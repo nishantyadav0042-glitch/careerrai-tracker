@@ -205,3 +205,87 @@ describe('event-policy is either wired to dispatch or visibly not wired', () => 
     expect(raw).not.toMatch(/NOT YET WIRED/);
   });
 });
+
+// ── The browser may read its notifications and mark them read. Nothing else ──
+//
+// 20260827b revokes INSERT / DELETE / TRUNCATE from anon and authenticated and
+// narrows UPDATE to the single `read` column, because until then any signed-in
+// student could — with the public anon key, from a browser console — insert
+// notification rows dispatch() never created, rewrite send_status and
+// pushed_at on their own rows, or delete the record entirely. None of it
+// crosses users; all of it corrupts the table this PR just promoted to the
+// delivery authority.
+//
+// That migration and this guard have to agree. If client code ever starts
+// writing another column, the grant will refuse it at runtime — as a silent
+// failure in a browser, which is the worst place to discover it. So the rule
+// is checked here, at build time, in the direction that fails first.
+
+describe('client-side notification writes stay inside what the grant allows', () => {
+  /** Files that talk to Supabase WITHOUT the admin (service_role) client. */
+  function clientSideFiles(): Array<readonly [string, string]> {
+    const out: Array<readonly [string, string]> = [];
+    const walk = (dir: string) => {
+      for (const name of readdirSync(dir)) {
+        const p = join(dir, name);
+        if (statSync(p).isDirectory()) { walk(p); continue; }
+        if (!/\.(ts|tsx)$/.test(name) || /\.test\.tsx?$/.test(name)) continue;
+        const code = stripComments(readFileSync(p, 'utf8'));
+        if (!code.includes("from('notifications')")) continue;
+        if (code.includes('createAdminClient')) continue; // service_role: unrestricted, by design
+        out.push([p, code] as const);
+      }
+    };
+    walk('src');
+    return out;
+  }
+
+  /** The one column the grant makes writable from a browser. */
+  const WRITABLE = ['read'];
+
+  it('finds the client surfaces (the guard is a guard)', () => {
+    expect(clientSideFiles().length).toBeGreaterThan(0);
+  });
+
+  it('no client-side INSERT or DELETE of a notification', () => {
+    const bad: string[] = [];
+    for (const [file, code] of clientSideFiles()) {
+      for (const m of code.matchAll(/from\('notifications'\)([\s\S]{0,200})/g)) {
+        if (/\.(insert|delete|upsert)\s*\(/.test(m[1])) bad.push(file);
+      }
+    }
+    expect(
+      [...new Set(bad)],
+      'Only dispatch() creates a notification and nothing deletes one. The grant refuses both — this would fail silently in the browser:\n  ' +
+        [...new Set(bad)].join('\n  '),
+    ).toEqual([]);
+  });
+
+  it('client-side UPDATE touches only the granted column', () => {
+    const bad: string[] = [];
+    for (const [file, code] of clientSideFiles()) {
+      for (const m of code.matchAll(/from\('notifications'\)[\s\S]{0,120}?\.update\(\s*\{([^}]*)\}/g)) {
+        const cols = [...m[1].matchAll(/([a-z_]+)\s*:/g)].map((c) => c[1]);
+        const illegal = cols.filter((c) => !WRITABLE.includes(c));
+        if (illegal.length) bad.push(`${file}: ${illegal.join(', ')}`);
+      }
+    }
+    expect(
+      bad,
+      'A browser may set `read` and nothing else. Delivery stamps (send_status, pushed_at, emailed_at, clicked_at) are service_role-only so the answer to "did we deliver this?" cannot be authored by its recipient:\n  ' +
+        bad.join('\n  '),
+    ).toEqual([]);
+  });
+
+  it('the migration that backs this rule is present and says why', () => {
+    const files = readdirSync('supabase/migrations');
+    const mig = files.find((f) => f.includes('notifications_are_server_written'));
+    expect(mig, 'the grant migration is missing — this guard would be enforcing a rule the database does not').toBeTruthy();
+    const sql = readFileSync(join('supabase/migrations', mig!), 'utf8');
+    expect(sql).toMatch(/revoke all privileges on public\.notifications from anon, authenticated/);
+    expect(sql).toMatch(/grant update \(read\) on public\.notifications to authenticated/);
+    // The delivery columns must NOT be handed back.
+    expect(sql).not.toMatch(/grant update \([^)]*send_status/);
+    expect(sql).not.toMatch(/grant update \([^)]*pushed_at/);
+  });
+});
