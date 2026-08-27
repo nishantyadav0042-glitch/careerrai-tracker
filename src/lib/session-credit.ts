@@ -435,6 +435,74 @@ export type CreditSettlement =
  * the worse error. Failures are reported in the return value and logged, so a
  * stuck credit surfaces rather than silently disappearing.
  */
+/**
+ * A credit that cannot be booked AT ALL — no session was ever created, so there
+ * is nothing to settle.
+ *
+ * settleCreditForSession handles the delivery that FAILED: a session existed,
+ * it was cancelled or expired, and the credit is released back. This is the
+ * case before that — the student went to pick a time and the mentor had no
+ * calendar, so /api/sessions/schedule returned `needs_team` and told them "our
+ * team will set your session time for you". That promise had no owner.
+ *
+ * It lives HERE because booking_blocked is a terminal credit state and this
+ * file is its one authority — session-credit-writers.guard says so, and it is
+ * right: a second writer is a second answer to "what does this student own".
+ * The route that detects the block does not write the credit; it asks this.
+ *
+ * IDEMPOTENT by construction: creditBlockPatch returns null when the same block
+ * is already recorded, so re-detecting leaves failure_at alone. That timestamp
+ * means "stuck since", and it is what decides how loudly the exception speaks.
+ */
+import { creditBlockPatch } from './booking-blocked';
+import type { UnbookableReason } from './session-assignment';
+
+export async function markBookingBlocked(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: { from: (t: string) => any },
+  creditId: string,
+  reason: UnbookableReason,
+): Promise<{ marked: boolean; reason?: 'unchanged' | 'lost_race' | 'read_failed' | 'write_failed' }> {
+  const { data: current, error: readErr } = await admin
+    .from('session_credits')
+    .select('status, failure_reason, failure_at')
+    .eq('id', creditId)
+    .maybeSingle();
+
+  if (readErr || !current) {
+    console.error('[markBookingBlocked] read failed', creditId, readErr?.message);
+    return { marked: false, reason: 'read_failed' };
+  }
+
+  const patch = creditBlockPatch(
+    {
+      status: current.status as string,
+      failure_reason: (current.failure_reason as string | null) ?? null,
+      failure_at: (current.failure_at as string | null) ?? null,
+    },
+    reason,
+    new Date().toISOString(),
+  );
+  if (!patch) return { marked: false, reason: 'unchanged' };
+
+  // Guarded on the status we read. A booking that succeeds between the read and
+  // the write moves the credit to 'scheduled', and this then matches zero rows
+  // rather than dragging a live booking back into blocked.
+  const { data: updated, error: writeErr } = await admin
+    .from('session_credits')
+    .update(patch)
+    .eq('id', creditId)
+    .eq('status', current.status as string)
+    .select('id');
+
+  if (writeErr) {
+    console.error('[markBookingBlocked] write failed', creditId, writeErr.message);
+    return { marked: false, reason: 'write_failed' };
+  }
+  if (!updated?.length) return { marked: false, reason: 'lost_race' };
+  return { marked: true };
+}
+
 export async function settleCreditForSession(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   admin: { from: (t: string) => any },

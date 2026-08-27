@@ -38,6 +38,11 @@ export const TIMELINE_KINDS = {
   session_started: 'mentor',
   session_completed: 'mentor',
   session_expired: 'mentor',
+  // 27 Aug: a paid student who cannot book. `payment_stuck` is the wrong
+  // word — the money moved fine; the DELIVERY is blocked because the mentor
+  // has no calendar. Money-domain because a paid entitlement is undelivered,
+  // which is what makes it urgent rather than merely untidy.
+  booking_blocked: 'money',
   ocr_failed: 'study',
   scholarship_granted: 'money',
   // 26 Aug: the founder's retention interviews (Log Breakers). The contact

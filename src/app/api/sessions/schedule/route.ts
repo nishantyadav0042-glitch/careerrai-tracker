@@ -3,9 +3,11 @@ import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generateSlots, slotsByDay, type Availability, type BusySpan } from '@/lib/session-slots';
 import { mentorBookability, UNBOOKABLE_COPY } from '@/lib/session-assignment';
+import type { UnbookableReason } from '@/lib/session-assignment';
+
 import { constraintFailure } from '@/lib/booking-constraints';
 import { ensureBuddyRoom } from '@/lib/buddy-room';
-import { SESSION_MINUTES } from '@/lib/session-credit';
+import { SESSION_MINUTES, markBookingBlocked } from '@/lib/session-credit';
 import { emitTimeline } from '@/lib/os/timeline';
 import { dispatch } from '@/lib/notification-os';
 import { createCalendarHold } from '@/lib/google-meet';
@@ -59,6 +61,57 @@ async function loadCredit(admin: ReturnType<typeof createAdminClient>, studentId
     .maybeSingle();
 }
 
+// ── SOMEBODY OWNS THE PROMISE (27 Aug) ──────────────────────────────────────
+//
+// This route tells a paying student "Our team will set your session time for
+// you" and, until now, wrote that promise NOWHERE — no notification, no queue,
+// no alert. `needs_team` was returned to the browser and that was the entire
+// record. A student paid ₹299, could not book, and nothing in the system knew.
+//
+// NO NEW SYSTEM. Two things already existed and neither was used: the Exception
+// Contract (lib/os/exception.ts — the founder's "one primitive, not another
+// dashboard", which SCALE-CONTRACT repeats), and the session_credits columns
+// `owner`, `next_action`, `failure_reason`, `failure_at` plus the
+// `booking_blocked` status. The schema was ready; nothing wrote to it.
+//
+// So this writes the durable state, and lib/booking-blocked.ts turns it into an
+// Exception for whatever reads the founder inbox. Every rule lives there as a
+// pure function; this is only the I/O.
+//
+// IDEMPOTENT. creditBlockPatch returns null when the same block is already
+// recorded, so re-detecting does not touch the row — which is what keeps
+// `failure_at` meaning "stuck since", the fact that decides severity. A sweep
+// that refreshed it every visit would report a week-old problem as new forever.
+//
+// NEVER FATAL, NEVER SILENT. The student already has their answer on screen;
+// failing their request because bookkeeping failed would help nobody. But a
+// silent failure here recreates the exact defect being fixed.
+//
+// DELIBERATELY DOES NOT REASSIGN. Overriding an assignment cuts whatever human
+// conversation is already in flight. That is a judgement call for a person.
+async function ownTheBlock(
+  admin: ReturnType<typeof createAdminClient>,
+  credit: { id: string; status: string; studentId: string },
+  reason: UnbookableReason,
+) {
+  try {
+    // The ROUTE DOES NOT WRITE THE CREDIT. booking_blocked is a terminal credit
+    // state and lib/session-credit.ts is its one authority — a second writer is
+    // a second answer to "what does this student own", which is what
+    // session-credit-writers.guard exists to stop. This asks; it does not act.
+    const res = await markBookingBlocked(admin, credit.id, reason);
+    if (!res.marked) return; // unchanged, lost a race, or already reported
+
+    await emitTimeline(admin, {
+      entity: 'student', entityId: credit.studentId, kind: 'booking_blocked',
+      summary: `Booking blocked — ${reason.replace(/_/g, ' ')}`, actor: 'system',
+      metadata: { creditId: credit.id, reason },
+    });
+  } catch (err) {
+    console.error('[sessions/schedule] block ownership failed', credit.id, err);
+  }
+}
+
 export async function GET() {
   const user = await getAuthUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -90,6 +143,7 @@ export async function GET() {
     // The mentor cannot actually produce a meeting room or has no calendar.
     // Offering slots here would sell a booking nobody can join — which is how
     // sixteen sessions were created and none delivered.
+    await ownTheBlock(admin, { id: credit.id, status: credit.status as string, studentId: user.id }, bookable.reason);
     return NextResponse.json({
       state: 'needs_team',
       reason: bookable.reason,
