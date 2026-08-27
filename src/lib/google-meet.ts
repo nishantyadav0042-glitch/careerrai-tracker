@@ -216,6 +216,75 @@ export async function createGoogleMeet(input: CreateMeetInput): Promise<CreateMe
   };
 }
 
+// ── The mentor's calendar knows the hour is taken ───────────────────────────
+//
+// The permanent room is minted `busy: false` on purpose (buddy-room.ts): an
+// anchor a year out must not make a mentor look booked for an hour they are
+// not working. The consequence nobody closed is that a session a student DOES
+// book appears nowhere on the mentor's own calendar. They look at their week,
+// see a free hour, and give it to something else.
+//
+// 11 of the first 18 sessions carry status 'expired' — the state
+// release-stale-sessions writes when the hour passed and nobody closed it out.
+// A commitment invisible to the person who has to keep it is a plausible
+// mechanism for that, though 18 rows is correlation, not proof.
+//
+// THIS IS A HOLD, NOT A ROOM. It deliberately sends NO conferenceData, so it
+// cannot mint a second Meet room and cannot break the one-room-per-buddy
+// invariant that the knock-lobby and the no_overlapping_buddy_sessions GiST
+// constraint both rest on. The join link travels in the description, where the
+// mentor can tap it, and the room itself is still the buddy's permanent one.
+//
+// `opaque` is the whole point: this event makes the mentor busy.
+
+export interface CalendarHoldInput {
+  buddyUserId: string;
+  title: string;
+  start: Date;
+  durationMinutes: number;
+  /** The buddy's PERMANENT room link, carried for convenience — never minted here. */
+  meetLink: string | null;
+  /** Student's email when we have one. 6 of 888 students have one, so usually absent. */
+  studentEmail?: string | null;
+}
+
+export type CalendarHoldResult = { ok: true; eventId: string } | Failure;
+
+export async function createCalendarHold(input: CalendarHoldInput): Promise<CalendarHoldResult> {
+  const end = new Date(input.start.getTime() + input.durationMinutes * 60_000);
+
+  const body = {
+    summary: input.title,
+    description: input.meetLink
+      ? `CareerRai 1:1 session.\n\nJoin here: ${input.meetLink}`
+      : 'CareerRai 1:1 session.',
+    start: { dateTime: input.start.toISOString(), timeZone: 'Asia/Kolkata' },
+    end: { dateTime: end.toISOString(), timeZone: 'Asia/Kolkata' },
+    attendees: input.studentEmail ? [{ email: input.studentEmail }] : [],
+    reminders: { useDefault: true },
+    // The mentor is BUSY for this hour. Everything else in this module is
+    // about links; this line is the entire reason the function exists.
+    transparency: 'opaque',
+  };
+
+  const call = await calendarFetch(
+    input.buddyUserId,
+    `${CALENDAR_EVENTS}?sendUpdates=all`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
+    { op: 'hold' },
+  );
+  if (!call.ok) return call;
+
+  const ev = (await call.res.json()) as { id?: string };
+  if (!ev.id) {
+    // Unlike createGoogleMeet there is no 'no_link' case to fail on — a hold
+    // has no conference. An id we cannot store is still useless, because
+    // cancel and reschedule both address the event by id.
+    return { ok: false, reason: 'api_error', error: messageFor('api_error') };
+  }
+  return { ok: true, eventId: ev.id };
+}
+
 // ── Update ─────────────────────────────────────────────────────────────────
 //
 // PATCH, not delete-and-recreate. That distinction is the whole point: a

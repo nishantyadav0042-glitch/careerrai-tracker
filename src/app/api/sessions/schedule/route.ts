@@ -3,11 +3,14 @@ import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generateSlots, slotsByDay, type Availability, type BusySpan } from '@/lib/session-slots';
 import { mentorBookability, UNBOOKABLE_COPY } from '@/lib/session-assignment';
+import type { UnbookableReason } from '@/lib/session-assignment';
+
 import { constraintFailure } from '@/lib/booking-constraints';
 import { ensureBuddyRoom } from '@/lib/buddy-room';
-import { SESSION_MINUTES } from '@/lib/session-credit';
+import { SESSION_MINUTES, markBookingBlocked } from '@/lib/session-credit';
 import { emitTimeline } from '@/lib/os/timeline';
 import { dispatch } from '@/lib/notification-os';
+import { createCalendarHold } from '@/lib/google-meet';
 import {
   bookedNotificationBody, buddyBookedNotificationBody, sessionNotificationUrl,
 } from '@/lib/session-link';
@@ -58,6 +61,57 @@ async function loadCredit(admin: ReturnType<typeof createAdminClient>, studentId
     .maybeSingle();
 }
 
+// ── SOMEBODY OWNS THE PROMISE (27 Aug) ──────────────────────────────────────
+//
+// This route tells a paying student "Our team will set your session time for
+// you" and, until now, wrote that promise NOWHERE — no notification, no queue,
+// no alert. `needs_team` was returned to the browser and that was the entire
+// record. A student paid ₹299, could not book, and nothing in the system knew.
+//
+// NO NEW SYSTEM. Two things already existed and neither was used: the Exception
+// Contract (lib/os/exception.ts — the founder's "one primitive, not another
+// dashboard", which SCALE-CONTRACT repeats), and the session_credits columns
+// `owner`, `next_action`, `failure_reason`, `failure_at` plus the
+// `booking_blocked` status. The schema was ready; nothing wrote to it.
+//
+// So this writes the durable state, and lib/booking-blocked.ts turns it into an
+// Exception for whatever reads the founder inbox. Every rule lives there as a
+// pure function; this is only the I/O.
+//
+// IDEMPOTENT. creditBlockPatch returns null when the same block is already
+// recorded, so re-detecting does not touch the row — which is what keeps
+// `failure_at` meaning "stuck since", the fact that decides severity. A sweep
+// that refreshed it every visit would report a week-old problem as new forever.
+//
+// NEVER FATAL, NEVER SILENT. The student already has their answer on screen;
+// failing their request because bookkeeping failed would help nobody. But a
+// silent failure here recreates the exact defect being fixed.
+//
+// DELIBERATELY DOES NOT REASSIGN. Overriding an assignment cuts whatever human
+// conversation is already in flight. That is a judgement call for a person.
+async function ownTheBlock(
+  admin: ReturnType<typeof createAdminClient>,
+  credit: { id: string; status: string; studentId: string },
+  reason: UnbookableReason,
+) {
+  try {
+    // The ROUTE DOES NOT WRITE THE CREDIT. booking_blocked is a terminal credit
+    // state and lib/session-credit.ts is its one authority — a second writer is
+    // a second answer to "what does this student own", which is what
+    // session-credit-writers.guard exists to stop. This asks; it does not act.
+    const res = await markBookingBlocked(admin, credit.id, reason);
+    if (!res.marked) return; // unchanged, lost a race, or already reported
+
+    await emitTimeline(admin, {
+      entity: 'student', entityId: credit.studentId, kind: 'booking_blocked',
+      summary: `Booking blocked — ${reason.replace(/_/g, ' ')}`, actor: 'system',
+      metadata: { creditId: credit.id, reason },
+    });
+  } catch (err) {
+    console.error('[sessions/schedule] block ownership failed', credit.id, err);
+  }
+}
+
 export async function GET() {
   const user = await getAuthUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -89,6 +143,7 @@ export async function GET() {
     // The mentor cannot actually produce a meeting room or has no calendar.
     // Offering slots here would sell a booking nobody can join — which is how
     // sixteen sessions were created and none delivered.
+    await ownTheBlock(admin, { id: credit.id, status: credit.status as string, studentId: user.id }, bookable.reason);
     return NextResponse.json({
       state: 'needs_team',
       reason: bookable.reason,
@@ -215,6 +270,68 @@ async function tellBothParties(
   }
 }
 
+// ── AND THE MENTOR'S CALENDAR KNOWS (27 Aug) ────────────────────────────────
+//
+// The permanent room is minted `busy: false` deliberately, so a booked session
+// showed up nowhere on the mentor's own Google Calendar. They saw a free hour
+// and could give it away. This puts a BUSY hold on it.
+//
+// A hold, not a room: createCalendarHold sends no conferenceData, so the
+// one-room-per-buddy invariant is untouched and the join link in the hold is
+// the buddy's existing permanent one.
+//
+// BEST EFFORT, AND THAT IS DELIBERATE. Zero mentors have connected Google
+// (google_oauth_tokens is empty), so today this returns 'not_connected' every
+// single time. That must not cost a student a booking they already hold — the
+// session exists, the credit is spent, and the app row is the source of truth.
+// The DB constraint no_overlapping_buddy_sessions is what actually prevents
+// double-booking; the calendar is a courtesy to the human, not a lock.
+//
+// The event id lands on video_sessions.google_event_id, which cancel-meeting
+// and reschedule-meeting ALREADY handle correctly — cancel deletes it only
+// when it differs from the buddy's permanent anchor, reschedule moves it. So
+// this writes into a contract that already exists rather than inventing one.
+async function holdTheMentorsHour(
+  admin: ReturnType<typeof createAdminClient>,
+  opts: { sessionId: string; studentId: string; buddyId: string; startIso: string; meetUrl: string | null },
+) {
+  try {
+    const [{ data: student }, { data: buddy }] = await Promise.all([
+      admin.from('profiles').select('full_name, email').eq('id', opts.studentId).maybeSingle(),
+      admin.from('profiles').select('full_name').eq('id', opts.buddyId).maybeSingle(),
+    ]);
+
+    const studentFirst = ((student?.full_name as string | null) ?? 'a student').split(' ')[0];
+    const hold = await createCalendarHold({
+      buddyUserId: opts.buddyId,
+      title: `CareerRai 1:1 — ${studentFirst}`,
+      start: new Date(opts.startIso),
+      durationMinutes: SESSION_MINUTES,
+      meetLink: opts.meetUrl,
+      studentEmail: (student?.email as string | null) ?? null,
+    });
+
+    if (!hold.ok) {
+      // not_connected is the EXPECTED answer until a mentor connects Google.
+      // Logged at info, not error, so it does not drown the real failures.
+      console.log('[sessions/schedule] calendar hold skipped', opts.sessionId, hold.reason);
+      return;
+    }
+
+    const { error } = await admin
+      .from('video_sessions')
+      .update({ google_event_id: hold.eventId })
+      .eq('id', opts.sessionId);
+    if (error) {
+      // The hold exists in Google but we cannot address it later. Say so
+      // loudly: a cancel will now leave a stale hold on the mentor's calendar.
+      console.error('[sessions/schedule] hold created but id not stored', opts.sessionId, hold.eventId, error.message);
+    }
+  } catch (err) {
+    console.error('[sessions/schedule] calendar hold failed', opts.sessionId, err);
+  }
+}
+
 export async function POST(request: NextRequest) {
   const user = await getAuthUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -320,6 +437,14 @@ export async function POST(request: NextRequest) {
   });
 
   await tellBothParties(admin, {
+    sessionId: sessionId as string,
+    studentId: user.id,
+    buddyId: credit.buddy_id,
+    startIso,
+    meetUrl: room.meetUrl,
+  });
+
+  await holdTheMentorsHour(admin, {
     sessionId: sessionId as string,
     studentId: user.id,
     buddyId: credit.buddy_id,

@@ -159,8 +159,12 @@ describe('orphan surfaces are declared, not discovered', () => {
 //   event-policy.ts   — a complete second answer to "which channels does this
 //                       event use?", while the live answer sat in dispatch().
 //                       Found 27 Aug; it is now the live authority.
-//   os/exception.ts   — the SCALE-CONTRACT's "one primitive for every
-//                       operational problem", which no producer emits through.
+//   os/exception.ts   — WIRED 27 Aug. It was the SCALE-CONTRACT's "one
+//                       primitive for every operational problem" with no
+//                       producer. lib/booking-blocked.ts is now that producer:
+//                       a paid credit whose mentor cannot be booked becomes an
+//                       Exception rather than a bespoke table or a dashboard.
+//                       Removed from the list below, which may only shrink.
 //
 // A component nobody renders is a wasted screen. A LIBRARY nobody imports is
 // worse: it is a second authority waiting for someone to wire it, and whoever
@@ -169,14 +173,6 @@ describe('orphan surfaces are declared, not discovered', () => {
 // mistake this file's own header records making once already.
 
 const KNOWN_PARKED_MODULES: Record<string, string> = {
-  'src/lib/os/exception.ts':
-    'PARKED. The SCALE-CONTRACT primitive: one Exception shape for every ' +
-    'operational domain, aggregated into the Founder Inbox. Deliberately ' +
-    'zero-infra (a type, a pure aggregation, a presentation rule) and kept ' +
-    'because it is the founder\'s stated architecture, not a spare part. It ' +
-    'is unwired because the PRODUCERS have not been converted: founder-inbox ' +
-    'and mentor-ops still shape their own rows. Wiring it is its own cycle. ' +
-    'Delete only with the founder, and only together with that contract.',
   'src/lib/facts/registry.ts':
     'PARKED. The canonical fact registry: one place a fact is DEFINED, so a ' +
     'second definition cannot be added quietly. Every producer in it is pure. ' +
