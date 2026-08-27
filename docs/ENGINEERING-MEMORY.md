@@ -51,6 +51,9 @@
 | 36 | 2026-08-27 | A cancelled session welded the ₹299 to a booking that would never happen | Trust (P0) | every future mentor cancellation |
 | 37 | 2026-08-27 | Daily Insight repeated for days — the suppression read had no upper bound | Learning (P1) | every student who opened Home twice |
 | 38 | 2026-08-27 | 71% of completions got the wrong topic — task ids are unique only within a day | Learning (P1) | every student the recovery rule fired for |
+| 39 | 2026-08-27 | The guard read one of the two routes it named — a lost notification failed a committed booking | Notification / Trust (P1) | every mentor-booked session whose dispatch failed |
+| 40 | 2026-08-27 | The rules were real, and attached to the wrong verb — reschedule skipped availability | Trust (P1) | any student whose session was moved |
+| 41 | 2026-08-27 | The mentor could give away the thing the product sells — booking never linked a credit | Trust (P0, money) | every mentor-booked guidance session |
 
 > Entries 12 and 13 were never written. The gap is left visible rather than
 > renumbered — the numbers are referenced from commit messages and code

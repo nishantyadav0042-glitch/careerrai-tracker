@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   generateSlots, slotsByDay, offsetMinutes, localDay, localWeekday,
+  offeredSlotProblem,
   type Availability, type BusySpan,
 } from './session-slots';
 
@@ -202,5 +203,84 @@ describe('this module offers, it never reserves', () => {
     for (const banned of [/\.insert\s*\(/, /\.update\s*\(/, /\.rpc\s*\(/, /createAdminClient/, /\bfetch\s*\(/]) {
       expect(code, `session-slots acquired a write path: ${banned}`).not.toMatch(banned);
     }
+  });
+});
+
+// ── offeredSlotProblem — the door a RESCHEDULE has to pass ──────────────────
+//
+// 27 Aug. calendar/reschedule-meeting moved sessions with no availability
+// check at all: it validated that the new time parsed, was in the future, and
+// had a legal duration, then wrote it. A mentor could move a student onto a
+// Sunday, to 3am, or into their own time off.
+//
+// It survived review because the table looked guarded. Two triggers sit on
+// video_sessions and only one reaches an UPDATE:
+//   set_video_session_span                  insert OR UPDATE → overlap caught
+//   video_session_within_availability_guard insert ONLY      → the hole
+// The rules existed; they were attached to the wrong verb.
+describe('offeredSlotProblem — a reschedule must land on a real offer', () => {
+  // Monday 24 Aug 2026, 10:00 IST. A working day inside working hours.
+  const MON_10 = Date.parse('2026-08-24T04:30:00Z');
+  const now = MON_10 - 6 * 60 * 60_000; // 04:00 IST Monday, past the 120m notice
+
+  it('accepts a time the mentor is actually offering', () => {
+    expect(offeredSlotProblem(avail(), [], MON_10, 45, now)).toBeNull();
+  });
+
+  it('refuses a day the mentor does not work', () => {
+    // Sunday 23 Aug 2026, 10:00 IST — one day earlier, everything else equal.
+    const sun10 = MON_10 - 86_400_000;
+    expect(offeredSlotProblem(avail(), [], sun10, 45, now - 86_400_000))
+      .toBe('not_offered');
+  });
+
+  it('refuses a time outside the mentor’s hours', () => {
+    // 03:00 IST Monday. Inside the horizon, on a working day, still not a slot.
+    const mon03 = Date.parse('2026-08-23T21:30:00Z');
+    expect(offeredSlotProblem(avail(), [], mon03, 45, now - 6 * 60 * 60_000))
+      .toBe('not_offered');
+  });
+
+  it('refuses a slot that is not on the mentor’s grid', () => {
+    // 10:20 IST — twenty minutes into a real slot is not a real slot.
+    expect(offeredSlotProblem(avail(), [], MON_10 + 20 * 60_000, 45, now))
+      .toBe('not_offered');
+  });
+
+  it('refuses a time already taken, including its buffer', () => {
+    const busy: BusySpan[] = [
+      { startMs: MON_10, endMs: MON_10 + (45 + 15) * 60_000 },
+    ];
+    expect(offeredSlotProblem(avail(), busy, MON_10, 45, now)).toBe('not_offered');
+  });
+
+  it('refuses a move inside the mentor’s notice period', () => {
+    // now = 09:00 IST for a 10:00 slot, against a 120-minute notice.
+    const tooSoon = MON_10 - 60 * 60_000;
+    expect(offeredSlotProblem(avail(), [], MON_10, 45, tooSoon)).toBe('not_offered');
+  });
+
+  it('refuses a move beyond the mentor’s horizon', () => {
+    const farOut = MON_10 + 30 * 86_400_000;
+    expect(offeredSlotProblem(avail({ horizonDays: 14 }), [], farOut, 45, now))
+      .toBe('not_offered');
+  });
+
+  // THE CASE generateSlots CANNOT SEE. It measures the end-of-day fit against
+  // the mentor's own slot length, so a reschedule that also LENGTHENS the
+  // session starts on a genuine slot and finishes after closing time. The
+  // database checks this with the real duration — on insert, which a
+  // reschedule never reaches.
+  it('refuses a longer session that starts on a real slot but overruns the day', () => {
+    // Last 30-minute slot of an 18:30-close day, stretched to 60 minutes.
+    const a = avail({ slotMinutes: 30, bufferMinutes: 0, endMinute: 18 * 60 + 30 });
+    const mon1800 = Date.parse('2026-08-24T12:30:00Z'); // 18:00 IST
+    expect(offeredSlotProblem(a, [], mon1800, 30, now)).toBeNull();
+    expect(offeredSlotProblem(a, [], mon1800, 60, now)).toBe('overruns_day');
+  });
+
+  it('refuses everything while the mentor is not taking bookings', () => {
+    expect(offeredSlotProblem(avail({ active: false }), [], MON_10, 45, now))
+      .toBe('not_offered');
   });
 });

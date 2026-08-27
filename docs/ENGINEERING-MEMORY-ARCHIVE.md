@@ -1570,3 +1570,188 @@ other hid behind `if (status === 'ready')` on a fixture that never reached
 `ready`. **Both were written by the same person who wrote the fix, and both
 passed on the broken code. A test is not a test until it has been seen to
 fail.**
+
+## Incident #39 — the guard read one of the two routes it named (2026-08-27)
+
+**Severity:** P1 (Trust). A mentor was told a booking failed that had happened.
+
+**What happened.** `calendar/schedule-meeting` and `calendar/reschedule-meeting`
+each ran `await dispatch(...)` bare, inside the route's single `try`. A
+transport failure therefore fell through to the outer `catch` and answered the
+mentor with `500 "Couldn't create the session"` — for a session already
+committed by the insert above it. The mentor retried, hit the `session_exists`
+refusal, and held two contradictory answers about one booking.
+`rememberIdempotent()` sat below the dispatch and never ran, so the replay
+record that exists to make the retry safe was never written. The student's
+notification was lost with no retry path.
+
+**Why nobody saw it.** `session-booking-notified.guard.test.ts` named both
+booking routes in `BOOKING_ROUTES` — and then ran four of its six assertions
+against a hardcoded `sessions/schedule/route.ts`. The sibling route was checked
+only for "the token `dispatch(` appears somewhere in this file". Assertion (5),
+*notification failure can never fail a committed booking*, is the exact rule
+that was being broken, and it never ran on the file that broke it.
+
+Worse, (5) could not have worked where it was pointed even if it had run: it
+matched `catch (...) { ... console.error }` at FILE level, and every one of
+these routes has an outer `catch (error) { console.error(...) }`. The
+assertion was satisfied by the very handler whose catch was the problem.
+
+**The lesson.** *A guard's route list is not its scope.* Reading a file name in
+a table at the top of a guard tells you nothing about which assertions run
+against it. And **a structural assertion about error handling is meaningless
+without a scope** — `catch` and `console.error` exist in almost every route, so
+matching them anywhere in the file is close to matching nothing. Both
+assertions here are now evaluated inside the notifier's own function body,
+found by brace-matching.
+
+**The fix.** Each route owns a notifier (`tellTheStudent`,
+`tellTheStudentItMoved`) shaped like the one that was already correct,
+`tellBothParties`: try/catch, log, never rethrow. The guard now runs every
+assertion over every route in its table, adds `reschedule-meeting` to it, and
+adds a rule the old guard had no way to express — **no bare `dispatch(` may
+survive in the handler**, where the outer catch makes a transport failure fatal
+to a write that already committed.
+
+**How it was proven.** Three mutations, each run against the rewritten guard:
+restoring the inline dispatch (the original defect) failed 2 assertions;
+removing the notifier's try/catch failed 1; deleting the notifier call while
+leaving the function defined failed 1. Baseline green before and after, file
+byte-identical.
+
+A fourth mutation was caught by the guard's own construction rather than by
+intent: anchoring "notified before success" on `NextResponse.json(payload)`
+matched the `already: true` REPLAY return, which must NOT notify — a
+double-submit re-telling the student is a different defect. The anchor now
+names the new-booking success specifically.
+
+---
+
+## Incident #40 — the rules were real, and attached to the wrong verb (2026-08-27)
+
+**Severity:** P1 (Trust). Sessions could be moved outside a mentor's week.
+
+**What happened.** `calendar/reschedule-meeting` wrote a new `scheduled_at`
+after validating three things: that the timestamp parsed, that it was in the
+future, and that the duration was one of 20/30/45/60. It never read
+`buddy_availability`, never generated slots, and never checked time off. A
+mentor could move a student's session onto a day they do not work, to 3am, or
+into their own holiday, and nothing refused it.
+
+**Why nobody saw it.** The table looked guarded, and half of it was. Two
+triggers sit on `video_sessions`, and only one reaches an UPDATE:
+
+```
+set_video_session_span                   before insert OR UPDATE OF
+                                         scheduled_at, duration_minutes,
+                                         buddy_id   → the GIST exclusion still
+                                                      refuses a double-booking
+                                                      on a reschedule.
+video_session_within_availability_guard  before INSERT      ← only
+                                         → work days, hours and time off are
+                                           never re-read when a session MOVES.
+```
+
+So double-booking — the failure everyone thinks of first, and the one that
+would have been noticed — was covered the whole time. That is precisely what
+made the uncovered half invisible: a reschedule that collided with another
+session WAS refused, so the path looked defended.
+
+**The lesson.** *Coverage is per-verb, not per-table.* A constraint that fires
+on INSERT protects rows that are created, not rows that are changed, and the
+two are different populations. When reviewing an invariant, read the trigger's
+event list, not its name. **Half-covered reads as covered** — the rule that was
+enforced supplied the confidence that the rule that was not enforced borrowed.
+
+**The fix.** `offeredSlotProblem()` in `lib/session-slots.ts` — asks whether one
+specific instant is a slot we would have OFFERED a student, which is the
+existing rule read backwards. The route does the DB reads and calls it; the
+mentor's week is still defined by `generateSlots` and nowhere else (Incident
+#23). The session being moved is filtered out of its own busy list, or it would
+block every slot inside its own buffer and a mentor nudging 3pm to 3.30pm would
+be refused by the booking they are holding.
+
+One rule `generateSlots` cannot express is checked alongside it: it measures the
+end-of-day fit against the mentor's own slot length, so a reschedule that also
+LENGTHENS the session can start on a genuine slot and finish after closing time.
+The database checks this with the real duration — on INSERT, which a reschedule
+never reaches.
+
+**How it was proven.** Nine unit tests on the pure function (wrong day, outside
+hours, off-grid, taken slot including buffer, inside notice, past horizon,
+inactive mentor, and the lengthened-session overrun), plus
+`session-reschedule-availability.guard.test.ts` for the half a unit test cannot
+reach — that the route still CALLS it, before the calendar move and before the
+row is written. Three mutations: deleting the call (the pre-fix state) failed;
+removing the self-filter failed; moving the check after `updateGoogleMeet`
+**passed, wrongly** — the ordering assertion had searched the whole file and
+found the function's own DECLARATION, which sits above `POST` and is therefore
+earlier than everything. Scoped to the POST body and to a call rather than a
+name, the mutation fails as it should. The guard was wrong in the same shape as
+Incident #39, and only mutation testing said so.
+
+---
+
+## Incident #41 — the mentor could give away the thing the product sells (2026-08-27)
+
+**Severity:** P0 (Trust, money). A paid session delivered against no payment.
+
+**What happened.** `grep -c session_credits` in
+`calendar/schedule-meeting/route.ts` returned **0**. The mentor-initiated
+booking path inserted a `video_sessions` row directly and never touched the
+ledger. So a mentor could book the very session a student had paid ₹299 for,
+and the credit never learned about it: it stayed `status='paid'` with
+`video_session_id` null while the session it bought went ahead.
+
+Both halves then compound. `hasOpenSessionCredit()` still counted the credit
+open, so the student could not buy another — they had paid, attended, and were
+now blocked from purchasing again by the entitlement they had already consumed.
+And any count of "sessions paid for" and "sessions delivered" disagreed with no
+row anywhere being wrong.
+
+**Why nobody saw it.** This is Incident #31's shape exactly — *a paid student
+fell out of the lifecycle and no row was wrong* — and it was missed for the same
+reason: every individual record is valid. There is no failing query to find,
+because the defect is a JOIN that nobody performs. The route also looked
+complete: it validated the mentor, the student's assignment, the duration, the
+slot, and the free-orientation allowance, and notified the student correctly.
+The one thing it did not do was the one thing nothing displays.
+
+An earlier pass over this route reported it as "notification-correct, credit
+gap" — and got the notification half wrong too (Incident #39). Both errors came
+from asserting behaviour from the presence of a name in a file rather than from
+reading the call, which is Law L2.
+
+**The founder's rule (27 Aug).** Orientation is free; a guidance session
+consumes a credit. A student with no open credit cannot be given a guidance
+session — the alternative is a mentor handing out the product one booking at a
+time with nothing recording that it happened.
+
+**The fix.** The branch is in the route, because one product rule has two
+transactional shapes behind it. Orientation keeps the direct insert: there is no
+credit to move, and inventing a ₹0 one so both paths could share a writer would
+put a row in the ledger that every revenue count then has to special-case.
+Guidance goes through `book_session_credit()` — the RPC that already locks the
+credit, inserts the session, links it and moves the state in ONE transaction,
+and that writes the same eight columns the direct insert did.
+
+**NO SECOND WRITER.** A credit-linking path written in TypeScript beside the
+one in plpgsql is Incident #23 aimed at money. `p_expected_buddy_id` is the
+booking mentor, so a credit assigned to someone else is refused by the database
+rather than by a check here that can drift out of step with it.
+
+**How it was proven.** Eight behaviour tests driven through the real `POST`
+handler: guidance calls the RPC and never inserts directly; the call carries
+this mentor's id; no credit is a 409 with no session, no notification and
+nothing given away; a refused RPC never tells the student "booked"; a re-submit
+answers with the existing session rather than a second one; a credit read
+failure is a 503 and never a free session; orientation writes directly and
+never calls the RPC; a second free orientation is still refused. Four mutations,
+all caught: direct-insert everything (the pre-fix route, 6 failures), no-credit
+falls through to a free session, notify-anyway on a refusal, and dropping the
+mentor identity from the RPC call.
+
+**No migration.** This route now uses a function that already exists in
+production; nothing in the schema changed.
+
+---

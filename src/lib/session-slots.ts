@@ -182,3 +182,43 @@ export function slotsByDay(slots: readonly Slot[]): { day: string; slots: Slot[]
   return [...map.entries()].map(([day, list]) => ({ day, slots: list }))
     .sort((x, y) => x.day.localeCompare(y.day));
 }
+
+/** Why a proposed time is not bookable, or null when it is. */
+export type SlotProblem = 'not_offered' | 'overruns_day';
+
+/**
+ * Would we OFFER this exact time to a student, for a session this long?
+ *
+ * The question a reschedule has to answer. generateSlots() says what a mentor
+ * is offering; this asks whether one specific instant is one of those offers,
+ * which is the same rule read backwards.
+ *
+ * It exists because the availability rules were enforced in exactly one place
+ * that a reschedule never reached: `video_session_within_availability_guard`
+ * is `before insert` on video_sessions, so moving a session skipped the
+ * mentor's week entirely (the overlap exclusion still applied — its span
+ * trigger fires on update too). Restating those rules in the route would have
+ * made them true in two places and eventually in neither; Incident #23.
+ *
+ * `durationMinutes` is checked separately because generateSlots measures the
+ * end-of-day fit against the mentor's own slot length. A reschedule may also
+ * LENGTHEN the session, and a 60-minute session on a real 30-minute slot can
+ * start inside the mentor's hours and still finish after them.
+ */
+export function offeredSlotProblem(
+  a: Availability,
+  busy: readonly BusySpan[],
+  startMs: number,
+  durationMinutes: number,
+  nowMs: number,
+): SlotProblem | null {
+  if (!generateSlots(a, busy, nowMs).some((slot) => slot.startMs === startMs)) {
+    return 'not_offered';
+  }
+
+  const localStart = new Date(startMs + offsetMinutes(a.timezone, startMs) * MIN);
+  const startMinute = localStart.getUTCHours() * 60 + localStart.getUTCMinutes();
+  if (startMinute + durationMinutes > a.endMinute) return 'overruns_day';
+
+  return null;
+}
