@@ -48,6 +48,8 @@
 | 33 | 2026-08-26 | `revoke from public` did not revoke it — Supabase grants anon/authenticated explicitly | Security | — (caught pre-prod) |
 | 34 | 2026-08-26 | **OPEN** — `claim_lead` is SECURITY DEFINER and callable by anon | Security (P1) | sales pipeline ownership |
 | 35 | 2026-08-26 | Deploy took the whole site down (runner build lost NEXT_PUBLIC_SUPABASE_URL) | Deploy / Growth | full cohort (874) |
+| 36 | 2026-08-27 | A cancelled session welded the ₹299 to a booking that would never happen | Trust (P0) | every future mentor cancellation |
+| 37 | 2026-08-27 | Daily Insight repeated for days — the suppression read had no upper bound | Learning (P1) | every student who opened Home twice |
 
 > Entries 12 and 13 were never written. The gap is left visible rather than
 > renumbered — the numbers are referenced from commit messages and code

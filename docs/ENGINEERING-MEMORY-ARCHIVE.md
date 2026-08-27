@@ -1410,3 +1410,109 @@ output it fails, with the host present it passes.
   real URL and read the status code. `careerrai.in` is unreachable from the
   agent sandbox (network policy denies CONNECT), so use the Vercel MCP
   `web_fetch_vercel_url` tool, or check runtime logs grouped by status code.
+
+---
+
+## Incident #36 — a cancelled session welded the ₹299 to a booking that would never happen (2026-08-27)
+
+**Severity:** P0 (Trust). Money paid, delivery failed, entitlement unreachable.
+
+**What happened.** `session_credit_coherent()` rule (5) forbade a credit from
+ever changing its linked session, and rule (8) forbade `booking_blocked` from
+holding one. Both rules were individually correct. Together they left a credit
+whose session was CANCELLED with no exit at all:
+
+- it could not be relinked to a new session (rule 5)
+- it could not fall back to `booking_blocked` (rules 5 + 8)
+- `sessions/schedule` read `video_session_id` as set and answered "already
+  booked", pointing the student at the cancelled session
+- `hasOpenSessionCredit()` counted it as open, so they could not buy another
+
+The student had paid, their mentor had cancelled, and the only recovery was a
+manual refund that the student had to notice was owed and go ask for.
+
+**Why nobody saw it.** 20260826b's own comment named it and deferred it:
+*"Phase 3's problem, not a state to fake here."* That was honest at the time —
+nothing had been cancelled yet, so the trap had never been sprung. The comment
+then aged into permission. **A deferred defect with no owner and no date is not
+deferred; it is accepted.**
+
+There was also no terminal writer at all: nothing in the codebase ever moved a
+credit to `completed`. The state machine had a start and no end.
+
+**The fix.**
+- `settleCreditForSession()` (`src/lib/session-credit.ts`) — the single writer
+  that closes a credit. `completed` on delivery; on cancel/expire it releases
+  the credit into `booking_blocked` with `owner`, `next_action`,
+  `failure_reason` and `failure_at`, guarded on the credit's prior status so a
+  double-settle cannot fire twice. It never throws: a settlement failure must
+  not roll back the cancellation the student already saw.
+- `20260827a_session_credit_recovery.sql` — the narrowest possible relaxation
+  of rule 5. Written as `if not (<all three preconditions>) then raise`, so it
+  fails CLOSED: release only, into `booking_blocked` only, and only when
+  `video_sessions` (the delivery authority, re-read inside the trigger) says
+  the session is `cancelled` or `expired`.
+
+**How it was proven.** Applied to careerrai-test only. Ten-case adversarial
+matrix run with fixtures created and rolled back inside one transaction (both
+tables verified back to zero rows): the two legal releases and the subsequent
+rebook were ALLOWED; relink, release-while-scheduled, release-after-completed,
+unlink-into-`paid`, release-without-owner and blocked-while-still-linked were
+all REFUSED. Non-vacuity: the same legal release, run against production's
+current rule 5 restored into the test DB, was REFUSED.
+
+**Schema-parity lesson, and a correction to Incident #32.** The test DB's
+`pg_get_functiondef()` md5 differed from production's, which under #32's rule
+means "your test result is worthless". Comparing the two bodies showed the
+entire difference was `--` comments. Comment-stripped and whitespace-
+normalised, both hash to `5eacc10fecbdc6f8a67bab22fa128fed`. **#32's discipline
+is to prove the schemas match, not to compare hashes — a raw hash mismatch is
+where the investigation starts, not where it ends.** The same normalisation,
+with the rule-5 block excised, hashes to `69c4e5877914907e1a4f4499c17ad5f9` on
+both sides after the migration, which is the actual proof that rule 5 is the
+only thing that changed.
+
+**Encoded with teeth.** `src/lib/session-credit-release.guard.test.ts` reads
+the NEWEST migration defining the function — not a pinned filename — and fails
+if any one of the three preconditions is deleted or the `if not (...)` shape is
+flipped to fail-open. Both mutations were run and both failed the guard.
+`session-assignment.guard.test.ts`'s rule-5 row was relabelled, because it
+reads a superseded migration and would otherwise have stayed green while the
+live behaviour changed.
+
+**MIGRATION NOT APPLIED TO PRODUCTION.** It ships with the branch and needs
+explicit founder approval.
+
+---
+
+## Incident #37 — the Daily Insight repeated for days (2026-08-27)
+
+**Severity:** P1 (Learning). The product's core daily intelligence looked dead.
+
+**What happened.** The founder saw the identical "23 topics done / 23 to go"
+card for several consecutive mornings. The suspicion was frozen state or a
+stuck cron. It was neither.
+
+`loadSuppressedInsightKeys()` read the last-shown ledger with a lower bound
+only: `last_shown_on > cutoff`. Today's own row satisfies that. So the moment an
+insight was shown, it suppressed itself. Home records a show on EVERY server
+render, so each visit re-ran the selection against a set that had just grown by
+one — four or five visits in a morning drained a candidate pool of one to three
+items, and what survived was the suppression-EXEMPT `progress` fallback, whose
+numbers come from `topic_coverage` and genuinely do not move for days.
+
+**The lesson.** *A "recently shown" filter must exclude the window it is
+selecting FOR.* The bug is not that the insight was suppressed; it is that the
+suppression window and the selection window overlapped, so the act of selecting
+changed the input to selection. Any read-then-write loop where the write
+becomes the next read's input needs its boundary written down explicitly.
+
+Second lesson: **the fallback hid the failure.** A rotation that silently
+degrades to an exempt static card looks like a working feature showing
+unchanging data. If a selector falls back, that fallback needs to be visible in
+telemetry, or the failure is indistinguishable from the truth.
+
+**The fix.** One added bound — `.lt('last_shown_on', today)` — plus
+`src/lib/daily-insight-rotation.test.ts`, which spies on the FILTERS the query
+applies rather than the rows it returns, because the filters are where the bug
+lived. Removing the bound makes the boundary test fail.

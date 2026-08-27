@@ -262,7 +262,13 @@ describe('cross-state invariants keep money and delivery honest', () => {
     ['assigned/scheduled/completed need a buddy', /status % requires an assigned buddy/],
     ['scheduled/completed need a session', /status % requires a linked session/],
     ['a credit cannot complete before its session does', /cannot complete while the session is/],
-    ['the link is permanent', /already linked to a session/],
+    // Rule 5 was AMENDED on 27 Aug (20260827a): a credit whose session was
+    // cancelled or expired may drop the link to return to booking_blocked.
+    // This row still holds — the refusal is still the default — but the live
+    // definition is the newest migration, and its one exception is pinned by
+    // src/lib/session-credit-release.guard.test.ts. Do not read rule 5's
+    // current behaviour from this file.
+    ['relinking is refused by default', /already linked to a session/],
     ['participants must match', /different mentor|different student/],
   ])('%s', (_label, pattern) => {
     expect(MIGRATION).toMatch(pattern);
