@@ -21,7 +21,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // never delay a message insert), so these tests flush the microtask queue
 // rather than changing the code to be convenient to test.
 
-const dispatch = vi.hoisted(() => vi.fn(async () => 'sent'));
+// Typed with its argument: a zero-parameter mock makes `mock.calls[0][0]` a
+// type error, and the payload is the entire thing under test here.
+const dispatch = vi.hoisted(() =>
+  vi.fn(async (opts: Record<string, unknown>) => { void opts; return 'sent'; }),
+);
 vi.mock('./notification-os', () => ({ dispatch }));
 
 import { deliverPairMessage } from './chat-deliver';
