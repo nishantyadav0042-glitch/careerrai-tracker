@@ -40,16 +40,28 @@ describe('mentor readiness never claims what it cannot back', () => {
 
   const HOURS_SET = { configured: true, work_days: [1, 2, 3], start_minute: 600, end_minute: 1140, active: true };
 
-  it('RULE CHANGE: hours + a pasted room and NO Google is READY', () => {
-    // This test previously asserted the opposite — "NOT ready when Google is
-    // missing, even with hours set" — encoding a Google requirement that this
-    // codebase had already removed elsewhere as a design mistake. Shreya has a
-    // room and no Google; the booking API would accept her.
+  it('RULE CHANGE (27 Aug): hours + a legacy pasted room and NO Google is NOT ready', () => {
+    // This assertion has now flipped TWICE, which is worth stating plainly.
+    //
+    // It first said "not ready without Google". Then the codebase removed the
+    // Google requirement as a design mistake, and it was rewritten to say a
+    // pasted room was enough — Shreya's exact state.
+    //
+    // 27 Aug reverses it again, deliberately and at the founder's direction:
+    // Google is now the mentor's infrastructure, because Calendar and Meet are
+    // what produce the event, the link and the reminders. A pasted URL produces
+    // none of those. The room is still stored and every session already booked
+    // against it still opens — it just no longer opens the door to NEW ones.
+    //
+    // The verdict is still computed from the canonical rule, never hardcoded,
+    // which is exactly why this test could follow the rule through all three
+    // positions instead of quietly disagreeing with it.
     const canBook = verdict({ availability: { active: true }, hasRoom: true, googleConnected: false });
-    expect(canBook).toBe(true);
+    expect(canBook).toBe(false);
     const html = renderToStaticMarkup(
       <SessionReadiness canBook={canBook} googleConnected={false} availability={HOURS_SET} />);
-    expect(html).toMatch(/Ready — students can book you/);
+    expect(html).toMatch(/students cannot book you yet/i);
+    expect(html).toMatch(/Google not connected/);
   });
 
   it('no room AND no Google is genuinely not ready', () => {
@@ -58,7 +70,16 @@ describe('mentor readiness never claims what it cannot back', () => {
     const html = renderToStaticMarkup(
       <SessionReadiness canBook={canBook} googleConnected={false} availability={HOURS_SET} />);
     expect(html).toMatch(/students cannot book you yet/i);
-    expect(html).toMatch(/Google Calendar not connected/);
+    expect(html).toMatch(/Google not connected/);
+  });
+
+  it('Google connected + hours is the whole requirement', () => {
+    const canBook = verdict({ availability: { active: true }, hasRoom: false, googleConnected: true });
+    expect(canBook).toBe(true);
+    const html = renderToStaticMarkup(
+      <SessionReadiness canBook={canBook} googleConnected availability={HOURS_SET} />);
+    expect(html).toMatch(/Ready — students can book you/);
+    expect(html).toMatch(/Google Connected/);
   });
 
   it('says NOT ready when hours are missing, even with Google connected', () => {

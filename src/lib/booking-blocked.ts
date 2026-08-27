@@ -179,7 +179,7 @@ export interface CreditBlockPatch {
 export const NEXT_ACTION_FOR: Record<UnbookableReason, string> = {
   no_availability: 'Mentor has no calendar — set their availability, then tell the student',
   not_taking_bookings: 'Mentor is not taking bookings — reopen their calendar or arrange the session by hand',
-  no_meeting_room: 'Mentor has no meeting room — connect their Google account or set a room, then tell the student',
+  no_meeting_room: 'Mentor has not connected Google — get them connected, then tell the student',
 };
 
 export function creditBlockPatch(

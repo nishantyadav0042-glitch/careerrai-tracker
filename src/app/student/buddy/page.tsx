@@ -15,6 +15,7 @@ import { ChatThread } from '@/components/chat/chat-thread';
 import { SessionDebrief } from '@/components/student/session-debrief';
 import { SessionFeedbackCard } from '@/components/session/session-feedback-card';
 import { SchedulePicker } from '@/components/session/schedule-picker';
+import { PostPaymentGoogle } from '@/components/student/post-payment-google';
 
 export const metadata = {
   title: 'Buddy · CareerRai',
@@ -28,7 +29,11 @@ export const metadata = {
 export default async function BuddyPage({
   searchParams,
 }: { searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
-  await searchParams;
+  // ?pay=paid is appended by the Razorpay callback AFTER the payment is
+  // verified and the credit exists. It is the ONLY thing that reveals the
+  // Google offer below, which is what makes "never before payment" a property
+  // of the code rather than a promise about it.
+  const justPaid = (await searchParams)?.pay === 'paid';
   const user = await getAuthUser();
   if (!user) redirect('/login');
 
@@ -186,19 +191,37 @@ export default async function BuddyPage({
     }
   }
 
+  // Only asked on the post-payment render, so the ordinary visit costs nothing.
+  // `readPremiumProfile` deliberately returns the premium facts and no more, and
+  // widening that primitive for one card would be the wrong trade.
+  let hasEmailOnFile = true;
+  if (justPaid) {
+    const { data: emailRow } = await admin
+      .from('profiles').select('email').eq('id', user.id).maybeSingle();
+    hasEmailOnFile = !!emailRow?.email;
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-stone-50 to-white p-4 sm:p-6">
       <div className="max-w-md mx-auto pb-24">
         {/*
-          The student Google-connect card is DELIBERATELY not rendered.
+          POST-PAYMENT ONLY. Restored 27 Aug, and only because the benefit is
+          real again — the note that used to stand here was right to remove it
+          when it was not.
 
-          It sold one benefit: a calendar invite for each session. The
-          permanent-room architecture (founder, 5 Aug) stopped creating a
-          calendar event per booking, so connecting Google now buys a student
-          nothing. The component and the /api/google/* routes are kept intact —
-          restoring the card is this one line — but we do not ask students for
-          a Google account in exchange for a promise the app no longer keeps.
+          What connecting actually buys the student: an EMAIL ON THEIR PROFILE.
+          createCalendarHold() adds the student as an attendee by email
+          (google-meet.ts), so Google itself delivers the invite and its
+          reminders to their own calendar. With no email we send
+          `attendees: []` and they get nothing — and production is 924
+          phone-only accounts against 5 with an email, so today that is almost
+          everyone. This is the gap the card closes, which is why the copy
+          promises scheduling and reminders and nothing more.
+
+          It renders ONLY on ?pay=paid: after the money, after the credit,
+          never in front of either.
         */}
+        {justPaid && <PostPaymentGoogle connected={hasEmailOnFile} />}
         {buddyId && (
           <SessionDebrief
             buddyFirstName={buddyName}

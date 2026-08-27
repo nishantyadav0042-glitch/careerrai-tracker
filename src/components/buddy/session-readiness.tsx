@@ -6,7 +6,7 @@ import { CheckCircle2, XCircle } from 'lucide-react';
 // ── Can this mentor actually hold a session? ────────────────────────────────
 //
 // Two things must BOTH be true, and until now nothing said so out loud:
-// a Google connection (so a meeting room can exist) and a described week (so
+// a Google connection (so a session can be hosted) and a described week (so
 // slots can be computed). Production has eight mentors, zero connections and
 // zero availability rows — and every one of them believed they were set up.
 //
@@ -60,12 +60,11 @@ export function SessionReadiness({ canBook, googleConnected, availability }: {
 
   // THE CANONICAL VERDICT, passed in — never recomputed here.
   //
-  // This line used to read `googleConnected && configured && active !== false`,
-  // which required Google (a requirement removed elsewhere as a design
-  // mistake) and ignored a pasted meeting room entirely. A mentor with a room
-  // and hours was told "Not ready — students cannot book you" while the API
-  // happily accepted bookings for her. Seven definitions of bookable, four
-  // different answers for one real mentor; this was one of them.
+  // Still passed in, still never recomputed here — even though the rule now
+  // happens to be "Google + hours", which is exactly what the two rows below
+  // display. Rebuilding it from those two props would be a second definition
+  // that agrees today and drifts the first time the rule moves. It has moved
+  // twice already.
   const ready = canBook;
 
   async function save() {
@@ -100,10 +99,10 @@ export function SessionReadiness({ canBook, googleConnected, availability }: {
       <div className="mt-3 space-y-2">
         <Row
           ok={googleConnected}
-          label={googleConnected ? 'Google Calendar connected' : 'Google Calendar not connected'}
+          label={googleConnected ? 'Google Connected' : 'Google not connected'}
           detail={googleConnected
-            ? 'Your meeting room can be created.'
-            : 'Without this there is no room to put a student in. Connect it below.'}
+            ? 'Sessions, meeting links and reminders run through your calendar.'
+            : 'Connect Google to accept student sessions.'}
         />
         <Row
           ok={availability.configured && availability.active !== false}

@@ -24,10 +24,13 @@ import { decideBookability, type BookabilityFacts } from './session-assignment';
 // decideBookability() is now the only place the rule exists. Adapters are
 // allowed; competing definitions are not.
 
+// The BOOKABLE baseline, so each test states only what it is varying. Google
+// connected is part of that baseline as of 27 Aug — it is now the requirement,
+// not one of two ways to satisfy one.
 const facts = (o: Partial<BookabilityFacts> = {}): BookabilityFacts => ({
   availability: { active: true },
   hasRoom: true,
-  googleConnected: false,
+  googleConnected: true,
   ...o,
 });
 
@@ -50,14 +53,31 @@ describe('the six states, enumerated', () => {
     expect(d).toMatchObject({ reason: 'no_meeting_room' });
   });
 
-  it('availability ✓ / room ✓ / google ✗ → BOOKABLE', () => {
-    // The case the old rule got wrong: a pasted link is a room.
-    expect(decideBookability(facts({ hasRoom: true, googleConnected: false })).bookable).toBe(true);
+  it('availability ✓ / room ✓ / google ✗ → NOT bookable — the 27 Aug reversal', () => {
+    // This case flipped. A pasted link used to satisfy the rule on the
+    // reasoning that "a room is a room". Google is now the mentor's
+    // infrastructure — Calendar event, Meet link, reminders — and a pasted URL
+    // provides none of it, so a legacy room no longer makes anyone bookable.
+    //
+    // The room is still RECORDED, and every session already booked against it
+    // still opens. This is about taking NEW bookings.
+    const d = decideBookability(facts({ hasRoom: true, googleConnected: false }));
+    expect(d.bookable).toBe(false);
+    expect(d).toMatchObject({ reason: 'no_meeting_room' });
   });
 
   it('availability ✓ / room ✗ / google ✓ → BOOKABLE', () => {
-    // Google can mint a room, so it satisfies the same half.
+    // Google alone is now the whole requirement: it can mint the room.
     expect(decideBookability(facts({ hasRoom: false, googleConnected: true })).bookable).toBe(true);
+  });
+
+  it('hasRoom cannot rescue a mentor, and cannot condemn one either', () => {
+    // Stated directly, because `hasRoom` is still in the facts and a reader
+    // could reasonably assume it still counts. Google decides alone.
+    for (const hasRoom of [true, false]) {
+      expect(decideBookability(facts({ hasRoom, googleConnected: true })).bookable).toBe(true);
+      expect(decideBookability(facts({ hasRoom, googleConnected: false })).bookable).toBe(false);
+    }
   });
 
   it('availability ✗ / room ✗ / google ✓ → not bookable', () => {

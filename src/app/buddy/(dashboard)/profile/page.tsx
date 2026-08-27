@@ -6,10 +6,11 @@ import { Settings, Video } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { NotifPrefsPanel } from '@/components/notif-prefs-panel';
-import { MeetingRoomCard } from '@/components/buddy/meeting-room-card';
+import { GoogleConnectCard } from '@/components/buddy/google-connect-card';
 import { LogoutButton } from '@/components/logout-button';
 import type { NotifPrefs } from '@/types';
 import { sessionsVisibleFrom } from '@/lib/session-window';
+import { buddyBookingReadiness } from '@/lib/buddy-room';
 import { SpecialistForm } from './specialist-form';
 
 export default async function BuddyProfilePage() {
@@ -19,11 +20,14 @@ export default async function BuddyProfilePage() {
 
   const admin = createAdminClient();
   const { data: profile } = await admin.from('profiles').select(
-    'full_name, email, notif_prefs, buddy_meet_url, specialities, strongest_section, own_weakest_section, attempt_number, previous_percentile, languages, weekly_session_cap, notice_hours, buddy_story'
+    'full_name, email, notif_prefs, specialities, strongest_section, own_weakest_section, attempt_number, previous_percentile, languages, weekly_session_cap, notice_hours, buddy_story'
   ).eq('id', user.id).single();
   if (!profile) redirect('/login');
 
-  const [{ count: studentCount }, { data: upcomingSessions }] = await Promise.all([
+  const [googleReadiness, { count: studentCount }, { data: upcomingSessions }] = await Promise.all([
+    // The one adapter over decideBookability(), never a second opinion about
+    // whether this mentor is connected.
+    buddyBookingReadiness(user.id),
     admin
       .from('profiles')
       .select('id', { count: 'exact' })
@@ -114,10 +118,15 @@ export default async function BuddyProfilePage() {
         </Card>
       </div>
 
-      {/* Her own room, above the sessions that use it. Shown ALWAYS — including
-          when it is missing, because "you cannot book until you set this" is
-          the single most useful thing an unset mentor can be told. */}
-      <MeetingRoomCard meetUrl={(profile as { buddy_meet_url?: string | null }).buddy_meet_url ?? null} />
+      {/* The integration, above the sessions that depend on it. Shown ALWAYS
+          — including when it is missing, because "you cannot take bookings
+          until this is connected" is the single most useful thing an unset
+          mentor can be told. */}
+      <GoogleConnectCard
+        connected={googleReadiness.googleConnected}
+        email={googleReadiness.googleEmail}
+        from="/buddy/profile"
+      />
 
       {/* Upcoming sessions */}
       {(upcomingSessions?.length ?? 0) > 0 && (

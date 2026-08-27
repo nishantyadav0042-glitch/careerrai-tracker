@@ -19,7 +19,7 @@ import { INTENT_LABEL, type IntentKind } from '@/lib/session-intent';
 //
 // Production today has zero Google connections and zero availability rows, so
 // every student lands on `needs_team`. That is correct: offering a slot for a
-// mentor with no meeting room is exactly how sixteen sessions were sold and
+// mentor who cannot host a session is exactly how sixteen were sold and
 // none delivered.
 
 type Slot = { startIso: string; label: string };

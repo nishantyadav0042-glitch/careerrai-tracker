@@ -142,19 +142,26 @@ describe('the ₹299 relationship never becomes the premium one', () => {
 });
 
 describe('a student is never offered a slot nobody can hold', () => {
-  it('bookability requires availability AND a meeting room', async () => {
-    const noAvail = await mentorBookability(admin({ avail: null, profile: { buddy_meet_url: 'x' } }), 'b1');
+  it('bookability requires availability AND a connected Google account', async () => {
+    const noAvail = await mentorBookability(
+      admin({ avail: null, profile: { google_calendar_connected: true } }), 'b1');
     expect(noAvail.bookable).toBe(false);
 
-    const noRoom = await mentorBookability(
+    const noGoogle = await mentorBookability(
       admin({ avail: { active: true, timezone: 'Asia/Kolkata' },
         profile: { buddy_meet_url: null, google_calendar_connected: false } }), 'b1');
-    expect(noRoom.bookable).toBe(false);
-    expect(noRoom.bookable === false && noRoom.reason).toBe('no_meeting_room');
+    expect(noGoogle.bookable).toBe(false);
+    expect(noGoogle.bookable === false && noGoogle.reason).toBe('no_meeting_room');
+
+    // 27 Aug: a legacy pasted room no longer opens the door on its own.
+    const legacyRoomOnly = await mentorBookability(
+      admin({ avail: { active: true, timezone: 'Asia/Kolkata' },
+        profile: { buddy_meet_url: 'https://meet.google.com/x', google_calendar_connected: false } }), 'b1');
+    expect(legacyRoomOnly.bookable).toBe(false);
 
     const ok = await mentorBookability(
       admin({ avail: { active: true, timezone: 'Asia/Kolkata' },
-        profile: { buddy_meet_url: 'https://meet.google.com/x' } }), 'b1');
+        profile: { buddy_meet_url: null, google_calendar_connected: true } }), 'b1');
     expect(ok.bookable).toBe(true);
   });
 

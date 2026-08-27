@@ -47,7 +47,7 @@ export function SetRoom({ buddyId, hasRoom }: { buddyId: string; hasRoom: boolea
   return (
     <div className={`mt-3 rounded-2xl border p-3.5 ${hasRoom ? 'border-stone-200 bg-white' : 'border-red-300 bg-red-50'}`}>
       <p className={`text-[12px] font-bold ${hasRoom ? 'text-stone-700' : 'text-red-800'}`}>
-        {hasRoom ? 'Replace the meeting room' : 'No meeting room — this mentor cannot book a session'}
+        {hasRoom ? 'Replace the legacy meeting room' : 'No legacy meeting room on file'}
       </p>
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <input

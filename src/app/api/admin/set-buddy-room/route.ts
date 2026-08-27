@@ -11,7 +11,10 @@ export const dynamic = 'force-dynamic';
 // "Cannot run a session" — a mentor with students and no room — is a P0 the
 // founder must be able to clear from the surface that reports it, not by asking
 // the mentor to log in and do it themselves while a paid student waits. This is
-// the admin twin of /api/buddy/meeting-room: same link validation, same profile
+// Once the admin twin of /api/buddy/meeting-room. That mentor-facing route was
+// removed on 27 Aug when Google became the only mentor setup path; this one
+// survives as an OPS tool for legacy rooms and no longer makes anyone bookable
+// — decideBookability() asks about Google alone. Same link validation, same profile
 // write, but keyed on a buddy_id and gated to admins.
 export async function POST(request: NextRequest) {
   const supabase = await createClient();

@@ -133,7 +133,15 @@ export type Bookability =
 export interface BookabilityFacts {
   /** The availability row, or null when the mentor has never described a week. */
   availability: { active: boolean | null; timezone?: string | null } | null;
-  /** A room URL already recorded — pasted by the mentor or minted earlier. */
+  /**
+   * A room URL already recorded — pasted by the mentor, or minted from Google.
+   *
+   * RECORDED, NO LONGER DECISIVE (27 Aug). It stays in the facts because it
+   * stays TRUE: legacy rooms keep every session already booked against them
+   * joinable, and the admin surfaces report it. It simply no longer makes a
+   * mentor bookable on its own. Reading this field and concluding "so a pasted
+   * room is enough" is the mistake this comment exists to prevent.
+   */
   hasRoom: boolean;
   /** A live Google Calendar connection, from which a room CAN be minted. */
   googleConnected: boolean;
@@ -145,17 +153,34 @@ export interface BookabilityFacts {
  * Pure: same facts, same answer, no I/O and no clock — so every state can be
  * enumerated in a test rather than argued about.
  *
- * GOOGLE IS NOT INDEPENDENTLY MANDATORY. A room is a room whether Google
- * minted it or the mentor pasted their own link; requiring a Google
- * connection made booking hostage to Google's app-verification queue, which
- * is a dependency the product never needed. Either satisfies the room half.
+ * GOOGLE IS NOW THE MENTOR'S INFRASTRUCTURE — founder decision, 27 Aug, and a
+ * deliberate reversal of what this comment said before. The previous rule was
+ * `!hasRoom && !googleConnected`: a pasted link satisfied it, on the reasoning
+ * that "a room is a room" and that requiring Google made booking hostage to
+ * Google's verification queue. That reasoning was sound for the product we had
+ * and wrong for the product we want. It also had a cost that only showed up in
+ * the UI: it forced every mentor screen to explain a CHOICE — paste a room, or
+ * connect Google — and a setup question with two right answers is one most
+ * people simply do not finish.
+ *
+ * So the product is now one path. CareerRai owns the meeting infrastructure
+ * through the mentor's Google account: Calendar for the event, Meet for the
+ * link, and the reminders that hang off both. A pasted URL cannot do any of
+ * that, which is why "either satisfies the room half" no longer holds.
+ *
+ * THE REASON CODE DELIBERATELY DID NOT CHANGE. `no_meeting_room` is threaded
+ * through booking-blocked, session-credit, the ops queue and the student copy,
+ * and the student must never be told about Google — from where they stand the
+ * fact is unchanged: their mentor cannot host a call yet. Only the condition
+ * moved. What the MENTOR is told changes, and that lives in
+ * MENTOR_BLOCKER_COPY.
  */
 export function decideBookability(facts: BookabilityFacts): Bookability {
   if (!facts.availability) return { bookable: false, reason: 'no_availability' };
   if (facts.availability.active !== true) {
     return { bookable: false, reason: 'not_taking_bookings' };
   }
-  if (!facts.hasRoom && !facts.googleConnected) {
+  if (!facts.googleConnected) {
     return { bookable: false, reason: 'no_meeting_room' };
   }
   return { bookable: true, timezone: facts.availability.timezone ?? 'Asia/Kolkata' };

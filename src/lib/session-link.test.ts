@@ -159,18 +159,47 @@ describe('a session leaves the schedule an hour after it starts', () => {
 describe('a mentor who hits a scheduling error is never stuck', () => {
   const modal = readFileSync('src/components/schedule-session-modal.tsx', 'utf8');
 
-  it('offers them their own Meet room rather than a dead end', () => {
-    expect(modal).toContain('meet.google.com/new');
-    expect(modal).toContain('meetingLink');
-    expect(modal.toLowerCase()).toContain('new meeting');
+  // 27 Aug: the escape hatch these two tests guarded — "open meet.google.com,
+  // make a room, paste it here" — was REMOVED, and the rule they encode had to
+  // move with it rather than be deleted.
+  //
+  // The old hatch solved a real problem (a mentor stuck at 6:28pm with a
+  // student waiting) by offering a second way to get a meeting link. That
+  // second way is exactly what the founder removed: a setup question with two
+  // right answers, which is why nine mentors reached production with two
+  // pasted rooms, zero Google connections and no clear next step.
+  //
+  // "Never stuck" survives; "never stuck by pasting a link" does not. The
+  // error must still carry its own way out, and now there is only one.
+
+  it('offers the ONE fix, in the error itself — never a second way to make a link', () => {
+    expect(modal, 'the paste-your-own-room hatch must be gone')
+      .not.toContain('meet.google.com/new');
+    expect(modal, 'the modal must not send a hand-pasted link')
+      .not.toContain('meetingLink');
+    expect(modal, 'no room-vs-Google decision may survive here')
+      .not.toMatch(/paste/i);
+    expect(modal).toContain('Connect Google');
   });
 
-  it('the guidance appears WITH the error, not somewhere else', () => {
-    // A workaround the mentor has to go hunting for is a workaround that does
-    // not get used at 6:28pm with a student waiting.
-    const firstErrorBlock = modal.indexOf('{error && (');
-    const guidance = modal.indexOf('start your own Meet');
-    expect(guidance).toBeGreaterThan(-1);
-    expect(Math.abs(guidance - firstErrorBlock)).toBeLessThan(600);
+  it('the way out appears WITH the error, not somewhere else', () => {
+    // A fix the mentor has to go hunting for is a fix that does not get used
+    // at 6:28pm with a student waiting. Unchanged in spirit, one fix instead
+    // of two.
+    //
+    // Asserted as CONTAINMENT, not as a character distance. The first version
+    // of this allowed 600 characters between the two, which passed only because
+    // of how long the old block happened to be; the rewritten block is 737 and
+    // failed while being perfectly correct. A byte count was never the rule —
+    // "inside the error, above the submit button" is.
+    const errorBlock = modal.indexOf('{error && (');
+    const submitButton = modal.indexOf('onClick={handleCreate}');
+    const wayOut = modal.indexOf('Connect Google', errorBlock);
+
+    expect(errorBlock, 'the error block itself is gone').toBeGreaterThan(-1);
+    expect(submitButton, 'the submit button is gone — update this guard').toBeGreaterThan(-1);
+    expect(wayOut, 'the error carries no way out').toBeGreaterThan(-1);
+    expect(wayOut, 'the fix must sit inside the error, not after the form')
+      .toBeLessThan(submitButton);
   });
 });
