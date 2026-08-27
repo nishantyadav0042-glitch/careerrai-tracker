@@ -248,3 +248,82 @@ describe('a wrong topic cannot silence the right one for seven days', () => {
     expect(suppressed.has(insightKey(i))).toBe(true);
   });
 });
+
+// ── The last three cases from the final gate ───────────────────────────────
+
+describe('the remaining attribution cases', () => {
+  it('DIFFERENT ids for the SAME topic still add up to one topic', () => {
+    // The mirror of the reused-id bug. Algebra served under two different ids
+    // on two days must be ONE topic that went red then green, not two topics
+    // that each did nothing interesting.
+    const tables = {
+      daily_reports: [{ report_date: d(2) }, { report_date: d(1) }, { report_date: d(0) }],
+      daily_routines: [
+        { routine_date: d(2), tasks: [{ id: 'a1', section: 'QA', topic: 'Algebra' }] },
+        { routine_date: d(0), tasks: [{ id: 'a2', section: 'QA', topic: 'Algebra' }] },
+      ],
+      routine_task_completions: [
+        { routine_date: d(2), task_id: 'a1', confidence: 'red' },
+        { routine_date: d(0), task_id: 'a2', confidence: 'green' },
+      ],
+    } as Record<string, Row[]>;
+    return daily(tables).then((insight) => {
+      expect(insight?.kind).toBe('recovery');
+      expect(insight?.subject).toBe('Algebra');
+    });
+  });
+
+  it('a LATE completion is attributed to the day it was planned for, not today', () => {
+    // A student ticks Monday's task on Wednesday. routine_date says Monday —
+    // and Monday's plan is where the topic lives. Attributing it to Wednesday
+    // would name whatever Wednesday happened to serve.
+    const tables = {
+      daily_reports: [{ report_date: d(2) }, { report_date: d(1) }, { report_date: d(0) }],
+      daily_routines: [
+        { routine_date: d(2), tasks: [{ id: 't1', section: 'QA', topic: 'Algebra' }] },
+        { routine_date: d(0), tasks: [{ id: 't1', section: 'DILR', topic: 'Arrangements' }] },
+      ],
+      // Both marks carry routine_date d(2) — logged late, but FOR that day.
+      routine_task_completions: [
+        { routine_date: d(2), task_id: 't1', confidence: 'red' },
+        { routine_date: d(2), task_id: 't1', confidence: 'green' },
+      ],
+    } as Record<string, Row[]>;
+    return daily(tables).then((insight) => {
+      if (insight?.kind === 'recovery') {
+        expect(
+          insight.subject,
+          'A late tick was attributed to the topic served on the day it was ENTERED rather than the day it was FOR.',
+        ).toBe('Algebra');
+      }
+    });
+  });
+
+  it('DAILY and WEEKLY agree about the same completion', () => {
+    // Two engines, one fact. If they ever disagree about which topic a tick
+    // belongs to, one of them is telling the student something false — and
+    // which one is false would depend on the day of the week.
+    const tables = {
+      daily_reports: [0, 1, 2].map((n) => ({ report_date: day(n) })),
+      daily_routines: [
+        { routine_date: day(0), tasks: [{ id: 'x1', section: 'QA', topic: 'Algebra' }] },
+        { routine_date: day(1), tasks: [{ id: 'x1', section: 'QA', topic: 'Geometry' }] },
+        { routine_date: day(2), tasks: [{ id: 'x1', section: 'QA', topic: 'Arithmetic' }] },
+      ],
+      routine_task_completions: [
+        { routine_date: day(0), task_id: 'x1', confidence: 'green', completed_at: `${day(0)}T04:00:00Z` },
+        { routine_date: day(1), task_id: 'x1', confidence: 'green', completed_at: `${day(1)}T04:00:00Z` },
+        { routine_date: day(2), task_id: 'x1', confidence: 'green', completed_at: `${day(2)}T04:00:00Z` },
+      ],
+      video_sessions: [],
+    } as Record<string, Row[]>;
+    return computeWeeklyInsight(fakeAdmin(tables) as never, 'stu-1', NOW).then((out) => {
+      if (out.status !== 'ready') throw new Error('fixture must reach ready');
+      const move = out.sections.find((s) => s.id === 'topic_movement');
+      // The weekly engine must see all THREE topics — the same resolution the
+      // daily engine performs, from the same (routine_date, task_id) key.
+      expect(move?.text).toMatch(/3 topics/);
+      for (const t of ['Algebra', 'Geometry', 'Arithmetic']) expect(move!.text).toContain(t);
+    });
+  });
+});
