@@ -23,6 +23,12 @@ import { execSync } from 'node:child_process';
 const NOT_JOIN_SURFACES = [
   // Tomorrow's reminder. A session already running is not tomorrow's.
   'src/app/api/cron/session-tomorrow/route.ts',
+  // The 30-minute reminder, for the same reason and no other. It says "starts
+  // in N minutes"; a session already 'active' has started, and pushing that
+  // sentence to two people mid-call is a lie on their lock screens. This
+  // surface shows NO join button and grants NO access — it only decides
+  // whether a not-yet-begun session is close enough to be worth announcing.
+  'src/app/api/cron/session-reminder/route.ts',
 ];
 
 function surfaces(): string[] {

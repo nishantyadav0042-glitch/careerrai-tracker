@@ -93,6 +93,12 @@ export const EVENT_POLICY: Readonly<Record<string, EventPolicy>> = {
   // ── Session lifecycle — transactional ────────────────────────────────────
   session_scheduled:   { importance: 'P0', taxonomy: 'transactional', ladder: ['whatsapp', 'push'], urgent: true },
   session_reminder:    { importance: 'P1', taxonomy: 'transactional', ladder: ['calendar', 'whatsapp', 'push'] },
+  // The last message before the room. Same taxonomy and rails as its
+  // day-before sibling, but P0: at T-30 the student can still act, and a
+  // reminder that arrives after the hour is worth nothing. `urgent` so it
+  // survives quiet hours — a session at 8am is exactly the case that needs
+  // waking someone, and they asked for it by booking the slot.
+  session_reminder_30m:{ importance: 'P0', taxonomy: 'transactional', ladder: ['whatsapp', 'push'], urgent: true },
   session_cancelled:   { importance: 'P0', taxonomy: 'transactional', ladder: ['whatsapp', 'push'], urgent: true },
   // NOT urgent, deliberately. An expiry is discovered hours after the fact by
   // a cron — the session is already gone and nothing the student does tonight
