@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminCtx } from '@/lib/require-admin';
+import { decideBookability } from '@/lib/session-assignment';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,13 +31,19 @@ export async function GET(request: NextRequest) {
   const hours = Number(new URL(request.url).searchParams.get('hours')) || WINDOW_HOURS;
   const since = new Date(Date.now() - hours * 3_600_000).toISOString();
 
-  const [{ data: buddies }, { data: tokens }, { data: events }] = await Promise.all([
+  const [{ data: buddies }, { data: tokens }, { data: events }, { data: availRows }] = await Promise.all([
     admin.from('profiles').select('id, buddy_meet_url, buddy_meet_email').eq('role', 'buddy'),
     admin.from('google_oauth_tokens').select('user_id, google_email'),
     admin.from('integration_audit_log').select('action, ok, detail, created_at').gte('created_at', since).limit(5000),
-  ]);
+      admin.from('buddy_availability').select('buddy_id, active, timezone'),
+]);
 
   const connected = new Map((tokens ?? []).map((t) => [t.user_id, t.google_email]));
+  // Availability is half the canonical rule; without it this file could only
+  // ever answer a different question than the booking API.
+  const availByBuddy = new Map(
+    (availRows ?? []).map((a) => [a.buddy_id, { active: a.active as boolean | null, timezone: a.timezone as string | null }]),
+  );
   const all = buddies ?? [];
 
   const withRoom = all.filter((b) => b.buddy_meet_url);
@@ -52,8 +59,15 @@ export async function GET(request: NextRequest) {
     googleDisconnected: all.filter((b) => !connected.has(b.id)).length,
     roomsCreated: withRoom.length,
     roomOwnerMismatch: mismatched.length,
-    // The one that is an outage: connected but no room, or no connection.
-    cannotBook: all.filter((b) => !connected.has(b.id) || !b.buddy_meet_url).length,
+    // THE CANONICAL RULE. This counted a mentor as unable to book whenever
+    // Google was absent — a requirement removed elsewhere as a design mistake,
+    // so this metric was reporting an outage that did not exist while missing
+    // the one that did (no hours). Google is not independently mandatory.
+    cannotBook: all.filter((b) => !decideBookability({
+      availability: availByBuddy.get(b.id) ?? null,
+      hasRoom: !!b.buddy_meet_url,
+      googleConnected: connected.has(b.id),
+    }).bookable).length,
   };
 
   // Activity — what happened in the window.

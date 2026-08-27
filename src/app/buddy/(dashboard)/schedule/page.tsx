@@ -55,6 +55,7 @@ export default async function BuddySchedulePage({
         {/* Pasting a link beats waiting on Google's verification queue, so it
             leads. Google stays available as the "make one for me" shortcut. */}
         <SessionReadiness
+          canBook={readiness.ready}
           googleConnected={readiness.googleConnected}
           availability={{
             configured: availabilityRow != null,

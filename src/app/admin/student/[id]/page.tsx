@@ -9,6 +9,7 @@ import { findSacredFailures } from '@/lib/os/sacred-guard';
 import { EntityNeighbours } from '@/components/admin/entity-neighbours';
 import { ShieldAlert } from 'lucide-react';
 import { StudentActions, type MentorOption } from './student-actions';
+import { decideBookability } from '@/lib/session-assignment';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Student 360 · CareerRai' };
@@ -39,7 +40,7 @@ export default async function Student360Page({ params }: { params: Promise<{ id:
   const { id } = await params;
   const { admin } = await requireAdmin();
 
-  const [s, entity, allAlerts, { data: mentorRows }, { data: assignmentRows }, { data: studentRow }] = await Promise.all([
+  const [s, entity, allAlerts, { data: mentorRows }, { data: assignmentRows }, { data: studentRow }, { data: availRows }, { data: tokenRows }] = await Promise.all([
     getStudent360(admin, id),
     resolveEntity(admin, 'student', id),
     findSacredFailures(admin, Date.now()),
@@ -47,6 +48,8 @@ export default async function Student360Page({ params }: { params: Promise<{ id:
     admin.from('profiles').select('buddy_id').eq('role', 'student').not('buddy_id', 'is', null)
       .not('is_test_account', 'is', true).not('is_demo', 'is', true),
     admin.from('profiles').select('buddy_id').eq('id', id).single(),
+    admin.from('buddy_availability').select('buddy_id, active, timezone'),
+    admin.from('google_oauth_tokens').select('user_id'),
   ]);
   if (!s) {
     return (
@@ -62,13 +65,29 @@ export default async function Student360Page({ params }: { params: Promise<{ id:
 
   // Mentor supply, for the inline assign action. Load is the count of students
   // already pointing at each mentor, so the founder can pick the lightest one.
+  // Both halves of the canonical rule, so the assign action shows the same
+  // verdict the booking API will apply.
+  type AvailFact = { active: boolean | null; timezone: string | null };
+  const availByBuddy = new Map<string, AvailFact>(
+    (availRows ?? []).map((a: { buddy_id: string; active: boolean | null; timezone: string | null }) =>
+      [a.buddy_id, { active: a.active, timezone: a.timezone }]),
+  );
+  const googleConnectedIds = new Set<string>((tokenRows ?? []).map((t: { user_id: string }) => t.user_id));
   const load = new Map<string, number>();
   for (const a of assignmentRows ?? []) load.set(a.buddy_id as string, (load.get(a.buddy_id as string) ?? 0) + 1);
   const mentors: MentorOption[] = (mentorRows ?? []).map((m: { id: string; full_name: string | null; buddy_meet_url: string | null }) => ({
     id: m.id,
     name: m.full_name ?? 'Mentor',
     students: load.get(m.id) ?? 0,
-    hasRoom: !!m.buddy_meet_url,
+    // Canonical bookability, not "has a room". Assigning a student to a
+    // mentor with a room but no hours is exactly how a paid student ended up
+    // unable to book for two days — the assign action must show the same
+    // verdict the booking API will apply.
+    hasRoom: decideBookability({
+      availability: availByBuddy.get(m.id) ?? null,
+      hasRoom: !!m.buddy_meet_url,
+      googleConnected: googleConnectedIds.has(m.id),
+    }).bookable,
   }));
   const currentBuddyId = (studentRow?.buddy_id as string | null) ?? null;
   const currentBuddyName = currentBuddyId ? (mentors.find((m) => m.id === currentBuddyId)?.name ?? 'Assigned') : null;

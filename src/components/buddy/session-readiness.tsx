@@ -40,7 +40,9 @@ function Row({ ok, label, detail }: { ok: boolean; label: string; detail: string
   );
 }
 
-export function SessionReadiness({ googleConnected, availability }: {
+export function SessionReadiness({ canBook, googleConnected, availability }: {
+  /** decideBookability()'s verdict, computed on the server. The one rule. */
+  canBook: boolean;
   googleConnected: boolean;
   availability: {
     configured: boolean;
@@ -56,7 +58,15 @@ export function SessionReadiness({ googleConnected, availability }: {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const ready = googleConnected && availability.configured && availability.active !== false;
+  // THE CANONICAL VERDICT, passed in — never recomputed here.
+  //
+  // This line used to read `googleConnected && configured && active !== false`,
+  // which required Google (a requirement removed elsewhere as a design
+  // mistake) and ignored a pasted meeting room entirely. A mentor with a room
+  // and hours was told "Not ready — students cannot book you" while the API
+  // happily accepted bookings for her. Seven definitions of bookable, four
+  // different answers for one real mentor; this was one of them.
+  const ready = canBook;
 
   async function save() {
     setSaving(true); setError(null);
