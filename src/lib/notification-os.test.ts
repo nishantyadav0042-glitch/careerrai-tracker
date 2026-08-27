@@ -109,7 +109,7 @@ vi.mock('@/lib/push', () => ({
   },
 }));
 
-import { dispatch, isStudentBudgetType, STUDENT_BUDGET_TYPES, DAILY_BUDGET } from './notification-os';
+import { dispatch, isStudentBudgetType, STUDENT_BUDGET_TYPES, DAILY_BUDGET, outcomeWroteRow } from './notification-os';
 
 beforeEach(() => {
   rows = [];
@@ -286,10 +286,21 @@ describe('Notification Reliability V2, Phase 11 — duplicate suppression and in
     expect(suppressionLog).toHaveLength(0);
   });
 
-  it('a genuine insert failure (not 23505) reports failed instead of silently returning sent', async () => {
+  it('a genuine insert failure (not 23505) reports create_failed instead of silently returning sent', async () => {
+    // Phase 5's property is unchanged and is the one that matters: an insert
+    // failure must NEVER be reported as success.
+    //
+    // 27 Aug: the value is now 'create_failed' rather than 'failed'. 'failed'
+    // was carrying two opposite meanings — "the insert failed" (NO ROW) and
+    // "the push failed" (ROW EXISTS) — and a caller cannot tell them apart.
+    // The daily-insight cron records "this student was shown this insight"
+    // from that answer; recording one for a row that was never written costs
+    // the student a real insight for seven days.
     insertErrorCode = '23P01'; // any non-duplicate Postgres error
     const outcome = await dispatch(opts());
-    expect(outcome).toBe('failed');
+    expect(outcome).toBe('create_failed');
+    expect(outcome, 'an insert failure must never read as success').not.toBe('sent');
+    expect(outcomeWroteRow(outcome), 'no row was written, so nothing was shown').toBe(false);
     expect(sendCalls).toHaveLength(0);
   });
 });

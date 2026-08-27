@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { authorizedCron } from '@/lib/cron-auth';
 import { computeDailyInsight, loadSuppressedInsightKeys, recordInsightShown } from '@/lib/daily-insight';
-import { dispatch } from '@/lib/notification-os';
+import { dispatch, outcomeWroteRow } from '@/lib/notification-os';
 import { withCronTracking } from '@/lib/cron-run-tracker';
 
 export const dynamic = 'force-dynamic';
@@ -69,12 +69,36 @@ async function dailyInsightRun(): Promise<NextResponse> {
       expectedAction: 'open_plan',
       prefs: (s.notif_prefs ?? {}) as Record<string, unknown>,
     });
-    if (outcome === 'sent') {
-      sent++;
-      // Only a delivered push counts as "shown" — a budget-skipped one must
-      // not silence tomorrow's card.
+    // ── RECORD WHAT THE STUDENT WAS SHOWN, NOT WHAT THE PUSH DID ──────────
+    //
+    // This gate used to be `outcome === 'sent'`, on the reasoning that "only a
+    // delivered push counts as shown". That is right for budget_exhausted and
+    // duplicate_suppressed — in both, dispatch() creates NO row, so nothing was
+    // shown and silencing tomorrow would be wrong.
+    //
+    // It is WRONG for 'failed' and 'daily_cap'. In both of those dispatch() has
+    // ALREADY WRITTEN THE NOTIFICATION ROW; only the push leg did not land. The
+    // student still sees the insight in their tray. Skipping the record left
+    // the ledger empty, so tomorrow nothing was suppressed, the same rule fired
+    // again, and the same insight was written again — every day, forever.
+    //
+    // Measured in production 27 Aug, before this fix: of 54 students receiving
+    // a daily insight in 14 days, 21 had ZERO successful sends and therefore no
+    // ledger rows at all, and 28 received an IDENTICAL insight body on three or
+    // more days. One account received "Only 0 of 5 VARC tasks done" on eleven
+    // consecutive days with nine `failed` sends and an empty ledger.
+    //
+    // The condition is therefore "did a row get written", not "did the push
+    // arrive" — which is exactly the distinction the delivery model already
+    // draws everywhere else: the row is the EVENT, pushed_at is the DELIVERY.
+    // outcomeWroteRow() is the authority, not a list repeated here. 'failed'
+    // alone was ambiguous — it meant both "the insert failed" (no row) and
+    // "the push failed" (row exists). dispatch() now separates them.
+    const rowWasWritten = outcomeWroteRow(outcome);
+    if (outcome === 'sent') sent++; else skipped++;
+    if (rowWasWritten) {
       await recordInsightShown(admin, s.id, insight).catch(() => {});
-    } else skipped++;
+    }
   }
 
   return NextResponse.json({ ok: true, sent, skipped });
