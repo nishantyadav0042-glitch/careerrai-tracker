@@ -40,10 +40,9 @@ function Row({ ok, label, detail }: { ok: boolean; label: string; detail: string
   );
 }
 
-export function SessionReadiness({ canBook, googleConnected, availability }: {
+export function SessionReadiness({ canBook, availability }: {
   /** decideBookability()'s verdict, computed on the server. The one rule. */
   canBook: boolean;
-  googleConnected: boolean;
   availability: {
     configured: boolean;
     work_days?: number[]; start_minute?: number; end_minute?: number;
@@ -98,13 +97,12 @@ export function SessionReadiness({ canBook, googleConnected, availability }: {
       </p>
 
       <div className="mt-3 space-y-2">
-        <Row
-          ok={googleConnected}
-          label={googleConnected ? 'Google Calendar connected' : 'Google Calendar not connected'}
-          detail={googleConnected
-            ? 'Your meeting room can be created.'
-            : 'Without this there is no room to put a student in. Connect it below.'}
-        />
+        {/* The Google row lived here and pointed at nothing — its detail said
+            "Connect it below" while the only connect link sat in a different
+            card. Google is now the GoogleConnect card's single job, rendered
+            directly above this one, so repeating it here would be the second
+            visible setup prompt the 27 Aug simplification removed. This card
+            is availability, and only availability. */}
         <Row
           ok={availability.configured && availability.active !== false}
           label={availability.configured

@@ -157,20 +157,37 @@ describe('a session leaves the schedule an hour after it starts', () => {
 });
 
 describe('a mentor who hits a scheduling error is never stuck', () => {
+  // ── THE FIX CHANGED; THE PROPERTY DID NOT (27 Aug) ─────────────────────────
+  //
+  // These two tests used to require the 9 Aug escape hatch: on any scheduling
+  // error, a "start your own Meet" box where the mentor pasted a link, sent to
+  // the route as `meetingLink`. That was the second way to configure meeting
+  // infrastructure, and the founder removed the manual-room UX entirely —
+  // Google Connect is now the one mentor setup path.
+  //
+  // So the assertions are inverted rather than deleted. The property they
+  // protect is still exactly right and still enforced below: a mentor looking
+  // at a red error at 6:28pm with a student waiting must see the fix next to
+  // the error, not go hunting for it. The fix is now Connect Google.
   const modal = readFileSync('src/components/schedule-session-modal.tsx', 'utf8');
+  const code = modal.replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1');
 
-  it('offers them their own Meet room rather than a dead end', () => {
-    expect(modal).toContain('meet.google.com/new');
-    expect(modal).toContain('meetingLink');
-    expect(modal.toLowerCase()).toContain('new meeting');
+  it('no longer asks the mentor to supply a room by hand', () => {
+    expect(code, 'the make-your-own-room link is manual-room UX').not.toContain('meet.google.com/new');
+    expect(code, 'the product must not send a hand-pasted meetingLink').not.toContain('meetingLink');
+    expect(code.toLowerCase()).not.toContain('new meeting');
   });
 
-  it('the guidance appears WITH the error, not somewhere else', () => {
-    // A workaround the mentor has to go hunting for is a workaround that does
-    // not get used at 6:28pm with a student waiting.
-    const firstErrorBlock = modal.indexOf('{error && (');
-    const guidance = modal.indexOf('start your own Meet');
-    expect(guidance).toBeGreaterThan(-1);
-    expect(Math.abs(guidance - firstErrorBlock)).toBeLessThan(600);
+  it('the recovery appears WITH the error, not somewhere else', () => {
+    const firstErrorBlock = code.indexOf('{error && (');
+    expect(firstErrorBlock).toBeGreaterThan(-1);
+    // The one-tap fix for the one recoverable failure class (not_connected /
+    // auth_expired) sits inside that same error block.
+    const recovery = code.indexOf('needsGoogle && (');
+    expect(recovery, 'an error with no way out is a dead end').toBeGreaterThan(-1);
+    expect(Math.abs(recovery - firstErrorBlock)).toBeLessThan(600);
+    expect(code.slice(firstErrorBlock)).toMatch(/Connect Google/);
   });
 });

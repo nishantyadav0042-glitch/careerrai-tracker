@@ -61,12 +61,34 @@ export async function GET(request: Request) {
   // only moment it is ever created. Every session they run for the rest of
   // their time on CareerRai uses this link.
   //
-  // A failure is logged, not surfaced: the connection itself succeeded, and
-  // the first booking calls ensureBuddyRoom again anyway. Turning a working
-  // connection into "failed" over a retryable step would be a lie.
+  // ── A HALF-SUCCESS IS NOT A SUCCESS (27 Aug) ──────────────────────────────
+  //
+  // This used to console.error the failure and redirect ?google=connected
+  // anyway, on the reasoning that the connection itself had worked. That was
+  // true and still misleading: with Google now the ONLY mentor setup path, a
+  // mentor whose room was never minted has no room, is not bookable, and was
+  // being shown "Google connected" with nothing left to do. The paste-a-link
+  // card that used to be their way out has been removed.
+  //
+  // So the two outcomes are now told apart. `room_failed` is not a failed
+  // connection — the token is stored and reconnecting re-runs ensureBuddyRoom,
+  // which is the actual recovery — it is a connection that has not yet
+  // produced the thing the mentor needs. The UI states it honestly and offers
+  // that retry.
+  //
+  // Audited, not just logged: a failure nobody can read is a failure you debug
+  // twice, and this is the exact step that has never once succeeded in
+  // production (google_oauth_tokens has been empty for the product's life).
   if (profile?.role === 'buddy') {
     const room = await ensureBuddyRoom(user.id);
-    if (!room.ok) console.error('[google] permanent room not created:', room.reason, room.error);
+    if (!room.ok) {
+      console.error('[google] permanent room not created:', room.reason, room.error);
+      await audit({
+        subjectId: user.id, action: 'room.created', ok: false,
+        detail: { stage: 'post_connect', failure: room.reason, error: room.error },
+      });
+      return NextResponse.redirect(new URL(`${back}?google=room_failed`, request.url));
+    }
   }
 
   return NextResponse.redirect(new URL(`${back}?google=connected`, request.url));

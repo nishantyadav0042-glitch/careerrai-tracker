@@ -4,7 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { MeetingWidget } from '@/components/meeting-widget';
-import { MeetingRoomSetup } from '@/components/buddy/meeting-room-setup';
+import { GoogleConnect } from '@/components/buddy/google-connect';
 import { SessionReadiness } from '@/components/buddy/session-readiness';
 import { buddyBookingReadiness } from '@/lib/buddy-room';
 
@@ -52,11 +52,19 @@ export default async function BuddySchedulePage({
       </div>
 
       <div className="max-w-2xl mx-auto px-4 py-6 space-y-4">
-        {/* Pasting a link beats waiting on Google's verification queue, so it
-            leads. Google stays available as the "make one for me" shortcut. */}
+        {/* Connect Google leads, and it is the ONLY meeting-infrastructure
+            path a mentor sees. The paste-your-own-room card that used to sit
+            below this was the second visible way to configure the same thing;
+            removing it is the 27 Aug simplification. */}
+        <GoogleConnect
+          googleConnected={readiness.googleConnected}
+          hasRoom={readiness.hasRoom}
+          googleEmail={readiness.googleEmail}
+          from="/buddy/schedule"
+          googleStatus={googleStatus}
+        />
         <SessionReadiness
           canBook={readiness.ready}
-          googleConnected={readiness.googleConnected}
           availability={{
             configured: availabilityRow != null,
             work_days: (availabilityRow?.work_days as number[] | undefined),
@@ -67,7 +75,6 @@ export default async function BuddySchedulePage({
             active: (availabilityRow?.active as boolean | undefined),
           }}
         />
-        <MeetingRoomSetup currentRoom={readiness.roomUrl} from="/buddy/schedule" googleStatus={googleStatus} />
         {/* The widget is ALWAYS shown now. Hiding it when Google was not
             connected meant a mentor lost the whole surface and had to go find
             the connect button elsewhere; the modal itself now leads with

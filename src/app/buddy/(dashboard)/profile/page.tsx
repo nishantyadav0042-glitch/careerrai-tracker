@@ -6,7 +6,6 @@ import { Settings, Video } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { NotifPrefsPanel } from '@/components/notif-prefs-panel';
-import { MeetingRoomCard } from '@/components/buddy/meeting-room-card';
 import { LogoutButton } from '@/components/logout-button';
 import type { NotifPrefs } from '@/types';
 import { sessionsVisibleFrom } from '@/lib/session-window';
@@ -114,10 +113,12 @@ export default async function BuddyProfilePage() {
         </Card>
       </div>
 
-      {/* Her own room, above the sessions that use it. Shown ALWAYS — including
-          when it is missing, because "you cannot book until you set this" is
-          the single most useful thing an unset mentor can be told. */}
-      <MeetingRoomCard meetUrl={(profile as { buddy_meet_url?: string | null }).buddy_meet_url ?? null} />
+      {/* The meeting-room card used to sit here, showing the mentor their own
+          buddy_meet_url with a copy button. Removed 27 Aug: the room is an
+          implementation detail of the Google connection now, and a mentor who
+          has to understand it is a mentor we have handed our plumbing to.
+          Setup lives on /buddy/home and /buddy/schedule as one action —
+          Connect Google — and nowhere else. */}
 
       {/* Upcoming sessions */}
       {(upcomingSessions?.length ?? 0) > 0 && (
