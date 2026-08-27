@@ -37,6 +37,8 @@ function chain(result: unknown) {
 const admin = (opts: {
   roster?: unknown[]; rosterFails?: boolean; rpc?: unknown;
   avail?: unknown; profile?: unknown;
+  /** A google_oauth_tokens row, i.e. a live connection. THE source of truth. */
+  googleToken?: boolean;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 }): any => ({
   from(table: string) {
@@ -50,6 +52,11 @@ const admin = (opts: {
       return c;
     }
     if (table === 'buddy_availability') return chain({ data: opts.avail ?? null, error: null });
+    // bookabilityFacts asks the TOKEN table, not the dead
+    // profiles.google_calendar_connected column it used to read.
+    if (table === 'google_oauth_tokens') {
+      return chain({ data: opts.googleToken ? { user_id: 'b1' } : null, error: null });
+    }
     if (table === 'session_credits') return chain({ data: [], error: null });
     if (table === 'mentor_grants') return chain({ data: null, error: null });
     return chain({ data: null, error: null });
@@ -143,25 +150,29 @@ describe('the ₹299 relationship never becomes the premium one', () => {
 
 describe('a student is never offered a slot nobody can hold', () => {
   it('bookability requires availability AND a connected Google account', async () => {
+    // The connection is read from google_oauth_tokens. It used to be read from
+    // profiles.google_calendar_connected, a column nothing has written for
+    // weeks — harmless while a pasted room could carry a mentor past it, and a
+    // total outage the moment Google became mandatory.
     const noAvail = await mentorBookability(
-      admin({ avail: null, profile: { google_calendar_connected: true } }), 'b1');
+      admin({ avail: null, googleToken: true }), 'b1');
     expect(noAvail.bookable).toBe(false);
 
     const noGoogle = await mentorBookability(
       admin({ avail: { active: true, timezone: 'Asia/Kolkata' },
-        profile: { buddy_meet_url: null, google_calendar_connected: false } }), 'b1');
+        profile: { buddy_meet_url: null }, googleToken: false }), 'b1');
     expect(noGoogle.bookable).toBe(false);
     expect(noGoogle.bookable === false && noGoogle.reason).toBe('no_meeting_room');
 
     // 27 Aug: a legacy pasted room no longer opens the door on its own.
     const legacyRoomOnly = await mentorBookability(
       admin({ avail: { active: true, timezone: 'Asia/Kolkata' },
-        profile: { buddy_meet_url: 'https://meet.google.com/x', google_calendar_connected: false } }), 'b1');
+        profile: { buddy_meet_url: 'https://meet.google.com/x' }, googleToken: false }), 'b1');
     expect(legacyRoomOnly.bookable).toBe(false);
 
     const ok = await mentorBookability(
       admin({ avail: { active: true, timezone: 'Asia/Kolkata' },
-        profile: { buddy_meet_url: null, google_calendar_connected: true } }), 'b1');
+        profile: { buddy_meet_url: null }, googleToken: true }), 'b1');
     expect(ok.bookable).toBe(true);
   });
 

@@ -188,16 +188,36 @@ export function decideBookability(facts: BookabilityFacts): Bookability {
 
 /** Read the facts for one mentor. The only query behind the rule. */
 export async function bookabilityFacts(admin: any, buddyId: string): Promise<BookabilityFacts> {
-  const [{ data: avail }, { data: prof }] = await Promise.all([
+  const [{ data: avail }, { data: prof }, { data: token }] = await Promise.all([
     admin.from('buddy_availability')
       .select('timezone, active').eq('buddy_id', buddyId).maybeSingle(),
     admin.from('profiles')
-      .select('buddy_meet_url, google_calendar_connected').eq('id', buddyId).maybeSingle(),
+      .select('buddy_meet_url').eq('id', buddyId).maybeSingle(),
+    // ── THE TOKEN, NOT THE COLUMN ──────────────────────────────────────────
+    //
+    // This read used to be `profiles.google_calendar_connected`, and that
+    // column has not been written by anything in this codebase for weeks —
+    // two other files say so in their own comments, having each been bitten by
+    // it. Under the old rule the mistake was survivable: bookability was
+    // `hasRoom || googleConnected`, so a pasted room carried mentors past a
+    // fact that was always false.
+    //
+    // Making Google mandatory (27 Aug) removed that cover and turned a stale
+    // read into a total outage: every mentor would have been unbookable
+    // forever, INCLUDING after successfully connecting Google, because nothing
+    // would ever have set the column back to true.
+    //
+    // google_oauth_tokens is the only thing that actually knows. A row exists
+    // while the connection does, and clearGoogleState() deletes it on
+    // disconnect, on revoke, and on a 401 — so revoked access closes the door
+    // by itself rather than waiting for a flag nobody updates.
+    admin.from('google_oauth_tokens')
+      .select('user_id').eq('user_id', buddyId).maybeSingle(),
   ]);
   return {
     availability: avail ? { active: avail.active as boolean | null, timezone: avail.timezone as string | null } : null,
     hasRoom: prof?.buddy_meet_url != null,
-    googleConnected: prof?.google_calendar_connected === true,
+    googleConnected: !!token,
   };
 }
 

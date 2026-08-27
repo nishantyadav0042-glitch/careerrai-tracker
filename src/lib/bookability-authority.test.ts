@@ -179,3 +179,40 @@ describe('no second definition of mentor bookability', () => {
     }
   });
 });
+
+// ── THE FACT MUST COME FROM SOMETHING THAT IS STILL WRITTEN ─────────────────
+//
+// 27 Aug, caught before shipping and worth a permanent test.
+//
+// bookabilityFacts() read `profiles.google_calendar_connected` — a column
+// nothing in this codebase has written for weeks. Two other files already
+// carry comments saying so, each having been misled by it. It survived because
+// the rule was `hasRoom || googleConnected`: a pasted room carried every
+// mentor past a fact that was permanently false.
+//
+// Making Google mandatory removed that cover, and the stale read stopped being
+// cosmetic: with the column never set, EVERY mentor would have been unbookable
+// forever — including immediately after successfully connecting Google. A
+// correct rule reading a dead fact is still a total outage, and the rule looks
+// perfect while it happens.
+//
+// google_oauth_tokens is the only thing that knows: a row exists while the
+// connection does, and clearGoogleState() deletes it on disconnect, on revoke
+// and on a 401.
+describe('the connection fact is read from the token, not a dead column', () => {
+  const source = readFileSync('src/lib/session-assignment.ts', 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1');
+
+  it('bookabilityFacts asks google_oauth_tokens', () => {
+    expect(source).toMatch(/from\(['"]google_oauth_tokens['"]\)/);
+  });
+
+  it('bookabilityFacts never reads profiles.google_calendar_connected again', () => {
+    expect(
+      /google_calendar_connected/.test(source),
+      'that column is not written by anything — reading it makes every mentor '
+        + 'permanently unbookable, and the rule above will look correct while it does',
+    ).toBe(false);
+  });
+});
