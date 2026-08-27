@@ -144,7 +144,31 @@ export interface DispatchOptions {
 // success ('if (outcome === "sent") sent++') — verified across all 27 call
 // sites before this change — so adding new values here is additive: none of
 // them can be silently miscounted as a success by existing code.
-export type DispatchOutcome = 'sent' | 'budget_exhausted' | 'daily_cap' | 'failed' | 'duplicate_suppressed';
+export type DispatchOutcome =
+  | 'sent'                  // row written; push delivered, or none was owed
+  | 'budget_exhausted'      // NO row: the daily budget refused this call outright
+  | 'daily_cap'             // row written; the 10/day push ceiling suppressed the push
+  | 'failed'                // row written; the PUSH TRANSPORT failed
+  | 'create_failed'         // NO row: the notifications insert itself failed
+  | 'duplicate_suppressed'; // NO new row: the unique index rejected a same-day repeat
+
+/**
+ * Did this outcome leave a notifications row behind?
+ *
+ * Callers need this and the enum alone could not answer it: 'failed' used to
+ * mean BOTH "the insert failed" (no row) and "the push failed" (row exists),
+ * and they demand opposite behaviour. The daily-insight cron records a shown
+ * insight from this, and recording one the student never saw silently costs
+ * them a real insight for seven days.
+ *
+ * 'create_failed' was split out of 'failed' on 27 Aug for exactly that reason.
+ * Adding a value is additive — every existing caller tests `=== 'sent'`, so
+ * none can miscount it — which is the same reasoning that admitted 'failed'
+ * and 'duplicate_suppressed' in the first place.
+ */
+export function outcomeWroteRow(outcome: DispatchOutcome): boolean {
+  return outcome === 'sent' || outcome === 'failed' || outcome === 'daily_cap';
+}
 
 // ── THE ONE SEND BOUNDARY ────────────────────────────────────────────────
 //
@@ -269,7 +293,10 @@ export async function dispatch(opts: DispatchOptions): Promise<DispatchOutcome> 
       return 'duplicate_suppressed';
     }
     console.error('[notif-os] notification insert failed:', insertError.message);
-    return 'failed';
+    // 'create_failed', not 'failed': NO ROW EXISTS. A caller that records
+    // "the student was shown this" from a bare 'failed' would be recording a
+    // row that was never written.
+    return 'create_failed';
   }
 
   // Auto-silence removed (founder decision): we keep pushing up to the budget for
