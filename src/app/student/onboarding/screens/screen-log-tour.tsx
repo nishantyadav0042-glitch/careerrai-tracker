@@ -135,19 +135,63 @@ export default function ScreenLogTour({ onNext, isLoading, firstName = null }: S
   // says about the student) → ACTION (the one thing to do tomorrow). One
   // discovery only — a second finding would turn the page into a dashboard,
   // and dashboards get admired and closed.
+  //
+  // TWO LAYERS, NAMED (27 Aug). This screen always showed a WEEK-shaped
+  // sample — six planned-vs-actual rows and one pattern across them — while
+  // the thing a student meets first is the DAILY line on Home. Students were
+  // therefore shown the slower layer and given the faster one, with nothing
+  // saying they were different. Both are now labelled and both are samples:
+  //
+  //   daily   → computeDailyInsight()   one line, every day, one observation
+  //   weekly  → computeWeeklyInsight()  the closed week, every Monday
+  //
+  // The samples below are STATIC COPY, not a second engine. They are hand-
+  // written to match the SHAPE those two functions produce — a single
+  // clamped sentence for the daily, an evidence-gated observation for the
+  // weekly — and screen-log-tour.guard.test.ts pins that correspondence.
+  // Running the real engines here would mean inventing rows for a student
+  // who has none, which is the one thing day 0 must never do.
   if (phase === 'insight') {
     return (
       <div className="space-y-4">
         <div>
           <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-800">
-            Sample — from one week of logs
+            Sample — nobody&apos;s real data
           </span>
           <h3 className="mt-2 text-xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
             This is what your logs unlock
           </h3>
           <p className="mt-1.5 text-[13px] leading-relaxed text-stone-600">
-            Here&apos;s a student who logged 6 days. Watch what their own logs caught:
+            Your logs get read twice — once every day, once every week. Here is
+            each one, from a student who logged 6 days.
           </p>
+        </div>
+
+        {/* LAYER 1 — the daily line. Shaped like computeDailyInsight()'s
+            output: one clamped sentence, one observation, no dashboard. This
+            is the layer a student actually meets first, and it was missing
+            from this screen entirely. */}
+        <div className="rounded-2xl border border-stone-200 bg-white p-3.5">
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Every day · on Home</p>
+            <span className="rounded bg-stone-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-stone-500">Sample</span>
+          </div>
+          <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-3">
+            <p className="text-[12px] font-bold text-stone-900">📊 A pattern in your week</p>
+            <p className="mt-1 text-[12.5px] leading-relaxed text-stone-700">
+              Only 1 of 4 DILR tasks done. Give DILR 20 minutes first tomorrow.
+            </p>
+          </div>
+          <p className="mt-2 text-[11px] leading-relaxed text-stone-500">
+            One line. It changes when your logs change — never the same thing twice in a week.
+          </p>
+        </div>
+
+        {/* LAYER 2 — the week. Everything below already existed; it is now
+            labelled as the second layer rather than as "the" insight. */}
+        <div className="flex items-center justify-between pt-1">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Every Monday · your finished week</p>
+          <span className="rounded bg-stone-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-stone-500">Sample</span>
         </div>
 
         {/* The week — planned vs what actually happened. Messy on purpose. */}
@@ -196,13 +240,14 @@ export default function ScreenLogTour({ onNext, isLoading, firstName = null }: S
           <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">The more you log, the more it sees</p>
           <div className="mt-2 space-y-1.5 text-[12px] leading-relaxed">
             <p><b className="text-stone-900">2 logs</b><span className="text-stone-500"> — how today compared to yesterday</span></p>
-            <p><b className="text-stone-900">1 week</b><span className="text-stone-500"> — which section you&apos;re quietly avoiding</span></p>
+            <p><b className="text-stone-900">1 week</b><span className="text-stone-500"> — which section you&apos;re quietly avoiding, and your Monday review</span></p>
             <p><b className="text-stone-900">2 weeks</b><span className="text-stone-500"> — your plan vs what you actually do</span></p>
           </div>
         </div>
 
         <p className="text-center text-[11px] text-stone-400">
-          That was a sample. Yours starts with your first real log — tomorrow&apos;s taps build it.
+          Both of those were samples. Yours start with your first real log — and the
+          weekly one only appears once there is a real week behind it.
         </p>
 
         <div className="sticky bottom-0 z-20 bg-white/95 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm">

@@ -116,14 +116,25 @@ function examContextLine(topic: string, section: string): string {
 // on a small phone — past that it stops being a glance and becomes reading.
 const MAX_INSIGHT_CHARS = 105;
 
-function oneLine(text: string): string {
+/**
+ * The length contract, with the budget as an argument. The daily card gets
+ * MAX_INSIGHT_CHARS; the Weekly Insight is a review rather than a glance and
+ * gets its own, larger budget. Exported so weekly-insight.ts inherits this
+ * behaviour instead of copying it — one implementation of "keep it short",
+ * not two that drift.
+ */
+export function clampSentence(text: string, max: number): string {
   const flat = text.replace(/\s+/g, ' ').trim();
-  if (flat.length <= MAX_INSIGHT_CHARS) return flat;
+  if (flat.length <= max) return flat;
   // Trim at the last sentence boundary that fits; fall back to a word cut.
-  const clipped = flat.slice(0, MAX_INSIGHT_CHARS);
+  const clipped = flat.slice(0, max);
   const lastStop = Math.max(clipped.lastIndexOf('. '), clipped.lastIndexOf('! '));
   if (lastStop > 40) return clipped.slice(0, lastStop + 1);
   return clipped.slice(0, clipped.lastIndexOf(' ')).trimEnd() + '…';
+}
+
+function oneLine(text: string): string {
+  return clampSentence(text, MAX_INSIGHT_CHARS);
 }
 
 export async function computeDailyInsight(

@@ -82,6 +82,14 @@ const NOT_THIS_FACT: Record<string, string> = {
     'not days in a calendar window, and filters on dayWasStudied (A3) rather than on ' +
     'having logged. Different fact, deferred with study_duration to Wave 5. Its "/7" ' +
     'meaning rows rather than days is recorded as an open honesty question, not fixed here.',
+  'src/lib/weekly-insight.ts':
+    'counts logged days in a CLOSED CALENDAR WEEK (last complete Monday-Sunday), not in ' +
+    'the trailing [today-6 ... today] window the authority anchors on. On any day but ' +
+    'Monday the two cover different dates and correctly give different numbers, so ' +
+    'consuming the authority here would report the wrong week. The weekly card renders ' +
+    'its date range in the header and the sentence says "of the week\'s 7 days", so the ' +
+    'two claims can never be read as the same one. If the trailing window ever becomes ' +
+    'week-aligned, delete this entry and consume the producer.',
 };
 
 describe('the logged-days claim comes from the authority', () => {

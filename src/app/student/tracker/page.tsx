@@ -9,8 +9,10 @@ import { StreakRestoreButton } from '@/components/streak-restore-button';
 import { InsightCloud } from '@/components/insight-cloud';
 import { daySlot, slotGreeting } from '@/lib/day-slot';
 import { InsightBubble } from '@/components/home/insight-bubble';
+import { WeeklyReviewCard } from '@/components/home/weekly-review-card';
 import { CampaignOfferCard } from '@/components/campaign/offer-card';
 import { computeDailyInsight, loadSuppressedInsightKeys, recordInsightShown } from '@/lib/daily-insight';
+import { computeWeeklyInsight } from '@/lib/weekly-insight';
 import { CheckInGate } from '@/components/check-in-gate';
 import { TodaysRoutineCard } from '@/components/DailyTracker/TodaysRoutineCard';
 import { ValueProofCard } from '@/components/value-proof-card';
@@ -471,6 +473,12 @@ export default async function DailyTrackerPage() {
     : null;
   if (dailyInsight) void recordInsightShown(admin, user.id, dailyInsight).catch(() => {});
 
+  // LAST WEEK, finished and fixed. A closed calendar week is deterministic,
+  // so this is computed on read — no cron, no stored copy, no second producer
+  // of a fact the window already determines. A failure renders nothing rather
+  // than blanking Home, exactly as the daily insight does.
+  const weeklyInsight = await computeWeeklyInsight(admin, user.id).catch(() => null);
+
   // The daily check-in. YESTERDAY ONLY, never older — a student returning
   // after two weeks answers one question, not fourteen. Skipped entirely for
   // anyone who joined today or yesterday: they have no yesterday with us to
@@ -591,6 +599,11 @@ export default async function DailyTrackerPage() {
             accident. It is the one place the app speaks about the student
             rather than instructing them, so it opens the screen. */}
         {dailyInsight && <InsightBubble title={dailyInsight.title} text={dailyInsight.text} kind={dailyInsight.kind} />}
+
+        {/* 0a · LAST WEEK — one folded line under the daily one. Home stays a
+            study screen; the review opens only if the student asks for it,
+            and is absent entirely when there was no week worth reviewing. */}
+        {weeklyInsight?.status === 'ready' && <WeeklyReviewCard insight={weeklyInsight} />}
 
         {/* 0b · THE ONE PAID DOOR ON HOME (founder, 22 Aug: do not complicate
             Home — one line, nothing else).

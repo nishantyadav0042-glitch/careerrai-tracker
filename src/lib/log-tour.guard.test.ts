@@ -109,14 +109,54 @@ describe('it never gates completion', () => {
 
   it('the sample insight promises only what the real engines deliver', () => {
     // The ladder sells 2-log comparison, week-scale avoidance and
-    // plan-vs-actual — capabilities postLogInsight and
-    // computePrescriptiveLine actually have. A rung promising something the
-    // product cannot do yet would spend the trust this screen exists to earn.
+    // plan-vs-actual — capabilities postLogInsight, computePrescriptiveLine
+    // and (since 27 Aug) computeWeeklyInsight actually have. A rung promising
+    // something the product cannot do yet would spend the trust this screen
+    // exists to earn.
     const s = screen();
-    expect(s).toContain('Sample — from one week of logs');
     expect(s).not.toMatch(/AI predicts|percentile forecast|guarantee/i);
     // and it stays a sample: the insight phase writes nothing.
     expect(s).not.toContain("from('daily_reports')");
+  });
+
+  it('BOTH layers are labelled a sample, and neither is nobody\'s real data', () => {
+    // This used to pin one exact label. It now pins the property that label
+    // existed for, because the screen grew a second sample: a student must
+    // never be able to read either block as their own numbers on day 0, when
+    // by definition they have none.
+    const s = screen();
+    const insight = s.slice(s.indexOf("if (phase === 'insight')"));
+    const labels = insight.match(/>\s*Sample[^<]*</g) ?? [];
+    expect(
+      labels.length,
+      'The daily sample and the weekly sample must each carry their own visible "Sample" mark. One shared label at the top leaves the second block readable as real.',
+    ).toBeGreaterThanOrEqual(2);
+    expect(insight).toMatch(/nobody&apos;s real data/);
+  });
+
+  it('names the two intelligence layers and their cadence', () => {
+    // Students were shown a week-shaped sample and then handed a daily line,
+    // with nothing saying they were different things.
+    const s = screen();
+    expect(s).toMatch(/Every day · on Home/);
+    expect(s).toMatch(/Every Monday · your finished week/);
+  });
+
+  it('does not run a real engine to draw a sample', () => {
+    // Day 0 has no rows. Calling computeDailyInsight/computeWeeklyInsight
+    // here would mean inventing them — and would be a second place the
+    // sample is produced.
+    // Comments must be stripped first. The header comment NAMES both engines
+    // to document what the static copy is shaped after — five prior incidents
+    // in this repo were guards that matched their own explanatory prose.
+    const code = screen().replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+    expect(code).not.toMatch(/computeDailyInsight|computeWeeklyInsight/);
+  });
+
+  it('the weekly promise is hedged on there being a real week', () => {
+    // computeWeeklyInsight returns not_enough_data below MIN_REAL_SECTIONS.
+    // The screen must not promise a Monday review that will not arrive.
+    expect(screen()).toMatch(/only appears once there is a real week behind it/);
   });
 });
 
