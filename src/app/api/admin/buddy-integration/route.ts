@@ -5,6 +5,8 @@ import { clearGoogleState } from '@/lib/google-oauth';
 import { statusFor } from '@/lib/google-meet';
 import { audit } from '@/lib/integration-audit';
 import { canTransition, transitionRefusal, type SessionStatus } from '@/lib/session-lifecycle';
+import { settleCreditForSession } from '@/lib/session-credit';
+import { dispatch } from '@/lib/notification-os';
 
 export const dynamic = 'force-dynamic';
 
@@ -128,14 +130,38 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { error } = await admin
+    const { data: cancelledRows, error } = await admin
       .from('video_sessions')
       .update({ session_status: 'cancelled', updated_at: new Date().toISOString() })
       .eq('id', sessionId)
       // Conditional: if the session settled between our read and this write,
       // nothing is written rather than the trigger raising.
-      .eq('session_status', wasStatus);
+      .eq('session_status', wasStatus)
+      .select('id');
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    const reallyCancelled = (cancelledRows?.length ?? 0) > 0;
+
+    // An admin cancel used to tell NOBODY. The student found out by showing
+    // up to a session that was called off days earlier — the same silence the
+    // buddy-side cancel was fixed for, one route over. Same event, same
+    // authority, same words.
+    if (reallyCancelled && session.student_id) {
+      const { data: prof } = await admin
+        .from('profiles').select('notif_prefs').eq('id', session.student_id).single();
+      await dispatch({
+        userId: session.student_id as string,
+        type: 'session_cancelled',
+        title: 'Session cancelled',
+        body: 'Your upcoming session was cancelled. Your credit is safe — you can book again.',
+        url: '/student/buddy?tab=sessions',
+        data: { sessionId },
+        reason: 'Admin cancelled a scheduled session — the student must never discover this by showing up',
+        expectedAction: 'view_session',
+        prefs: (prof?.notif_prefs as Record<string, unknown>) ?? {},
+      });
+      // ...and the words are true: release the credit so it can be rebooked.
+      await settleCreditForSession(admin, sessionId as string, 'cancelled');
+    }
 
     await audit({
       subjectId: session.buddy_id, actorId, action: 'admin.session_cancelled',

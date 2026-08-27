@@ -52,15 +52,43 @@ export function insightKey(i: Pick<DailyInsight, 'kind' | 'subject'>): string {
 
 export const INSIGHT_SUPPRESS_DAYS = 7;
 
-/** Keys shown within the last 7 days — candidates carrying one stay quiet. */
+/**
+ * Keys shown in the last 7 days, EXCLUDING today — candidates carrying one
+ * stay quiet.
+ *
+ * The upper bound is the whole fix (forensic audit, 27 Aug). Without it, the
+ * row written by TODAY'S show satisfied `last_shown_on > cutoff`, so today's
+ * own insight suppressed itself — and because the Home page records a show on
+ * every server render, each visit re-ran the decision against a set that had
+ * just grown by one:
+ *
+ *   load 1 → consistency        (recorded)
+ *   load 2 → consistency now suppressed → high_weightage   (recorded)
+ *   load 3 → …burns the next candidate
+ *   load 4 → pool empty → the suppression-EXEMPT `progress` fallback
+ *
+ * A real candidate pool is one to three items, so four or five visits to Home
+ * in a single day drained a week of insights — invisibly, because the client
+ * only renders the first one it sees each day. What was left was `progress`,
+ * whose numbers come from topic_coverage and therefore do not move for days.
+ * That is why the same "23 done / 23 to go" card appeared morning after
+ * morning: not frozen state, a rotation that had eaten itself.
+ *
+ * With today excluded, every render on the same day sees the identical
+ * suppressed set, so the same rules fire in the same order and the student
+ * gets the SAME insight all day. The pool advances once per day, which is
+ * what "daily" was always supposed to mean.
+ */
 export async function loadSuppressedInsightKeys(admin: any, studentId: string): Promise<Set<string>> {
   const cutoff = new Date(Date.now() - INSIGHT_SUPPRESS_DAYS * 86_400_000)
     .toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
   const { data } = await admin
     .from('daily_insight_shown')
     .select('insight_key, last_shown_on')
     .eq('student_id', studentId)
-    .gt('last_shown_on', cutoff);
+    .gt('last_shown_on', cutoff)
+    .lt('last_shown_on', today);
   return new Set((data ?? []).map((r: any) => r.insight_key as string));
 }
 

@@ -11,12 +11,20 @@ import type { NextRequest } from 'next/server';
 // both ways and assert dispatch() fires exactly when this caller actually
 // changed the state — and never otherwise.
 
+const released = vi.hoisted(() => [] as Array<{ id: string; outcome: string }>);
+vi.mock('@/lib/session-credit', () => ({
+  settleCreditForSession: async (_a: unknown, _sid: string, outcome: string) => {
+    released.push({ id: 'cred-1', outcome });
+    return { settled: 'released', creditId: 'cred-1' };
+  },
+}));
 const dispatch = vi.hoisted(() => vi.fn(async (o: Record<string, unknown>) => { void o; return 'sent'; }));
 
 // What the status-guarded UPDATE returns: rows when this caller cancelled,
 // empty when someone/something already settled the session.
 let updateReturns: Array<{ id: string }>;
 let sessionRow: Record<string, unknown>;
+let creditRow: Record<string, unknown> | null;
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
@@ -45,6 +53,15 @@ vi.mock('@/lib/supabase/admin', () => ({
           }),
         };
       }
+      if (table === 'session_credits') {
+        // The cancel now releases the credit so the student can rebook.
+        const q: Record<string, unknown> = {
+          select: () => q, eq: () => q, in: () => q, update: () => q,
+          maybeSingle: async () => ({ data: creditRow, error: null }),
+          then: (r: (v: unknown) => unknown) => Promise.resolve({ error: null }).then(r),
+        };
+        return q;
+      }
       throw new Error(`unexpected table ${table}`);
     },
   }),
@@ -60,11 +77,13 @@ async function callRoute() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  released.length = 0;
   vi.resetModules();
   sessionRow = {
     id: 'sess-1', buddy_id: 'buddy-1', student_id: 'stu-1',
     title: 'Guidance session', session_status: 'scheduled', google_event_id: null,
   };
+  creditRow = { id: 'cred-1', status: 'scheduled', buddy_id: 'buddy-1' };
 });
 
 describe('cancel-meeting × dispatch ownership (audit F1)', () => {
@@ -77,6 +96,21 @@ describe('cancel-meeting × dispatch ownership (audit F1)', () => {
     expect(opts.type).toBe('session_cancelled');
     expect(opts.userId).toBe('stu-1');
     expect(typeof opts.url).toBe('string'); // P0 events always land somewhere actionable
+  });
+
+  it('releases the ₹299 credit so the student can rebook', async () => {
+    // Before this, a mentor cancellation welded the credit to a dead session
+    // with no exit in code — a silent refund the student had to ask for.
+    updateReturns = [{ id: 'sess-1' }];
+    const res = await callRoute();
+    expect((await res.json()).success).toBe(true);
+    expect(released).toEqual([{ id: 'cred-1', outcome: 'cancelled' }]);
+  });
+
+  it('a cancel that lost the race releases nothing', async () => {
+    updateReturns = [];
+    await callRoute();
+    expect(released).toEqual([]);
   });
 
   it('a cancel that lost the race (alreadySettled) stays SILENT — the session may have completed', async () => {

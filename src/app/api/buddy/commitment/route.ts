@@ -3,6 +3,7 @@ import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { emitTimeline } from '@/lib/os/timeline';
 import { dispatch } from '@/lib/notification-os';
+import { settleCreditForSession } from '@/lib/session-credit';
 
 // Close out a call in one request: the mentor's read of the student + the ONE
 // thing the student committed to. Built to be ~15 seconds on a phone, because
@@ -90,23 +91,6 @@ export async function POST(request: NextRequest) {
 
   // Tell the student there is something waiting — a debrief nobody reads is
   // the same as no debrief.
-  // Through dispatch() — a debrief nobody reads is the same as no debrief,
-  // and an in-app-only row is a debrief nobody reads.
-  const { data: debriefStudent } = await admin
-    .from('profiles').select('notif_prefs').eq('id', studentId).single();
-  await dispatch({
-    userId: studentId,
-    type: 'session_debrief',
-    title: 'Your buddy left notes from the call',
-    body: tasks.length
-      ? `${tasks.length} thing${tasks.length > 1 ? 's' : ''} to do before next time.`
-      : 'Open your Buddy tab to see what went well and what to fix.',
-    url: '/student/buddy',
-    data: { sessionId: sessionId ?? null },
-    reason: 'Buddy closed out the call and left notes the student has not seen',
-    expectedAction: 'open_buddy',
-    prefs: (debriefStudent?.notif_prefs as Record<string, unknown>) ?? {},
-  });
 
   // Mark the session done — the gap that made a 10/10 orientation invisible.
   //
@@ -126,6 +110,7 @@ export async function POST(request: NextRequest) {
       .in('session_status', ['scheduled', 'active'])
       .select('id, student_id')
       .maybeSingle();
+
     if (doneError) {
       // Reported, never fatal: the debrief itself IS saved. But a silent
       // failure here is precisely how "0 completed sessions" happened.
@@ -138,6 +123,39 @@ export async function POST(request: NextRequest) {
         metadata: { sessionId, buddyId: user.id },
       });
     }
+  }
+
+  // The debrief announces a call that happened, so it may only be sent by a
+  // caller that actually closed one — or where there was no session row to
+  // close (notes saved against a call tracked outside video_sessions).
+  //
+  // It used to fire BEFORE this update and unconditionally: when a cancel won
+  // the race, the student was told "your buddy left notes from the call"
+  // about a session that never happened, sitting next to "Session cancelled".
+  // A notification may only describe a transition its own caller won.
+  if (sessionCompleted || !sessionId) {
+    const { data: debriefStudent } = await admin
+      .from('profiles').select('notif_prefs').eq('id', studentId).single();
+    await dispatch({
+      userId: studentId,
+      type: 'session_debrief',
+      title: 'Your buddy left notes from the call',
+      body: tasks.length
+        ? `${tasks.length} thing${tasks.length > 1 ? 's' : ''} to do before next time.`
+        : 'Open your Buddy tab to see what went well and what to fix.',
+      url: '/student/buddy',
+      data: { sessionId: sessionId ?? null },
+      reason: 'Buddy closed out the call and left notes the student has not seen',
+      expectedAction: 'open_buddy',
+      prefs: (debriefStudent?.notif_prefs as Record<string, unknown>) ?? {},
+    });
+  }
+
+  // The ₹299 this session delivered is now spent. Without this the credit sat
+  // at 'scheduled' forever, blocking the student from ever buying a second
+  // session and permanently consuming a seat of their mentor's capacity.
+  if (sessionCompleted && sessionId) {
+    await settleCreditForSession(admin, sessionId, 'completed');
   }
 
   return NextResponse.json({ ok: true, commitment: data, sessionCompleted });

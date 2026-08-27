@@ -5,6 +5,7 @@ import { withCronTracking } from '@/lib/cron-run-tracker';
 import { audit } from '@/lib/integration-audit';
 import { RELEASE_AFTER_MS } from '@/lib/session-window';
 import { emitTimeline } from '@/lib/os/timeline';
+import { settleCreditForSession } from '@/lib/session-credit';
 
 export const dynamic = 'force-dynamic';
 
@@ -101,6 +102,9 @@ export async function POST(request: NextRequest) {
       if (!updated?.length) continue;
 
       released.push(s.id);
+      // Nobody joined, so nothing was delivered. The credit goes back to the
+      // student as a rebookable, owned failure rather than staying spent.
+      await settleCreditForSession(admin, s.id as string, 'expired');
       // Timeline: a booked session nobody joined — a missed promise, on the
       // student's story and the mentor's both.
       if (s.student_id) await emitTimeline(admin, {

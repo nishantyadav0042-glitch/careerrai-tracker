@@ -5,6 +5,7 @@ import { deleteGoogleMeet } from '@/lib/google-meet';
 import { audit } from '@/lib/integration-audit';
 import { dispatch } from '@/lib/notification-os';
 import { sessionNotificationUrl } from '@/lib/session-link';
+import { settleCreditForSession } from '@/lib/session-credit';
 
 /**
  * POST /api/calendar/cancel-meeting
@@ -133,6 +134,13 @@ export async function POST(request: NextRequest) {
       expectedAction: 'view_session',
       prefs: (cancelledStudent?.notif_prefs as Record<string, unknown>) ?? {},
     });
+    }
+
+    // The student paid for a session that will not happen. Release the credit
+    // so they can rebook, instead of leaving ₹299 welded to a dead session
+    // with no exit in code — a silent refund they would have to ask for.
+    if (!alreadySettled) {
+      await settleCreditForSession(admin, session.id as string, 'cancelled');
     }
 
     // The cancel succeeded. calendarError is reported, not thrown — the mentor

@@ -381,3 +381,97 @@ export function upgradeCreditPaise(
 ): number {
   return pickUpgradeCredit(credits, now)?.paise ?? 0;
 }
+
+// ── What happens to the ₹299 when its session ends ─────────────────────────
+//
+// THE authority for that question. Before this existed there was none: the
+// credit lifecycle had no terminal writer at all. Nothing anywhere set
+// 'completed', so a delivered session left its credit at 'scheduled'
+// forever — and because hasOpenSessionCredit() counts 'scheduled' as open and
+// readMentorRoster() counts it against the mentor's weekly cap, every session
+// we successfully delivered permanently consumed a seat and permanently
+// blocked that student from buying a second one. The product was quietly
+// ratcheting itself toward sold-out, one happy customer at a time.
+//
+// Cancellation was worse. The credit stayed welded to a session that would
+// never happen, with no exit in code (see 20260827a) — a silent refund the
+// student had to notice and ask for.
+//
+// One function, called from every terminal transition, so the two state
+// machines cannot disagree about the same event. video_sessions remains the
+// delivery authority; this reads that decision and settles the entitlement.
+
+export type SessionOutcome = 'completed' | 'cancelled' | 'expired';
+
+export type CreditSettlement =
+  | { settled: 'completed' }
+  | { settled: 'released'; creditId: string }   // back to booking_blocked, rebookable
+  | { settled: 'none'; reason: 'no_credit' | 'already_terminal' | 'read_failed' | 'write_failed' };
+
+/**
+ * Settle the credit attached to a session that just reached a terminal state.
+ *
+ * Never throws: a session genuinely completed even if we could not settle its
+ * credit, and failing the mentor's close-out because of bookkeeping would be
+ * the worse error. Failures are reported in the return value and logged, so a
+ * stuck credit surfaces rather than silently disappearing.
+ */
+export async function settleCreditForSession(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: { from: (t: string) => any },
+  sessionId: string,
+  outcome: SessionOutcome,
+): Promise<CreditSettlement> {
+  const { data: credit, error } = await admin
+    .from('session_credits')
+    .select('id, status, buddy_id')
+    .eq('video_session_id', sessionId)
+    .maybeSingle();
+
+  if (error) {
+    console.error('[settleCredit] could not read the credit for session', sessionId, error.message);
+    return { settled: 'none', reason: 'read_failed' };
+  }
+  // Orientation and buddy-plan sessions carry no credit. That is normal.
+  if (!credit) return { settled: 'none', reason: 'no_credit' };
+  if (credit.status === 'completed' || credit.status === 'refunded') {
+    return { settled: 'none', reason: 'already_terminal' };
+  }
+
+  if (outcome === 'completed') {
+    // Rule (4) requires the session to be completed first — it is, that is why
+    // we are here. Rule (9) requires a terminal credit to owe nobody anything.
+    const { error: e } = await admin
+      .from('session_credits')
+      .update({ status: 'completed', owner: null, next_action: null })
+      .eq('id', credit.id)
+      .eq('status', 'scheduled');
+    if (e) {
+      console.error('[settleCredit] complete failed for credit', credit.id, e.message);
+      return { settled: 'none', reason: 'write_failed' };
+    }
+    return { settled: 'completed' };
+  }
+
+  // Cancelled or expired: the delivery failed, so the entitlement goes back
+  // to the student as a rebookable, OWNED failure. Rule (6) forces the owner
+  // and next_action; rule (5)'s one exception (20260827a) permits the unlink
+  // only in exactly this shape.
+  const { error: e } = await admin
+    .from('session_credits')
+    .update({
+      status: 'booking_blocked',
+      video_session_id: null,
+      owner: 'ops',
+      next_action: 'Session did not happen — rebook this student with their mentor',
+      failure_reason: `session_${outcome}`,
+      failure_at: new Date().toISOString(),
+    })
+    .eq('id', credit.id)
+    .in('status', ['scheduled', 'assigned']);
+  if (e) {
+    console.error('[settleCredit] release failed for credit', credit.id, e.message);
+    return { settled: 'none', reason: 'write_failed' };
+  }
+  return { settled: 'released', creditId: credit.id as string };
+}

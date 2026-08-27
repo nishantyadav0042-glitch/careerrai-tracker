@@ -115,14 +115,25 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const { error: updateError } = await admin
+    const { data: movedRows, error: updateError } = await admin
       .from('video_sessions')
       .update({
         scheduled_at: start.toISOString(),
         duration_minutes: duration,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', meetingId);
+      .eq('id', meetingId)
+      // STATUS-GUARDED (audit, 27 Aug). This write had no status filter, and
+      // neither lifecycle trigger fires on it: video_session_lifecycle only
+      // checks when session_status changes, and the terminal-reassert guard is
+      // `before update OF session_status`, which this SET list does not touch.
+      // So the check at the top was a read-then-write with an open window — a
+      // session cancelled in between was still moved, and the student was told
+      // "your session moved, same joining link" about a session that was
+      // already called off. Two concurrent reschedules also both succeeded,
+      // last-write-wins, with two different times announced.
+      .in('session_status', ['scheduled'])
+      .select('id');
 
     if (updateError) {
       // Same two rules, same shared wording. Moving a session into a slot the
@@ -148,6 +159,14 @@ export async function POST(request: NextRequest) {
       minute: '2-digit',
       hour12: true,
     });
+    // Only the caller that actually moved the session may announce it.
+    if ((movedRows?.length ?? 0) === 0) {
+      return NextResponse.json(
+        { error: 'This session changed while you were rescheduling it — reload and try again.' },
+        { status: 409 },
+      );
+    }
+
     // Through dispatch() — SESSION_RESCHEDULED, P0 must-reach. The copy still
     // says the link is unchanged: a student who saved the old one assumes it
     // is dead and asks, which is the support ticket this line prevents.
