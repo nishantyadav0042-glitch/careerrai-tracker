@@ -37,7 +37,95 @@ export function googleRedirectUri(): string {
   return `${SITE_URL}/api/google/callback`;
 }
 
-/** Where we send a mentor to grant access. `state` carries the return path. */
+// ── THE `state` PARAMETER, DONE PROPERLY (27 Aug audit, item 11) ────────────
+//
+// `state` used to carry ONE thing — the path to return the mentor to — and the
+// callback used it verbatim:
+//
+//     const back = decodeURIComponent(params.get('state') || '/buddy/profile');
+//     return NextResponse.redirect(new URL(`${back}?google=denied`, request.url));
+//
+// Two defects, both in the OAuth path itself.
+//
+// OPEN REDIRECT. `from` on /api/google/connect is attacker-controlled and is
+// echoed into `state`. `new URL('https://evil.com?google=denied', base)`
+// resolves to the ABSOLUTE url, not a path on our origin — so
+// careerrai.in/api/google/connect?from=https://evil.com bounces the visitor
+// off-site wearing our domain in the referrer. It does not even need a
+// successful consent: the denied branch redirects before any token work, so
+// cancelling at Google is enough.
+//
+// NO CSRF BINDING. `state` exists in OAuth to tie the callback to the browser
+// that started the flow. Ours was a return path with no unguessable component,
+// so a callback could be replayed into a victim's session — linking an
+// ATTACKER's Google account to the victim's CareerRai account, which for a
+// mentor means their sessions get created on someone else's calendar.
+//
+// Both are closed here rather than at the call sites, so the next route that
+// starts an OAuth flow cannot reintroduce either one.
+
+/** The only paths a Google round trip may return someone to. */
+const RETURN_FALLBACK = '/buddy/home';
+
+/**
+ * The cookie tying a callback to the browser that started the flow.
+ *
+ * Lives here, not in the connect route: an App Router route file may only
+ * export the handler and a fixed set of config keys, so exporting a constant
+ * from one fails the build.
+ */
+export const OAUTH_STATE_COOKIE = 'g_oauth_state';
+
+/**
+ * A return path that cannot leave this origin.
+ *
+ * Relative, single-slash, no scheme. `//evil.com` is rejected too — browsers
+ * read a protocol-relative URL as absolute, so it is an off-site redirect
+ * wearing a path's clothing.
+ */
+export function safeReturnPath(raw: string | null | undefined, fallback = RETURN_FALLBACK): string {
+  if (typeof raw !== 'string' || raw.length === 0) return fallback;
+  let value = raw;
+  // The connect route encodes it once; a hand-built link may not have.
+  try { value = decodeURIComponent(raw); } catch { return fallback; }
+  if (!value.startsWith('/')) return fallback;
+  if (value.startsWith('//')) return fallback;
+  if (/[\r\n]/.test(value)) return fallback;
+  return value;
+}
+
+/** A random, unguessable half for `state`. Node's webcrypto, no dependency. */
+export function newStateNonce(): string {
+  return Array.from(crypto.getRandomValues(new Uint8Array(16)))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+/** `state` on the wire: an unguessable nonce, then the return path. */
+export function encodeOAuthState(nonce: string, returnPath: string): string {
+  return `${nonce}:${safeReturnPath(returnPath)}`;
+}
+
+/**
+ * Split `state` and check it against the nonce this browser was issued.
+ *
+ * A mismatch means the callback did not come from a flow this browser started.
+ * The return path is re-validated even on success: the nonce proves origin, it
+ * does not make the path safe.
+ */
+export function verifyOAuthState(
+  state: string | null | undefined,
+  expectedNonce: string | null | undefined,
+): { ok: boolean; returnPath: string } {
+  const raw = typeof state === 'string' ? state : '';
+  const sep = raw.indexOf(':');
+  const nonce = sep === -1 ? '' : raw.slice(0, sep);
+  const returnPath = safeReturnPath(sep === -1 ? null : raw.slice(sep + 1));
+  const ok = !!expectedNonce && nonce.length > 0 && nonce === expectedNonce;
+  return { ok, returnPath };
+}
+
+/** Where we send a mentor to grant access. `state` carries nonce + return path. */
 export function googleConsentUrl(state: string): string {
   const p = new URLSearchParams({
     client_id: process.env.GOOGLE_CLIENT_ID!,

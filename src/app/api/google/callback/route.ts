@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { getAuthUser } from '@/lib/auth';
-import { exchangeCodeAndStore } from '@/lib/google-oauth';
+import { exchangeCodeAndStore, verifyOAuthState, OAUTH_STATE_COOKIE } from '@/lib/google-oauth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { ensureBuddyRoom } from '@/lib/buddy-room';
 import { audit } from '@/lib/integration-audit';
@@ -21,7 +22,38 @@ export async function GET(request: Request) {
   if (!user) return NextResponse.redirect(new URL('/login', request.url));
 
   const params = new URL(request.url).searchParams;
-  const back = decodeURIComponent(params.get('state') || '/buddy/profile');
+
+  // ── STATE IS CHECKED BEFORE ANYTHING ELSE (27 Aug audit, item 11) ─────────
+  //
+  // `back` used to be `decodeURIComponent(params.get('state'))` used verbatim
+  // in every redirect below — an open redirect, since `state` echoes the
+  // attacker-controlled `from` on /api/google/connect, and reachable without
+  // consent because the denied branch redirects too. And nothing tied the
+  // callback to the browser that began the flow, so a replayed callback could
+  // link an attacker's Google account to a victim's CareerRai account.
+  //
+  // verifyOAuthState checks the nonce against the httpOnly cookie set at
+  // connect time and re-validates the path to something on this origin. A
+  // mismatch is refused outright rather than followed.
+  const jar = await cookies();
+  const expectedNonce = jar.get(OAUTH_STATE_COOKIE)?.value ?? null;
+  const { ok: stateOk, returnPath: back } = verifyOAuthState(params.get('state'), expectedNonce);
+
+  /** Every exit clears the one-shot nonce, so a state can never be replayed. */
+  const leave = (url: URL) => {
+    const res = NextResponse.redirect(url);
+    res.cookies.set(OAUTH_STATE_COOKIE, '', { path: '/', maxAge: 0 });
+    return res;
+  };
+
+  if (!stateOk) {
+    await audit({
+      subjectId: user.id, action: 'google.connect_failed', ok: false,
+      detail: { stage: 'state', reason: expectedNonce ? 'state_mismatch' : 'no_state_cookie' },
+    });
+    return leave(new URL('/buddy/home?google=failed', request.url));
+  }
+
   const denied = params.get('error');
   const deniedDescription = params.get('error_description');
   const code = params.get('code');
@@ -40,7 +72,7 @@ export async function GET(request: Request) {
         googleErrorDescription: deniedDescription,
       },
     });
-    return NextResponse.redirect(new URL(`${back}?google=denied`, request.url));
+    return leave(new URL(`${back}?google=denied`, request.url));
   }
 
   const result = await exchangeCodeAndStore(code, user.id);
@@ -50,7 +82,7 @@ export async function GET(request: Request) {
       subjectId: user.id, action: 'google.connect_failed', ok: false,
       detail: { stage: 'token_exchange', reason: result.error },
     });
-    return NextResponse.redirect(new URL(`${back}?google=failed`, request.url));
+    return leave(new URL(`${back}?google=failed`, request.url));
   }
 
   const admin = createAdminClient();
@@ -87,9 +119,9 @@ export async function GET(request: Request) {
         subjectId: user.id, action: 'room.created', ok: false,
         detail: { stage: 'post_connect', failure: room.reason, error: room.error },
       });
-      return NextResponse.redirect(new URL(`${back}?google=room_failed`, request.url));
+      return leave(new URL(`${back}?google=room_failed`, request.url));
     }
   }
 
-  return NextResponse.redirect(new URL(`${back}?google=connected`, request.url));
+  return leave(new URL(`${back}?google=connected`, request.url));
 }
