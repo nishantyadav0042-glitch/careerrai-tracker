@@ -134,3 +134,76 @@ describe('Event OS invariant 1 — no direct notification writers', () => {
     }
   });
 });
+
+// ── The channel policy must never become a QUIET second authority ──────────
+//
+// event-policy.ts is the executable form of EVENT-OS.md's channel rules. It is
+// fully written and fully tested, and as of 27 Aug NOTHING IN THE APP CALLS
+// IT: dispatch() still takes its channels from whatever each caller passes in
+// `prefs`. That is a shadow authority — two places that answer "which channels
+// does this event use?", one of them live and one of them merely correct.
+//
+// It is not dead code kept "just in case": it is the pure core of Event OS
+// Batch 2, which the founder explicitly gated on a clean production
+// observation window that is still open (task #61). But an unwired module with
+// no marker reads to the next person like something already in force.
+//
+// The gap is real and is NOT a mechanical substitution. EVENT_POLICY declares
+// 26 event types; the codebase dispatches far more, and many are not in the
+// table at all. Wiring chooseChannels() into dispatch() therefore changes what
+// every one of those events does, for 876 students, and needs its own cycle
+// with its own observation window — not a closing edit on a large branch.
+//
+// So this guard holds the honest middle: the module may be unwired, but it may
+// not be unwired SILENTLY, and the moment anything other than its own test
+// imports it, that consumer must be the dispatch boundary.
+
+describe('event-policy is either wired to dispatch or visibly not wired', () => {
+  const POLICY = 'src/lib/event-policy.ts';
+  const BOUNDARY = 'src/lib/notification-os.ts';
+
+  /** Every non-test file that imports the policy. */
+  function consumers(): string[] {
+    const out: string[] = [];
+    const walk = (dir: string) => {
+      for (const name of readdirSync(dir)) {
+        const p = join(dir, name);
+        if (statSync(p).isDirectory()) { walk(p); continue; }
+        if (!/\.(ts|tsx)$/.test(name) || /\.test\.tsx?$/.test(name)) continue;
+        if (p === POLICY) continue;
+        if (/from ['"][^'"]*event-policy['"]/.test(readFileSync(p, 'utf8'))) out.push(p);
+      }
+    };
+    walk('src');
+    return out;
+  }
+
+  it('if anything consumes the policy, it is the dispatch boundary', () => {
+    const bad = consumers().filter((f) => f !== BOUNDARY);
+    expect(
+      bad,
+      'Only notification-os.ts may consume the channel policy. Any other consumer makes a second place that decides channels, and the two will disagree the first time one is edited:\n  ' +
+        bad.join('\n  '),
+    ).toEqual([]);
+  });
+
+  it('while it is unwired, it stays PURE — no client, no transport, no writes', () => {
+    // An unwired module that can reach the database is one import away from
+    // becoming a second sender rather than a second opinion.
+    const code = stripComments(readFileSync(POLICY, 'utf8'));
+    expect(code).not.toMatch(/supabase|createAdminClient|from ['"].*\/push['"]|from ['"].*\/email['"]/);
+    expect(code).not.toMatch(/\.(insert|update|upsert|delete)\s*\(/);
+  });
+
+  it('the unwired state is DECLARED in the file, not left to be discovered', () => {
+    // If someone wires it, they must delete this marker — which is the moment
+    // they are forced to read why it was not wired in the first place.
+    const raw = readFileSync(POLICY, 'utf8');
+    const wired = consumers().includes(BOUNDARY);
+    if (wired) return; // once dispatch consumes it, the marker's job is done
+    expect(
+      raw,
+      'event-policy.ts is imported by nothing but its own test. Say so at the top of the file, with the gate that has to clear before it is wired — an undeclared shadow authority is how two channel decisions end up in the codebase.',
+    ).toMatch(/NOT YET WIRED/);
+  });
+});

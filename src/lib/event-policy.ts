@@ -1,3 +1,22 @@
+// ── NOT YET WIRED — read this before you import it ─────────────────────────
+//
+// As of 27 Aug 2026 nothing in the application calls this module. dispatch()
+// still takes its channels from whatever each caller passes in `prefs`. This
+// file is the pure core of Event OS Batch 2, which the founder gated on a
+// clean production observation window (task #61) that is still open.
+//
+// THE GAP IS NOT MECHANICAL. EVENT_POLICY declares 26 event types; the
+// codebase dispatches considerably more, and many are absent from the table.
+// Wiring chooseChannels() into dispatch() therefore changes the behaviour of
+// every event not in the table, for the whole cohort. It needs its own cycle
+// and its own observation window.
+//
+// WHEN YOU WIRE IT: the only permitted consumer is src/lib/notification-os.ts
+// — the dispatch boundary — and you must delete this marker. Both rules are
+// enforced by event-os-writers.guard.test.ts, which is also what stops this
+// file from quietly becoming a second answer to "which channels does this
+// event use?" while the live one sits in dispatch().
+
 // ── The channel decision, as one pure function ─────────────────────────────
 //
 // docs/OS/EVENT-OS.md: "Channel policy = f(event class, user capability).
