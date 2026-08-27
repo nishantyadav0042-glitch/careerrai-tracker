@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
+import { decideBookability } from '@/lib/session-assignment';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { googleConfigured } from '@/lib/google-oauth';
 
@@ -25,25 +26,37 @@ export async function GET() {
   const { data: me } = await admin.from('profiles').select('role').eq('id', user.id).single();
   if (me?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  const [{ data: buddies }, { data: tokens }, { data: liveSessions }] = await Promise.all([
+  const [{ data: buddies }, { data: tokens }, { data: liveSessions }, { data: availRows }] = await Promise.all([
     admin.from('profiles').select('id, full_name, buddy_meet_url').eq('role', 'buddy'),
     admin.from('google_oauth_tokens').select('user_id, google_email'),
     // 'active' included: a LIVE session with a broken room is the worst case
     // this health check exists to catch, not one to filter out.
     admin.from('video_sessions').select('buddy_id, student_id').in('session_status', ['scheduled', 'active']),
+    // Availability is HALF the canonical rule. Reading only tokens and rooms
+    // is what made this file's verdict disagree with the booking API.
+    admin.from('buddy_availability').select('buddy_id, active, timezone'),
   ]);
 
   const connected = new Map((tokens ?? []).map((t) => [t.user_id, t.google_email]));
+  const availByBuddy = new Map(
+    (availRows ?? []).map((a) => [a.buddy_id, { active: a.active as boolean | null, timezone: a.timezone as string | null }]),
+  );
   const mentors = (buddies ?? []).map((b) => ({
     name: b.full_name,
     googleConnected: connected.has(b.id),
     googleEmail: connected.get(b.id) ?? null,
-    // Booking needs a connection AND a minted room — the same two conditions
-    // buddyBookingReadiness enforces. Reporting only the token here made this
-    // a second source of truth that could say "can schedule" while the API
-    // refused the booking.
+    // THE CANONICAL RULE, not a local re-derivation. This comment used to
+    // claim these were "the same two conditions buddyBookingReadiness
+    // enforces" — that stopped being true when the Google requirement was
+    // removed as a design mistake, and this file never followed. It then
+    // reported mentors as unable to book, blaming Google, while the API was
+    // refusing them for a completely different reason.
     hasRoom: !!b.buddy_meet_url,
-    canSchedule: connected.has(b.id) && !!b.buddy_meet_url,
+    canSchedule: decideBookability({
+      availability: availByBuddy.get(b.id) ?? null,
+      hasRoom: !!b.buddy_meet_url,
+      googleConnected: connected.has(b.id),
+    }).bookable,
   }));
 
   // Incident #21 guard: a pair must never hold two live sessions at once.

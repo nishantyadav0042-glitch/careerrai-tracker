@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 import type { DailyReport } from '@/types';
 import { trailingWindow } from '@/lib/facts/window';
 import { getLogDateString } from '@/lib/streak-utils';
+import { decideBookability } from '@/lib/session-assignment';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,7 +43,7 @@ export default async function BuddyRosterPage() {
    
   const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString();
 
-  const [{ data: buddyRows }, { data: assignedRows }, { data: recentFeedback }] = await Promise.all([
+  const [{ data: buddyRows }, { data: assignedRows }, { data: recentFeedback }, { data: availRows }, { data: tokenRows }] = await Promise.all([
     // The full storefront dossier — same columns the buddy fills in setup.
     admin.from('profiles')
       .select('id, full_name, email, phone, cat_percentile, first_attempt_percentile, cat_year, iim_converted, current_company, strongest_section, student_types_helped, how_i_work, biggest_mistake, younger_self_advice, linkedin_url, avatar_url, buddy_meet_url, buddy_onboarding_completed, starting_percentile')
@@ -53,8 +54,16 @@ export default async function BuddyRosterPage() {
       .eq('role', 'student').not('buddy_id', 'is', null)
       .not('is_test_account', 'is', true).not('is_demo', 'is', true),
     admin.from('buddy_feedback').select('buddy_id, created_at, feedback_date').gte('created_at', twoWeeksAgo),
-  ]);
+      admin.from('buddy_availability').select('buddy_id, active, timezone'),
+    admin.from('google_oauth_tokens').select('user_id'),
+]);
 
+  // Both halves of the canonical rule. Reading only profiles is what let this
+  // page answer a different question than the booking API.
+  const availByBuddy = new Map(
+    (availRows ?? []).map((a) => [a.buddy_id as string, { active: a.active as boolean | null, timezone: a.timezone as string | null }]),
+  );
+  const googleConnectedIds = new Set((tokenRows ?? []).map((t) => t.user_id as string));
   const buddies = buddyRows ?? [];
   const assigned = assignedRows ?? [];
   const assignedIds = assigned.map((s) => s.id);
@@ -118,7 +127,14 @@ export default async function BuddyRosterPage() {
   // onboarding done. A "free slot" on a mentor who cannot run a session is the
   // Aarav Mehta bug wearing a roster.
   const openSlots = buddies.reduce((sum, b) => {
-    const ready = !!b.buddy_meet_url && b.buddy_onboarding_completed === true;
+    // THE CANONICAL RULE. This used room + onboarding_completed and never
+    // looked at availability, so it counted Shreya as READY and offered her
+    // free slots while the booking API refused every student she had.
+    const ready = decideBookability({
+      availability: availByBuddy.get(b.id as string) ?? null,
+      hasRoom: !!b.buddy_meet_url,
+      googleConnected: googleConnectedIds.has(b.id as string),
+    }).bookable;
     return ready ? sum + Math.max(0, MENTOR_OVERLOAD_THRESHOLD - (studentsByBuddy.get(b.id as string)?.length ?? 0)) : sum;
   }, 0);
 

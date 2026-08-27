@@ -258,10 +258,18 @@ export async function releaseBuddyRoom(buddyUserId: string): Promise<{ deleted: 
 
 // ── Can this buddy take a booking at all? ───────────────────────────────────
 
+import {
+  decideBookability, bookabilityFacts, type UnbookableReason,
+} from './session-assignment';
+
 export interface BookingReadiness {
+  /** The canonical verdict. Identical to what the booking API will decide. */
   ready: boolean;
+  /** Why not, when not — the same three reasons the API uses. */
+  reason: UnbookableReason | null;
   googleConnected: boolean;
   hasRoom: boolean;
+  hasAvailability: boolean;
   /** The room itself — safe to show a mentor; it is the link they hand out. */
   roomUrl: string | null;
   googleEmail: string | null;
@@ -270,30 +278,44 @@ export interface BookingReadiness {
 }
 
 /**
- * Everything the booking UI needs to decide whether to offer the button —
- * and the same check the API runs before it accepts one.
+ * The mentor-facing view of bookability.
  *
- * Deliberately exposes NO token, no calendar id and no event id. A client
- * needs to know *whether* booking is possible, never the credentials that
- * make it possible.
+ * A THIN ADAPTER over decideBookability(), never a second implementation.
+ * This function used to compute its own answer — `ready: hasRoom` — while its
+ * comment claimed it ran "the same readiness the booking API enforces". It did
+ * not, and a mentor with a room and no hours was shown a clean screen while
+ * every student hit a dead end.
+ *
+ * It adds only PRESENTATION: the room URL to display, the connected Google
+ * address, and a sentence. The verdict itself comes from the one rule.
  */
 export async function buddyBookingReadiness(buddyUserId: string): Promise<BookingReadiness> {
   const admin = createAdminClient();
-  const [{ data: profile }, connection] = await Promise.all([
+  const [facts, { data: profile }, connection] = await Promise.all([
+    bookabilityFacts(admin, buddyUserId),
     admin.from('profiles').select('buddy_meet_url').eq('id', buddyUserId).single(),
     googleConnection(buddyUserId),
   ]);
 
-  // Booking needs a ROOM, not a Google connection. A mentor who pasted their
-  // own Meet link is every bit as ready as one who connected Google — and is
-  // not hostage to Google's app-verification queue.
-  const hasRoom = !!profile?.buddy_meet_url;
+  const decision = decideBookability(facts);
   return {
-    ready: hasRoom,
+    ready: decision.bookable,
+    reason: decision.bookable ? null : decision.reason,
     googleConnected: connection.connected,
-    hasRoom,
+    hasRoom: facts.hasRoom,
+    hasAvailability: facts.availability?.active === true,
     roomUrl: profile?.buddy_meet_url ?? null,
     googleEmail: connection.email,
-    blocker: hasRoom ? null : 'Set your meeting room before booking a session.',
+    blocker: decision.bookable ? null : MENTOR_BLOCKER_COPY[decision.reason],
   };
 }
+
+/**
+ * What the MENTOR reads. Distinct from UNBOOKABLE_COPY, which is what the
+ * STUDENT reads about their buddy — same three reasons, two audiences.
+ */
+export const MENTOR_BLOCKER_COPY: Record<UnbookableReason, string> = {
+  no_availability: 'Set your weekly hours so students can book a time with you.',
+  not_taking_bookings: 'Your hours are switched off — turn them back on to take bookings.',
+  no_meeting_room: 'Set your meeting room before students can book a session.',
+};

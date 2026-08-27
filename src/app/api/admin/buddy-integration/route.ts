@@ -7,6 +7,7 @@ import { audit } from '@/lib/integration-audit';
 import { canTransition, transitionRefusal, type SessionStatus } from '@/lib/session-lifecycle';
 import { settleCreditForSession } from '@/lib/session-credit';
 import { dispatch } from '@/lib/notification-os';
+import { decideBookability } from '@/lib/session-assignment';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,8 +28,9 @@ export async function GET(request: NextRequest) {
 
   const subject = new URL(request.url).searchParams.get('buddyId');
 
-  const [{ data: buddies }, { data: tokens }, { data: live }, { data: log }] = await Promise.all([
+  const [{ data: buddies }, { data: availRows }, { data: tokens }, { data: live }, { data: log }] = await Promise.all([
     admin.from('profiles').select('id, full_name, buddy_meet_url, buddy_meet_email, buddy_meet_event_id').eq('role', 'buddy'),
+    admin.from('buddy_availability').select('buddy_id, active, timezone'),
     admin.from('google_oauth_tokens').select('user_id, google_email, token_expires_at'),
     admin.from('video_sessions')
       .select('id, buddy_id, student_id, title, scheduled_at, session_status')
@@ -41,6 +43,9 @@ export async function GET(request: NextRequest) {
   ]);
 
   const connected = new Map((tokens ?? []).map((t) => [t.user_id, t.google_email]));
+  const availByBuddy = new Map(
+    (availRows ?? []).map((a) => [a.buddy_id as string, { active: a.active as boolean | null, timezone: a.timezone as string | null }]),
+  );
   const sessionsByBuddy = new Map<string, typeof live>();
   for (const s of live ?? []) {
     sessionsByBuddy.set(s.buddy_id, [...(sessionsByBuddy.get(s.buddy_id) ?? []), s]);
@@ -59,7 +64,15 @@ export async function GET(request: NextRequest) {
       // The state that silently breaks bookings: a room minted under an account
       // they are no longer connected with.
       roomOwnerMismatch: !!b.buddy_meet_url && !!tokenEmail && b.buddy_meet_email !== tokenEmail,
-      canBook: connected.has(b.id) && !!b.buddy_meet_url,
+      // THE CANONICAL RULE. This was an EIGHTH private definition — Google
+      // AND a room, ignoring availability entirely — found only by a semantic
+      // sweep, not by searching for a function name. None of the eight shared
+      // one.
+      canBook: decideBookability({
+        availability: availByBuddy.get(b.id) ?? null,
+        hasRoom: !!b.buddy_meet_url,
+        googleConnected: connected.has(b.id),
+      }).bookable,
       liveSessions: (sessionsByBuddy.get(b.id) ?? []).map((s) => ({
         id: s.id, studentId: s.student_id, title: s.title,
         scheduledAt: s.scheduled_at, status: s.session_status,

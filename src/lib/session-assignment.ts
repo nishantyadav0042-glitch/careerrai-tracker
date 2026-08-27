@@ -103,41 +103,88 @@ export async function assignBuddyToCredit(admin: any, input: AssignInput): Promi
 export type UnbookableReason =
   | 'no_availability'      // they have not described their week
   | 'not_taking_bookings'  // availability exists but is switched off
-  | 'no_meeting_room';     // no Google connection, so no room to put anyone in
+  | 'no_meeting_room';     // no room at all — neither a pasted link nor Google
 
 export type Bookability =
   | { bookable: true; timezone: string }
   | { bookable: false; reason: UnbookableReason };
 
 /**
- * Whether a student may be shown slots for this mentor.
+ * ── THE ONE BUSINESS RULE ───────────────────────────────────────────────────
  *
- * BOTH halves are required, and the second is the one that matters today:
- * production has 8 mentors, ZERO Google connections and ZERO availability
- * rows. Offering a slot for a mentor who cannot produce a meeting room would
- * sell a booking nobody can join — which is exactly how sixteen sessions were
- * created and none delivered.
+ * Everything a mentor needs to be bookable, as facts. Every surface in the
+ * product — the booking API, the mentor's own screens, every admin view —
+ * answers the question by calling decideBookability() with these, and none of
+ * them re-derives it.
  *
- * A mentor who is not bookable is not an error and not a fault; the student is
- * routed to the team instead, and the credit keeps waiting.
+ * That is not tidiness. On 27 Aug an audit found SEVEN independent
+ * definitions of "can this mentor be booked", giving FOUR different answers
+ * for one real mentor (Shreya: a room, no hours, no Google):
+ *
+ *   · the booking API said no — correctly, no availability
+ *   · her own home screen said nothing was wrong
+ *   · the admin roster counted her as READY and offered her free slots
+ *   · video-health and integration-metrics said she could not book, blaming
+ *     Google — a requirement this codebase had already removed as "a design
+ *     mistake", leaving those two chasing a problem that no longer existed
+ *
+ * A student had paid ₹299 two days earlier and could not pick a time.
  */
-export async function mentorBookability(admin: any, buddyId: string): Promise<Bookability> {
+export interface BookabilityFacts {
+  /** The availability row, or null when the mentor has never described a week. */
+  availability: { active: boolean | null; timezone?: string | null } | null;
+  /** A room URL already recorded — pasted by the mentor or minted earlier. */
+  hasRoom: boolean;
+  /** A live Google Calendar connection, from which a room CAN be minted. */
+  googleConnected: boolean;
+}
+
+/**
+ * The rule, and the only place it exists.
+ *
+ * Pure: same facts, same answer, no I/O and no clock — so every state can be
+ * enumerated in a test rather than argued about.
+ *
+ * GOOGLE IS NOT INDEPENDENTLY MANDATORY. A room is a room whether Google
+ * minted it or the mentor pasted their own link; requiring a Google
+ * connection made booking hostage to Google's app-verification queue, which
+ * is a dependency the product never needed. Either satisfies the room half.
+ */
+export function decideBookability(facts: BookabilityFacts): Bookability {
+  if (!facts.availability) return { bookable: false, reason: 'no_availability' };
+  if (facts.availability.active !== true) {
+    return { bookable: false, reason: 'not_taking_bookings' };
+  }
+  if (!facts.hasRoom && !facts.googleConnected) {
+    return { bookable: false, reason: 'no_meeting_room' };
+  }
+  return { bookable: true, timezone: facts.availability.timezone ?? 'Asia/Kolkata' };
+}
+
+/** Read the facts for one mentor. The only query behind the rule. */
+export async function bookabilityFacts(admin: any, buddyId: string): Promise<BookabilityFacts> {
   const [{ data: avail }, { data: prof }] = await Promise.all([
     admin.from('buddy_availability')
       .select('timezone, active').eq('buddy_id', buddyId).maybeSingle(),
     admin.from('profiles')
       .select('buddy_meet_url, google_calendar_connected').eq('id', buddyId).maybeSingle(),
   ]);
+  return {
+    availability: avail ? { active: avail.active as boolean | null, timezone: avail.timezone as string | null } : null,
+    hasRoom: prof?.buddy_meet_url != null,
+    googleConnected: prof?.google_calendar_connected === true,
+  };
+}
 
-  if (!avail) return { bookable: false, reason: 'no_availability' };
-  if (avail.active !== true) return { bookable: false, reason: 'not_taking_bookings' };
-
-  // A usable room is either a live Google connection (we can mint one) or a
-  // room URL already recorded. Neither means there is nowhere to meet.
-  const hasRoom = prof?.google_calendar_connected === true || prof?.buddy_meet_url != null;
-  if (!hasRoom) return { bookable: false, reason: 'no_meeting_room' };
-
-  return { bookable: true, timezone: (avail.timezone as string) ?? 'Asia/Kolkata' };
+/**
+ * Whether a student may be shown slots for this mentor.
+ *
+ * The canonical entry point: facts in, one rule applied. A mentor who is not
+ * bookable is not an error and not a fault; the student is routed to the team
+ * instead, and the credit keeps waiting.
+ */
+export async function mentorBookability(admin: any, buddyId: string): Promise<Bookability> {
+  return decideBookability(await bookabilityFacts(admin, buddyId));
 }
 
 /** What the student is told. Never blames them, never invents a timeline. */
