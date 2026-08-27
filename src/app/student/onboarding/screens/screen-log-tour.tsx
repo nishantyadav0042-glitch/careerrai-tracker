@@ -4,6 +4,55 @@ import { useEffect, useRef, useState } from 'react';
 import { Check, Flame } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { track } from '@/lib/journey';
+import { InsightCardFace } from '@/components/home/insight-bubble';
+import { WeeklyReviewCard } from '@/components/home/weekly-review-card';
+import type { DailyInsight } from '@/lib/daily-insight';
+import type { WeeklyInsight } from '@/lib/weekly-insight';
+
+// ── The two samples, typed against the REAL contracts ──────────────────────
+//
+// Both are hand-written copy, NOT engine output — day 0 has no rows, and
+// running computeDailyInsight/computeWeeklyInsight against a student with no
+// history would mean inventing the history. What the types buy is that the
+// samples cannot describe a shape the product no longer produces: change
+// DailyInsight or WeeklyInsight and this file stops compiling.
+//
+// The numbers below are the same fictional week the planned-vs-actual table
+// underneath shows, so the sample review and the sample week agree with each
+// other. A demo whose own numbers disagree teaches a student not to trust the
+// real one.
+//
+// The evidence lines are deliberately in plain language rather than naming
+// tables the way the real engine does. On a demo a table name is not
+// provenance, it is set dressing — and the screen's own guard forbids this
+// file from mentioning a table at all, precisely so nobody can quietly start
+// reading one here.
+
+const SAMPLE_DAILY: DailyInsight = {
+  kind: 'avoidance',
+  title: '📊 A pattern in your week',
+  text: 'Only 1 of 4 DILR tasks done. Give DILR 20 minutes first tomorrow.',
+  subject: 'DILR',
+};
+
+const SAMPLE_WEEKLY: WeeklyInsight = {
+  status: 'ready',
+  start: '2026-08-17',
+  end: '2026-08-23',
+  headline: 'A working week, with one thing pushing back.',
+  sections: [
+    { id: 'consistency', label: 'How often you showed up',
+      text: "You logged 6 of the week's 7 days.", evidence: 'from 6 logged days' },
+    { id: 'planned_vs_actual', label: 'Planned vs actual',
+      text: 'Your plan asked for 9 tasks. You finished 6.', evidence: 'from 6 daily plans and what was ticked off them' },
+    { id: 'slipping', label: 'What fought back',
+      text: 'DILR — 3 tasks marked hard. Start next week there, while you are fresh.', evidence: 'from 3 tasks marked hard' },
+    { id: 'behaviour', label: 'When your work happens',
+      text: '71% of what you finished was before noon. Your mornings are carrying this.', evidence: 'from when each task was ticked' },
+    { id: 'next_week', label: 'One thing for next week',
+      text: 'Give DILR the first twenty minutes of three days. Earlier, not longer.', evidence: 'derived from the slipping section (DILR)' },
+  ],
+};
 
 // ── The first log, practised before it's real ───────────────────────────────
 //
@@ -135,20 +184,78 @@ export default function ScreenLogTour({ onNext, isLoading, firstName = null }: S
   // says about the student) → ACTION (the one thing to do tomorrow). One
   // discovery only — a second finding would turn the page into a dashboard,
   // and dashboards get admired and closed.
+  //
+  // TWO LAYERS, NAMED (27 Aug). This screen always showed a WEEK-shaped
+  // sample — six planned-vs-actual rows and one pattern across them — while
+  // the thing a student meets first is the DAILY line on Home. Students were
+  // therefore shown the slower layer and given the faster one, with nothing
+  // saying they were different. Both are now labelled and both are samples:
+  //
+  //   daily   → computeDailyInsight()   one line, every day, one observation
+  //   weekly  → computeWeeklyInsight()  the closed week, every Monday
+  //
+  // The samples below are STATIC COPY, not a second engine. They are hand-
+  // written to match the SHAPE those two functions produce — a single
+  // clamped sentence for the daily, an evidence-gated observation for the
+  // weekly — and screen-log-tour.guard.test.ts pins that correspondence.
+  // Running the real engines here would mean inventing rows for a student
+  // who has none, which is the one thing day 0 must never do.
   if (phase === 'insight') {
     return (
       <div className="space-y-4">
         <div>
           <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-800">
-            Sample — from one week of logs
+            Sample — nobody&apos;s real data
           </span>
           <h3 className="mt-2 text-xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
             This is what your logs unlock
           </h3>
           <p className="mt-1.5 text-[13px] leading-relaxed text-stone-600">
-            Here&apos;s a student who logged 6 days. Watch what their own logs caught:
+            Your logs get read twice — once every day, once every week. Here is
+            each one, from a student who logged 6 days.
           </p>
         </div>
+
+        {/* LAYER 1 — the daily line, drawn by the REAL component.
+            InsightCardFace is the same code that renders the card on Home, so
+            this sample cannot drift from the thing the student actually meets
+            tomorrow. What it deliberately is NOT is the whole InsightBubble:
+            that one writes cr_insight_seen_<studyDay> to localStorage and
+            fires track('insight_shown'), so rendering it here would log a
+            shown-insight for a sample AND — if the student dismissed it —
+            mark their real first insight as already seen, so it would never
+            appear. The face is shared; the side effects stay on Home. */}
+        <div className="rounded-2xl border border-stone-200 bg-white p-3.5">
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Every day · on Home</p>
+            <span className="rounded bg-stone-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-stone-500">Sample</span>
+          </div>
+          <div className="mt-2 overflow-hidden rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 p-4">
+            <InsightCardFace title={SAMPLE_DAILY.title} text={SAMPLE_DAILY.text} />
+          </div>
+          <p className="mt-2 text-[11px] leading-relaxed text-stone-500">
+            <b className="text-stone-700">One thing about today.</b> It changes when your logs
+            change — never the same line twice in a week.
+          </p>
+        </div>
+
+        {/* LAYER 2 — the week, drawn by the REAL WeeklyReviewCard. That
+            component holds only useState: no storage, no analytics, nothing
+            that can leak into the student's own record, so it is safe to
+            render whole. SAMPLE_WEEKLY is typed as WeeklyInsight, so if the
+            engine's contract changes this stops compiling instead of quietly
+            showing a shape the product no longer produces. */}
+        <div className="flex items-center justify-between pt-1">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Every Monday · your finished week</p>
+          <span className="rounded bg-stone-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-stone-500">Sample</span>
+        </div>
+
+        <WeeklyReviewCard insight={SAMPLE_WEEKLY} />
+
+        <p className="text-[11px] leading-relaxed text-stone-500">
+          <b className="text-stone-700">The pattern across a whole week.</b> Tap it open — that is
+          what a real Monday looks like. Here is the week those numbers came from:
+        </p>
 
         {/* The week — planned vs what actually happened. Messy on purpose. */}
         <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white">
@@ -196,13 +303,14 @@ export default function ScreenLogTour({ onNext, isLoading, firstName = null }: S
           <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">The more you log, the more it sees</p>
           <div className="mt-2 space-y-1.5 text-[12px] leading-relaxed">
             <p><b className="text-stone-900">2 logs</b><span className="text-stone-500"> — how today compared to yesterday</span></p>
-            <p><b className="text-stone-900">1 week</b><span className="text-stone-500"> — which section you&apos;re quietly avoiding</span></p>
+            <p><b className="text-stone-900">1 week</b><span className="text-stone-500"> — which section you&apos;re quietly avoiding, and your Monday review</span></p>
             <p><b className="text-stone-900">2 weeks</b><span className="text-stone-500"> — your plan vs what you actually do</span></p>
           </div>
         </div>
 
         <p className="text-center text-[11px] text-stone-400">
-          That was a sample. Yours starts with your first real log — tomorrow&apos;s taps build it.
+          Both of those were samples. Yours start with your first real log — and the
+          weekly one only appears once there is a real week behind it.
         </p>
 
         <div className="sticky bottom-0 z-20 bg-white/95 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm">

@@ -1,4 +1,4 @@
-import { createServerClient } from '@supabase/ssr';
+import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { clientIp } from '@/lib/request-ip';
@@ -50,11 +50,7 @@ export async function POST(request: NextRequest) {
   // Resolve the authenticated user (if any) server-side — never trust the client.
   let userId: string | null = null;
   try {
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { cookies: { getAll: () => request.cookies.getAll(), setAll: () => {} } }
-    );
+    const supabase = await createClient();
     const { data } = await supabase.auth.getUser();
     userId = data.user?.id ?? null;
   } catch {

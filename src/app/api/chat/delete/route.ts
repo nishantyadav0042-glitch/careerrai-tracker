@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@supabase/ssr';
+import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { discardAttachment } from '@/lib/chat-attachment-verify';
 import { audit } from '@/lib/integration-audit';
@@ -15,11 +15,7 @@ export const dynamic = 'force-dynamic';
 // Only your OWN messages, ever — a mentor deleting a student's words (or vice
 // versa) would be rewriting someone else's record.
 export async function POST(request: NextRequest) {
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { getAll: () => request.cookies.getAll(), setAll: () => {} } },
-  );
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Please sign in again.' }, { status: 401 });
 

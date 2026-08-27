@@ -491,15 +491,20 @@ async function notifyBuddy(studentId: string, buddyId: string | null, data: { ho
   if (!buddyId) return;
   try {
     const admin = createAdminClient();
-    const { data: student } = await admin.from('profiles').select('full_name').eq('id', studentId).single();
-    await admin.from('notifications').insert({
-      user_id: buddyId,
+    const [{ data: student }, { data: buddyProf }] = await Promise.all([
+      admin.from('profiles').select('full_name').eq('id', studentId).single(),
+      admin.from('profiles').select('notif_prefs').eq('id', buddyId).single(),
+    ]);
+    await dispatch({
+      userId: buddyId,
       type: 'student_logged',
       title: `${student?.full_name || 'Student'} logged their prep`,
       body: `${data.hours}h · ${data.energy}`,
+      url: `/buddy/students/${studentId}`,
       data: { student_id: studentId, hours: data.hours, energy: data.energy },
-      read: false,
-      channel: 'in_app',
+      reason: 'Assigned student logged today — the buddy should not have to go looking',
+      expectedAction: 'acknowledge',
+      prefs: (buddyProf?.notif_prefs as Record<string, unknown>) ?? {},
     });
   } catch (error) {
     console.error('Failed to notify buddy:', error);
@@ -514,15 +519,18 @@ async function notifyBuddyMock(studentId: string, buddyId: string | null, logDat
     const admin = createAdminClient();
     const { data: student } = await admin.from('profiles').select('full_name').eq('id', studentId).single();
     const name = student?.full_name?.split(' ')[0] || 'Your student';
-    await admin.from('notifications').insert({
-      user_id: buddyId,
+    const { data: mockBuddy } = await admin
+      .from('profiles').select('notif_prefs').eq('id', buddyId).single();
+    await dispatch({
+      userId: buddyId,
       type: 'mock_logged',
       title: `${name} finished a mock`,
       body: 'Debrief within 24h — walk it with them while it’s fresh.',
+      url: `/buddy/students/${studentId}`,
       data: { student_id: studentId, log_date: logDate },
-      read: false,
-      channel: 'in_app',
-      link_url: `/buddy/students/${studentId}`,
+      reason: 'Student finished a mock — the 24h debrief window is open right now',
+      expectedAction: 'acknowledge',
+      prefs: (mockBuddy?.notif_prefs as Record<string, unknown>) ?? {},
     });
   } catch (error) {
     console.error('Failed to send mock notification:', error);
@@ -544,15 +552,18 @@ async function notifyBuddyEmotional(studentId: string, buddyId: string | null, c
       feeling_behind: 'feeling behind',
     };
     const described = chips.map((c) => chipLabels[c] ?? c).join(', ');
-    await admin.from('notifications').insert({
-      user_id: buddyId,
+    const { data: flagBuddy } = await admin
+      .from('profiles').select('notif_prefs').eq('id', buddyId).single();
+    await dispatch({
+      userId: buddyId,
       type: 'emotional_flag',
       title: `${name} flagged an emotional block`,
       body: `They marked: ${described}. Check in with them.`,
+      url: `/buddy/students/${studentId}`,
       data: { student_id: studentId, chips },
-      read: false,
-      channel: 'in_app',
-      link_url: `/buddy/students/${studentId}`,
+      reason: 'Student reported an emotional block — the most time-sensitive signal we have',
+      expectedAction: 'acknowledge',
+      prefs: (flagBuddy?.notif_prefs as Record<string, unknown>) ?? {},
     });
   } catch (error) {
     console.error('Failed to send emotional notification:', error);
@@ -566,15 +577,18 @@ async function notifyBuddyRecovery(studentId: string, buddyId: string | null, mi
     const admin = createAdminClient();
     const { data: student } = await admin.from('profiles').select('full_name').eq('id', studentId).single();
     const name = student?.full_name?.split(' ')[0] || 'Your student';
-    await admin.from('notifications').insert({
-      user_id: buddyId,
+    const { data: recovBuddy } = await admin
+      .from('profiles').select('notif_prefs').eq('id', buddyId).single();
+    await dispatch({
+      userId: buddyId,
       type: 'student_recovered',
       title: `${name} is back after ${missedDays} day${missedDays === 1 ? '' : 's'}`,
       body: 'A good moment to reach out — welcome them back, no guilt.',
+      url: `/buddy/students/${studentId}`,
       data: { student_id: studentId, missed_days: missedDays },
-      read: false,
-      channel: 'in_app',
-      link_url: `/buddy/students/${studentId}`,
+      reason: 'Student returned after a lapse — a welcome now lands, a scold later does not',
+      expectedAction: 'acknowledge',
+      prefs: (recovBuddy?.notif_prefs as Record<string, unknown>) ?? {},
     });
   } catch (error) {
     console.error('Failed to send recovery notification:', error);

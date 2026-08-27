@@ -109,14 +109,85 @@ describe('it never gates completion', () => {
 
   it('the sample insight promises only what the real engines deliver', () => {
     // The ladder sells 2-log comparison, week-scale avoidance and
-    // plan-vs-actual — capabilities postLogInsight and
-    // computePrescriptiveLine actually have. A rung promising something the
-    // product cannot do yet would spend the trust this screen exists to earn.
+    // plan-vs-actual — capabilities postLogInsight, computePrescriptiveLine
+    // and (since 27 Aug) computeWeeklyInsight actually have. A rung promising
+    // something the product cannot do yet would spend the trust this screen
+    // exists to earn.
     const s = screen();
-    expect(s).toContain('Sample — from one week of logs');
     expect(s).not.toMatch(/AI predicts|percentile forecast|guarantee/i);
     // and it stays a sample: the insight phase writes nothing.
     expect(s).not.toContain("from('daily_reports')");
+  });
+
+  it('BOTH layers are labelled a sample, and neither is nobody\'s real data', () => {
+    // This used to pin one exact label. It now pins the property that label
+    // existed for, because the screen grew a second sample: a student must
+    // never be able to read either block as their own numbers on day 0, when
+    // by definition they have none.
+    const s = screen();
+    const insight = s.slice(s.indexOf("if (phase === 'insight')"));
+    const labels = insight.match(/>\s*Sample[^<]*</g) ?? [];
+    expect(
+      labels.length,
+      'The daily sample and the weekly sample must each carry their own visible "Sample" mark. One shared label at the top leaves the second block readable as real.',
+    ).toBeGreaterThanOrEqual(2);
+    expect(insight).toMatch(/nobody&apos;s real data/);
+  });
+
+  it('names the two intelligence layers and their cadence', () => {
+    // Students were shown a week-shaped sample and then handed a daily line,
+    // with nothing saying they were different things.
+    const s = screen();
+    expect(s).toMatch(/Every day · on Home/);
+    expect(s).toMatch(/Every Monday · your finished week/);
+  });
+
+  it('does not run a real engine to draw a sample', () => {
+    // Day 0 has no rows. Calling computeDailyInsight/computeWeeklyInsight
+    // here would mean inventing them — and would be a second place the
+    // sample is produced.
+    // Comments must be stripped first. The header comment NAMES both engines
+    // to document what the static copy is shaped after — five prior incidents
+    // in this repo were guards that matched their own explanatory prose.
+    const code = screen().replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+    expect(code).not.toMatch(/computeDailyInsight|computeWeeklyInsight/);
+  });
+
+  it('the weekly promise is hedged on there being a real week', () => {
+    // computeWeeklyInsight returns not_enough_data below MIN_REAL_SECTIONS.
+    // The screen must not promise a Monday review that will not arrive.
+    expect(screen()).toMatch(/only appears once there is a real week behind it/);
+  });
+
+  it('the samples are the REAL components, so they cannot drift from Home', () => {
+    const s = screen();
+    expect(s).toMatch(/InsightCardFace/);
+    expect(s).toMatch(/WeeklyReviewCard/);
+  });
+
+  it('the samples are typed against the real contracts', () => {
+    // Change DailyInsight or WeeklyInsight and this screen stops compiling,
+    // rather than quietly demoing a shape the product no longer produces.
+    const s = screen();
+    expect(s).toMatch(/SAMPLE_DAILY: DailyInsight/);
+    expect(s).toMatch(/SAMPLE_WEEKLY: WeeklyInsight/);
+  });
+
+  it('it renders the FACE, never the stateful InsightBubble', () => {
+    // InsightBubble writes cr_insight_seen_<studyDay> and fires
+    // track('insight_shown'). Rendering it here would log a shown-insight for
+    // a SAMPLE, and a student who dismissed the sample would mark that study
+    // day's real insight as seen — so their genuine first insight would never
+    // appear. Exactly the defect InsightBubble was built to fix (writing the
+    // seen key on mount, 19 Aug), coming back through onboarding.
+    const code = screen().replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+    expect(code).not.toMatch(/<\s*InsightBubble\b/);
+    // Nor may it reproduce the side effects by hand. The screen's OWN
+    // analytics (sample_insight_shown) are fine and wanted — what must never
+    // happen here is writing the daily insight's seen key, or emitting the
+    // daily insight's own events, for a card that is not the student's.
+    expect(code).not.toMatch(/cr_insight_seen/);
+    expect(code).not.toMatch(/track\(\s*'insight_(shown|dismissed)'/);
   });
 });
 

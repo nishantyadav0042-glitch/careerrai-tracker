@@ -29,7 +29,7 @@ const SECTIONS: Section[] = ['VARC', 'DILR', 'QA'];
 
 interface StoredTask { id: string; section: string; topic: string | null; label: string; target: string | null; estMinutes: number; reason: string | null }
 
-export async function POST(request: NextRequest) {
+export async function POST(_request: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });

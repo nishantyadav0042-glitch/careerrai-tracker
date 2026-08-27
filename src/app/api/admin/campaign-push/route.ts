@@ -11,9 +11,12 @@ import { claimBuddyPitch, settleBuddyPitch } from '@/lib/promo-impression';
 // bring students back to the app. So this route is deliberately small and
 // deliberately gated:
 //
-//  · It sends through sendNotification → sendPushToUser, which means the
-//    Notification-OS rules still apply: the 10-per-day hard cap, delivery
-//    beacons, click tracking. We are not building a second notification path.
+//  · It sends through dispatch(), which means the Notification-OS rules
+//    still apply: the 10-per-day hard cap, delivery beacons, click tracking.
+//    We are not building a second notification path. (This line used to name
+//    sendNotification → sendPushToUser; that abstraction was deleted in
+//    August and the comment outlived it, which is exactly how a reader comes
+//    to believe there are two send paths when there is one.)
 //  · It NEVER sends to a premium student. Nobody who paid gets sold to.
 //  · It refuses to send when the campaign is not live (window closed or the
 //    50th seat gone), so a mistimed click cannot advertise a dead offer.

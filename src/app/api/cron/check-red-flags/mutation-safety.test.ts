@@ -22,7 +22,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // broke, so a future pagination or chunking bug cannot pass by being under the
 // old threshold.
 
-const insert = vi.fn(() => Promise.resolve({ data: null, error: null }));
+// dispatch() writes via .insert(...).select('id').single(), so the fake models
+// that chain. The spy still records every attempted notification write, which
+// is what every assertion below counts — only the SHAPE changed, because the
+// route now goes through the send boundary instead of inserting by hand.
+const insert = vi.fn(() => {
+  const row = { data: { id: 'notif-fake' }, error: null };
+  const chain: Record<string, unknown> = {
+    select: () => chain,
+    single: () => Promise.resolve(row),
+    then: (res: (v: unknown) => unknown) => Promise.resolve(row).then(res),
+  };
+  return chain;
+});
 const sendRedFlagAlert = vi.fn((...args: unknown[]) => { void args; return Promise.resolve(); });
 
 vi.mock('@/lib/email', () => ({ sendRedFlagAlert: (...a: unknown[]) => sendRedFlagAlert(...a) }));

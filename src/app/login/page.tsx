@@ -1,11 +1,12 @@
 'use client';
-import { useState, Suspense } from 'react';
+import { useState, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { ArrowRight, Eye, EyeOff, Smartphone, ChevronLeft, KeyRound } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { InstallButton } from '@/components/install/install-button';
 import { cn } from '@/lib/utils';
+import { track } from '@/lib/journey';
 
 type LoginMode = 'otp-phone' | 'otp-phone-verify' | 'password';
 type UserType = 'student' | 'buddy' | null;
@@ -57,10 +58,18 @@ function LoginForm() {
 
   const activePhone = phone;
 
+  // Counts how many OTPs one person needs. Production measured 830 sends
+  // against 630 signups (1.32x) with no way to tell a first ask from a
+  // resend — the retry rate was visible only as an SMS bill.
+  const otpAsks = useRef(0);
+
   async function requestPhoneOtp(e?: React.FormEvent) {
     e?.preventDefault();
     setLoading(true);
     clearMsg();
+    otpAsks.current += 1;
+    track(otpAsks.current === 1 ? 'auth_otp_requested' : 'auth_otp_resent',
+      { surface: 'login', attempt: otpAsks.current });
     try {
       const res = await fetch('/api/auth/request-phone-otp', {
         method: 'POST',
@@ -93,8 +102,12 @@ function LoginForm() {
       });
       const data = await res.json();
       if (data.ok && data.dest) {
+        track('auth_otp_verified', { surface: 'login', asks: otpAsks.current });
+        track('auth_identity_completed', { surface: 'login', method: 'phone_otp' });
         window.location.href = data.dest;
       } else {
+        // The reason, never the code the student typed.
+        track('auth_otp_failed', { surface: 'login', status: res.status });
         setError(data.error ?? 'Incorrect OTP. Try again.');
       }
     } catch {

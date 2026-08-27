@@ -12,7 +12,7 @@ import type { NextRequest } from 'next/server';
 // script in the audit): with the claim gone, the double-pitch test fails.
 
 
-const dispatch = vi.hoisted(() => vi.fn(async () => 'sent'));
+const dispatch = vi.hoisted(() => vi.fn(async (opts: Record<string, unknown>) => { void opts; return 'sent'; }));
 const claim = vi.hoisted(() => vi.fn());
 
 let students: Array<{ id: string; full_name: string; notif_prefs: { push: boolean }; last_seen_at: string }>;
@@ -69,7 +69,7 @@ describe('the wave asks the promo authority for every student, before the wire',
       id === 'stu-1' ? { show: false, reason: 'already_pitched_today' } : { show: true });
     const body = await (await POST(req({ wave: 'wide', dryRun: false }))).json();
     expect(dispatch).toHaveBeenCalledTimes(1);
-    expect((dispatch.mock.calls[0][0] as { userId: string }).userId).toBe('stu-2');
+    expect((dispatch.mock.calls[0]![0] as { userId: string }).userId).toBe('stu-2');
     expect(body.sent).toBe(1);
     expect(body.alreadyPitched).toBe(1);
   });

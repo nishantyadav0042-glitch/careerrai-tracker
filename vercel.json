@@ -159,6 +159,10 @@
     {
       "path": "/api/cron/founder-alerts",
       "schedule": "10,25,40,55 * * * *"
+    },
+    {
+      "path": "/api/cron/purge-session-handoffs",
+      "schedule": "20 * * * *"
     }
   ]
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { authorizedCron } from '@/lib/cron-auth';
 import { withCronTracking } from '@/lib/cron-run-tracker';
+import { dispatch } from '@/lib/notification-os';
 
 // Kind dunning: nudge active students before their term ends so the journey
 // never lapses by surprise. Reminds at 7, 3 and 1 days out. Runs daily.
@@ -18,7 +19,7 @@ export async function POST(request: NextRequest) {
 
     const { data: upcoming, error } = await admin
       .from('profiles')
-      .select('id, subscription_renews_at')
+      .select('id, subscription_renews_at, notif_prefs')
       .eq('subscription_status', 'active')
       .not('subscription_renews_at', 'is', null)
       .lte('subscription_renews_at', windowEnd)
@@ -47,14 +48,18 @@ export async function POST(request: NextRequest) {
         .maybeSingle();
       if (existing) continue;
 
-      await admin.from('notifications').insert({
-        user_id: p.id,
+      // Through dispatch(). The per-threshold dedup above still stands — it
+      // keys on data->>days, which dispatch carries through unchanged.
+      await dispatch({
+        userId: p.id as string,
         type: 'renewal_reminder',
         title: daysLeft === 1 ? 'Your journey pauses tomorrow' : `Your journey pauses in ${daysLeft} days`,
         body: 'Reactivate from your profile to keep your streak, mocks, debriefs, and buddy without a break.',
+        url: '/student/profile',
         data: { days: daysLeft },
-        read: false,
-        channel: 'in_app',
+        reason: `Subscription pauses in ${daysLeft} day(s) — last honest chance to keep it unbroken`,
+        expectedAction: 'acknowledge',
+        prefs: ((p as { notif_prefs?: unknown }).notif_prefs as Record<string, unknown>) ?? {},
       });
       reminded++;
     }

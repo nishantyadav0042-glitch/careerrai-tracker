@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { authorizedCron } from '@/lib/cron-auth';
 import { withCronTracking } from '@/lib/cron-run-tracker';
+import { dispatch } from '@/lib/notification-os';
 
 // Memberships are one-time purchases, not auto-debit. When a term ends we flip
 // the student from 'active' to 'paused' (data fully preserved) so the membership
@@ -24,7 +25,7 @@ export async function POST(request: NextRequest) {
     // Find active subscriptions whose renewal date has already passed.
     const { data: lapsed, error } = await admin
       .from('profiles')
-      .select('id, full_name')
+      .select('id, full_name, notif_prefs')
       .eq('subscription_status', 'active')
       .lt('subscription_renews_at', nowIso);
 
@@ -55,17 +56,20 @@ export async function POST(request: NextRequest) {
       .eq('status', 'pending');
 
     // Nudge each student in-app — continuity, not a hard stop.
-    await admin.from('notifications').insert(
-      lapsed.map((p) => ({
-        user_id: p.id,
+    // Through dispatch() — continuity, not a hard stop, and the student
+    // should hear it from us rather than discover a missing buddy.
+    for (const p of lapsed) {
+      await dispatch({
+        userId: p.id as string,
         type: 'membership',
         title: 'Your mentorship has ended',
         body: 'Your streak, mocks and debriefs stay yours — keep using them free. Reactivate whenever you want your IIM mentor back.',
-        data: {},
-        read: false,
-        channel: 'in_app',
-      }))
-    );
+        url: '/student/profile',
+        reason: 'Subscription lapsed — say what they keep before they notice what they lost',
+        expectedAction: 'acknowledge',
+        prefs: ((p as { notif_prefs?: unknown }).notif_prefs as Record<string, unknown>) ?? {},
+      });
+    }
 
     return NextResponse.json({ expired: ids.length });
   });

@@ -39,7 +39,11 @@ let healedThisSession = false;
 // in the recovery population at all, including one fully reachable student
 // with a live subscription who was stamped recovery_failed. Recovery
 // reporting is now gated on `inRecoveryQueue` — permission actually granted
-// AND no working subscription, i.e. needsRecovery() from notification-state.ts
+// AND no working subscription. This used to say "i.e. needsRecovery() from
+// notification-state.ts" — that file was deleted in this consolidation and the
+// pointer outlived it. A comment naming a module that does not exist sends the
+// next reader looking for an authority that is gone, which is the documentation
+// form of the same zombie architecture the code cleanup is removing.
 // — while `serverPushDead` keeps its separate, correct job of deciding
 // whether to ROTATE the endpoint. Two different questions, two flags.
 async function reportOutcome(ok: boolean, reason?: string) {

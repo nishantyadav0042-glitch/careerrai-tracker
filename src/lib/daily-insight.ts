@@ -1,6 +1,7 @@
 import { TOPIC_METADATA, QA_GROUPS } from '@/lib/topics-constants';
 import { computeTopicMemory } from '@/lib/prep-memory-data';
 import { isCovered } from './coverage-status';
+import { studyDayString } from './study-day';
 
 // ── Daily one-liner insight (founder, 21 July) ──────────────────────────────
 // One specific, data-earned sentence per student per day — "this is the
@@ -52,21 +53,53 @@ export function insightKey(i: Pick<DailyInsight, 'kind' | 'subject'>): string {
 
 export const INSIGHT_SUPPRESS_DAYS = 7;
 
-/** Keys shown within the last 7 days — candidates carrying one stay quiet. */
+/**
+ * Keys shown in the last 7 days, EXCLUDING today — candidates carrying one
+ * stay quiet.
+ *
+ * The upper bound is the whole fix (forensic audit, 27 Aug). Without it, the
+ * row written by TODAY'S show satisfied `last_shown_on > cutoff`, so today's
+ * own insight suppressed itself — and because the Home page records a show on
+ * every server render, each visit re-ran the decision against a set that had
+ * just grown by one:
+ *
+ *   load 1 → consistency        (recorded)
+ *   load 2 → consistency now suppressed → high_weightage   (recorded)
+ *   load 3 → …burns the next candidate
+ *   load 4 → pool empty → the suppression-EXEMPT `progress` fallback
+ *
+ * A real candidate pool is one to three items, so four or five visits to Home
+ * in a single day drained a week of insights — invisibly, because the client
+ * only renders the first one it sees each day. What was left was `progress`,
+ * whose numbers come from topic_coverage and therefore do not move for days.
+ * That is why the same "23 done / 23 to go" card appeared morning after
+ * morning: not frozen state, a rotation that had eaten itself.
+ *
+ * With today excluded, every render on the same day sees the identical
+ * suppressed set, so the same rules fire in the same order and the student
+ * gets the SAME insight all day. The pool advances once per day, which is
+ * what "daily" was always supposed to mean.
+ */
 export async function loadSuppressedInsightKeys(admin: any, studentId: string): Promise<Set<string>> {
-  const cutoff = new Date(Date.now() - INSIGHT_SUPPRESS_DAYS * 86_400_000)
-    .toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  // studyDayString(), not an IST calendar date: the study day rolls at 05:30
+  // IST, and the ledger's rows are keyed by study day everywhere else. A
+  // calendar "today" made this the second live definition of today in the
+  // codebase — the exact condition the study-day module was written to end.
+  const cutoff = studyDayString(new Date(Date.now() - INSIGHT_SUPPRESS_DAYS * 86_400_000));
+  const today = studyDayString();
   const { data } = await admin
     .from('daily_insight_shown')
     .select('insight_key, last_shown_on')
     .eq('student_id', studentId)
-    .gt('last_shown_on', cutoff);
+    .gt('last_shown_on', cutoff)
+    .lt('last_shown_on', today);
   return new Set((data ?? []).map((r: any) => r.insight_key as string));
 }
 
 /** Record a show (card rendered or push sent). Idempotent per day. */
 export async function recordInsightShown(admin: any, studentId: string, insight: DailyInsight): Promise<void> {
-  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  // Same authority as the read above — the two halves of one identity.
+  const today = studyDayString();
   await admin.from('daily_insight_shown').upsert({
     student_id: studentId,
     insight_key: insightKey(insight),
@@ -88,14 +121,25 @@ function examContextLine(topic: string, section: string): string {
 // on a small phone — past that it stops being a glance and becomes reading.
 const MAX_INSIGHT_CHARS = 105;
 
-function oneLine(text: string): string {
+/**
+ * The length contract, with the budget as an argument. The daily card gets
+ * MAX_INSIGHT_CHARS; the Weekly Insight is a review rather than a glance and
+ * gets its own, larger budget. Exported so weekly-insight.ts inherits this
+ * behaviour instead of copying it — one implementation of "keep it short",
+ * not two that drift.
+ */
+export function clampSentence(text: string, max: number): string {
   const flat = text.replace(/\s+/g, ' ').trim();
-  if (flat.length <= MAX_INSIGHT_CHARS) return flat;
+  if (flat.length <= max) return flat;
   // Trim at the last sentence boundary that fits; fall back to a word cut.
-  const clipped = flat.slice(0, MAX_INSIGHT_CHARS);
+  const clipped = flat.slice(0, max);
   const lastStop = Math.max(clipped.lastIndexOf('. '), clipped.lastIndexOf('! '));
   if (lastStop > 40) return clipped.slice(0, lastStop + 1);
   return clipped.slice(0, clipped.lastIndexOf(' ')).trimEnd() + '…';
+}
+
+function oneLine(text: string): string {
+  return clampSentence(text, MAX_INSIGHT_CHARS);
 }
 
 export async function computeDailyInsight(
@@ -123,26 +167,38 @@ export async function computeDailyInsight(
   const loggedDays = new Set((reports ?? []).map((r: any) => r.report_date as string)).size;
   if (loggedDays < 2) return null; // patterns need at least a little history
 
-  // task_id → {topic, section} from the served routines.
+  // (routine_date, task_id) → {topic, section} from the served routines.
+  //
+  // THE KEY MUST INCLUDE THE DATE (27 Aug). Task ids are not unique across the
+  // window — the planner reuses the same id on different days, and in one
+  // production week 362 ids repeated, 314 of them carrying a DIFFERENT TOPIC
+  // on different days. Keyed by id alone this Map was last-write-wins, so
+  // 135 of 190 completions (71%) resolved to a topic the student had not
+  // worked on. That fed the RECOVERY rule ("Algebra: struggled → solid" for a
+  // topic they never touched) and, worse, the suppression key is
+  // `kind:subject` — so a wrong subject silenced the wrong insight for seven
+  // days. Sections were unaffected (0 ids conflicted on section), but the fix
+  // is the same key for both.
   const taskMeta = new Map<string, { topic: string | null; section: string }>();
+  const metaKey = (date: unknown, id: unknown) => `${String(date)}|${String(id)}`;
   const served: Record<string, number> = {};
   for (const r of routines ?? []) {
     for (const t of (Array.isArray(r.tasks) ? (r.tasks as any[]) : [])) {
-      taskMeta.set(String(t.id), { topic: (t.topic as string | null) ?? null, section: (t.section as string) ?? 'General' });
+      taskMeta.set(metaKey(r.routine_date, t.id), { topic: (t.topic as string | null) ?? null, section: (t.section as string) ?? 'General' });
       const sec = (t.section as string) ?? 'General';
       if (sec !== 'General') served[sec] = (served[sec] ?? 0) + 1;
     }
   }
   const doneBySec: Record<string, number> = {};
   for (const c of completions ?? []) {
-    const sec = taskMeta.get(String(c.task_id))?.section;
+    const sec = taskMeta.get(metaKey(c.routine_date, c.task_id))?.section;
     if (sec && sec !== 'General') doneBySec[sec] = (doneBySec[sec] ?? 0) + 1;
   }
 
   // 1 — RECOVERY: same topic, struggled (red) then solid (green) later.
   const byTopic = new Map<string, { date: string; confidence: string | null }[]>();
   for (const c of completions ?? []) {
-    const topic = taskMeta.get(String(c.task_id))?.topic;
+    const topic = taskMeta.get(metaKey(c.routine_date, c.task_id))?.topic;
     if (!topic) continue;
     if (!byTopic.has(topic)) byTopic.set(topic, []);
     byTopic.get(topic)!.push({ date: c.routine_date as string, confidence: (c.confidence as string | null) ?? null });

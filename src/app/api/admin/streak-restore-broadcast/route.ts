@@ -77,18 +77,22 @@ async function runBroadcast() {
       body = `New: your streak can never reset to zero. Miss a day — a shield covers it. Start tonight: your first log takes 15 seconds.`;
     }
 
-    // In-app bell notification, once ever.
+    // Through dispatch(), once ever. This wrote a bell row by hand and then
+    // dispatched a SECOND row for the push — two records of one announcement.
+    // One dispatch now creates the row and pushes it, so "was this student
+    // told?" has a single answer. The once-ever guard is unchanged.
     if (!hasInApp.has(s.id)) {
-      const { error } = await admin.from('notifications').insert({
-        user_id: s.id,
+      const outcome = await dispatch({
+        userId: s.id,
         type: 'streak_restored',
         title,
         body,
-        data: { url: '/student/tracker' },
-        read: false,
-        channel: 'in_app',
+        url: '/student/tracker',
+        reason: 'Momentum Shields announcement — told once, ever',
+        expectedAction: 'log_today',
+        prefs: (s.notif_prefs ?? {}) as Record<string, unknown>,
       });
-      if (!error) inApp++;
+      if (outcome === 'sent' || outcome === 'failed') inApp++;
     }
 
     // Web push, once ever — only where notifications are on. dispatch() now
