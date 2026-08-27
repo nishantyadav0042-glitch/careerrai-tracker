@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { settleCreditForSession } from '@/lib/session-credit';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { dispatch } from '@/lib/notification-os';
 import { canTransition, transitionRefusal, type SessionStatus } from '@/lib/session-lifecycle';
@@ -71,6 +72,17 @@ export async function POST(request: NextRequest) {
         metadata: { session_id: sessionId, buddy_id: user.id },
       }),
     ]);
+
+    // ORIENTATION CARRIES NO CREDIT — and this call is here precisely because
+    // that is an assumption rather than a constraint. settleCreditForSession
+    // looks the credit up BY SESSION, so for a genuine orientation it finds
+    // nothing and returns { settled: 'none', reason: 'no_credit' }: a no-op.
+    // If a paid credit is ever linked to a session that completes down this
+    // path, it now reaches its terminal state instead of staying 'scheduled'
+    // forever. Every OTHER completion/cancel/expiry route already settles;
+    // this was the one exception, and an exception is where the next stranded
+    // ₹299 would have come from.
+    await settleCreditForSession(admin, sessionId as string, 'completed');
 
     // Through dispatch() — the retention bridge should reach the student's
     // phone at the exact moment motivation peaks, not wait in the bell.

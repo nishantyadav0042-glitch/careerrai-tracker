@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { dispatch } from '@/lib/notification-os';
+import { sessionNotificationUrl } from '@/lib/session-link';
 import { authorizedCron } from '@/lib/cron-auth';
 import { withCronTracking } from '@/lib/cron-run-tracker';
 import { audit } from '@/lib/integration-audit';
@@ -104,7 +106,39 @@ export async function POST(request: NextRequest) {
       released.push(s.id);
       // Nobody joined, so nothing was delivered. The credit goes back to the
       // student as a rebookable, owned failure rather than staying spent.
-      await settleCreditForSession(admin, s.id as string, 'expired');
+      const settlement = await settleCreditForSession(admin, s.id as string, 'expired');
+
+      // ── AND THE STUDENT IS TOLD (27 Aug) ────────────────────────────────
+      //
+      // Until now every record of an expiry went to an INTERNAL ledger — the
+      // timeline, the audit log, owner='ops' on the credit — and the person
+      // who paid ₹299 for the session got nothing at all. Their booking
+      // vanished, their entitlement moved into a recovery queue they cannot
+      // see, and the only way they learned any of it was by opening the app
+      // and noticing. That is a silent loss of exactly the kind this cycle
+      // exists to remove: the system knew, and did not say.
+      //
+      // Gated on `updated.length` above, so a session someone else closed out
+      // between our read and our write produces no event here — ONE state
+      // change, ONE telling. A cron rerun re-reads and finds nothing live, so
+      // the second run has nothing to announce.
+      if (s.student_id) {
+        const { data: prof } = await admin
+          .from('profiles').select('notif_prefs').eq('id', s.student_id).single();
+        await dispatch({
+          userId: s.student_id as string,
+          type: 'session_expired',
+          title: 'Your session did not happen',
+          body: settlement.settled === 'released'
+            ? 'Nobody joined, so your session is closed. Your booking is back — pick a new time.'
+            : 'Nobody joined, so your session is closed.',
+          url: sessionNotificationUrl('student'),
+          reason: `session ${s.id} expired unattended; credit ${settlement.settled}`,
+          expectedAction: 'view_session',
+          prefs: (prof?.notif_prefs as Record<string, unknown>) ?? {},
+          data: { session_id: s.id },
+        });
+      }
       // Timeline: a booked session nobody joined — a missed promise, on the
       // student's story and the mentor's both.
       if (s.student_id) await emitTimeline(admin, {

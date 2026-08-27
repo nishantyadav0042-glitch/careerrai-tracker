@@ -406,7 +406,7 @@ export type SessionOutcome = 'completed' | 'cancelled' | 'expired';
 export type CreditSettlement =
   | { settled: 'completed' }
   | { settled: 'released'; creditId: string }   // back to booking_blocked, rebookable
-  | { settled: 'none'; reason: 'no_credit' | 'already_terminal' | 'read_failed' | 'write_failed' };
+  | { settled: 'none'; reason: 'no_credit' | 'already_terminal' | 'already_settled' | 'read_failed' | 'write_failed' };
 
 /**
  * Settle the credit attached to a session that just reached a terminal state.
@@ -417,6 +417,27 @@ export type CreditSettlement =
  * stuck credit surfaces rather than silently disappearing.
  */
 export async function settleCreditForSession(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: { from: (t: string) => any },
+  sessionId: string,
+  outcome: SessionOutcome,
+): Promise<CreditSettlement> {
+  // The docstring above has always said "never throws"; until 27 Aug that was
+  // an intention rather than a fact. A client that throws rather than
+  // returning { error } — a dead connection, a transport fault — propagated
+  // out of here into callers that do not catch, and every one of them calls
+  // this AFTER the session state has already changed. The mentor would have
+  // seen a 500 for a cancellation that had, in fact, happened. Now the
+  // failure is reported the same way every other failure here is.
+  try {
+    return await settle(admin, sessionId, outcome);
+  } catch (err) {
+    console.error('[settleCredit] threw for session', sessionId, err);
+    return { settled: 'none', reason: 'write_failed' };
+  }
+}
+
+async function settle(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   admin: { from: (t: string) => any },
   sessionId: string,
@@ -441,15 +462,20 @@ export async function settleCreditForSession(
   if (outcome === 'completed') {
     // Rule (4) requires the session to be completed first — it is, that is why
     // we are here. Rule (9) requires a terminal credit to owe nobody anything.
-    const { error: e } = await admin
+    // .select() so the ROW COUNT is knowable. Without it a status-guarded
+    // update that matched nothing is indistinguishable from one that worked,
+    // and this function would report success for a credit it never touched.
+    const { data: done, error: e } = await admin
       .from('session_credits')
       .update({ status: 'completed', owner: null, next_action: null })
       .eq('id', credit.id)
-      .eq('status', 'scheduled');
+      .eq('status', 'scheduled')
+      .select('id');
     if (e) {
       console.error('[settleCredit] complete failed for credit', credit.id, e.message);
       return { settled: 'none', reason: 'write_failed' };
     }
+    if (!done || done.length === 0) return { settled: 'none', reason: 'already_settled' };
     return { settled: 'completed' };
   }
 
@@ -457,7 +483,7 @@ export async function settleCreditForSession(
   // to the student as a rebookable, OWNED failure. Rule (6) forces the owner
   // and next_action; rule (5)'s one exception (20260827a) permits the unlink
   // only in exactly this shape.
-  const { error: e } = await admin
+  const { data: released, error: e } = await admin
     .from('session_credits')
     .update({
       status: 'booking_blocked',
@@ -468,10 +494,18 @@ export async function settleCreditForSession(
       failure_at: new Date().toISOString(),
     })
     .eq('id', credit.id)
-    .in('status', ['scheduled', 'assigned']);
+    .in('status', ['scheduled', 'assigned'])
+    .select('id');
   if (e) {
     console.error('[settleCredit] release failed for credit', credit.id, e.message);
     return { settled: 'none', reason: 'write_failed' };
   }
+  // NO DOUBLE RELEASE. The status guard already made the second write a
+  // no-op at the database; this makes the second CALL say so. It matters
+  // because the honest answer is what a caller would key a notification off:
+  // a cancel racing an expiry must produce one release and one telling, not
+  // two. Today no caller branches on this value — which is exactly when a
+  // lying return costs nothing to fix and everything to discover later.
+  if (!released || released.length === 0) return { settled: 'none', reason: 'already_settled' };
   return { settled: 'released', creditId: credit.id as string };
 }

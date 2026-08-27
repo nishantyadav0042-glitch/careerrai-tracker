@@ -96,12 +96,13 @@ export const EVENT_POLICY: Readonly<Record<string, EventPolicy>> = {
   // ── Session lifecycle — transactional ────────────────────────────────────
   session_scheduled:   { importance: 'P0', taxonomy: 'transactional', ladder: ['whatsapp', 'push'], urgent: true },
   session_reminder:    { importance: 'P1', taxonomy: 'transactional', ladder: ['calendar', 'whatsapp', 'push'] },
-  // SESSION_REMINDER_30M was registered here and removed 27 Aug. It is still
-  // in EVENT-OS.md's catalogue as a Phase 2 event — the constitution is the
-  // law including what is not built yet — but NO PRODUCER EMITS IT, and a
-  // registry that describes events the code cannot send is a registry nobody
-  // can trust to describe the ones it can. It returns the day its cron does.
   session_cancelled:   { importance: 'P0', taxonomy: 'transactional', ladder: ['whatsapp', 'push'], urgent: true },
+  // NOT urgent, deliberately. An expiry is discovered hours after the fact by
+  // a cron — the session is already gone and nothing the student does tonight
+  // changes it. Waking someone at 3am to say a session they missed has been
+  // marked expired is the opposite of must-reach; P0 buys reach, not a
+  // quiet-hours bypass.
+  session_expired:     { importance: 'P0', taxonomy: 'transactional', ladder: ['whatsapp', 'push'] },
   session_rescheduled: { importance: 'P0', taxonomy: 'transactional', ladder: ['whatsapp', 'push'], urgent: true },
   session_request:     { importance: 'P0', taxonomy: 'relationship',  ladder: ['whatsapp', 'push'], urgent: true },
   session_debrief:     { importance: 'P1', taxonomy: 'relationship',  ladder: ['push', 'whatsapp'] },
