@@ -23,6 +23,7 @@
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendPushToUser } from '@/lib/push';
+import { chooseChannels, type UserCapabilities } from '@/lib/event-policy';
 
 // State-based daily budgets (founder decision, post-Inshorts discussion):
 // students who are ACTIVELY STUDYING get the full Study Companion cadence —
@@ -181,6 +182,38 @@ export type DispatchOutcome = 'sent' | 'budget_exhausted' | 'daily_cap' | 'faile
 //   sees it in the tray, they just don't get buzzed for the eleventh time.
 export async function dispatch(opts: DispatchOptions): Promise<DispatchOutcome> {
   const admin = createAdminClient();
+
+  // ── THE CHANNEL DECISION, made in exactly one place ────────────────────
+  //
+  // EVENT-OS.md: "Channel policy = f(event class, user capability). Producers
+  // emit the event and stop." Until 27 Aug that sentence was true of the
+  // document and false of the code. The ladder lived in event-policy.ts,
+  // which nothing imported, while the live decision was two scattered
+  // conditions below that read the CALLER's payload — the event type played
+  // no part at all. Two authorities, one of them merely correct.
+  //
+  // This is a deliberate NO-OP substitution, not a redesign:
+  //   · every registered ladder contains push, so wantsPush is exactly the
+  //     old "did the caller's prefs allow push"
+  //   · the five types that pass an email leg all declare email, so
+  //     wantsEmail is exactly the old "is there a leg and do prefs allow it"
+  //   · whatsapp/calendar are hard false — no transport exists, so every
+  //     WhatsApp entry in the table is inert
+  // Both equivalences are held by guard tests, not by this comment.
+  //
+  // What it BUYS: the ladder is now load-bearing. Invariant 2 (habit never
+  // rides a paid rail) is enforced on the LIVE path by
+  // assertNoPaidHabitChannel inside chooseChannels, and WhatsApp arrives by
+  // flipping one capability rather than by finding every branch that sends.
+  const caps: UserCapabilities = {
+    push: opts.prefs.push === true,
+    email: !!opts.email && opts.prefs.email !== false,
+    whatsapp: false,  // no transport yet — EVENT-OS build order, Phase 2
+    calendar: false,  // calendar is minted by the booking routes, not dispatched
+  };
+  const channels = chooseChannels(opts.type, caps);
+  const wantsPush = channels.includes('push');
+  const wantsEmail = channels.includes('email');
   const todayStart =
     new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) + 'T00:00:00+05:30';
 
@@ -249,8 +282,8 @@ export async function dispatch(opts: DispatchOptions): Promise<DispatchOutcome> 
   // failure — every "N reminded" count downstream was a row-write count, not
   // a delivery-attempt count. `outcome` now starts as 'failed' and is only
   // ever promoted to 'sent' after sendPushToUser() actually reports success.
-  let outcome: DispatchOutcome = opts.prefs.push === true ? 'failed' : 'sent';
-  if (opts.prefs.push === true && row?.id) {
+  let outcome: DispatchOutcome = wantsPush ? 'failed' : 'sent';
+  if (wantsPush && row?.id) {
     // The hard ceiling. Counts PUSHES (pushed_at), not notifications
     // (created_at) — a budget-exhausted call above never reaches here, and an
     // in-app-only row (push pref off) never counted against it either, both
@@ -284,7 +317,7 @@ export async function dispatch(opts: DispatchOptions): Promise<DispatchOutcome> 
     }
   }
 
-  if (opts.email && opts.prefs.email !== false) {
+  if (wantsEmail && opts.email) {
     try {
       await opts.email.send();
       if (row?.id) {
