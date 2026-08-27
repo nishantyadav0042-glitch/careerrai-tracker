@@ -108,11 +108,48 @@ export function bookedNotificationBody(opts: {
   istTime: string;
   isOrientation: boolean;
   meetLink: string | null;
+  /**
+   * WHO did the booking. The original copy said "your buddy booked a 1:1"
+   * because, when it was written, a buddy was the only one who could — the
+   * student self-serve path (/api/sessions/schedule) dispatched nothing at
+   * all, so no message ever had to describe it. Now that it does, telling a
+   * student their buddy booked the slot the student just picked is a small
+   * lie of the kind that teaches people to distrust the rest of the message.
+   *
+   * Defaulted, so the existing caller keeps its exact wording.
+   */
+  bookedBy?: 'buddy' | 'student';
 }): string {
-  const what = opts.isOrientation ? 'your free orientation is booked' : 'your buddy booked a 1:1';
+  const what = opts.isOrientation
+    ? 'your free orientation is booked'
+    : opts.bookedBy === 'student'
+      ? 'your 1:1 is booked'
+      : 'your buddy booked a 1:1';
   return opts.meetLink
     ? `${opts.istTime} IST — ${what}. Join here: ${opts.meetLink}`
     : `${opts.istTime} IST — ${what}.`;
+}
+
+/**
+ * The BUDDY's side of a booking the student made.
+ *
+ * Until 27 Aug no dispatch anywhere in the codebase addressed a buddy —
+ * `recipient_type: 'buddy'` had zero call sites — so a student could take a
+ * slot and the mentor was never told. 11 of the first 18 sessions expired,
+ * which is the state meaning the hour passed and nobody closed it out.
+ *
+ * First name only, matching every other buddy-facing string, and the room
+ * link travels IN the message for the same reason it does for the student.
+ */
+export function buddyBookedNotificationBody(opts: {
+  istTime: string;
+  studentName: string;
+  meetLink: string | null;
+}): string {
+  const who = opts.studentName.split(' ')[0] || 'A student';
+  return opts.meetLink
+    ? `${who} booked you for ${opts.istTime} IST. Join here: ${opts.meetLink}`
+    : `${who} booked you for ${opts.istTime} IST.`;
 }
 
 /** Day-before reminder, carrying the room rather than pointing at a dashboard. */

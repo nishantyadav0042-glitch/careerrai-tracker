@@ -7,6 +7,10 @@ import { constraintFailure } from '@/lib/booking-constraints';
 import { ensureBuddyRoom } from '@/lib/buddy-room';
 import { SESSION_MINUTES } from '@/lib/session-credit';
 import { emitTimeline } from '@/lib/os/timeline';
+import { dispatch } from '@/lib/notification-os';
+import {
+  bookedNotificationBody, buddyBookedNotificationBody, sessionNotificationUrl,
+} from '@/lib/session-link';
 
 // ── The student picks their own time ────────────────────────────────────────
 //
@@ -135,6 +139,82 @@ export async function GET() {
   });
 }
 
+// ── AND BOTH PEOPLE ARE TOLD (27 Aug) ───────────────────────────────────────
+//
+// This route booked a session and dispatched NOTHING. Not to the student who
+// had just paid ₹299, and not to the mentor whose hour had just been taken.
+// The sibling path (/api/calendar/schedule-meeting) has told the student since
+// the Event OS cycle; this one — the student's OWN self-serve path — never
+// did, so the journey was covered on one side and silent on the other.
+//
+// The mentor's half is new to the whole codebase: before this, `recipient_type
+// 'buddy'` had ZERO dispatch call sites. A student could take a slot and the
+// only human who could show up was never informed. 11 of the first 18 sessions
+// carry status 'expired' — the state release-stale-sessions writes when the
+// hour passed and nobody closed it out. That is correlation on a small sample,
+// not proof of cause; it is also the exact failure this silence would produce.
+//
+// Deliberately through dispatch() and no other path: same type, same URL
+// helper, same body module as the sibling route, so the two cannot drift.
+// `session_scheduled` is NOT one of the 21 types in
+// notifications_once_per_day_per_type (index definition checked in production,
+// 27 Aug), so a mentor booked three times in one day is told three times
+// rather than once — which is the whole point of telling them.
+//
+// NEVER fatal. The booking is already committed and the student is holding a
+// real slot; failing their request now would be a lie about a session that
+// exists. But not silent either — silence here is the defect being fixed.
+async function tellBothParties(
+  admin: ReturnType<typeof createAdminClient>,
+  opts: { sessionId: string; studentId: string; buddyId: string; startIso: string; meetUrl: string | null },
+) {
+  try {
+    const [{ data: student }, { data: buddy }] = await Promise.all([
+      admin.from('profiles').select('full_name, notif_prefs').eq('id', opts.studentId).maybeSingle(),
+      admin.from('profiles').select('full_name, notif_prefs').eq('id', opts.buddyId).maybeSingle(),
+    ]);
+
+    const istTime = new Date(opts.startIso).toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      weekday: 'short', day: 'numeric', month: 'short',
+      hour: 'numeric', minute: '2-digit', hour12: true,
+    });
+    const buddyFirst = ((buddy?.full_name as string | null) ?? 'your buddy').split(' ')[0];
+
+    await dispatch({
+      userId: opts.studentId,
+      type: 'session_scheduled',
+      title: `📅 Session with ${buddyFirst}`,
+      body: bookedNotificationBody({
+        istTime, isOrientation: false, meetLink: opts.meetUrl, bookedBy: 'student',
+      }),
+      url: sessionNotificationUrl('student'),
+      data: { sessionId: opts.sessionId, meetLink: opts.meetUrl, sessionType: 'guidance' },
+      reason: 'The student booked this slot themselves and holds the join link',
+      expectedAction: 'view_session',
+      prefs: (student?.notif_prefs as Record<string, unknown>) ?? {},
+    });
+
+    await dispatch({
+      userId: opts.buddyId,
+      type: 'session_scheduled',
+      title: '📅 New session booked',
+      body: buddyBookedNotificationBody({
+        istTime,
+        studentName: (student?.full_name as string | null) ?? 'A student',
+        meetLink: opts.meetUrl,
+      }),
+      url: sessionNotificationUrl('buddy'),
+      data: { sessionId: opts.sessionId, meetLink: opts.meetUrl, sessionType: 'guidance' },
+      reason: 'A student took this mentor’s slot — the mentor has to know to show up',
+      expectedAction: 'view_session',
+      prefs: (buddy?.notif_prefs as Record<string, unknown>) ?? {},
+    });
+  } catch (err) {
+    console.error('[sessions/schedule] booking notification failed', opts.sessionId, err);
+  }
+}
+
 export async function POST(request: NextRequest) {
   const user = await getAuthUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -237,6 +317,14 @@ export async function POST(request: NextRequest) {
     entity: 'student', entityId: user.id, kind: 'buddy_assigned',
     summary: 'Session booked', actor: 'student',
     metadata: { sessionId, buddyId: credit.buddy_id, intent: credit.session_intent },
+  });
+
+  await tellBothParties(admin, {
+    sessionId: sessionId as string,
+    studentId: user.id,
+    buddyId: credit.buddy_id,
+    startIso,
+    meetUrl: room.meetUrl,
   });
 
   return NextResponse.json({ ok: true, sessionId, meetUrl: room.meetUrl });
