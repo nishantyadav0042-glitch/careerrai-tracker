@@ -36,8 +36,13 @@ export function WeeklyReviewCard({ insight }: { insight: WeeklyInsight }) {
         className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors active:bg-stone-50"
       >
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
-            Your week · {RANGE(insight.start, insight.end)}
+          {/* The pair has to read as two DIFFERENT things. The daily card
+              above says "CareerRai Insight · Today" and notices one thing
+              about today; this one reads a finished week. Same voice, plainly
+              different scope — a student who cannot tell them apart learns
+              that neither is worth opening. */}
+          <p className="text-[10px] font-bold uppercase tracking-wider text-stone-500">
+            📊 CareerRai Weekly · {RANGE(insight.start, insight.end)}
           </p>
           <p className="mt-0.5 truncate text-[13.5px] font-semibold text-stone-900">{insight.headline}</p>
         </div>
@@ -48,6 +53,11 @@ export function WeeklyReviewCard({ insight }: { insight: WeeklyInsight }) {
 
       {open && (
         <div className="space-y-3 border-t border-stone-100 px-4 py-3.5">
+          <p className="text-[11.5px] leading-relaxed text-stone-500">
+            Your daily insight notices <b className="text-stone-700">one thing about today</b>.
+            This reads <b className="text-stone-700">the pattern across a whole week</b> — the
+            part you cannot see by scrolling.
+          </p>
           {insight.sections.map((s) => (
             <div key={s.id}>
               <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">{s.label}</p>

@@ -158,6 +158,37 @@ describe('it never gates completion', () => {
     // The screen must not promise a Monday review that will not arrive.
     expect(screen()).toMatch(/only appears once there is a real week behind it/);
   });
+
+  it('the samples are the REAL components, so they cannot drift from Home', () => {
+    const s = screen();
+    expect(s).toMatch(/InsightCardFace/);
+    expect(s).toMatch(/WeeklyReviewCard/);
+  });
+
+  it('the samples are typed against the real contracts', () => {
+    // Change DailyInsight or WeeklyInsight and this screen stops compiling,
+    // rather than quietly demoing a shape the product no longer produces.
+    const s = screen();
+    expect(s).toMatch(/SAMPLE_DAILY: DailyInsight/);
+    expect(s).toMatch(/SAMPLE_WEEKLY: WeeklyInsight/);
+  });
+
+  it('it renders the FACE, never the stateful InsightBubble', () => {
+    // InsightBubble writes cr_insight_seen_<studyDay> and fires
+    // track('insight_shown'). Rendering it here would log a shown-insight for
+    // a SAMPLE, and a student who dismissed the sample would mark that study
+    // day's real insight as seen — so their genuine first insight would never
+    // appear. Exactly the defect InsightBubble was built to fix (writing the
+    // seen key on mount, 19 Aug), coming back through onboarding.
+    const code = screen().replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+    expect(code).not.toMatch(/<\s*InsightBubble\b/);
+    // Nor may it reproduce the side effects by hand. The screen's OWN
+    // analytics (sample_insight_shown) are fine and wanted — what must never
+    // happen here is writing the daily insight's seen key, or emitting the
+    // daily insight's own events, for a card that is not the student's.
+    expect(code).not.toMatch(/cr_insight_seen/);
+    expect(code).not.toMatch(/track\(\s*'insight_(shown|dismissed)'/);
+  });
 });
 
 describe('placement and measurement', () => {

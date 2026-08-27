@@ -133,24 +133,49 @@ export function InsightBubble({ title, text, kind }: { title: string; text: stri
       >
         <X className="h-3.5 w-3.5" />
       </button>
+      <InsightCardFace title={title} text={text} />
+    </div>
+  );
+}
 
-      <div className="flex items-start gap-3 pr-7">
-        <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-amber-100">
-          <Eye className="h-4 w-4 text-amber-700" />
-        </span>
-        <div className="min-w-0">
-          {/* CareerRai Insight (founder, 22 Aug). It read "Rai noticed" —
-              accurate about the mechanism, but it spent the moment on a
-              sentence instead of on the brand. A student should build ONE
-              association from this card: CareerRai is the system that
-              understands me. The full name earns that; a clever half-name
-              does not. */}
-          <p className="text-[11px] font-bold uppercase tracking-wide text-amber-700">
-            ✨ CareerRai Insight
-          </p>
-          <p className="mt-1 text-[14px] font-bold leading-snug text-stone-900">{title}</p>
-          <p className="mt-0.5 text-[13px] leading-snug text-stone-700">{text}</p>
-        </div>
+// ── The face of the insight, with nothing behind it ────────────────────────
+//
+// Extracted 27 Aug so onboarding can show a SAMPLE daily insight that is
+// literally this component rather than a hand-drawn imitation — the sample
+// can then never drift from the real thing.
+//
+// It had to be extracted rather than reused whole, and the reason is not
+// tidiness: InsightBubble writes `cr_insight_seen_<studyDay>` to localStorage
+// and fires track('insight_shown'). Rendering the real card in onboarding
+// would have logged a shown-insight event for a sample, and — far worse —
+// a student who dismissed the SAMPLE would have marked that study day's real
+// insight as already seen, so their genuine first insight would never have
+// appeared. The same class of defect this component was built to fix (writing
+// the seen key on mount, 19 Aug), reintroduced through the back door.
+//
+// So: everything stateful stays above. This is only the picture.
+export function InsightCardFace({ title, text }: { title: string; text: string }) {
+  return (
+    <div className="flex items-start gap-3 pr-7">
+      <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-amber-100">
+        <Eye className="h-4 w-4 text-amber-700" />
+      </span>
+      <div className="min-w-0">
+        {/* CareerRai Insight (founder, 22 Aug). It read "Rai noticed" —
+            accurate about the mechanism, but it spent the moment on a
+            sentence instead of on the brand. A student should build ONE
+            association from this card: CareerRai is the system that
+            understands me. The full name earns that; a clever half-name
+            does not.
+            "· Today" added 27 Aug: the Weekly Insight now sits directly
+            below this one, and two cards both headed "CareerRai Insight"
+            teach a student that they are the same thing. They are not — one
+            notices today, the other reads a whole week. */}
+        <p className="text-[11px] font-bold uppercase tracking-wide text-amber-700">
+          ✨ CareerRai Insight · Today
+        </p>
+        <p className="mt-1 text-[14px] font-bold leading-snug text-stone-900">{title}</p>
+        <p className="mt-0.5 text-[13px] leading-snug text-stone-700">{text}</p>
       </div>
     </div>
   );

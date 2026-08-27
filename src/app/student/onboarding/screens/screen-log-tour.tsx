@@ -4,6 +4,55 @@ import { useEffect, useRef, useState } from 'react';
 import { Check, Flame } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { track } from '@/lib/journey';
+import { InsightCardFace } from '@/components/home/insight-bubble';
+import { WeeklyReviewCard } from '@/components/home/weekly-review-card';
+import type { DailyInsight } from '@/lib/daily-insight';
+import type { WeeklyInsight } from '@/lib/weekly-insight';
+
+// ── The two samples, typed against the REAL contracts ──────────────────────
+//
+// Both are hand-written copy, NOT engine output — day 0 has no rows, and
+// running computeDailyInsight/computeWeeklyInsight against a student with no
+// history would mean inventing the history. What the types buy is that the
+// samples cannot describe a shape the product no longer produces: change
+// DailyInsight or WeeklyInsight and this file stops compiling.
+//
+// The numbers below are the same fictional week the planned-vs-actual table
+// underneath shows, so the sample review and the sample week agree with each
+// other. A demo whose own numbers disagree teaches a student not to trust the
+// real one.
+//
+// The evidence lines are deliberately in plain language rather than naming
+// tables the way the real engine does. On a demo a table name is not
+// provenance, it is set dressing — and the screen's own guard forbids this
+// file from mentioning a table at all, precisely so nobody can quietly start
+// reading one here.
+
+const SAMPLE_DAILY: DailyInsight = {
+  kind: 'avoidance',
+  title: '📊 A pattern in your week',
+  text: 'Only 1 of 4 DILR tasks done. Give DILR 20 minutes first tomorrow.',
+  subject: 'DILR',
+};
+
+const SAMPLE_WEEKLY: WeeklyInsight = {
+  status: 'ready',
+  start: '2026-08-17',
+  end: '2026-08-23',
+  headline: 'A working week, with one thing pushing back.',
+  sections: [
+    { id: 'consistency', label: 'How often you showed up',
+      text: "You logged 6 of the week's 7 days.", evidence: 'from 6 logged days' },
+    { id: 'planned_vs_actual', label: 'Planned vs actual',
+      text: 'Your plan asked for 9 tasks. You finished 6.', evidence: 'from 6 daily plans and what was ticked off them' },
+    { id: 'slipping', label: 'What fought back',
+      text: 'DILR — 3 tasks marked hard. Start next week there, while you are fresh.', evidence: 'from 3 tasks marked hard' },
+    { id: 'behaviour', label: 'When your work happens',
+      text: '71% of what you finished was before noon. Your mornings are carrying this.', evidence: 'from when each task was ticked' },
+    { id: 'next_week', label: 'One thing for next week',
+      text: 'Give DILR the first twenty minutes of three days. Earlier, not longer.', evidence: 'derived from the slipping section (DILR)' },
+  ],
+};
 
 // ── The first log, practised before it's real ───────────────────────────────
 //
@@ -167,32 +216,46 @@ export default function ScreenLogTour({ onNext, isLoading, firstName = null }: S
           </p>
         </div>
 
-        {/* LAYER 1 — the daily line. Shaped like computeDailyInsight()'s
-            output: one clamped sentence, one observation, no dashboard. This
-            is the layer a student actually meets first, and it was missing
-            from this screen entirely. */}
+        {/* LAYER 1 — the daily line, drawn by the REAL component.
+            InsightCardFace is the same code that renders the card on Home, so
+            this sample cannot drift from the thing the student actually meets
+            tomorrow. What it deliberately is NOT is the whole InsightBubble:
+            that one writes cr_insight_seen_<studyDay> to localStorage and
+            fires track('insight_shown'), so rendering it here would log a
+            shown-insight for a sample AND — if the student dismissed it —
+            mark their real first insight as already seen, so it would never
+            appear. The face is shared; the side effects stay on Home. */}
         <div className="rounded-2xl border border-stone-200 bg-white p-3.5">
           <div className="flex items-center justify-between">
             <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Every day · on Home</p>
             <span className="rounded bg-stone-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-stone-500">Sample</span>
           </div>
-          <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-3">
-            <p className="text-[12px] font-bold text-stone-900">📊 A pattern in your week</p>
-            <p className="mt-1 text-[12.5px] leading-relaxed text-stone-700">
-              Only 1 of 4 DILR tasks done. Give DILR 20 minutes first tomorrow.
-            </p>
+          <div className="mt-2 overflow-hidden rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 p-4">
+            <InsightCardFace title={SAMPLE_DAILY.title} text={SAMPLE_DAILY.text} />
           </div>
           <p className="mt-2 text-[11px] leading-relaxed text-stone-500">
-            One line. It changes when your logs change — never the same thing twice in a week.
+            <b className="text-stone-700">One thing about today.</b> It changes when your logs
+            change — never the same line twice in a week.
           </p>
         </div>
 
-        {/* LAYER 2 — the week. Everything below already existed; it is now
-            labelled as the second layer rather than as "the" insight. */}
+        {/* LAYER 2 — the week, drawn by the REAL WeeklyReviewCard. That
+            component holds only useState: no storage, no analytics, nothing
+            that can leak into the student's own record, so it is safe to
+            render whole. SAMPLE_WEEKLY is typed as WeeklyInsight, so if the
+            engine's contract changes this stops compiling instead of quietly
+            showing a shape the product no longer produces. */}
         <div className="flex items-center justify-between pt-1">
           <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Every Monday · your finished week</p>
           <span className="rounded bg-stone-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-stone-500">Sample</span>
         </div>
+
+        <WeeklyReviewCard insight={SAMPLE_WEEKLY} />
+
+        <p className="text-[11px] leading-relaxed text-stone-500">
+          <b className="text-stone-700">The pattern across a whole week.</b> Tap it open — that is
+          what a real Monday looks like. Here is the week those numbers came from:
+        </p>
 
         {/* The week — planned vs what actually happened. Messy on purpose. */}
         <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white">
