@@ -195,15 +195,13 @@ describe('event-policy is either wired to dispatch or visibly not wired', () => 
     expect(code).not.toMatch(/\.(insert|update|upsert|delete)\s*\(/);
   });
 
-  it('the unwired state is DECLARED in the file, not left to be discovered', () => {
-    // If someone wires it, they must delete this marker — which is the moment
-    // they are forced to read why it was not wired in the first place.
+  it('the file does not still claim to be unwired', () => {
+    // It carried a NOT YET WIRED marker until dispatch() consumed it. A marker
+    // that outlives its condition is worse than no marker: it tells the next
+    // reader the live channel authority is inert.
     const raw = readFileSync(POLICY, 'utf8');
     const wired = consumers().includes(BOUNDARY);
-    if (wired) return; // once dispatch consumes it, the marker's job is done
-    expect(
-      raw,
-      'event-policy.ts is imported by nothing but its own test. Say so at the top of the file, with the gate that has to clear before it is wired — an undeclared shadow authority is how two channel decisions end up in the codebase.',
-    ).toMatch(/NOT YET WIRED/);
+    expect(wired, 'event-policy is no longer consumed by dispatch — the channel decision has moved somewhere else').toBe(true);
+    expect(raw).not.toMatch(/NOT YET WIRED/);
   });
 });

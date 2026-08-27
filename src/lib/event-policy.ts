@@ -1,21 +1,18 @@
-// ── NOT YET WIRED — read this before you import it ─────────────────────────
+// ── WIRED 27 Aug — this is the LIVE channel authority ──────────────────────
 //
-// As of 27 Aug 2026 nothing in the application calls this module. dispatch()
-// still takes its channels from whatever each caller passes in `prefs`. This
-// file is the pure core of Event OS Batch 2, which the founder gated on a
-// clean production observation window (task #61) that is still open.
+// This file carried an unwired-warning header from the moment it was written
+// until 27 Aug, when dispatch() started consuming it. That warning lives in
+// git history now rather than in the file, because a stale marker is worse
+// than none: it tells the next reader that the thing deciding their channels
+// is inert. The guard that used to require the warning now requires its
+// ABSENCE, and asserts dispatch really is the consumer.
 //
-// THE GAP IS NOT MECHANICAL. EVENT_POLICY declares 26 event types; the
-// codebase dispatches considerably more, and many are absent from the table.
-// Wiring chooseChannels() into dispatch() therefore changes the behaviour of
-// every event not in the table, for the whole cohort. It needs its own cycle
-// and its own observation window.
-//
-// WHEN YOU WIRE IT: the only permitted consumer is src/lib/notification-os.ts
-// — the dispatch boundary — and you must delete this marker. Both rules are
-// enforced by event-os-writers.guard.test.ts, which is also what stops this
-// file from quietly becoming a second answer to "which channels does this
-// event use?" while the live one sits in dispatch().
+// dispatch() (src/lib/notification-os.ts) is the ONLY permitted consumer —
+// event-os-writers.guard.test.ts fails the build if anything else imports it.
+// The registry must cover every type dispatch() emits; that is a build
+// condition too (event-registry-completeness.guard.test.ts), because the 32
+// types this table did NOT cover were invisible for a month behind a
+// push-only DEFAULT_POLICY that happened to be right.
 
 // ── The channel decision, as one pure function ─────────────────────────────
 //
