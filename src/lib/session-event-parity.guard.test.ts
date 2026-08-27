@@ -35,6 +35,10 @@ const TRANSITIONS: Array<{ file: string; what: string }> = [
   { file: 'src/app/api/admin/buddy-integration/route.ts', what: 'ops cancels' },
   { file: 'src/app/api/cron/release-stale-sessions/route.ts', what: 'nobody joined' },
   { file: 'src/app/api/buddy/commitment/route.ts', what: 'mentor closes it out' },
+  // Added 27 Aug by the final gate. This route was NOT in the list, and it was
+  // the one terminal transition that never read its row count — so the guard
+  // that exists to catch exactly that had a hole shaped like the defect.
+  { file: 'src/app/api/calendar/complete-orientation/route.ts', what: 'mentor completes an orientation' },
 ];
 
 describe('every session transition a person should hear about produces exactly one event', () => {

@@ -52,15 +52,39 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Mark session complete and student orientation used — both atomic
+    // ── THE ROW COUNT DECIDES WHETHER THIS CALLER OWNS THE TRANSITION ──────
+    //
+    // The read-and-check above handles the SEQUENTIAL case: an
+    // already-completed orientation returns alreadyCompleted, and a
+    // cancelled one returns 409. It cannot handle the CONCURRENT one. Two
+    // requests — a double-tap is enough — both read 'scheduled', both pass
+    // canTransition, and both issue this update. One changes a row; the
+    // other changes nothing. Before this, neither looked, so BOTH went on to
+    // settle the credit and dispatch, and the student was told twice that
+    // their orientation was done. orientation_complete is not one of the 21
+    // types in notifications_once_per_day_per_type, so the database backstop
+    // does not catch the second one either.
+    //
+    // This is audit finding F1 in a route F1 did not reach. The other four
+    // terminal transitions already gate on their row count; this one now does
+    // too, and session-event-parity.guard.test.ts covers it so the next
+    // reviewer does not have to notice.
+    const { data: completedRows } = await admin
+      .from('video_sessions')
+      // ended_at is stamped by the DB trigger in the same statement that
+      // changes the state (20260824e), so the two can never disagree.
+      .update({ session_status: 'completed' })
+      .eq('id', sessionId)
+      .in('session_status', ['scheduled', 'active'])
+      .select('id');
+
+    if (!completedRows?.length) {
+      // Somebody else completed it between our read and our write. They own
+      // the settlement and the telling; we say nothing and report honestly.
+      return NextResponse.json({ ok: true, alreadyCompleted: true, lostRace: true });
+    }
+
     await Promise.all([
-      admin
-        .from('video_sessions')
-        // ended_at is stamped by the DB trigger in the same statement that
-        // changes the state (20260824e), so the two can never disagree.
-        .update({ session_status: 'completed' })
-        .eq('id', sessionId)
-        .in('session_status', ['scheduled', 'active']),
       admin
         .from('profiles')
         .update({ free_onboarding_used: true })
