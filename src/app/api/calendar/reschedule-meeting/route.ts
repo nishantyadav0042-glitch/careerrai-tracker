@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { updateGoogleMeet, statusFor } from '@/lib/google-meet';
+import { updateGoogleMeet } from '@/lib/google-meet';
 import { audit } from '@/lib/integration-audit';
 import { dispatch } from '@/lib/notification-os';
 import { sessionNotificationUrl } from '@/lib/session-link';
 import { constraintFailure } from '@/lib/booking-constraints';
 import { idempotencyKey, replayIdempotent, rememberIdempotent } from '@/lib/idempotency';
-import { offeredSlotProblem, type Availability, type BusySpan } from '@/lib/session-slots';
 
 const ALLOWED_DURATIONS = [20, 30, 45, 60];
 
@@ -64,100 +63,6 @@ async function tellTheStudentItMoved(
   } catch (err) {
     console.error('[calendar/reschedule-meeting] reschedule notification failed', opts.sessionId, err);
   }
-}
-
-// ── A RESCHEDULE IS A BOOKING, AND MUST PASS THE SAME DOOR ──────────────────
-//
-// 27 Aug. This route moved a session with no availability check of any kind.
-// It validated that the new time parsed, was in the future, and had a legal
-// duration — and then wrote it. A mentor could move a student's session onto a
-// day they do not work, outside their hours, or into their own time off, and
-// nothing anywhere refused it.
-//
-// It looked covered, and that is why it survived. Two DATABASE guards sit on
-// video_sessions, and only one of them reaches an UPDATE:
-//
-//   set_video_session_span                  before insert OR UPDATE OF
-//                                           scheduled_at, duration_minutes,
-//                                           buddy_id   → the GIST exclusion
-//                                           still refuses a double-booking
-//                                           on a reschedule. Covered.
-//
-//   video_session_within_availability_guard before INSERT          ← only
-//                                           → work days, hours and time off
-//                                           are NOT re-checked when a session
-//                                           MOVES. The hole.
-//
-// So the defect was never "no rules exist", it was "the rules are attached to
-// the wrong verb". The overlap half was safe the whole time, which is exactly
-// what made the availability half look safe too.
-//
-// The rule itself lives in lib/session-slots' offeredSlotProblem() rather than
-// being restated here — Incident #23, a rule written in N places drifts N−1
-// times. This function is only the DB reads around it. The new time must be a
-// slot we would have OFFERED a student: same working days, same hours, same
-// buffer, same notice and horizon, same max_per_day.
-//
-// A mentor with no availability row is unaffected, which is the policy the
-// database guard already states in its own comment. Fail-open is deliberate
-// here: a mentor who never configured a week has no window to be outside of,
-// and refusing every reschedule for them would strand real sessions.
-async function refuseOutsideAvailability(
-  admin: ReturnType<typeof createAdminClient>,
-  opts: { buddyId: string; sessionId: string; start: Date; durationMinutes: number },
-): Promise<{ error: string; reason: string } | null> {
-  const [{ data: avail }, { data: busy }] = await Promise.all([
-    admin.from('buddy_availability').select('*').eq('buddy_id', opts.buddyId).maybeSingle(),
-    admin.from('video_sessions')
-      .select('id, scheduled_at, duration_minutes')
-      .eq('buddy_id', opts.buddyId)
-      .in('session_status', ['scheduled', 'active'])
-      .gte('scheduled_at', new Date(Date.now() - 86_400_000).toISOString()),
-  ]);
-
-  if (!avail) return null;
-
-  const a: Availability = {
-    timezone: avail.timezone as string,
-    workDays: (avail.work_days as number[]) ?? [],
-    startMinute: avail.start_minute as number,
-    endMinute: avail.end_minute as number,
-    slotMinutes: avail.slot_minutes as number,
-    bufferMinutes: avail.buffer_minutes as number,
-    maxPerDay: (avail.max_per_day as number | null) ?? null,
-    horizonDays: avail.horizon_days as number,
-    minNoticeMinutes: avail.min_notice_minutes as number,
-    active: avail.active as boolean,
-  };
-
-  // THE SESSION BEING MOVED IS NOT AN OBSTACLE TO ITSELF. Leaving it in the
-  // busy list would block every slot within its own buffer — so a mentor
-  // nudging a 3pm session to 3.30pm would be refused by the session they are
-  // holding — and would spend one of its own day's max_per_day places.
-  const spans: BusySpan[] = (busy ?? [])
-    .filter((b) => b.id !== opts.sessionId)
-    .map((b) => {
-      const startMs = Date.parse(b.scheduled_at as string);
-      return {
-        startMs,
-        endMs: startMs + (((b.duration_minutes as number) ?? 30) + a.bufferMinutes) * 60_000,
-      };
-    });
-
-  const problem = offeredSlotProblem(
-    a, spans, opts.start.getTime(), opts.durationMinutes, Date.now(),
-  );
-  if (!problem) return null;
-
-  // The mentor is the one reading this, so it names what THEY control. The
-  // student never sees it: a reschedule they did not ask for cannot fail in
-  // their face.
-  return {
-    reason: 'outside_availability',
-    error: problem === 'overruns_day'
-      ? `A ${opts.durationMinutes}-minute session starting then would run past the end of your day.`
-      : 'That time is outside your availability — pick a slot you actually offer.',
-  };
 }
 
 export async function POST(request: NextRequest) {
@@ -220,50 +125,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Duration must be 20, 30, 45 or 60 minutes.' }, { status: 400 });
     }
 
-    // BEFORE the calendar is touched and before the row moves: refusing after
-    // updateGoogleMeet() would leave the mentor's calendar on a time the
-    // database rejected.
-    const outside = await refuseOutsideAvailability(admin, {
-      buddyId: user.id,
-      sessionId: session.id as string,
-      start,
-      durationMinutes: duration,
-    });
-    if (outside) {
-      await audit({
-        subjectId: user.id, action: 'booking.rejected', ok: false,
-        detail: {
-          reason: outside.reason, sessionId: session.id,
-          studentId: session.student_id, startTime: start.toISOString(),
-        },
-      });
-      return NextResponse.json({ error: outside.error, reason: outside.reason }, { status: 409 });
-    }
-
     const meetLink = session.google_meet_link as string | null;
     const legacyEventId = session.google_event_id as string | null;
-
-    // Sessions booked under the permanent-room design have NO calendar event of
-    // their own — the link belongs to the buddy, not to this booking, so moving
-    // the session is a pure database operation and the link cannot change.
-    //
-    // Rows from before that change still carry their own event. Move it too, so
-    // the mentor's calendar does not disagree with the app.
-    if (legacyEventId) {
-      const moved = await updateGoogleMeet({
-        buddyUserId: user.id,
-        eventId: legacyEventId,
-        start,
-        durationMinutes: duration,
-        title: session.title ?? undefined,
-      });
-      // 'gone' means someone deleted it inside Google. That is not a reason to
-      // refuse a reschedule: the join link still works and the app row is the
-      // source of truth.
-      if (!moved.ok && moved.reason !== 'gone') {
-        return NextResponse.json({ error: moved.error, reason: moved.reason }, { status: statusFor(moved.reason) });
-      }
-    }
 
     const { data: movedRows, error: updateError } = await admin
       .from('video_sessions')
@@ -320,6 +183,52 @@ export async function POST(request: NextRequest) {
     // Through dispatch() — SESSION_RESCHEDULED, P0 must-reach. The copy still
     // says the link is unchanged: a student who saved the old one assumes it
     // is dead and asks, which is the support ticket this line prevents.
+    // ── THE CALENDAR FOLLOWS THE DATABASE, NEVER LEADS IT ────────────────────
+    //
+    // This block used to run BEFORE the update. That was safe only while
+    // nothing could refuse the move: the row always accepted whatever the
+    // calendar had already been told. Once availability is enforced on UPDATE
+    // (20260827c, Incident #40), a refusal became reachable — and with the old
+    // order the mentor's Google calendar would already be sitting on a time the
+    // database had just rejected. One meeting, two truths, which is Incident
+    // #17 arriving from the opposite direction.
+    //
+    // So the authority decides first and the calendar is reconciled after.
+    //
+    // Which means a calendar failure can no longer refuse the reschedule — the
+    // session HAS moved, the student is about to be told so, and answering
+    // "couldn't move the meeting" would be a lie about a committed write (the
+    // same rule as the notifier below). Sessions booked under the permanent-room
+    // design have no event of their own and never enter this branch at all; for
+    // the legacy rows that do, the app row is already documented as the source
+    // of truth, so a stale Google event is a reconciliation problem and not a
+    // reason to fail the mentor's request.
+    if (legacyEventId) {
+      const moved = await updateGoogleMeet({
+        buddyUserId: user.id,
+        eventId: legacyEventId,
+        start,
+        durationMinutes: duration,
+        title: session.title ?? undefined,
+      });
+      // 'gone' means someone deleted it inside Google, which was already
+      // tolerated here. Everything else is now logged rather than returned.
+      if (!moved.ok && moved.reason !== 'gone') {
+        console.error(
+          '[calendar/reschedule-meeting] session moved but its legacy calendar event did not',
+          session.id, moved.reason, moved.error,
+        );
+        await audit({
+          subjectId: user.id, action: 'google.api_error', ok: false,
+          detail: {
+            at: 'reschedule.legacy_event', sessionId: session.id,
+            reason: moved.reason, to: start.toISOString(),
+            note: 'session moved in the database; its legacy calendar event did not follow',
+          },
+        });
+      }
+    }
+
     await tellTheStudentItMoved(admin, {
       sessionId: session.id,
       studentId: session.student_id,

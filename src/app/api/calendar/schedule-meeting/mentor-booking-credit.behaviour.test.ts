@@ -160,16 +160,32 @@ describe('a mentor-booked GUIDANCE session consumes a credit', () => {
     });
   });
 
-  it('REFUSES a guidance booking when the student has no credit', async () => {
+  it('falls back to the existing FREE booking when the student holds no credit', async () => {
+    // Founder decision, 27 Aug: the rule protects a paid entitlement, it does
+    // not price the session. No entitlement means nothing to bypass, so the
+    // mentor's free booking is exactly what it always was.
     creditRow = null;
     const res = await post();
 
-    expect(res.status).toBe(409);
-    await expect(res.json()).resolves.toMatchObject({ reason: 'no_credit' });
-    // The whole point of the rule: no session, no notification, nothing given
-    // away. A mentor handing out the thing the product sells is the defect.
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({ success: true, meetingId: 'sess-direct' });
+    expect(rpc, 'no credit to consume').not.toHaveBeenCalled();
+    expect(sessionInserts).toHaveLength(1);
+    expect(sessionInserts[0]).toMatchObject({ session_type: 'guidance' });
+    expect(dispatch, 'the student is still told').toHaveBeenCalledTimes(1);
+  });
+
+  it('a credit READ FAILURE is never treated as "no credit"', async () => {
+    // "We could not read the ledger" and "this student owns nothing" are
+    // different answers. Collapsing them gives away a paid session on a
+    // dropped connection — the free-fallback above is what makes this sharp.
+    creditError = { message: 'connection reset' };
+    creditRow = null;
+    const res = await post();
+
+    expect(res.status).toBe(503);
+    expect(sessionInserts, 'no free session on an unreadable ledger').toHaveLength(0);
     expect(rpc).not.toHaveBeenCalled();
-    expect(sessionInserts).toHaveLength(0);
     expect(dispatch).not.toHaveBeenCalled();
   });
 
@@ -192,6 +208,45 @@ describe('a mentor-booked GUIDANCE session consumes a credit', () => {
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toMatchObject({ meetingId: 'sess-1', already: true });
     expect(sessionInserts).toHaveLength(0);
+    expect(dispatch, 'a replay must not re-notify the student').not.toHaveBeenCalled();
+  });
+
+  it('two simultaneous attempts consume the credit once and create one session', async () => {
+    // The transaction, not this route, is what makes that true: the RPC locks
+    // the credit, and the loser sees the link the winner committed. What is
+    // asserted here is that the route REPORTS the loser's answer as the same
+    // session rather than inventing a second one.
+    let call = 0;
+    rpc.mockImplementation(async () => {
+      call += 1;
+      return call === 1
+        ? { data: [{ outcome: 'booked', session_id: 'sess-1', detail: null }], error: null }
+        : { data: [{ outcome: 'already_booked', session_id: 'sess-1', detail: null }], error: null };
+    });
+
+    const [a, b] = await Promise.all([post(), post()]);
+    const bodies = await Promise.all([a.json(), b.json()]);
+
+    expect([a.status, b.status]).toEqual([200, 200]);
+    expect(bodies.map((x) => x.meetingId), 'one session, reported twice').toEqual(['sess-1', 'sess-1']);
+    expect(sessionInserts, 'neither attempt may insert directly').toHaveLength(0);
+    expect(dispatch, 'only the winner announces the booking').toHaveBeenCalledTimes(1);
+  });
+
+  it('a booking refused by the mentor-mismatch guard never becomes a free session', async () => {
+    // The dangerous fallback: if "the credit belongs to another mentor" fell
+    // through to the free path, a mentor would deliver a session against
+    // someone else's entitlement and the ledger would never know.
+    rpc.mockResolvedValue({
+      data: [{ outcome: 'mentor_changed', session_id: null, detail: 'this credit belongs to another mentor' }],
+      error: null,
+    });
+    const res = await post();
+
+    expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toMatchObject({ reason: 'mentor_changed' });
+    expect(sessionInserts).toHaveLength(0);
+    expect(dispatch).not.toHaveBeenCalled();
   });
 
   it('surfaces a credit read failure as 503, never as a free session', async () => {

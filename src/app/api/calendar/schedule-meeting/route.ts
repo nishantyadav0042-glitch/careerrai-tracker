@@ -105,10 +105,22 @@ async function tellTheStudent(opts: {
 // mentor, so booking against a credit assigned to someone else is refused by
 // the database rather than by a check here that can drift out of step with it.
 //
-// A student with no open credit CANNOT be given a guidance session. That is
-// the point of the founder's rule — the alternative is a mentor handing out
-// the thing the product sells, one booking at a time, with nothing recording
-// that it happened.
+// The rule is about ENTITLEMENT, not about price. If the student holds a paid
+// credit, the booking must consume it whichever side started the booking —
+// otherwise a mentor-initiated booking silently delivers a ₹299 session while
+// the ledger still says the student is owed one. If they hold no credit, the
+// mentor's free booking is unchanged: there is no entitlement to bypass.
+/**
+ * What the credit authority decided. `no_credit` is not a failure — it is the
+ * answer "this student holds no paid entitlement", and the caller then books
+ * the free session the mentor path has always booked.
+ */
+type CreditBooking =
+  | { kind: 'booked'; sessionId: string }
+  | { kind: 'already'; sessionId: string }
+  | { kind: 'no_credit' }
+  | { kind: 'refused'; error: string; reason: string; status: number };
+
 async function bookAgainstCredit(
   admin: ReturnType<typeof createAdminClient>,
   opts: {
@@ -119,10 +131,7 @@ async function bookAgainstCredit(
     durationMinutes: number;
     meetLink: string;
   },
-): Promise<
-  | { sessionId: string; already: boolean }
-  | { refusal: { error: string; reason: string; status: number } }
-> {
+): Promise<CreditBooking> {
   // Same status set as the student's own booking route: booking_blocked is a
   // credit whose mentor cancelled — paid for, undelivered, explicitly
   // rebookable. Leaving it out was half of the stranded ₹299 (Incident #36).
@@ -137,24 +146,25 @@ async function bookAgainstCredit(
 
   if (error) {
     console.error('[calendar/schedule-meeting] credit read failed:', error.message);
+    // NOT a fall-through to a free session. "We could not read the ledger" and
+    // "this student owns nothing" are different answers, and treating the first
+    // as the second gives away a paid session on a dropped connection.
     return {
-      refusal: {
-        error: "Couldn't check this student's session credit — try again.",
-        reason: 'credit_read_failed',
-        status: 503,
-      },
+      kind: 'refused',
+      error: "Couldn't check this student's session credit — try again.",
+      reason: 'credit_read_failed',
+      status: 503,
     };
   }
 
-  if (!credit) {
-    return {
-      refusal: {
-        error: 'This student has no session credit to book against. A free orientation does not need one — book that instead.',
-        reason: 'no_credit',
-        status: 409,
-      },
-    };
-  }
+  // NO APPLICABLE PAID CREDIT. Founder decision, 27 Aug: this is not a
+  // refusal. A mentor booking for a student who has not bought a session keeps
+  // the behaviour it has always had — a free session — because that is a real
+  // and intended part of the product, not an accident. The rule being enforced
+  // is narrower than "guidance costs money": a paid entitlement must never be
+  // bypassed by the path the booking came in through. Where there is no
+  // entitlement there is nothing to bypass.
+  if (!credit) return { kind: 'no_credit' };
 
   const { data: booking, error: rpcError } = await admin.rpc('book_session_credit', {
     p_credit_id: credit.id,
@@ -170,18 +180,17 @@ async function bookAgainstCredit(
   if (rpcError || !booking?.[0]) {
     console.error('[calendar/schedule-meeting] booking failed:', rpcError?.message);
     return {
-      refusal: {
-        error: "Couldn't save the session — try again.",
-        reason: 'booking_failed',
-        status: 500,
-      },
+      kind: 'refused',
+      error: "Couldn't save the session — try again.",
+      reason: 'booking_failed',
+      status: 500,
     };
   }
 
   const { outcome, session_id: sessionId, detail } = booking[0];
 
-  if (outcome === 'booked') return { sessionId: sessionId as string, already: false };
-  if (outcome === 'already_booked') return { sessionId: sessionId as string, already: true };
+  if (outcome === 'booked') return { kind: 'booked', sessionId: sessionId as string };
+  if (outcome === 'already_booked') return { kind: 'already', sessionId: sessionId as string };
 
   // The two race outcomes have wording that already exists, written for a
   // mentor rather than a student — one module, so the two booking paths cannot
@@ -190,17 +199,16 @@ async function bookAgainstCredit(
     const refused = constraintFailure(
       { code: outcome === 'slot_taken' ? '23P01' : '23505' }, 'buddy',
     )!;
-    return { refusal: { error: refused.message, reason: refused.reason, status: refused.status } };
+    return { kind: 'refused', error: refused.message, reason: refused.reason, status: refused.status };
   }
 
   // unavailable / not_eligible / mentor_changed. `detail` comes from the
   // database guard that refused it and is already a sentence.
   return {
-    refusal: {
-      error: detail ?? 'That booking is not available.',
-      reason: outcome as string,
-      status: 409,
-    },
+    kind: 'refused',
+    error: detail ?? 'That booking is not available.',
+    reason: outcome as string,
+    status: 409,
   };
 }
 
@@ -375,7 +383,52 @@ export async function POST(request: NextRequest) {
     // rule in N places drifts N−1 times) aimed at money.
     let sessionId: string;
 
-    if (isOrientation) {
+    // ORIENTATION never asks. It is the free onboarding session, gated above by
+    // free_onboarding_used, and spending a ₹299 credit on it would take payment
+    // for the thing we advertise as free.
+    const booked: CreditBooking = isOrientation
+      ? { kind: 'no_credit' }
+      : await bookAgainstCredit(admin, {
+          buddyId: user.id,
+          studentId,
+          title,
+          start,
+          durationMinutes,
+          meetLink,
+        });
+
+    if (booked.kind === 'refused') {
+      await audit({
+        subjectId: user.id, action: 'booking.rejected', ok: false,
+        detail: {
+          reason: booked.reason, studentId,
+          startTime: start.toISOString(), viaCredit: true,
+        },
+      });
+      return NextResponse.json(
+        { error: booked.error, reason: booked.reason },
+        { status: booked.status },
+      );
+    }
+
+    // The credit already points at a session: the mentor double-submitted, or
+    // the student booked this same credit from their own side a moment ago. The
+    // answer is that session, not a second one — and no second notification,
+    // because they were told when it was first booked.
+    if (booked.kind === 'already') {
+      const payload = { success: true, meetingId: booked.sessionId, meetLink, already: true };
+      await rememberIdempotent(user.id, 'schedule-meeting', idemKey, 200, payload);
+      return NextResponse.json(payload);
+    }
+
+    if (booked.kind === 'booked') {
+      // book_session_credit() has already written the row AND linked the credit
+      // inside one transaction. There is nothing left to insert.
+      sessionId = booked.sessionId;
+    } else {
+      // FREE SESSION — orientation, or a student who holds no paid entitlement.
+      // Unchanged from what this route has always done: no credit exists, so
+      // there is none to consume and none to bypass.
       const { data: session, error: sessionError } = await admin
         .from('video_sessions')
         .insert({
@@ -385,14 +438,14 @@ export async function POST(request: NextRequest) {
           scheduled_at: start.toISOString(),
           duration_minutes: durationMinutes,
           session_status: 'scheduled',
-          session_type: 'onboarding',
+          session_type: isOrientation ? 'onboarding' : 'guidance',
           google_meet_link: meetLink, // reused as the generic "join link" column
         })
         .select('id')
         .single();
 
       if (sessionError || !session) {
-        // The database is the authority on both booking rules, and it fires on
+        // The database is the authority on the booking rules, and it fires on
         // races the SELECT above cannot see. A rule violation is a 409 with a
         // sentence, never a 500 — see lib/booking-constraints.
         const refused = constraintFailure(sessionError, 'buddy');
@@ -408,40 +461,6 @@ export async function POST(request: NextRequest) {
       }
 
       sessionId = session.id as string;
-    } else {
-      const booked = await bookAgainstCredit(admin, {
-        buddyId: user.id,
-        studentId,
-        title,
-        start,
-        durationMinutes,
-        meetLink,
-      });
-
-      if ('refusal' in booked) {
-        await audit({
-          subjectId: user.id, action: 'booking.rejected', ok: false,
-          detail: {
-            reason: booked.refusal.reason, studentId,
-            startTime: start.toISOString(), viaCredit: true,
-          },
-        });
-        return NextResponse.json(
-          { error: booked.refusal.error, reason: booked.refusal.reason },
-          { status: booked.refusal.status },
-        );
-      }
-
-      // Already linked to a session: the mentor double-submitted, or the
-      // student booked the same credit from their own side a moment ago. The
-      // answer is that session, not a second one.
-      if (booked.already) {
-        const payload = { success: true, meetingId: booked.sessionId, meetLink, already: true };
-        await rememberIdempotent(user.id, 'schedule-meeting', idemKey, 200, payload);
-        return NextResponse.json(payload);
-      }
-
-      sessionId = booked.sessionId;
     }
 
     // ── Notify student in-app (this is where they get the join link) ──

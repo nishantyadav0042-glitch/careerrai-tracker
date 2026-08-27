@@ -1663,32 +1663,57 @@ two are different populations. When reviewing an invariant, read the trigger's
 event list, not its name. **Half-covered reads as covered** — the rule that was
 enforced supplied the confidence that the rule that was not enforced borrowed.
 
-**The fix.** `offeredSlotProblem()` in `lib/session-slots.ts` — asks whether one
-specific instant is a slot we would have OFFERED a student, which is the
-existing rule read backwards. The route does the DB reads and calls it; the
-mentor's week is still defined by `generateSlots` and nowhere else (Incident
-#23). The session being moved is filtered out of its own busy list, or it would
-block every slot inside its own buffer and a mentor nudging 3pm to 3.30pm would
-be refused by the booking they are holding.
+**The fix — one line, in the trigger.** The function was never wrong. It reads
+nothing but `new.*` and returns `new`, so it was always correct on an UPDATE and
+was simply never called on one. `20260827c_availability_on_update.sql` changes
+the trigger's event list and nothing else:
 
-One rule `generateSlots` cannot express is checked alongside it: it measures the
-end-of-day fit against the mentor's own slot length, so a reschedule that also
-LENGTHENS the session can start on a genuine slot and finish after closing time.
-The database checks this with the real duration — on INSERT, which a reschedule
-never reaches.
+```
+before insert
+  →  before insert or update of scheduled_at, duration_minutes, buddy_id
+```
 
-**How it was proven.** Nine unit tests on the pure function (wrong day, outside
-hours, off-grid, taken slot including buffer, inside notice, past horizon,
-inactive mentor, and the lengthened-session overrun), plus
-`session-reschedule-availability.guard.test.ts` for the half a unit test cannot
-reach — that the route still CALLS it, before the calendar move and before the
-row is written. Three mutations: deleting the call (the pre-fix state) failed;
-removing the self-filter failed; moving the check after `updateGoogleMeet`
-**passed, wrongly** — the ordering assertion had searched the whole file and
-found the function's own DECLARATION, which sits above `POST` and is therefore
-earlier than everything. Scoped to the POST body and to a call rather than a
-name, the mutation fails as it should. The guard was wrong in the same shape as
-Incident #39, and only mutation testing said so.
+Proof that only the trigger moved, rather than an assurance that it did: the
+normalised md5 of `video_session_within_availability()` is
+`9f5965f220431a1c15fbe4b21cd792d1` on production and on careerrai-test, both
+before and after the migration.
+
+**The column list is load-bearing.** A bare `or update` would fire on every
+write to the row, including the status transitions that end a session's life. A
+6pm session completed at 7:05pm is normal and would have begun raising
+`check_violation` on a row nobody was rescheduling. Scoped to the three
+scheduling columns, the trigger fires only when the session is actually MOVED —
+mirroring `set_video_session_span` directly above it. The writer inventory says
+what that costs: of every `.update()` against video_sessions in the codebase,
+exactly ONE sets any of those columns, and it is the defective route.
+
+**A first attempt solved this in the application and was thrown away.** It
+re-checked availability inside `reschedule-meeting` through a new
+`offeredSlotProblem()` helper. It worked, and it was wrong: it made the mentor's
+week answerable in two places, which is Incident #23 waiting to happen. The
+founder's call — enforce at the single existing authority — deleted more code
+than it added. **When a rule already exists and is merely mis-scoped, widening
+its scope beats re-implementing it upstream.**
+
+Removing that helper exposed a consequence worth recording. With the check gone
+from the route, the legacy Google-calendar move ran BEFORE the database could
+refuse, so a rejected reschedule would have left the mentor's calendar sitting
+on a time the database had just declined — Incident #17 arriving from the
+opposite direction. The calendar sync now runs AFTER the row is committed, and a
+calendar failure can no longer refuse a move that already happened; it is logged
+and audited as `google.api_error` instead.
+
+**How it was proven.** `supabase/tests/reschedule_availability_probes.sql`:
+seven probes on careerrai-test, inside one block that raises at the end so every
+fixture rolls back. A valid reschedule is allowed. A non-working day, a time
+outside hours, mentor time off, and a lengthened session that overruns closing
+time are all refused. A non-scheduling write (title, status) is unaffected. A
+mentor with no availability row is unaffected, as documented.
+
+Non-vacuity, and the only result that really matters: with the trigger reverted
+to `before insert` — production's shape today — the Sunday move was **ALLOWED**
+and `scheduled_at` became 2026-08-30, a day the fixture mentor does not work.
+The defect reproduces on demand.
 
 ---
 
@@ -1722,34 +1747,63 @@ gap" — and got the notification half wrong too (Incident #39). Both errors cam
 from asserting behaviour from the presence of a name in a file rather than from
 reading the call, which is Law L2.
 
-**The founder's rule (27 Aug).** Orientation is free; a guidance session
-consumes a credit. A student with no open credit cannot be given a guidance
-session — the alternative is a mentor handing out the product one booking at a
-time with nothing recording that it happened.
+**The founder's rule (27 Aug), and the correction that sharpened it.** The first
+reading was "guidance costs a credit", and it shipped a 409 for a student who
+had none. The founder narrowed it: the rule protects a PAID ENTITLEMENT, it does
+not price the session. *If the student holds an applicable paid credit, a
+mentor-initiated booking must consume it. If they hold none, the mentor's free
+booking is exactly what it always was.* Orientation never consumes one either
+way — spending ₹299 on the session we advertise as free is the same defect
+wearing the opposite sign.
 
-**The fix.** The branch is in the route, because one product rule has two
-transactional shapes behind it. Orientation keeps the direct insert: there is no
-credit to move, and inventing a ₹0 one so both paths could share a writer would
-put a row in the ledger that every revenue count then has to special-case.
-Guidance goes through `book_session_credit()` — the RPC that already locks the
-credit, inserts the session, links it and moves the state in ONE transaction,
-and that writes the same eight columns the direct insert did.
+That distinction is the lesson: **the defect was never that mentor sessions were
+free, it was that the path a booking arrived through could bypass an
+entitlement.** Where there is no entitlement, there is nothing to bypass.
 
-**NO SECOND WRITER.** A credit-linking path written in TypeScript beside the
-one in plpgsql is Incident #23 aimed at money. `p_expected_buddy_id` is the
-booking mentor, so a credit assigned to someone else is refused by the database
-rather than by a check here that can drift out of step with it.
+**The fix.** Orientation, and guidance for a student holding no credit, keep the
+direct insert this route has always used. Guidance for a student who holds one
+goes through `book_session_credit()` — the RPC that already locks the credit,
+inserts the session, links it and moves the state in ONE transaction, and that
+writes the same eight columns the direct insert does. Inventing a ₹0 credit so
+the free path could share that writer was rejected: it would put a row in the
+ledger that every revenue count then has to special-case.
 
-**How it was proven.** Eight behaviour tests driven through the real `POST`
-handler: guidance calls the RPC and never inserts directly; the call carries
-this mentor's id; no credit is a 409 with no session, no notification and
-nothing given away; a refused RPC never tells the student "booked"; a re-submit
-answers with the existing session rather than a second one; a credit read
-failure is a 503 and never a free session; orientation writes directly and
-never calls the RPC; a second free orientation is still refused. Four mutations,
-all caught: direct-insert everything (the pre-fix route, 6 failures), no-credit
-falls through to a free session, notify-anyway on a refusal, and dropping the
-mentor identity from the RPC call.
+**NO SECOND WRITER.** A credit-linking path written in TypeScript beside the one
+in plpgsql is Incident #23 aimed at money. `p_expected_buddy_id` is the booking
+mentor, so a credit assigned to someone else is refused by the database rather
+than by a check here that can drift out of step with it.
+
+**One distinction that is easy to lose and expensive to lose.** "We could not
+read the ledger" is not "this student owns nothing". Collapsing them hands out a
+paid session on a dropped connection — and it becomes reachable the moment
+no-credit stops being a refusal and becomes a fall-through. A credit read
+failure is a 503 that books nothing, with a test and a mutation holding it
+there.
+
+**Settlement needed no change, and that was verified rather than assumed.**
+`settle()` finds the credit with `.eq('video_session_id', sessionId)` and never
+learns who wrote the link, so a mentor-linked credit completes, releases and
+refuses to double-settle identically to a student-linked one.
+
+**How it was proven.** Eleven behaviour tests through the real `POST` handler,
+including: no credit falls back to the free booking; a credit READ FAILURE does
+not; a refused RPC never becomes a free session; `mentor_changed` never becomes
+a free session; two simultaneous attempts report one session and notify once;
+orientation never calls the RPC. Four mutations, all caught — removing the credit
+call (the pre-fix route, 10 failures), treating an unreadable ledger as
+no-credit, letting a refusal fall through to a free session, and making
+orientation consume a credit.
+
+**Cross-path parity is now held by a test, not by inspection.**
+`booking-paths-parity.behaviour.test.ts` drives both doors against the same
+credit: both call the same RPC with the same entitlement arguments, neither
+writes video_sessions directly while a credit exists, and settlement cannot tell
+them apart. It also surfaced a difference the database erases — the student path
+omits `p_session_type` and relies on the RPC's `default 'guidance'` while the
+mentor path passes it explicitly. Both write 'guidance', so the test normalises
+through the declared default rather than comparing the raw call: comparing raw
+would fail on a difference that does not exist, while still passing if one path
+later started sending 'onboarding'.
 
 **No migration.** This route now uses a function that already exists in
 production; nothing in the schema changed.
