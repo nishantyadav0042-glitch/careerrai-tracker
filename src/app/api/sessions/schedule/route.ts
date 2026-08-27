@@ -28,7 +28,27 @@ async function loadCredit(admin: ReturnType<typeof createAdminClient>, studentId
     .from('session_credits')
     .select('id, buddy_id, status, video_session_id, session_intent, session_intent_note')
     .eq('student_id', studentId)
-    .in('status', ['paid', 'assigned', 'scheduled'])
+    // booking_blocked BELONGS HERE. It is the state a credit lands in when the
+    // mentor cancelled or nobody joined: paid for, not delivered, mentor still
+    // attached (rule 8), and explicitly rebookable.
+    //
+    // Leaving it out was the other half of the stranded ₹299, and the worse
+    // half. The release fires, the student is told "your booking is back — pick
+    // a new time", and then this filter 404s them with "No session to
+    // schedule." No admin surface reads session_credits either, so ops cannot
+    // see the queue the credit was put into. We would have been making a
+    // promise the product could not keep.
+    //
+    // Nothing else had to change. book_session_credit() looks the credit up by
+    // id with no status filter and clears owner/next_action on success — its
+    // own comment says that is "what makes booking_blocked -> scheduled a real
+    // recovery rather than a status change with a stale ops queue behind it".
+    // The database was ready; this line was the whole gap.
+    //
+    // assignment_failed is deliberately NOT here: rule 7 says it carries no
+    // mentor, and rule 1 requires one before a credit can be scheduled. That
+    // is a different recovery and needs a mentor assigned first.
+    .in('status', ['paid', 'assigned', 'scheduled', 'booking_blocked'])
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle();

@@ -87,7 +87,10 @@ describe('credit side — the founder’s cases 1–4', () => {
   function creditClient(answers: Array<{ data: unknown; error: unknown }>) {
     let i = 0;
     const chain = {
-      select: () => chain, eq: () => chain, in: () => chain, limit: () => chain,
+      // `not` joined `in` on 27 Aug: hasOpenSessionCredit now asks for
+      // "anything that is not terminal" rather than listing the open states,
+      // so booking_blocked and assignment_failed count as owed.
+      select: () => chain, eq: () => chain, in: () => chain, not: () => chain, limit: () => chain,
       then: (res: (v: { data: unknown; error: unknown }) => void) =>
         Promise.resolve(answers[Math.min(i++, answers.length - 1)]).then(res),
     };

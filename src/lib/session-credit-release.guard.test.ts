@@ -121,3 +121,69 @@ describe(`the credit-release door frame (${file})`, () => {
     expect(release).toMatch(/\.in\('status', \['scheduled', 'assigned'\]\)/);
   });
 });
+
+// ── A released credit must have a way BACK IN ──────────────────────────────
+//
+// The migration opens the door out of a dead session. This is the door back.
+// They are worth guarding together, because closing one without the other is
+// worse than neither: the release fires, cancel-meeting/session_expired tells
+// the student "your booking is back — pick a new time", and then the booking
+// route cannot see the credit. We would be making a promise the product
+// cannot keep, to the exact student who has already been let down once.
+//
+// Found by the final gate on 27 Aug: sessions/schedule filtered credits to
+// ('paid','assigned','scheduled'), and no admin surface reads session_credits
+// at all — so ops could not see the recovery queue either. The ₹299 was still
+// stranded, just in a newer state.
+
+describe('the door back in', () => {
+  const SCHEDULE = readFileSync('src/app/api/sessions/schedule/route.ts', 'utf8');
+  const bookingRpc = (() => {
+    const files = readdirSync(MIGRATIONS).filter((f) => f.endsWith('.sql')).sort().reverse();
+    for (const f of files) {
+      const sql = readFileSync(join(MIGRATIONS, f), 'utf8');
+      if (/create or replace function public\.book_session_credit/.test(sql)) return sql;
+    }
+    throw new Error('book_session_credit() not found in any migration');
+  })();
+
+  it('the booking route can SEE a released credit', () => {
+    expect(
+      SCHEDULE.replace(/\/\/[^\n]*/g, ''),
+      'sessions/schedule filters out booking_blocked, so a student whose mentor cancelled is told their booking is back and then told there is nothing to schedule.',
+    ).toMatch(/\.in\('status', \['paid', 'assigned', 'scheduled', 'booking_blocked'\]\)/);
+  });
+
+  it('it does NOT try to book a credit that has no mentor', () => {
+    // Rule 7: assignment_failed carries no mentor. Rule 1: scheduled requires
+    // one. Including it here would just move the failure later.
+    expect(SCHEDULE.replace(/\/\/[^\n]*/g, '')).not.toMatch(/'assignment_failed'/);
+  });
+
+  it('booking a released credit clears what ops was holding', () => {
+    // Otherwise booking_blocked -> scheduled leaves owner/next_action behind
+    // and the recovery queue keeps an entry for work that is already done.
+    const upd = bookingRpc.slice(bookingRpc.indexOf('update public.session_credits'));
+    expect(upd).toMatch(/status\s*=\s*'scheduled'/);
+    expect(upd).toMatch(/owner\s*=\s*null/);
+    expect(upd).toMatch(/next_action\s*=\s*null/);
+  });
+
+  it('the RPC does not re-filter on status — the route already decided', () => {
+    // Two status filters would be two authorities on "which credit is
+    // bookable", and the DB one would win silently.
+    const lookup = bookingRpc.slice(
+      bookingRpc.indexOf('select * into c'),
+      bookingRpc.indexOf('if not found'),
+    );
+    expect(lookup).toMatch(/where id = p_credit_id and student_id = p_student_id/);
+    expect(lookup).not.toMatch(/status\s*(=|in)/);
+  });
+
+  it('and the sale is still refused while that credit is open', () => {
+    // The other half: a released credit must read as OPEN to hasOpenSessionCredit,
+    // or we take a second ₹299 for a session we already owe.
+    const credit = readFileSync('src/lib/session-credit.ts', 'utf8');
+    expect(credit).toContain(`not('status', 'in', '("completed","refunded")')`);
+  });
+});

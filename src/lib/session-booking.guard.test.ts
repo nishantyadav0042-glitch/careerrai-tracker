@@ -40,7 +40,23 @@ describe('capacity is checked BEFORE money, never after', () => {
   it('a student cannot buy a second session while one is unfinished', () => {
     // The open-credit query moved into hasOpenSessionCredit (Boundary 2,
     // Change 3); the route keeps the decision, the primitive keeps the read.
-    expect(readFileSync('src/lib/session-credit.ts', 'utf8')).toContain("in('status', ['paid', 'assigned', 'scheduled'])");
+    //
+    // 27 Aug: this used to pin the literal list ('paid','assigned','scheduled'),
+    // which was the bug. That list EXCLUDED booking_blocked and
+    // assignment_failed — the two states a student is in when they have paid
+    // and we have failed to deliver — so a student whose mentor cancelled read
+    // as having nothing open and could be sold a SECOND ₹299 for a session we
+    // already owed them. Latent until this branch made a release reachable.
+    //
+    // Now asserted as the subtraction, which is the property that matters: a
+    // credit is open unless it is finished. A status invented later is open by
+    // default, so the failure mode is refusing a sale, never taking money twice.
+    const credit = readFileSync('src/lib/session-credit.ts', 'utf8');
+    expect(credit).toContain(`not('status', 'in', '("completed","refunded")')`);
+    expect(
+      credit,
+      'hasOpenSessionCredit must not go back to enumerating the open states — that is how booking_blocked became sellable.',
+    ).not.toContain("in('status', ['paid', 'assigned', 'scheduled'])");
     const s = readFileSync(ROUTE, 'utf8');
     expect(s).toContain('hasOpenSessionCredit(admin, user.id)');
     expect(s).toContain('alreadyBooked: true');

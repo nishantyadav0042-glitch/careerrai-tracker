@@ -322,12 +322,31 @@ export async function hasOpenSessionCredit(
   admin: { from: (t: string) => any },
   studentId: string,
 ): Promise<boolean> {
+  // ── OPEN MEANS "WE STILL OWE THEM A SESSION" ─────────────────────────────
+  //
+  // Stated as the NEGATIVE of the two terminal states, not as a list of open
+  // ones, and that is the whole point. The old list was
+  // ('paid','assigned','scheduled'), which silently excluded booking_blocked
+  // and assignment_failed — the two states a student lands in when they have
+  // PAID and we have failed to deliver. This function gates sessions/book,
+  // the route that SELLS a credit. So a student whose mentor cancelled could
+  // be sold a second ₹299 while we already owed them the first.
+  //
+  // That hole was latent until this branch: before 20260827a, rule 5 made a
+  // release impossible, so nothing could put a credit into booking_blocked by
+  // cancelling. Making the release reachable is what makes this reachable —
+  // which is exactly the kind of cross-track consequence a per-track audit
+  // does not see.
+  //
+  // Written as a subtraction so the DEFAULT for any future status is "open".
+  // A new state added later fails toward refusing a second sale, rather than
+  // toward taking money twice.
   for (let attempt = 0; attempt < 2; attempt++) {
     const { data, error } = await admin
       .from('session_credits')
       .select('id')
       .eq('student_id', studentId)
-      .in('status', ['paid', 'assigned', 'scheduled'])
+      .not('status', 'in', '("completed","refunded")')
       .limit(1);
     if (!error) return ((data ?? []) as unknown[]).length > 0;
     if (attempt === 1) {
