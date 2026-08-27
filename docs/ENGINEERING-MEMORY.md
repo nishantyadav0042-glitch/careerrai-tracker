@@ -50,6 +50,7 @@
 | 35 | 2026-08-26 | Deploy took the whole site down (runner build lost NEXT_PUBLIC_SUPABASE_URL) | Deploy / Growth | full cohort (874) |
 | 36 | 2026-08-27 | A cancelled session welded the ₹299 to a booking that would never happen | Trust (P0) | every future mentor cancellation |
 | 37 | 2026-08-27 | Daily Insight repeated for days — the suppression read had no upper bound | Learning (P1) | every student who opened Home twice |
+| 38 | 2026-08-27 | 71% of completions got the wrong topic — task ids are unique only within a day | Learning (P1) | every student the recovery rule fired for |
 
 > Entries 12 and 13 were never written. The gap is left visible rather than
 > renumbered — the numbers are referenced from commit messages and code

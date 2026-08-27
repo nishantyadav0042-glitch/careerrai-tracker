@@ -129,6 +129,9 @@ export function lastCompleteWeek(now: Date = new Date()): WeeklyWindow {
   return { start: addDays(thisMonday, -7), end: addDays(thisMonday, -1) };
 }
 
+/** Task ids are unique only WITHIN a day. See computeWeeklyInsight's Map. */
+export const metaKey = (date: unknown, id: unknown) => `${String(date)}|${String(id)}`;
+
 interface Ctx {
   reports: any[];
   prevReports: any[];
@@ -204,7 +207,7 @@ function marksBySection(c: Ctx): Map<string, { green: number; red: number; total
   const m = new Map<string, { green: number; red: number; total: number }>();
   for (const x of c.completions) {
     if (!x.confidence) continue;
-    const sec = c.taskMeta.get(String(x.task_id))?.section;
+    const sec = c.taskMeta.get(metaKey(x.routine_date, x.task_id))?.section;
     if (!sec || sec === 'General') continue;
     const cur = m.get(sec) ?? { green: 0, red: 0, total: 0 };
     cur.total += 1;
@@ -289,7 +292,7 @@ function behaviour(c: Ctx): WeeklySection | null {
 function topicMovement(c: Ctx): WeeklySection | null {
   const topics = new Set<string>();
   for (const x of c.completions) {
-    const t = c.taskMeta.get(String(x.task_id))?.topic;
+    const t = c.taskMeta.get(metaKey(x.routine_date, x.task_id))?.topic;
     if (t) topics.add(t);
   }
   if (topics.size < 2) return null;
@@ -414,11 +417,14 @@ export async function computeWeeklyInsight(
   ]);
 
   const rows = (r: any) => (r?.data ?? []) as any[];
+  // Keyed by (routine_date, task_id) — see daily-insight.ts. Task ids repeat
+  // across days with different topics; keyed by id alone, 71% of completions
+  // in a real production week resolved to the wrong topic.
   const taskMeta = new Map<string, { topic: string | null; section: string }>();
   let served = 0;
   for (const r of rows(routines)) {
     for (const t of Array.isArray(r.tasks) ? (r.tasks as any[]) : []) {
-      taskMeta.set(String(t.id), { topic: (t.topic as string | null) ?? null, section: (t.section as string) ?? 'General' });
+      taskMeta.set(metaKey(r.routine_date, t.id), { topic: (t.topic as string | null) ?? null, section: (t.section as string) ?? 'General' });
       served += 1;
     }
   }

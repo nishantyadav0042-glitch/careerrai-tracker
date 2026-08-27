@@ -1516,3 +1516,57 @@ telemetry, or the failure is indistinguishable from the truth.
 `src/lib/daily-insight-rotation.test.ts`, which spies on the FILTERS the query
 applies rather than the rows it returns, because the filters are where the bug
 lived. Removing the bound makes the boundary test fail.
+
+---
+
+## Incident #38 — a task id means nothing without its day (2026-08-27)
+
+**Severity:** P1 (Learning). A live, shipped insight named topics students had
+not studied, and then silenced the real ones for a week.
+
+**What happened.** `computeDailyInsight()` builds a `task_id → {topic, section}`
+map from the served routines, then resolves each completion through it. The
+planner REUSES task ids across days. In one production week (17–23 Aug) 362 ids
+repeated, and **314 of them carried a different topic on different days**. Keyed
+by id alone the map was last-write-wins, so **135 of 190 completions — 71% —
+resolved to a topic the student had not worked on.**
+
+Two consequences, and the second is worse:
+
+1. the sentence named the wrong topic — the RECOVERY rule congratulating a
+   student for beating "Algebra" when they had never opened it;
+2. the suppression identity is `kind:subject`, so a wrong subject **suppressed
+   the wrong insight for seven days**. The student stopped hearing about a real
+   gap because we had recorded a fictional one.
+
+**Why it survived.** Section attribution was unaffected — zero ids conflicted on
+section — so every section-level number on every surface looked correct. The
+only wrong values were topic names, which nobody can verify by eye. *A bug that
+corrupts only the labels, never the counts, is invisible to every check that
+looks at counts.*
+
+**How it was found.** Not by reading the code. A production sanity check on the
+new Weekly Insight returned by-section totals of 145 against 25 completions —
+a fan-out in the verification SQL, not in the engine. Chasing why the SQL
+fanned out is what surfaced the id reuse, and the engine's own map turned out
+to have the mirror-image flaw. **The discrepancy that exposes a defect is often
+in the checking tool, not the system; investigate it anyway.**
+
+**The fix.** Both engines key the map by `(routine_date, task_id)` — the pair
+that is actually unique — via a shared `metaKey()`. `daily-insight.ts` and
+`weekly-insight.ts` were changed in the same commit; the new Weekly Insight had
+inherited the bug by copying the pattern before it was known to be wrong.
+
+**Encoded with teeth.** `src/lib/insight-task-attribution.test.ts` drives both
+engines through a fixture where one id carries three different topics across
+three days. Reverting `metaKey` to id-only fails both tests.
+
+**Test-discipline lesson, paid twice in one day.** The first version of the
+daily test PASSED with the fix reverted: the conflicting routine sat in the
+middle of the fixture array, so last-write-wins happened to land on the right
+topic. The conflicting day now sits LAST, so the two keyings genuinely diverge.
+This is the second vacuous assertion caught by mutation in this session — the
+other hid behind `if (status === 'ready')` on a fixture that never reached
+`ready`. **Both were written by the same person who wrote the fix, and both
+passed on the broken code. A test is not a test until it has been seen to
+fail.**

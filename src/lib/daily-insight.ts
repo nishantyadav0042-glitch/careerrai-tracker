@@ -162,26 +162,38 @@ export async function computeDailyInsight(
   const loggedDays = new Set((reports ?? []).map((r: any) => r.report_date as string)).size;
   if (loggedDays < 2) return null; // patterns need at least a little history
 
-  // task_id → {topic, section} from the served routines.
+  // (routine_date, task_id) → {topic, section} from the served routines.
+  //
+  // THE KEY MUST INCLUDE THE DATE (27 Aug). Task ids are not unique across the
+  // window — the planner reuses the same id on different days, and in one
+  // production week 362 ids repeated, 314 of them carrying a DIFFERENT TOPIC
+  // on different days. Keyed by id alone this Map was last-write-wins, so
+  // 135 of 190 completions (71%) resolved to a topic the student had not
+  // worked on. That fed the RECOVERY rule ("Algebra: struggled → solid" for a
+  // topic they never touched) and, worse, the suppression key is
+  // `kind:subject` — so a wrong subject silenced the wrong insight for seven
+  // days. Sections were unaffected (0 ids conflicted on section), but the fix
+  // is the same key for both.
   const taskMeta = new Map<string, { topic: string | null; section: string }>();
+  const metaKey = (date: unknown, id: unknown) => `${String(date)}|${String(id)}`;
   const served: Record<string, number> = {};
   for (const r of routines ?? []) {
     for (const t of (Array.isArray(r.tasks) ? (r.tasks as any[]) : [])) {
-      taskMeta.set(String(t.id), { topic: (t.topic as string | null) ?? null, section: (t.section as string) ?? 'General' });
+      taskMeta.set(metaKey(r.routine_date, t.id), { topic: (t.topic as string | null) ?? null, section: (t.section as string) ?? 'General' });
       const sec = (t.section as string) ?? 'General';
       if (sec !== 'General') served[sec] = (served[sec] ?? 0) + 1;
     }
   }
   const doneBySec: Record<string, number> = {};
   for (const c of completions ?? []) {
-    const sec = taskMeta.get(String(c.task_id))?.section;
+    const sec = taskMeta.get(metaKey(c.routine_date, c.task_id))?.section;
     if (sec && sec !== 'General') doneBySec[sec] = (doneBySec[sec] ?? 0) + 1;
   }
 
   // 1 — RECOVERY: same topic, struggled (red) then solid (green) later.
   const byTopic = new Map<string, { date: string; confidence: string | null }[]>();
   for (const c of completions ?? []) {
-    const topic = taskMeta.get(String(c.task_id))?.topic;
+    const topic = taskMeta.get(metaKey(c.routine_date, c.task_id))?.topic;
     if (!topic) continue;
     if (!byTopic.has(topic)) byTopic.set(topic, []);
     byTopic.get(topic)!.push({ date: c.routine_date as string, confidence: (c.confidence as string | null) ?? null });
