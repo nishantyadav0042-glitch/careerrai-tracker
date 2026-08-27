@@ -23,6 +23,14 @@ import type { NextRequest } from 'next/server';
 const dispatch = vi.hoisted(() => vi.fn(async (o: Record<string, unknown>) => { void o; return 'sent'; }));
 const timeline = vi.hoisted(() => vi.fn(async () => undefined));
 const rpc = vi.hoisted(() => vi.fn());
+type HoldResult = { ok: true; eventId: string } | { ok: false; reason: string; error: string };
+const hold = vi.hoisted(() =>
+  vi.fn(async (i: Record<string, unknown>): Promise<HoldResult> => {
+    void i;
+    return { ok: true, eventId: 'evt-1' };
+  }),
+);
+const sessionUpdates = vi.hoisted(() => [] as Record<string, unknown>[]);
 
 const STUDENT = 'stu-1';
 const BUDDY = 'bud-1';
@@ -44,6 +52,7 @@ vi.mock('@/lib/session-assignment', () => ({
   },
 }));
 vi.mock('@/lib/buddy-room', () => ({ ensureBuddyRoom: async () => room }));
+vi.mock('@/lib/google-meet', () => ({ createCalendarHold: hold }));
 
 vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: () => ({
@@ -75,6 +84,14 @@ vi.mock('@/lib/supabase/admin', () => ({
           }),
         };
       }
+      if (table === 'video_sessions') {
+        return {
+          update: (patch: Record<string, unknown>) => {
+            sessionUpdates.push(patch);
+            return { eq: async () => ({ error: null }) };
+          },
+        };
+      }
       throw new Error(`unexpected table ${table}`);
     },
   }),
@@ -90,6 +107,8 @@ const START = '2026-08-29T11:00:00.000Z';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  sessionUpdates.length = 0;
+  hold.mockResolvedValue({ ok: true, eventId: 'evt-1' });
   creditRow = {
     id: 'cred-1', buddy_id: BUDDY, status: 'assigned',
     video_session_id: null, session_intent: 'quant', session_intent_note: null,
@@ -199,6 +218,61 @@ describe('booking chain — nobody is told about a booking that did not happen',
     expect(res.status).toBe(409);
     expect(rpc).not.toHaveBeenCalled();
     expect(dispatch).not.toHaveBeenCalled();
+  });
+});
+
+describe('booking chain — the mentor’s calendar is held for the hour', () => {
+  it('places a hold on the mentor’s calendar, for the session length', async () => {
+    await post(START);
+    expect(hold).toHaveBeenCalledTimes(1);
+    const [arg] = hold.mock.calls[0] as [Record<string, unknown>];
+    expect(arg.buddyUserId).toBe(BUDDY);
+    expect(arg.durationMinutes).toBe(45);
+    expect((arg.start as Date).toISOString()).toBe(START);
+  });
+
+  it('carries the buddy’s existing permanent room, never a new one', async () => {
+    await post(START);
+    const [arg] = hold.mock.calls[0] as [Record<string, unknown>];
+    expect(arg.meetLink).toBe(MEET);
+  });
+
+  it('names the student so the mentor knows who is coming', async () => {
+    await post(START);
+    const [arg] = hold.mock.calls[0] as [Record<string, unknown>];
+    expect(arg.title).toContain('Dhruv');
+  });
+
+  it('stores the event id, so cancel and reschedule can address the hold', async () => {
+    await post(START);
+    expect(sessionUpdates).toContainEqual({ google_event_id: 'evt-1' });
+  });
+
+  it('holds nothing when the booking did not happen', async () => {
+    rpc.mockResolvedValue({
+      data: [{ outcome: 'slot_taken', session_id: null, detail: null }], error: null,
+    });
+    await post(START);
+    expect(hold).not.toHaveBeenCalled();
+  });
+});
+
+describe('booking chain — a calendar failure never costs the student their session', () => {
+  it('not_connected is the expected answer today and must not break booking', async () => {
+    // google_oauth_tokens is EMPTY in production — every mentor. If this could
+    // fail a booking, enabling the feature would break every booking at once.
+    hold.mockResolvedValue({ ok: false, reason: 'not_connected', error: 'x' });
+    const res = await post(START);
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({ ok: true, sessionId: 'sess-1' });
+    expect(sessionUpdates).toHaveLength(0);
+  });
+
+  it('a thrown calendar error still leaves the student booked and notified', async () => {
+    hold.mockRejectedValue(new Error('google exploded'));
+    const res = await post(START);
+    expect(res.status).toBe(200);
+    expect(dispatch).toHaveBeenCalledTimes(2);
   });
 });
 
