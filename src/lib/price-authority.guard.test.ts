@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { PLANS, SESSION_PRICING, ALL_PRODUCTS } from './plans';
-import { SESSION_PRICE_PAISE, SESSION_MRP_PAISE } from './session-credit';
+import { SESSION_PRICE_PAISE, SESSION_MRP_PAISE, SESSION_PLAN_ID } from './session-credit';
+import { taxForPlan } from './gst';
+import { priceWithCoupon, priceWithScholarship } from './pricing';
 
 // ── ONE PRICING AUTHORITY, PROVEN ───────────────────────────────────────────
 //
@@ -126,6 +128,49 @@ describe('there is only one authority, and everything derives from it', () => {
     for (const p of ['src/lib/campaign.ts', 'src/app/offer/page.tsx', 'src/app/api/campaign/route.ts']) {
       expect(existsSync(p), `${p} still exists — it carried the retired ₹2,499`).toBe(false);
     }
+  });
+});
+
+describe('THE TRANSACTION PATH charges the founder\'s number, not the card\'s', () => {
+  // A pricing card rendering ₹399 proves nothing about what Razorpay is asked
+  // for. The order amount is taxForPlan(plan, resolvePrice(...)) — two
+  // transforms downstream of the authority, either of which could move the
+  // money without touching a single ₹ literal. GST is currently OFF
+  // (not registered), so gross must equal the quoted price exactly; the day it
+  // is switched on, this test fails and forces the founder decision about
+  // whether ₹399 is inclusive or becomes ₹470.82 at the gateway.
+  const EXPECTED: Array<[string, string, number, number]> = [
+    ['single session', SESSION_PLAN_ID, SESSION_PRICING.offerPaise, 39900],
+    ['monthly',        'monthly',       PLANS.monthly.offerPaise,   99900],
+    ['till CAT',       'tillcat',       PLANS.tillcat.offerPaise,  259900],
+  ];
+
+  it.each(EXPECTED)('%s is charged exactly its offer price', (_name, planId, offerPaise, founderPaise) => {
+    expect(offerPaise).toBe(founderPaise);
+    const tax = taxForPlan(planId, offerPaise);
+    expect(tax.grossPaise, 'the amount sent to Razorpay must equal the advertised price').toBe(founderPaise);
+  });
+
+  it('the ANCHOR is never what gets charged', () => {
+    // listPaise exists only to be struck through. If a refactor ever passed it
+    // where offerPaise belongs, every student would silently be charged the
+    // higher number and every surface would still read correctly.
+    for (const p of ALL_PRODUCTS) {
+      if (p.listPaise == null) continue;
+      expect(taxForPlan(p.id, p.offerPaise).grossPaise).not.toBe(p.listPaise);
+      expect(p.listPaise).toBeGreaterThan(p.offerPaise);
+    }
+  });
+
+  it('a discount can only ever reduce the charge, never raise it', () => {
+    // Both discount paths take basePaise from the authority. A coupon or
+    // scholarship that could return MORE than base would be a price rise
+    // wearing a discount's label.
+    const base = SESSION_PRICING.offerPaise;
+    expect(priceWithCoupon(base, { discount_type: 'percent', discount_value: 20 } as never))
+      .toBeLessThanOrEqual(base);
+    expect(priceWithScholarship(base, { final_price_paise: base * 2, discount_percent: null } as never))
+      .toBeLessThanOrEqual(base);
   });
 });
 
