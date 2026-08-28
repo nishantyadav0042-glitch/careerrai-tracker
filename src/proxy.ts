@@ -35,10 +35,27 @@ export async function proxy(request: NextRequest) {
   // Supabase sends magic-link emails to its configured Site URL, which may be
   // the domain root rather than /auth/callback. Intercept the auth params here
   // and forward them so the callback route can complete the session exchange.
+  //
+  // ── PAGES ONLY — NEVER AN API ROUTE (Incident: 28 Aug, found live) ────────
+  //
+  // This block predates /api/google/callback and used to match ANY url with a
+  // `?code=`. Google's OAuth redirect for the mentor calendar flow is
+  // /api/google/callback?code=…, so the middleware hijacked it mid-flight and
+  // handed the RAW GOOGLE CODE to /auth/callback, which fed it to Supabase as
+  // a PKCE code — flow_state_not_found, bounced to /login?error=1. The mentor
+  // callback never executed: no audit row, no token stored, and the founder's
+  // first real connection attempt died with a password error on a screen he
+  // never asked for. Diagnosed from three logs agreeing: Vercel showed both
+  // routes 307ing in the same second, GoTrue showed the pkce exchange 404ing,
+  // and integration_audit_log showed the callback's audited branches never
+  // ran — the only unaudited exit is upstream of them all: this middleware.
+  //
+  // An /api/* route that receives a ?code= IS the handler for that code; the
+  // magic-link problem this block solves only ever lands on HTML pages.
   const code = searchParams.get('code');
   const token_hash = searchParams.get('token_hash');
   const type = searchParams.get('type');
-  if (pathname !== '/auth/callback' && (code || (token_hash && type))) {
+  if (pathname !== '/auth/callback' && !pathname.startsWith('/api/') && (code || (token_hash && type))) {
     const callbackUrl = new URL('/auth/callback', request.url);
     if (code) callbackUrl.searchParams.set('code', code);
     if (token_hash) callbackUrl.searchParams.set('token_hash', token_hash);
