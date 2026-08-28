@@ -149,6 +149,20 @@ describe('/sales/earnings — the statement the letter promises', () => {
     expect(html).toContain('Riya Sharma');
   });
 
+  it('DAY ONE: terms stated, zero conversions → shows ₹8,000, never ₹0 or a crash', async () => {
+    // Exactly what Anshul sees the first time he opens this page, before he
+    // has converted anybody. The founder smoke test checks this at step 4.
+    // The unit layer proves computePayslip pays the fixed fee with no
+    // conversions; nothing had proved the SCREEN renders it.
+    currentAdmin = makeAdmin({ sales_conversions: [], sales_rep_config: TERMS, profiles: [] });
+    const html = await render(SalesEarningsPage({ searchParams: Promise.resolve({ m: '2026-09' }) }) as any);
+    expect(html).toContain('₹8,000');
+    expect(html).toContain('No conversions yet this month');
+    expect(html).toContain('Your fixed fee is unaffected');
+    // The empty month must not read as "your terms are missing".
+    expect(html).not.toContain('aren’t set up yet');
+  });
+
   it('a failed conversions read renders as a failure, never as an empty month', async () => {
     currentAdmin = makeAdmin({ sales_conversions: new Error('db down'), sales_rep_config: TERMS, profiles: [] });
     const html = await render(SalesEarningsPage({ searchParams: Promise.resolve({ m: '2026-09' }) }) as any);
@@ -258,6 +272,22 @@ describe('/admin/sales/payroll — the founder’s number, with its rows', () =>
     expect(html).toContain('Riya Sharma');
     expect(html).toContain('Aditi Rao');
     expect(html).toContain('Every conversion behind that number');
+  });
+
+  it('DAY ONE: a rep with terms and no conversions still appears, owed ₹8,000', async () => {
+    // The founder smoke test's step 5. A rep who has sold nothing is still
+    // owed their fixed fee, so they must not be filtered off the payroll
+    // screen — the filter keeps reps who have terms OR conversions, and this
+    // pins the OR rather than trusting it.
+    currentAdmin = makeAdmin({
+      profiles: profilesFor([{ id: 'anshul', full_name: 'Anshul Yadav' }], []),
+      sales_conversions: [], sales_rep_config: TERMS, sales_followup: [], lead_outreach: [],
+    });
+    const html = await render(PayrollPage({ searchParams: Promise.resolve({ m: '2026-09' }) }) as any);
+    expect(html).toContain('Anshul Yadav');
+    expect(html).toContain('₹8,000');
+    expect(html).toContain('10% per conversion');
+    expect(html).not.toContain('Terms not set');
   });
 
   it('a rep with no stated terms shows "terms not set", not ₹0', async () => {
