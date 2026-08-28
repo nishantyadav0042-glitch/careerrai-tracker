@@ -147,6 +147,8 @@ interface TokenResponse {
   access_token?: string;
   refresh_token?: string;
   expires_in?: number;
+  /** Space-delimited scopes the user ACTUALLY granted — see the check below. */
+  scope?: string;
   error?: string;
   error_description?: string;
 }
@@ -177,6 +179,31 @@ export async function exchangeCodeAndStore(code: string, userId: string): Promis
     // dropped. Without a refresh token the connection expires in an hour, so
     // treat it as a failure rather than storing something that will rot.
     return { ok: false, error: 'Google did not return a refresh token — please remove CareerRai from your Google account permissions and connect again.' };
+  }
+
+  // ── THE CHECKBOX IS OPTIONAL; THE SCOPE IS NOT ────────────────────────────
+  //
+  // Found live, 29 Aug 2026, on the founder's own first connection. Google's
+  // granular-consent screen renders "View and edit events on all your
+  // calendars" as an UNTICKED opt-in checkbox. Leaving it unticked and
+  // pressing Continue is a successful OAuth flow: Google returns an access
+  // token AND a refresh token — just without the calendar grant. This
+  // function then stored that token, the card flipped to Connected,
+  // decideBookability called the mentor bookable, and every calendar call
+  // from that day on would have 403'd — a connection that is green everywhere
+  // and works nowhere, discovered only when a student's session silently gets
+  // no hold and no invite.
+  //
+  // The token response's `scope` field lists what was GRANTED, not what was
+  // asked. Calendar missing is a refusal to store, with instructions naming
+  // the exact checkbox, because "connect again and tick the box" is the whole
+  // repair and nothing downstream can perform it.
+  const granted = (tok.scope ?? '').split(/\s+/);
+  if (!granted.includes('https://www.googleapis.com/auth/calendar.events')) {
+    return {
+      ok: false,
+      error: 'Google connected your account but WITHOUT calendar access — the "View and edit events on all your calendars" checkbox was left unticked. Connect again and tick that box; without it, sessions cannot reach your calendar.',
+    };
   }
 
   let email: string | null = null;
