@@ -171,7 +171,17 @@ export async function buildMissionQueue(admin?: any, limit = 40): Promise<Missio
     db.from('founder_outreach').select('student_id, objective, action, snoozed_until, created_at').gte('created_at', sinceCooldown),
     // Someone who reached checkout and did not complete is the strongest
     // signal in the whole product — they tried to give us money.
-    db.from('student_payments').select('student_id, status, created_at').neq('status', 'paid').gte('created_at', since30d),
+    //
+    // 'refunded' is excluded alongside 'paid' (28 Aug 2026). This read was
+    // `.neq('status','paid')` and was correct only for as long as a refunded
+    // payment wrongly kept status='paid' forever. Once the refund webhook
+    // began writing the real status, a refunded student started matching
+    // "reached checkout and did not complete" — and they did complete. They
+    // paid and asked for the money back. Surfacing them as the product's
+    // strongest buying signal would send the founder to chase the one person
+    // who has already said no with their wallet.
+    db.from('student_payments').select('student_id, status, created_at')
+      .not('status', 'in', '("paid","refunded")').gte('created_at', since30d),
     db.from('session_requests').select('student_id, created_at').gte('created_at', since30d),
   ]);
 

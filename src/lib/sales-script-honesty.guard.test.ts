@@ -20,7 +20,15 @@ import { SESSION_PRICE_PAISE } from './session-credit';
 // Claims are what students RECEIVE — strip // comment lines before matching,
 // so the guard reads the copy, not the engineering notes about the copy.
 function copyOf(file: string): string {
-  return readFileSync(file, 'utf8').replace(/^\s*\/\/.*$/gm, '');
+  return readFileSync(file, 'utf8')
+    .replace(/^\s*\/\/.*$/gm, '')
+    // Supabase filter arguments are DATABASE VALUES, never copy a student
+    // reads. Without this, `.not('status','in','("paid","refunded")')` — the
+    // query that stops a refunded student being chased as an abandoned
+    // checkout — reads as a money-back promise and fails the honesty check.
+    // Stripping the filters keeps the rule strict about prose while letting
+    // the code name the statuses it actually filters on.
+    .replace(/\.(not|eq|neq|in|is|filter|gte|lte|lt|gt)\([^)]*\)/g, '');
 }
 
 const SCRIPT_FILES = [

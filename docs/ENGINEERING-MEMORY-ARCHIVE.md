@@ -1880,3 +1880,57 @@ and `authenticated` explicitly rather than relying on `PUBLIC` (Incident #33),
 that no later migration re-grants them, and that the lockdown is the last
 migration to touch `claim_lead`. The guard states plainly what it cannot see: a
 grant made by hand in the Supabase console.
+
+
+## Incident #41 — the fix removed the protection the bug was providing (2026-08-28)
+
+**Severity:** P0 (Trust, money). Caught during the verification pass on #40,
+before any real refund met it.
+
+**What happened.** #40's fix made the refund webhook write
+`student_payments.status = 'refunded'`. Correct in isolation. But both
+activation entry points — the Razorpay webhook and the checkout callback —
+guarded activation with `row.status !== 'paid'`, and while a refunded payment
+wrongly kept `status='paid'` FOREVER, that guard had also been the only thing
+preventing re-activation after a refund. Nobody knew it was doing that job.
+
+Writing the correct status removed the accidental protection:
+
+    pays → refund (status='refunded', premium revoked)
+         → Razorpay redelivers payment.captured (it retries for hours)
+         → 'refunded' !== 'paid' → guard passes
+         → activatePaidOrder runs again → status back to 'paid' beside a live
+           refunded_at, premium handed back to a refunded student
+
+**Why it was nearly invisible.** `razorpay.test.ts` had a test named "is
+idempotent — a replayed captured event cannot double-activate" whose entire
+body was `expect(route).toContain("row.status !== 'paid'")`. It asserted the
+IMPLEMENTATION STRING, so it passed while the property it was named for was
+false. Pinning that string would also have made the test the reason the bug
+could not be fixed. `callback.behaviour.test.ts` compounded it by mocking
+`@/lib/activate-payment` wholesale, so the predicate under test was a stub.
+
+**The fix.** One predicate, `mayActivatePayment(status)`, in the authority.
+'paid' and 'refunded' are both non-activatable; 'created', 'failed' and an
+absent status (reconcile-payments filters in the query) are activatable.
+Enforced INSIDE `activatePaidOrder` above every side effect — both call sites
+had independently written the same wrong guard, and a rule every caller must
+remember is one the third caller forgets. It returns `true`, not `false`, so a
+refused replay is a no-op rather than a 500 that makes Razorpay redeliver
+forever.
+
+**Two other readers were changed the same day by the same root cause.**
+`mission-queue.ts` used `.neq('status','paid')` to mean "reached checkout and
+did not complete" — a refunded student started matching it, and would have been
+surfaced to the founder as the product's strongest buying signal. The activation
+predicate and that filter are now both covered by
+`payment-status-semantics.guard.test.ts`.
+
+**The lesson, encoded.** **When you fix a bug, ask what the bug was protecting.**
+A wrong value that everything reads is load-bearing whether or not anyone
+designed it that way. Encoded in `refund-finality.test.ts` (the property, not
+the string) and `payment-status-semantics.guard.test.ts` (no reader may express
+"not paid" ambiguously).
+
+**Related:** #40, and #39 — both are tests that named the right property and
+asserted something else.

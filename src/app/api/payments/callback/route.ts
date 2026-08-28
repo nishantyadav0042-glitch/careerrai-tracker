@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { verifyCheckoutSignature } from '@/lib/razorpay';
-import { readWebhookPaymentRow, activatePaidOrder } from '@/lib/activate-payment';
+import { readWebhookPaymentRow, activatePaidOrder, mayActivatePayment } from '@/lib/activate-payment';
 import { paymentReturnPath } from '@/lib/payment-return';
 import { emitPaymentFunnel } from '@/lib/payment-funnel';
 
@@ -118,7 +118,7 @@ export async function POST(request: NextRequest) {
       order_id: orderId!, plan: row.plan,
     }).catch(() => {});
 
-    if (row.status !== 'paid') {
+    if (mayActivatePayment(row.status)) {
       // 'webhook' is the honest source label: this is the same signed-by-
       // Razorpay activation the webhook performs, arriving by the return leg
       // instead. Inventing a third ActivationSource would fork a type that

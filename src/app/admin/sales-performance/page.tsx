@@ -132,7 +132,8 @@ export default async function SalesPerformancePage({ searchParams }: { searchPar
       workspaceId="sales"
       activeHref="/admin/sales-performance"
       title={`${repName} — portfolio`}
-      subtitle={`Only the leads ${repName.split(' ')[0]} owns and works — their book, their numbers.`}
+      subtitle={`Only the leads ${repName.split(' ')[0]} owns and works — their book, their numbers. `
+        + 'Pipeline, not payroll: what they are owed is on the Payroll screen.'}
     >
         {repList.length > 1 && (
           <div className="mb-3 flex flex-wrap gap-1.5">
@@ -153,7 +154,14 @@ export default async function SalesPerformancePage({ searchParams }: { searchPar
               { l: 'Working', v: working },
               { l: 'Interested', v: interested, note: `Rs ${(interested * PRICE).toLocaleString('en-IN')}` },
               { l: 'Callbacks', v: callbacks },
-              { l: 'Won (paid)', v: won, note: `Rs ${bookedRs.toLocaleString('en-IN')}` },
+              // NOT the payroll number, and labelled so nobody has to work that
+              // out. This counts students in THIS rep's book today who have
+              // ever paid — a pipeline fact. Incentive is paid from
+              // sales_conversions, which freezes the owner at the moment the
+              // money landed and is scoped to a month. The two legitimately
+              // differ after any reassignment, and a founder comparing them
+              // without this label would reasonably think one of them is broken.
+              { l: 'Ever paid (book)', v: won, note: `Rs ${bookedRs.toLocaleString('en-IN')}` },
               { l: 'Lost', v: notInterested },
             ].map((x) => (
               <div key={x.l} className="rounded-xl bg-white/10 p-2.5">

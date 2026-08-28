@@ -18,6 +18,13 @@ export interface PayableRow {
   id: string;
   student_id: string;
   plan: string;
+  /**
+   * OPTIONAL on purpose. The webhook and the checkout callback both select it
+   * and it decides whether activation may proceed (see mayActivatePayment);
+   * reconcile-payments filters `.eq('status','created')` in the query and does
+   * not select the column, so absent here means 'created' rather than unknown.
+   */
+  status?: string | null;
   coupon_code?: string | null;
   amount?: number | null;
   /** Session purchases only: the diagnostic finding that motivated the buy,
@@ -89,6 +96,36 @@ export async function readWebhookPaymentRow(
  * webhook ACKed — so a refunded student kept premium forever, because
  * Razorpay never redelivers an acknowledged event. Retry once, then throw.
  */
+/**
+ * States a payment can never be activated OUT OF.
+ *
+ * 'paid' is a duplicate delivery — Razorpay redelivers, and that has always
+ * been a legitimate no-op 200.
+ *
+ * 'refunded' is the one added on 28 Aug 2026, and it is a REGRESSION FIX for
+ * the refund change made the same day. Both activation entry points guarded on
+ * `row.status !== 'paid'`. While a refunded payment wrongly kept status='paid'
+ * forever, that guard also — entirely by accident — blocked re-activation
+ * after a refund. Writing 'refunded' removed the accidental protection: a
+ * redelivered `payment.captured` (Razorpay retries an unacknowledged event for
+ * hours, easily spanning a same-day refund) would have passed the guard, put
+ * the row back to 'paid' beside a non-null refunded_at, and handed premium
+ * back to a student who had been refunded.
+ */
+const NON_ACTIVATABLE = new Set(['paid', 'refunded']);
+
+/**
+ * May this payment still be activated? The ONE definition, so the webhook, the
+ * checkout callback and any future caller cannot disagree about it.
+ *
+ * `undefined` is deliberately activatable: reconcile-payments selects its rows
+ * without the status column and filters `.eq('status','created')` in the
+ * query, so an absent status there means 'created', not "unknown and unsafe".
+ */
+export function mayActivatePayment(status: string | null | undefined): boolean {
+  return !NON_ACTIVATABLE.has(status ?? '');
+}
+
 export interface RefundTarget { paymentId: string; studentId: string }
 
 export async function readRefundTargetStudent(
@@ -308,6 +345,22 @@ export async function activatePaidOrder(
   paymentId: string | null,
   source: ActivationSource,
 ): Promise<boolean> {
+  // ── A REFUNDED PAYMENT IS NEVER RE-ACTIVATED ──────────────────────────────
+  //
+  // Defence in depth, and the reason it is HERE rather than only at the two
+  // call sites: both of them independently wrote `row.status !== 'paid'`, and
+  // both were silently wrong the moment 'refunded' became a real status. A
+  // rule that every caller has to remember is a rule that gets forgotten by
+  // the third caller.
+  //
+  // Returns TRUE, not false: this is a legitimate no-op, not a failure. A
+  // false here would 500 the webhook and make Razorpay redeliver the same
+  // impossible event indefinitely.
+  if (!mayActivatePayment(row.status)) {
+    console.warn(`[activate:${source}] refused — payment ${row.id} is '${row.status}', not activatable`);
+    return true;
+  }
+
   // ── WHO SOLD THIS, decided once, here ─────────────────────────────────────
   //
   // Deliberately ABOVE the plan branch, so the single session and every

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import crypto from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { mayActivatePayment } from './activate-payment';
 import { verifyRazorpayWebhook } from './razorpay';
 
 // PHASE 8 — the premium unlock, scored without spending money.
@@ -108,7 +109,22 @@ describe('the route treats the webhook as the only source of truth', () => {
   it('is idempotent — a replayed captured event cannot double-activate', () => {
     // Razorpay retries on any non-2xx, so the same payment.captured arrives
     // more than once as a matter of routine, not as an attack.
-    expect(route).toContain("row.status !== 'paid'");
+    //
+    // This assertion USED to be `expect(route).toContain("row.status !== 'paid'")`,
+    // and that string was the defect (28 Aug 2026). It guarded only against
+    // re-activating an already-paid row. Once refunds began writing
+    // status='refunded', a replayed capture after a refund passed it, put the
+    // row back to 'paid' beside a live refunded_at, and handed premium back to
+    // a student who had been refunded. Pinning the old string here would have
+    // made this test the reason the bug could not be fixed.
+    //
+    // The property is now stated instead of the implementation: the route asks
+    // the shared predicate, and the predicate covers refunded. Both halves are
+    // asserted because either alone can be true while the system is wrong.
+    expect(route).toMatch(/mayActivatePayment\(row\.status\)/);
+    expect(route, 'the old, weaker guard must not come back').not.toMatch(/status\s*!==\s*['"]paid['"]/);
+    expect(mayActivatePayment('paid'), 'a duplicate delivery must not re-activate').toBe(false);
+    expect(mayActivatePayment('refunded'), 'a replay after a refund must not re-activate').toBe(false);
   });
 
   it('returns 500 on a failed activation so Razorpay retries', () => {

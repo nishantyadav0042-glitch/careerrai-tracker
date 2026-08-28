@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { verifyRazorpayWebhook } from '@/lib/razorpay';
 import { revokePremium } from '@/lib/premium';
 import { logSecurityEvent } from '@/lib/security-log';
-import { activatePaidOrder, readWebhookPaymentRow, readRefundTargetStudent, settleRefund } from '@/lib/activate-payment';
+import { activatePaidOrder, readWebhookPaymentRow, readRefundTargetStudent, settleRefund, mayActivatePayment } from '@/lib/activate-payment';
 import { emitTimeline } from '@/lib/os/timeline';
 
 // Subscription state changes ONLY here, and only after the signature verifies.
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
         // Both of those remain legitimate 200s.
         const row = await readWebhookPaymentRow(admin, orderId);
 
-        if (row && row.status !== 'paid') {
+        if (row && mayActivatePayment(row.status)) {
           // Marks paid, activates the subscription, burns the coupon, grants
           // premium + queues the buddy. On failure we return 500 so Razorpay
           // retries — the status guard above means only the failed ops re-run.

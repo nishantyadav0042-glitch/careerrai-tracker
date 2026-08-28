@@ -53,6 +53,7 @@
 | 38 | 2026-08-27 | 71% of completions got the wrong topic — task ids are unique only within a day | Learning (P1) | every student the recovery rule fired for |
 | 39 | 2026-08-27 | The guard read one of the two routes it named — a lost notification failed a committed booking | Notification / Trust (P1) | every mentor-booked session whose dispatch failed |
 | 40 | 2026-08-28 | A refunded payment stayed `paid` forever — refunded money counted as revenue, and would have paid commission | Trust (money) (P1) | every refund ever processed; both counsellors from 2 Sept |
+| 41 | 2026-08-28 | Fixing #40 removed the accident that blocked re-activation — a replayed capture after a refund would have handed premium back | Trust (money) (P0) | any refunded student inside Razorpay's retry window |
 | 40 | 2026-08-27 | The rules were real, and attached to the wrong verb — availability was `before insert` only | Trust (P1) | any student whose session was moved |
 | 41 | 2026-08-27 | A paid entitlement could be bypassed by the path the booking came through | Trust (P0, money) | every mentor-booked session for a paying student |
 

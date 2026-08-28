@@ -69,15 +69,18 @@ describe('pay comes from the frozen ledger, never from today’s ownership', () 
     // moves money that has already been earned.
     const paysFromOwner = files.filter(([f, c]) => {
       if (f === AUTHORITY) return false;
-      // Only `owed` is word-bounded, and only because an unanchored /owed/
-      // matches "allowed" — ordinary capacity vocabulary in the distribution
-      // route, which this guard wrongly flagged on its first run.
+      // Matches payroll COMPUTATION, not payroll vocabulary.
       //
-      // The rest stay UNANCHORED on purpose: identifiers here are camelCase,
-      // so \bearnings\b cannot match `repEarningsQuick` — the exact shape a
-      // second payroll reader would take. Anchoring them made this test pass
-      // against a planted violation, which is worse than not having it.
-      const money = /incentive|payslip|payroll|earnings|\bowed\b/i.test(c);
+      // Two passes of this guard were wrong in opposite directions. Anchored
+      // (\bearnings\b) it missed `repEarningsQuick`, the exact camelCase shape
+      // a second payroll reader takes. Unanchored on prose words it flagged
+      // /admin/sales-performance for saying "Pipeline, not payroll" in a
+      // subtitle — a label that exists precisely to stop the founder confusing
+      // the two numbers.
+      //
+      // So it now looks for the SYMBOLS that only a pay calculation uses.
+      // A screen may talk about payroll; it may not compute one.
+      const money = /incentivePaise|incentivePercent|incentive_percent|computePayslip|getRepPayslip|getTeamPayslips|monthly_fixed_paise|incentiveForPaise/.test(c);
       const owner = /owner_id/.test(c) && /lead_outreach/.test(c);
       return money && owner;
     }).map(([f]) => f);
@@ -136,5 +139,38 @@ describe('the incentive table in the signed letters stays reproducible', () => {
         'Either the price or the letter’s table needs revisiting.',
       ).toBeLessThanOrEqual(50);
     }
+  });
+});
+
+// ── TWO LEGITIMATE NUMBERS, NEVER TWO SOURCES OF TRUTH ──────────────────────
+//
+// "How many did this rep convert" has two correct answers that differ, and a
+// solo founder must not have to work out which is which:
+//
+//   PIPELINE  /admin/sales-performance — students in the rep's book TODAY who
+//             have ever paid. Moves when a lead is reassigned. Not a month.
+//   PAYROLL   /admin/sales/payroll — sales_conversions, owner frozen at the
+//             moment the money landed, scoped to one IST month, refunds out.
+//
+// Both are wanted. What is not wanted is two tiles that look like the same
+// number and disagree after a reassignment.
+describe('the pipeline number never impersonates the payroll number', () => {
+  // Comments stripped, as everywhere else here: this file's own explanation
+  // of why it is not the payroll screen must not read as it being one.
+  const perf = codeOnly(readFileSync('src/app/admin/sales-performance/page.tsx', 'utf8'));
+
+  it('the portfolio tile is not labelled as a conversion count', () => {
+    expect(perf).not.toMatch(/l:\s*['"]Conversions['"]/);
+    expect(perf).toMatch(/Ever paid \(book\)/);
+  });
+
+  it('the screen says out loud that it is not payroll', () => {
+    expect(perf).toMatch(/Pipeline, not payroll/i);
+  });
+
+  it('and it still does not read the incentive ledger', () => {
+    // If this screen ever starts reading sales_conversions it must do so
+    // through lib/sales-earnings, not with its own month arithmetic.
+    expect(perf).not.toContain('sales_conversions');
   });
 });
