@@ -27,7 +27,15 @@ const { requireAdmin, requireBuddy, requireSales, readRole, homeForRole } =
 
 /** A profiles client whose single() answers however the test wants. */
 function clientThat(answer: () => { data: unknown; error: unknown }) {
-  const chain = { select: () => chain, eq: () => chain, single: async () => answer() };
+  // maybeSingle serves requireSales's seat read (added 29 Aug: a 'sales' role
+  // also needs an ACTIVE sales_rep_config seat). Answering active:true keeps
+  // this file testing what it always tested — the three-state ROLE gate — and
+  // leaves the seat rule to sales-team-seats.guard.test.ts.
+  const chain = {
+    select: () => chain, eq: () => chain,
+    single: async () => answer(),
+    maybeSingle: async () => ({ data: { active: true }, error: null }),
+  };
   return { from: () => chain } as never;
 }
 const ok = (role: string | null) => () => ({ data: role ? { role } : null, error: null });

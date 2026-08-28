@@ -200,10 +200,42 @@ export function canAccessLead(
   }
 }
 
+// ── An inactive seat is OFF THE TEAM, not merely un-allocatable ─────────────
+//
+// 29 Aug 2026, the day the sales team was reset to its two part-time
+// counsellors. Deactivating a rep used to bind exactly one thing: allocation
+// (repAllocationLimit answers 0 for INACTIVE). Everything else still worked —
+// the account could open /sales, see the shared book of unclaimed leads, and
+// CLAIM one, because both gates (this principal and requireSales) read only
+// profiles.role, and role stays 'sales' forever: it is the identity that keys
+// the account's historical activity and conversions, and rewriting it would
+// orphan that history.
+//
+// So `active` is the archive mechanism, and this is the one place it becomes
+// enforceable for access: a 'sales' role WITHOUT an active seat resolves to no
+// principal at all. Admins are untouched — their access never depended on a
+// seat. History is untouched — sales_activity, sales_conversions and
+// lead_outreach rows keep their ids; the person just cannot act any more.
+
+/** True when this rep holds an ACTIVE seat in sales_rep_config. Fails closed. */
+export async function activeSeat(admin: any, repId: string): Promise<boolean> {
+  const { data, error } = await admin
+    .from('sales_rep_config').select('active').eq('rep_id', repId).maybeSingle();
+  if (error) {
+    console.error('[sales-authz] seat read failed:', error.message);
+    return false; // cannot prove a seat → no access, never the other way round
+  }
+  // No config row at all is the same answer as active=false: a seat nobody
+  // configured is not on the team. (Every provisioned rep gets a row — the
+  // create-sales-rep route writes it in the same request as the profile.)
+  return data?.active === true;
+}
+
 /**
  * The principal for the authenticated user, or null.
  *
  * Deliberately does NOT read email. Nothing here may depend on it.
+ * A 'sales' role additionally requires an active seat — see activeSeat above.
  */
 export async function salesPrincipal(admin: any, userId: string): Promise<SalesPrincipal | null> {
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -217,6 +249,7 @@ export async function salesPrincipal(admin: any, userId: string): Promise<SalesP
     }
     const role = data?.role as string | null;
     if (role !== 'sales' && role !== 'admin') return null;
+    if (role === 'sales' && !(await activeSeat(admin, data.id as string))) return null;
     return { id: data.id as string, role };
   }
   return null;

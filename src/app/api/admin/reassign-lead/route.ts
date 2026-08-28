@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
   // The target must be a real staff record, addressed by id. Ownership no
   // longer depends on a column that is allowed to be null.
   const { data: target, error: targetErr } = await admin
-    .from('profiles').select('id, role').eq('id', newOwnerId).maybeSingle();
+    .from('profiles').select('id, role, full_name').eq('id', newOwnerId).maybeSingle();
   if (targetErr) {
     return NextResponse.json({ error: 'Could not verify the new owner — try again.' }, { status: 503 });
   }
@@ -125,6 +125,24 @@ export async function POST(request: NextRequest) {
   // here he did, so the answer is a fact in the response, not a refusal.
   const targetCapacity = (await getTeamCapacity(admin)).find((r) => r.repId === target.id) ?? null;
   const targetLimit = targetCapacity ? repAllocationLimit(targetCapacity) : null;
+
+  // ONE refusal survives the named-target override: INACTIVE (29 Aug, the
+  // sales-team reset). `active=false` is not a workload state like a full
+  // book or a Tuesday off — it is the archive bit that says this person is no
+  // longer on the team, and it is the ONLY thing standing between a retired
+  // account and new work, because role='sales' stays on the profile forever
+  // as the key to their history. An admin who genuinely wants to hand leads
+  // to a retired counsellor flips their seat back on at /admin/sales/capacity
+  // first, which is a decision made where the team is managed — not a side
+  // effect of a reassignment form. Everything else keeps the advisory shape:
+  // over-ceiling, out-of-hours and on-leave still assign with a stated fact,
+  // because the founder named the person.
+  if (targetLimit && !targetLimit.ok && targetLimit.reason === 'INACTIVE') {
+    return NextResponse.json({
+      error: `${(target.full_name as string | null) ?? 'This account'} is deactivated and cannot receive leads. Reactivate the seat on the capacity screen first if this is intentional.`,
+    }, { status: 409 });
+  }
+
   const capacityNote = !targetLimit
     ? 'Their capacity could not be read, so the effect on their workload is UNKNOWN — not "fine".'
     : targetLimit.ok

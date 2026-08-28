@@ -84,6 +84,55 @@ export function checkEmploymentStatement(
   return missing.length === 0 ? { ok: true } : { ok: false, missing };
 }
 
+// ── The seat cap ────────────────────────────────────────────────────────────
+//
+// Founder decision, 29 Aug 2026: the sales team is EXACTLY two part-time
+// counsellors — Neelam and Anshul. This constant is the application half of
+// that rule; the database half is the trigger in
+// supabase/migrations/20260829b_two_seat_sales_team.sql, which raises on any
+// write that would leave more than this many active rows in sales_rep_config,
+// whatever client performs it. The two are deliberately redundant: the route
+// check exists to give the founder a sentence instead of a Postgres error, and
+// the trigger exists because a route check binds only the routes that call it.
+//
+// WHY A CAP AND NOT A NAME LIST. The invariant's identities (Neelam, Anshul)
+// live in the data — in who actually holds the two seats — not in code.
+// Hard-coding names here would make a future legitimate replacement (one
+// counsellor leaves, another is hired) a CODE CHANGE, and misspell-sensitive at
+// that. The cap makes a third concurrent seat impossible through every path;
+// which two people hold the seats is exactly what /admin/sales/capacity is
+// for. Growing the team past two is a founder decision and arrives as a
+// migration that changes both halves of this rule in one commit.
+export const MAX_ACTIVE_SALES_SEATS = 2;
+
+export type SeatCapCheck =
+  | { ok: true; activeNow: number }
+  | { ok: false; activeNow: number; error: string };
+
+/**
+ * May this write leave `repId` holding an ACTIVE seat?
+ *
+ * Counts the OTHER active seats so the check is idempotent for a rep who is
+ * already active (re-saving their own config is not a new seat). Fails closed
+ * on a read error: a cap we cannot verify is not a cap.
+ */
+/* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+export async function checkSeatCap(admin: any, repId: string): Promise<SeatCapCheck> {
+  const { data, error } = await admin
+    .from('sales_rep_config').select('rep_id').eq('active', true).neq('rep_id', repId);
+  if (error) {
+    return { ok: false, activeNow: -1, error: 'Could not read the current team, so the seat cap cannot be verified. Nothing was changed — try again.' };
+  }
+  const others = (data ?? []).length;
+  if (others >= MAX_ACTIVE_SALES_SEATS) {
+    return {
+      ok: false, activeNow: others,
+      error: `The sales team is capped at ${MAX_ACTIVE_SALES_SEATS} active seats and both are taken. Deactivate a seat on this screen first if you are replacing someone.`,
+    };
+  }
+  return { ok: true, activeNow: others };
+}
+
 // ── Allocation headroom ─────────────────────────────────────────────────────
 
 export type AllocationRefusal =
