@@ -41,13 +41,23 @@ const dir: StaffDirectory = {
 };
 const own = (t: string | null) => resolveOwnerToken(t, dir);
 
-function fakeDb(profile: any, opts: { error?: string } = {}) {
+function fakeDb(profile: any, opts: { error?: string; seatActive?: boolean } = {}) {
+  // Since the 29 Aug team reset, a 'sales' principal also requires an ACTIVE
+  // seat in sales_rep_config (salesPrincipal → activeSeat). This harness
+  // models that seat as active by default so every pre-existing assertion in
+  // this file keeps testing what it always tested: the ROLE and EMAIL rules,
+  // not the seat rule — sales-team-seats.guard.test.ts owns the seat rule.
   return {
     from() { return this; },
     select() { return this; },
     eq() { return this; },
     in() { return this; },
     async single() { return opts.error ? { data: null, error: { message: opts.error } } : { data: profile, error: null }; },
+    async maybeSingle() {
+      return opts.error
+        ? { data: null, error: { message: opts.error } }
+        : { data: { active: opts.seatActive ?? true }, error: null };
+    },
   } as any;
 }
 

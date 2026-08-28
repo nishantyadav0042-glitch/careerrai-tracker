@@ -47,7 +47,7 @@ function makeAdmin(handlers: Record<string, Handler>) {
     for (const op of ['insert', 'update', 'upsert', 'delete']) {
       c[op] = (payload: unknown) => { state.op = op; state.payload = payload; writes.push({ table, op, payload }); return c; };
     }
-    for (const m of ['select', 'eq', 'in', 'is', 'not', 'lt', 'gte', 'order', 'limit', 'maybeSingle', 'single']) c[m] = () => c;
+    for (const m of ['select', 'eq', 'neq', 'in', 'is', 'not', 'lt', 'gte', 'order', 'limit', 'maybeSingle', 'single']) c[m] = () => c;
     c.then = (ok: (r: Res) => unknown) => {
       const key = `${table}.${state.op}`;
       const call = (counts[key] = (counts[key] ?? 0) + 1);

@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { isUuid, salesPrincipal } from '@/lib/sales-authz';
 import { auditSales } from '@/lib/sales-audit';
-import { checkEmploymentStatement } from '@/lib/sales-rep-provisioning';
+import { checkEmploymentStatement, checkSeatCap } from '@/lib/sales-rep-provisioning';
 
 // Phase 2B-1 — the ONLY write this phase adds, and it writes configuration,
 // never ownership. There is deliberately no code path here (or anywhere in
@@ -106,6 +106,15 @@ export async function POST(request: NextRequest) {
   // silently inheriting the table's full-time defaults (Mon–Sat, 10:00–19:00,
   // 50 units, 15/day) — the numbers are what part-time means, so they must be
   // stated. CareerRai invents no part-time defaults of its own.
+  // Activating a seat walks through the same cap the provisioning route
+  // enforces — otherwise "deactivate, then flip a third account on here"
+  // would quietly grow the team past two. Deactivations and plain edits of an
+  // already-active row pass untouched.
+  if (patch.active === true) {
+    const seat = await checkSeatCap(admin, repId as string);
+    if (!seat.ok) return NextResponse.json({ error: seat.error }, { status: 409 });
+  }
+
   const statement = checkEmploymentStatement(patch, before ?? null);
   if (!statement.ok) {
     return badRequest(

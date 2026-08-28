@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { isUuid, salesPrincipal } from '@/lib/sales-authz';
 import { auditSales } from '@/lib/sales-audit';
-import { checkEmploymentStatement, checkNewRep, PART_TIME_REQUIRED_FIELDS } from '@/lib/sales-rep-provisioning';
+import { checkEmploymentStatement, checkNewRep, checkSeatCap, PART_TIME_REQUIRED_FIELDS } from '@/lib/sales-rep-provisioning';
 import { normalizeIndianPhone } from '@/lib/phone';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -55,6 +55,22 @@ export async function POST(request: NextRequest) {
   if (employmentType !== 'full_time' && employmentType !== 'part_time') {
     return badRequest('employment_type must be full_time or part_time.');
   }
+
+  // ── The seat cap, before anything exists to strand ─────────────────────────
+  //
+  // Every provisioned seat is born active (the table default), so this route
+  // IS the third-seat door, and the check runs before the auth user is
+  // created for the same reason the part-time statement does: refusing after
+  // creation leaves an orphan login behind. In attach mode the given userId is
+  // excluded from the count so re-attaching an already-active rep stays
+  // idempotent; in create mode no row can exist yet, so the nil id excludes
+  // nothing. The database trigger (20260829b) enforces the same cap against
+  // every other client — this check exists to answer with a sentence.
+  const capSubject = mode === 'attach' && isUuid(body.userId)
+    ? (body.userId as string)
+    : '00000000-0000-0000-0000-000000000000';
+  const seat = await checkSeatCap(admin, capSubject);
+  if (!seat.ok) return NextResponse.json({ error: seat.error }, { status: 409 });
 
   // Build the config patch first: a part-time seat that cannot be described
   // must be refused BEFORE an auth user exists, otherwise a failed provision

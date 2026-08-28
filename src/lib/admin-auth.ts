@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { activeSeat } from '@/lib/sales-authz';
 
 // The admin door, in one place.
 //
@@ -103,6 +104,14 @@ export async function requireSales() {
   const admin = createAdminClient();
   const role = await readRole(admin, user.id);
   if (role !== 'sales' && role !== 'admin') redirect(homeForRole(role));
+
+  // A deactivated seat is off the team (sales-authz.ts has the full account of
+  // why role alone cannot say so). Same rule as salesPrincipal — the API gate
+  // and this page gate must never disagree about who is on the sales team, or
+  // a rep sees a workspace whose every button returns 403. Admins hold no seat.
+  if (role === 'sales' && !(await activeSeat(admin, user.id))) {
+    redirect('/login?error=seat_inactive');
+  }
 
   return { user, admin, role };
 }
