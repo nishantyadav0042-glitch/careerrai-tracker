@@ -10,7 +10,7 @@ import { ensureBuddyRoom } from '@/lib/buddy-room';
 import { SESSION_MINUTES, markBookingBlocked } from '@/lib/session-credit';
 import { emitTimeline } from '@/lib/os/timeline';
 import { dispatch } from '@/lib/notification-os';
-import { createCalendarHold } from '@/lib/google-meet';
+import { holdSessionOnCalendar } from '@/lib/session-calendar';
 import {
   bookedNotificationBody, buddyBookedNotificationBody, sessionNotificationUrl,
 } from '@/lib/session-link';
@@ -270,67 +270,11 @@ async function tellBothParties(
   }
 }
 
-// ── AND THE MENTOR'S CALENDAR KNOWS (27 Aug) ────────────────────────────────
-//
-// The permanent room is minted `busy: false` deliberately, so a booked session
-// showed up nowhere on the mentor's own Google Calendar. They saw a free hour
-// and could give it away. This puts a BUSY hold on it.
-//
-// A hold, not a room: createCalendarHold sends no conferenceData, so the
-// one-room-per-buddy invariant is untouched and the join link in the hold is
-// the buddy's existing permanent one.
-//
-// BEST EFFORT, AND THAT IS DELIBERATE. Zero mentors have connected Google
-// (google_oauth_tokens is empty), so today this returns 'not_connected' every
-// single time. That must not cost a student a booking they already hold — the
-// session exists, the credit is spent, and the app row is the source of truth.
-// The DB constraint no_overlapping_buddy_sessions is what actually prevents
-// double-booking; the calendar is a courtesy to the human, not a lock.
-//
-// The event id lands on video_sessions.google_event_id, which cancel-meeting
-// and reschedule-meeting ALREADY handle correctly — cancel deletes it only
-// when it differs from the buddy's permanent anchor, reschedule moves it. So
-// this writes into a contract that already exists rather than inventing one.
-async function holdTheMentorsHour(
-  admin: ReturnType<typeof createAdminClient>,
-  opts: { sessionId: string; studentId: string; buddyId: string; startIso: string; meetUrl: string | null },
-) {
-  try {
-    const [{ data: student }, { data: buddy }] = await Promise.all([
-      admin.from('profiles').select('full_name, email').eq('id', opts.studentId).maybeSingle(),
-      admin.from('profiles').select('full_name').eq('id', opts.buddyId).maybeSingle(),
-    ]);
-
-    const studentFirst = ((student?.full_name as string | null) ?? 'a student').split(' ')[0];
-    const hold = await createCalendarHold({
-      buddyUserId: opts.buddyId,
-      title: `CareerRai 1:1 — ${studentFirst}`,
-      start: new Date(opts.startIso),
-      durationMinutes: SESSION_MINUTES,
-      meetLink: opts.meetUrl,
-      studentEmail: (student?.email as string | null) ?? null,
-    });
-
-    if (!hold.ok) {
-      // not_connected is the EXPECTED answer until a mentor connects Google.
-      // Logged at info, not error, so it does not drown the real failures.
-      console.log('[sessions/schedule] calendar hold skipped', opts.sessionId, hold.reason);
-      return;
-    }
-
-    const { error } = await admin
-      .from('video_sessions')
-      .update({ google_event_id: hold.eventId })
-      .eq('id', opts.sessionId);
-    if (error) {
-      // The hold exists in Google but we cannot address it later. Say so
-      // loudly: a cancel will now leave a stale hold on the mentor's calendar.
-      console.error('[sessions/schedule] hold created but id not stored', opts.sessionId, hold.eventId, error.message);
-    }
-  } catch (err) {
-    console.error('[sessions/schedule] calendar hold failed', opts.sessionId, err);
-  }
-}
+// The mentor's calendar hold used to be implemented inline here, and ONLY
+// here — which is exactly why /api/calendar/schedule-meeting never placed one.
+// It now lives in lib/session-calendar as the single authority both booking
+// paths call; see that module for why a hold exists at all and why it is
+// deliberately best-effort.
 
 export async function POST(request: NextRequest) {
   const user = await getAuthUser();
@@ -444,11 +388,12 @@ export async function POST(request: NextRequest) {
     meetUrl: room.meetUrl,
   });
 
-  await holdTheMentorsHour(admin, {
+  await holdSessionOnCalendar(admin, {
     sessionId: sessionId as string,
     studentId: user.id,
     buddyId: credit.buddy_id,
     startIso,
+    durationMinutes: SESSION_MINUTES,
     meetUrl: room.meetUrl,
   });
 
