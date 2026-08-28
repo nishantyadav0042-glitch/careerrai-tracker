@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { track } from '@/lib/journey';
+import { ContinueWithGoogle } from '@/components/auth/continue-with-google';
 
 interface Props {
   isLoading: boolean;
@@ -32,6 +33,24 @@ export default function ScreenLoginBuild({ isLoading, onboarding }: Props) {
   const [otp, setOtp] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Park the answers this screen is holding before Google takes the browser
+  // away. `onboarding` is the SAME object handed to verify-phone-otp below, so
+  // the two doors carry identical payloads by construction rather than by two
+  // pieces of code agreeing with each other.
+  //
+  // Awaited, so the cookie is set before the redirect starts. Never throws:
+  // ContinueWithGoogle proceeds regardless, because a lost draft costs the
+  // questionnaire while a blocked redirect costs the account.
+  async function stashOnboarding(): Promise<void> {
+    try {
+      await fetch('/api/auth/stash-onboarding', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(onboarding),
+      });
+    } catch { /* best-effort; the sign-in must still happen */ }
+  }
   const [building, setBuilding] = useState(false);
   const [progress, setProgress] = useState(0);
   const [checkedCount, setCheckedCount] = useState(0);
@@ -215,10 +234,25 @@ export default function ScreenLoginBuild({ isLoading, onboarding }: Props) {
               <span className="text-[11px] font-medium text-stone-400">or</span>
               <div className="h-px flex-1 bg-stone-200" />
             </div>
+
+            {/* GOOGLE BELONGS HERE, AND NOWHERE EARLIER (founder, 29 Aug).
+                Not on the first screen of /start: a student who signs in before
+                answering anything is an account with no plan, and the funnel's
+                whole value is that the questions come first. By this screen the
+                questionnaire is COMPLETE and the only remaining decision is
+                which door to walk through — so Google is an alternative to the
+                OTP above it, never a replacement for the questions before it.
+
+                The draft is parked server-side before the redirect, because the
+                browser is about to leave for accounts.google.com and come back
+                to /auth/callback, which cannot see localStorage. That is the
+                whole reason this is not simply the same button as /login. */}
+            <ContinueWithGoogle beforeRedirect={stashOnboarding} />
+
             <button
               type="button"
               onClick={() => { setStep('password'); setError(null); }}
-              className="w-full rounded-xl border border-stone-300 bg-white py-3 text-[13px] font-semibold text-stone-700 transition-colors hover:border-stone-900 hover:text-stone-900"
+              className="mt-3 w-full rounded-xl border border-stone-300 bg-white py-3 text-[13px] font-semibold text-stone-700 transition-colors hover:border-stone-900 hover:text-stone-900"
             >
               Already have an account? Log in with password
             </button>

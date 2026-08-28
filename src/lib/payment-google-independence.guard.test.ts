@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { codeOnly } from './test-support/code-only';
 
 /**
  * ── A STUDENT WITHOUT GOOGLE MUST BE ABLE TO PAY ────────────────────────────
@@ -27,11 +28,6 @@ import { join } from 'node:path';
 
 const ROOT = join(__dirname, '..');
 
-function codeOnly(src: string): string {
-  return src
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/(^|[^:])\/\/.*$/gm, '$1');
-}
 
 /** Every file the money actually flows through. */
 const PAYMENT_CHAIN = [

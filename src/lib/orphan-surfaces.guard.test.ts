@@ -182,6 +182,18 @@ const KNOWN_PARKED_MODULES: Record<string, string> = {
     'authority for facts, and deleting it would leave the second-definition ' +
     'problem with nothing standing against it. Wiring it means moving the ' +
     'existing consumers onto it, which is its own cycle.',
+  'src/lib/test-support/code-only.ts':
+    'KEEP. Test infrastructure, not product code, and having no runtime ' +
+    'importer is the correct shape for it — the same shape reachability.ts ' +
+    'has, and for the same reason. It strips comments so a structural guard ' +
+    'cannot be satisfied by the prose explaining why we do NOT do the thing ' +
+    'it greps for. It replaced eleven separate copies of a two-regex version ' +
+    'that stripped BLOCK comments first, so a "/*" inside a LINE comment — a ' +
+    'route path like /student/* in a sentence — opened a comment that ran to ' +
+    'the next "*/" and deleted every line between. Guards do not fail when ' +
+    'they cannot see the code; they pass. Wiring it into product code is not ' +
+    'the way out and never will be: the way out is deleting it, once no guard ' +
+    'needs to read source as text.',
   'src/lib/reachability.ts':
     'KEEP. Build-time analysis, not product code: it walks the import graph ' +
     'from routed entrypoints so reachability.guard.test.ts can fail the build ' +

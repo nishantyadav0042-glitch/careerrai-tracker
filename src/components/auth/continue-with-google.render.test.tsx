@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ContinueWithGoogle } from './continue-with-google';
+import { codeOnly } from '../../lib/test-support/code-only';
 
 /**
  * ── TWO GOOGLE PURPOSES, KEPT APART ─────────────────────────────────────────
@@ -24,12 +25,6 @@ import { ContinueWithGoogle } from './continue-with-google';
 const SRC = join(__dirname, '..', '..');
 const SELF = join(__dirname, 'continue-with-google.tsx');
 
-function codeOnly(src: string): string {
-  return src
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
-    .replace(/(^|[^:])\/\/.*$/gm, '$1');
-}
 
 describe('student sign-in asks for identity, never calendar', () => {
   const code = codeOnly(readFileSync(SELF, 'utf8'));

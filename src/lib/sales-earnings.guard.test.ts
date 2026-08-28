@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { ALL_PRODUCTS } from './plans';
+import { codeOnly } from './test-support/code-only';
 
 // ── ONE PLACE DECIDES WHAT A PERSON IS PAID ─────────────────────────────────
 //
@@ -26,9 +27,6 @@ function walk(dir: string, out: string[] = []): string[] {
 }
 
 /** Comments stripped — this repo has repeatedly been bitten by guards that matched their own prose. */
-function codeOnly(src: string): string {
-  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
-}
 
 const files = walk(SRC)
   .map((f) => [f.slice(process.cwd().length + 1), codeOnly(readFileSync(f, 'utf8'))] as const)

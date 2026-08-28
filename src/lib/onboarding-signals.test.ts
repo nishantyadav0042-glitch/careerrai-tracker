@@ -75,7 +75,9 @@ describe('every onboarding answer reaches something', () => {
     // hours means two different days and we plan the wrong one.
     expect(screen).toContain('not counting your coaching hours');
 
-    const otp = readFileSync('src/app/api/auth/verify-phone-otp/route.ts', 'utf8');
+    // Answers are applied by lib/onboarding-apply now — one authority for
+    // the OTP door and the Google door alike.
+    const otp = readFileSync('src/lib/onboarding-apply.ts', 'utf8');
     expect(otp).toMatch(/setDailyHours\(\s*onboarding\.self_study_hours\s*,\s*'signup'\s*\)/);
   });
 

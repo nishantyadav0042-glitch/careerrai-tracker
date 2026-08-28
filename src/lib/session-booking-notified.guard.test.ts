@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { codeOnly } from './test-support/code-only';
 
 /**
  * ── EVERY PATH THAT WRITES A SESSION TELLS SOMEBODY, AND NEVER DIES TRYING ──
@@ -46,11 +47,6 @@ import { join } from 'node:path';
 const ROOT = join(__dirname, '..');
 
 /** Strip // line comments and block comments, so prose can never satisfy a guard. */
-function codeOnly(src: string): string {
-  return src
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/(^|[^:])\/\/.*$/gm, '$1');
-}
 
 /**
  * The body of a named function, by brace matching from its declaration.

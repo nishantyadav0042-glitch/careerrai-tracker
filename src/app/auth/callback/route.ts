@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { applyOnboarding, type OnboardingPayload } from '@/lib/onboarding-apply';
+import { COOKIE as ONBOARDING_DRAFT_COOKIE } from '@/app/api/auth/stash-onboarding/route';
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
@@ -157,6 +159,32 @@ export async function GET(request: NextRequest) {
       subscription_status: role === 'student' ? 'free' : null,
       password_set: false,
     });
+
+    // ── THE /start ANSWERS THEY GAVE BEFORE CHOOSING THIS DOOR ──────────────
+    //
+    // A student completes the whole onboarding questionnaire and only then
+    // picks Google or OTP. The OTP door posts the draft with the request that
+    // creates the account; Google cannot, because the browser has been to
+    // accounts.google.com and back and localStorage never reached this server.
+    // So the draft was parked before the redirect and is claimed here by the
+    // opaque id in an HttpOnly cookie.
+    //
+    // Without this a Google student arrived with an empty profile and the
+    // student layout sent them straight back through the questions they had
+    // just answered — the single worst moment to ask someone to start again.
+    //
+    // SAME AUTHORITY AS OTP, deliberately: lib/onboarding-apply, never a second
+    // copy of the mapping. And only inside `isNewUser`, so a replayed cookie on
+    // a returning student's login can never overwrite their real profile with a
+    // stale funnel answer.
+    //
+    // Best effort, and that is the point: the account and session already
+    // exist. A student must never be bounced out of a signup that succeeded
+    // because a draft lookup failed — they land in-app and answer in the
+    // Blueprint Builder instead, which is exactly the pre-existing behaviour.
+    if (role === 'student') {
+      await claimOnboardingDraft(admin, request, userId);
+    }
   } else {
     await admin
       .from('profiles')
@@ -176,5 +204,50 @@ export async function GET(request: NextRequest) {
   pending.forEach(({ name, value, options }) =>
     res.cookies.set(name, value, options as Parameters<typeof res.cookies.set>[2])
   );
+  // Hygiene only — the draft row is single-use, so a surviving cookie cannot
+  // re-apply anything. Clearing it keeps a stale id from riding along on every
+  // later request for half an hour.
+  if (request.cookies.get(ONBOARDING_DRAFT_COOKIE)) res.cookies.delete(ONBOARDING_DRAFT_COOKIE);
   return res;
+}
+
+/**
+ * Claim the /start draft parked before the Google redirect, and apply it.
+ *
+ * Single-use by construction: the row is stamped consumed_at in the same
+ * statement that reads it, conditional on it being unconsumed, so two
+ * concurrent callbacks cannot both apply the same draft. Whatever happens, the
+ * cookie is not the record — the row is.
+ */
+async function claimOnboardingDraft(
+  admin: ReturnType<typeof createAdminClient>,
+  request: NextRequest,
+  userId: string,
+): Promise<void> {
+  const draftId = request.cookies.get(ONBOARDING_DRAFT_COOKIE)?.value;
+  if (!draftId || !/^[0-9a-f-]{36}$/i.test(draftId)) return;
+
+  try {
+    // Claim and read in ONE statement. A plain select-then-update would let a
+    // duplicated callback (a refresh, a double-tapped redirect) apply the same
+    // answers twice; `.is('consumed_at', null)` makes the second one return no
+    // row. Check-then-act is a race, not a guard — Incident #42.
+    const { data, error } = await admin
+      .from('onboarding_drafts')
+      .update({ consumed_at: new Date().toISOString(), consumed_by: userId })
+      .eq('id', draftId)
+      .is('consumed_at', null)
+      .select('payload')
+      .maybeSingle();
+
+    if (error) {
+      console.error('[auth/callback] draft claim failed:', error.message);
+      return;
+    }
+    if (!data?.payload) return; // already consumed, expired, or never existed
+
+    await applyOnboarding(admin, userId, data.payload as OnboardingPayload);
+  } catch (e) {
+    console.error('[auth/callback] applying onboarding draft failed:', e);
+  }
 }

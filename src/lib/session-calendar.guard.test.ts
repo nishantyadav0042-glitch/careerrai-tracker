@@ -3,6 +3,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { join } from 'node:path';
 import { holdSessionOnCalendar } from './session-calendar';
+import { codeOnly } from './test-support/code-only';
 
 /**
  * ── EVERY BOOKING PATH REACHES GOOGLE CALENDAR THE SAME WAY ─────────────────
@@ -24,11 +25,6 @@ import { holdSessionOnCalendar } from './session-calendar';
 
 const ROOT = join(__dirname, '..');
 
-function codeOnly(src: string): string {
-  return src
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/(^|[^:])\/\/.*$/gm, '$1');
-}
 
 /** Every route that moves a video_session into 'scheduled'. */
 const BOOKING_ROUTES = [

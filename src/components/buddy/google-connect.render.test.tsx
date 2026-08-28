@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { GoogleConnect } from './google-connect';
+import { codeOnly } from '../../lib/test-support/code-only';
 
 /**
  * ── ONE MENTOR SETUP PATH ───────────────────────────────────────────────────
@@ -24,12 +25,6 @@ import { GoogleConnect } from './google-connect';
 
 const SRC = join(__dirname, '..', '..');
 
-function codeOnly(src: string): string {
-  return src
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
-    .replace(/(^|[^:])\/\/.*$/gm, '$1');
-}
 
 /** Every mentor-facing source file: the buddy app and its components. */
 function mentorSurfaces(): string[] {
