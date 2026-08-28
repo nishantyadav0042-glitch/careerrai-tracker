@@ -245,6 +245,15 @@ export type EventName =
   // key for "does practising the log move onboarded → first real log".
   | 'log_tour_done'
   | 'install_click' | 'install_already' | 'install_dismissed' | 'install_escape'
+  // The ONLY event in this list that is proof of an install rather than of an
+  // intention to install. The browser fires `appinstalled` after the install
+  // actually completes, whatever route was used. It was handled client-side
+  // only — it flipped a button's label and redirected — so it never reached
+  // this server, and the lifetime install count was therefore unknowable from
+  // our own data. Recorded from 29 Aug; it says nothing about installs that
+  // happened before that date, and nothing about uninstalls, because the
+  // platform provides no uninstall event to listen for.
+  | 'app_installed'
   | 'install_guide_shown' | 'install_prompt_result' | 'install_prompt_shown'
   // iOS since the native app shipped: the App Store hand-off, and the quiet
   // Add-to-Home-Screen fallback for anyone the App Store fails.
