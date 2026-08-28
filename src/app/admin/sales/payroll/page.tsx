@@ -47,6 +47,13 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
   // sold would quietly invert that on the one page the founder reads monthly.
   const boards = await Promise.all(slips.map((s) => getRepFollowupBoard(admin, s.repId)));
 
+  // A SUM of authority-computed totals, not a second calculation. Each
+  // s.totalPaise came out of computePayslip(); this page never applies a rate,
+  // never touches amount_paise, and never decides what a refund does. A rep
+  // whose terms are unstated contributes null → 0 here and is called out in the
+  // caption, so the total can never quietly include a payslip we cannot stand
+  // behind. sales-earnings.guard.test.ts fails the build if this page ever
+  // starts computing instead of summing.
   const payableTotal = slips.reduce((a, s) => a + (s.totalPaise ?? 0), 0);
   const anyUnstated = slips.some((s) => !s.terms.stated);
 

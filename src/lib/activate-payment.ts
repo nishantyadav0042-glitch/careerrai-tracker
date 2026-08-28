@@ -230,13 +230,53 @@ async function activateSessionCredit(
   // stamped it (activate_payment RPC does `paid_at = now()`), and this path
   // did not. Every Rs 299 payment therefore landed in the ledger as paid with
   // no timestamp, which is the operations invariant that caught this.
-  const { error: payErr } = await admin
+  // ── THE STATUS PRECONDITION IS THE GUARD ──────────────────────────────────
+  //
+  // This update was filtered on `.eq('id', row.id)` alone, so it flipped ANY
+  // row to 'paid' unconditionally — including one that had been refunded
+  // between the webhook's status read and this line. The subscription path had
+  // the identical hole in SQL (see 20260828c); this is the session half.
+  //
+  // Filtering on the status makes the DATABASE decide, atomically, instead of
+  // trusting a value read several statements ago. `.select('id')` is what makes
+  // the outcome observable: without it a no-op update and a successful one are
+  // indistinguishable, and the code below would go on to mint a session credit
+  // for a payment that had already been handed back.
+  const { data: moved, error: payErr } = await admin
     .from('student_payments')
     .update({ status: 'paid', paid_at: new Date().toISOString(), razorpay_payment_id: paymentId ?? null })
-    .eq('id', row.id);
+    .eq('id', row.id)
+    .in('status', ['created', 'failed'])
+    .select('id');
   if (payErr) {
     console.error(`[activate:${source}] session payment update failed:`, payErr.message);
     return false;
+  }
+  if (!moved || moved.length === 0) {
+    // Nothing moved, and the two reasons need OPPOSITE handling — so re-read
+    // the row rather than guessing. An early return for both was the first
+    // version of this fix and it introduced a worse bug than the one being
+    // fixed: if a delivery marked the payment paid and then failed to mint the
+    // credit, the retry would find 'paid', return true, and the student would
+    // have paid ₹399 for a session credit that never existed.
+    const { data: cur } = await admin
+      .from('student_payments').select('status').eq('id', row.id).maybeSingle();
+    const status = (cur as { status?: string } | null)?.status ?? null;
+
+    if (status === 'refunded') {
+      // A replay after a refund. Mint nothing.
+      console.warn(`[activate:${source}] session payment ${row.id} is refunded — not re-activating`);
+      return true;
+    }
+    if (status !== 'paid') {
+      // Neither moved nor settled: something else is wrong with this row.
+      console.error(`[activate:${source}] session payment ${row.id} did not move and is '${status}'`);
+      return false;
+    }
+    // Already 'paid' — a duplicate delivery, or a retry after the credit
+    // insert failed last time. FALL THROUGH: the credit insert below is
+    // guarded by its own payment_id lookup, so it is safe to repeat and
+    // necessary to attempt.
   }
 
   if (!existing) {

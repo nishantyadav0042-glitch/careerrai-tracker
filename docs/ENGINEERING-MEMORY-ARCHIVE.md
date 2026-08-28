@@ -1934,3 +1934,59 @@ the string) and `payment-status-semantics.guard.test.ts` (no reader may express
 
 **Related:** #40, and #39 — both are tests that named the right property and
 asserted something else.
+
+
+## Incident #42 — the guard was in the caller, the bug was in the callee (2026-08-28)
+
+**Severity:** P0 (Trust, money). Found in the release audit of 84c2be3 and
+REPRODUCED against the real function before it could reach a real refund.
+
+**What happened.** #41 added `mayActivatePayment()` and enforced it inside
+`activatePaidOrder`. The audit then re-ran the same scenario end-to-end and it
+still failed:
+
+    1 captured + activated   payment=paid,     subscription=active
+    2 refunded               payment=refunded, subscription=free
+    3 activate_payment()     payment=PAID,     subscription=ACTIVE
+                             refunded_at still set → a row claiming both
+
+**Two root causes, both below the fix.**
+
+1. `activate_payment` guards its own write with `where ... and status != 'paid'`
+   — the exact defect #41 fixed in TypeScript, still written in SQL. 'refunded'
+   is not 'paid', so the row moved. The fix travelled to the callers and never
+   reached the callee.
+2. The `profiles` update had NO condition at all. Even where the payment row
+   correctly refused to move, premium was handed back regardless. That is the
+   half that actually costs money.
+
+**And why an application guard could never have been enough.**
+`activatePaidOrder` reads the status in one statement and writes in another,
+with an attribution read and an insert in between. A refund landing in that
+window passes a guard evaluated against a stale row. Check-then-act is not a
+guard; it is a race with good intentions.
+
+**The fix.** `SELECT ... FOR UPDATE` inside `activate_payment` (20260828c),
+taking the row lock that `settleRefund`'s own UPDATE contends for, so the two
+serialise in either order and exactly one truthful row survives. The refunded
+check returns before `profiles` is touched. The session path got the same
+treatment in application code: the update filters
+`.in('status', ['created','failed'])` and reads the affected rows back, so the
+DATABASE decides rather than a value read several statements ago.
+
+**One regression caught inside the fix.** The first version early-returned
+whenever no row moved. That would have meant: delivery one marks the payment
+paid, then fails to mint the credit; the retry finds 'paid', returns true, and
+the student has paid ₹399 for a session credit that never existed. The code now
+re-reads and distinguishes 'refunded' (mint nothing) from 'paid' (fall through
+and mint) from anything else (500 and let Razorpay redeliver). A surviving
+mutation showed that last branch was uncovered; it now has a test.
+
+**The lesson, encoded.** **A guard belongs in the write, not in the caller** —
+anything else is check-then-act. Encoded in `refund-finality.test.ts`
+(behavioural: refund mid-activation mints nothing, a retry after a failed mint
+still mints, a stuck row 500s) and in the migration's own assertions.
+
+**Related:** #40, #41. The three together are one story: a wrong value that
+everything read was load-bearing, fixing it broke the things leaning on it, and
+the fix had to go one layer deeper than the first attempt.

@@ -25,22 +25,38 @@ const { SESSION_PLAN_ID } = await import('./session-credit');
 /** Records every table touched, so a cross-grant is visible as a write.
  *  `existingCredit` simulates a second webhook delivery (the credit is
  *  already there), which the module detects via select().eq().maybeSingle(). */
-function fakeAdmin(opts: { existingCredit?: boolean } = {}) {
+function fakeAdmin(opts: { existingCredit?: boolean; paymentStatus?: string } = {}) {
   const inserts: Record<string, unknown[]> = {};
   const rpcs: { fn: string; args: Record<string, unknown> }[] = [];
 
+  // The session path settles the payment with a CONDITIONAL update
+  // (`.in('status', ['created','failed'])`) and reads the affected rows back,
+  // so that a refund landing mid-activation moves nothing. This fake models
+  // that: `moved` is empty when the row is not in an activatable state, and
+  // the follow-up status read then says why. Before the 84c2be3 audit it
+  // returned a bare `{ error: null }` with no rows, which is a shape the real
+  // client never produces.
+  const status = opts.paymentStatus ?? 'created';
+  const activatable = status === 'created' || status === 'failed';
+
   function chainFor(table: string) {
+    let op: 'select' | 'update' = 'select';
     const chain: Record<string, unknown> = {
       select: () => chain,
       eq: () => chain,
+      in: () => chain,
       is: () => chain,
       maybeSingle: async () => ({
-        data: table === 'session_credits' && opts.existingCredit ? { id: 'c1' } : null,
+        data: table === 'session_credits'
+          ? (opts.existingCredit ? { id: 'c1' } : null)
+          : table === 'student_payments' ? { status } : null,
       }),
       insert: async (v: unknown) => { (inserts[table] ??= []).push(v); return { error: null }; },
-      update: () => chain,
-      // `update(...).eq(...)` and friends are awaited directly by the module.
-      then: (res: (v: { error: null }) => void) => res({ error: null }),
+      update: () => { op = 'update'; return chain; },
+      then: (res: (v: { data: unknown; error: null }) => void) =>
+        res(op === 'update' && table === 'student_payments'
+          ? { data: activatable ? [{ id: 'p1' }] : [], error: null }
+          : { data: null, error: null }),
     };
     return chain;
   }
@@ -75,8 +91,25 @@ describe('a ₹299 session never becomes a subscription', () => {
     expect(admin.rpcs.find((r) => r.fn === 'activate_payment')).toBeUndefined();
   });
 
+  it('a REFUNDED session payment mints nothing at all', async () => {
+    // Added in the 84c2be3 release audit. This suite exists to prove a ₹399
+    // session never becomes a subscription — and it had no case for the state
+    // that matters most once refunds became real: a replayed capture after the
+    // money went back. The conditional update moves no row, the status read
+    // says 'refunded', and nothing is minted.
+    const admin = fakeAdmin({ paymentStatus: 'refunded' });
+    const ok = await activatePaidOrder(
+      admin as never,
+      { id: 'p1', student_id: 's1', plan: SESSION_PLAN_ID, amount: 39900, status: 'created' },
+      'order_1', 'pay_1', 'webhook',
+    );
+    expect(ok, 'a refused replay is a no-op, not a 500').toBe(true);
+    expect(admin.inserts.session_credits ?? [], 'no credit for a refunded payment').toHaveLength(0);
+    expect(grantPremiumAndQueueBuddy).not.toHaveBeenCalled();
+  });
+
   it('a second delivery mints no second credit', async () => {
-    const admin = fakeAdmin({ existingCredit: true });
+    const admin = fakeAdmin({ existingCredit: true, paymentStatus: 'paid' });
     await activatePaidOrder(
       admin as never,
       { id: 'p1', student_id: 's1', plan: SESSION_PLAN_ID, amount: 29900 },

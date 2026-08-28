@@ -119,6 +119,23 @@ describe('the older invariants are untouched', () => {
     expect((await res.json()).error).toMatch(/not paid/i);
   });
 
+  it('a REFUNDED payment cannot be unlocked by an admin', async () => {
+    // Added in the 84c2be3 release audit. This route grants premium, and
+    // 'refunded' only became a status anything writes on 28 Aug 2026 — so
+    // every test here predates the state that matters most.
+    //
+    // The behaviour was already correct (`pay.status !== 'paid'` refuses it),
+    // but the ONLY test on that line asserted the SOURCE STRING, which is the
+    // same shape of false-green that hid Incident #41. A string assertion
+    // cannot tell you whether an admin can hand premium back to a refunded
+    // student. This executes it.
+    payment = { ...payment, plan: 'tillcat', status: 'refunded' };
+    const res = await POST(req());
+    expect(grantPremium, 'a refunded student must not be re-granted premium').not.toHaveBeenCalled();
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toMatch(/refunded/i);
+  });
+
   it('a non-admin cannot reach the grant at all', async () => {
     profileRole = 'student';
     payment = { ...payment, plan: 'tillcat' };
