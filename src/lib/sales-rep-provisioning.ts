@@ -40,6 +40,21 @@ export const PART_TIME_REQUIRED_FIELDS = [
   'work_end_ist',
   'max_capacity_units',
   'max_new_per_day',
+  // Added 28 Aug 2026, the day the first two part-time counsellors were hired.
+  //
+  // Same reasoning as the five above, applied to the half that was missing.
+  // "What does part-time mean for this person" has always included what they
+  // are paid, and until sales_conversions existed there was nowhere to say it,
+  // so the question simply was not asked. A part-time seat created without pay
+  // terms produces a counsellor who converts students all month and whose
+  // payslip cannot be computed — which is exactly the silently-full-time
+  // failure this list was written to prevent, one column over.
+  //
+  // Zero is a legal answer to either: a counsellor on fixed pay only states
+  // incentive_percent: 0, and readTerms() treats that as STATED. What is
+  // refused is silence.
+  'monthly_fixed_paise',
+  'incentive_percent',
 ] as const;
 export type PartTimeRequiredField = (typeof PART_TIME_REQUIRED_FIELDS)[number];
 

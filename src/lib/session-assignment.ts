@@ -4,7 +4,7 @@ import { readMentorRoster, matchMentor } from '@/lib/session-credit';
 
 // ── The missing middle ──────────────────────────────────────────────────────
 //
-// A ₹299 purchase minted a credit and then nothing happened: session_credits
+// A single-session purchase minted a credit and then nothing happened: session_credits
 // carried buddy_id and video_session_id that no code ever wrote, so a human
 // had to create the session by hand.
 //
@@ -13,10 +13,10 @@ import { readMentorRoster, matchMentor } from '@/lib/session-credit';
 // the honest handling of "nobody is available", which previously did not exist
 // because nothing tried.
 //
-// THE RELATIONSHIP RULE (founder, explicit): a ₹299 session assigns
+// THE RELATIONSHIP RULE (founder, explicit): a single session assigns
 // session_credits.buddy_id and NEVER profiles.buddy_id. A one-off session and
 // an ongoing premium mentorship are different relationships, and conflating
-// them would quietly hand a ₹299 buyer the continuous product.
+// them would quietly hand a session buyer the continuous product.
 
 export type AssignFailure =
   /** Roster or load read failed. NOT "sold out" — we must not refuse on a blip. */
@@ -128,12 +128,20 @@ export type Bookability =
  *     Google — a requirement this codebase had already removed as "a design
  *     mistake", leaving those two chasing a problem that no longer existed
  *
- * A student had paid ₹299 two days earlier and could not pick a time.
+ * A student had paid two days earlier and could not pick a time.
  */
 export interface BookabilityFacts {
   /** The availability row, or null when the mentor has never described a week. */
   availability: { active: boolean | null; timezone?: string | null } | null;
-  /** A room URL already recorded — pasted by the mentor or minted earlier. */
+  /**
+   * A room URL already recorded — pasted by the mentor, or minted from Google.
+   *
+   * RECORDED, NO LONGER DECISIVE (27 Aug). It stays in the facts because it
+   * stays TRUE: legacy rooms keep every session already booked against them
+   * joinable, and the admin surfaces report it. It simply no longer makes a
+   * mentor bookable on its own. Reading this field and concluding "so a pasted
+   * room is enough" is the mistake this comment exists to prevent.
+   */
   hasRoom: boolean;
   /** A live Google Calendar connection, from which a room CAN be minted. */
   googleConnected: boolean;
@@ -145,17 +153,34 @@ export interface BookabilityFacts {
  * Pure: same facts, same answer, no I/O and no clock — so every state can be
  * enumerated in a test rather than argued about.
  *
- * GOOGLE IS NOT INDEPENDENTLY MANDATORY. A room is a room whether Google
- * minted it or the mentor pasted their own link; requiring a Google
- * connection made booking hostage to Google's app-verification queue, which
- * is a dependency the product never needed. Either satisfies the room half.
+ * GOOGLE IS NOW THE MENTOR'S INFRASTRUCTURE — founder decision, 27 Aug, and a
+ * deliberate reversal of what this comment said before. The previous rule was
+ * `!hasRoom && !googleConnected`: a pasted link satisfied it, on the reasoning
+ * that "a room is a room" and that requiring Google made booking hostage to
+ * Google's verification queue. That reasoning was sound for the product we had
+ * and wrong for the product we want. It also had a cost that only showed up in
+ * the UI: it forced every mentor screen to explain a CHOICE — paste a room, or
+ * connect Google — and a setup question with two right answers is one most
+ * people simply do not finish.
+ *
+ * So the product is now one path. CareerRai owns the meeting infrastructure
+ * through the mentor's Google account: Calendar for the event, Meet for the
+ * link, and the reminders that hang off both. A pasted URL cannot do any of
+ * that, which is why "either satisfies the room half" no longer holds.
+ *
+ * THE REASON CODE DELIBERATELY DID NOT CHANGE. `no_meeting_room` is threaded
+ * through booking-blocked, session-credit, the ops queue and the student copy,
+ * and the student must never be told about Google — from where they stand the
+ * fact is unchanged: their mentor cannot host a call yet. Only the condition
+ * moved. What the MENTOR is told changes, and that lives in
+ * MENTOR_BLOCKER_COPY.
  */
 export function decideBookability(facts: BookabilityFacts): Bookability {
   if (!facts.availability) return { bookable: false, reason: 'no_availability' };
   if (facts.availability.active !== true) {
     return { bookable: false, reason: 'not_taking_bookings' };
   }
-  if (!facts.hasRoom && !facts.googleConnected) {
+  if (!facts.googleConnected) {
     return { bookable: false, reason: 'no_meeting_room' };
   }
   return { bookable: true, timezone: facts.availability.timezone ?? 'Asia/Kolkata' };
@@ -163,16 +188,36 @@ export function decideBookability(facts: BookabilityFacts): Bookability {
 
 /** Read the facts for one mentor. The only query behind the rule. */
 export async function bookabilityFacts(admin: any, buddyId: string): Promise<BookabilityFacts> {
-  const [{ data: avail }, { data: prof }] = await Promise.all([
+  const [{ data: avail }, { data: prof }, { data: token }] = await Promise.all([
     admin.from('buddy_availability')
       .select('timezone, active').eq('buddy_id', buddyId).maybeSingle(),
     admin.from('profiles')
-      .select('buddy_meet_url, google_calendar_connected').eq('id', buddyId).maybeSingle(),
+      .select('buddy_meet_url').eq('id', buddyId).maybeSingle(),
+    // ── THE TOKEN, NOT THE COLUMN ──────────────────────────────────────────
+    //
+    // This read used to be `profiles.google_calendar_connected`, and that
+    // column has not been written by anything in this codebase for weeks —
+    // two other files say so in their own comments, having each been bitten by
+    // it. Under the old rule the mistake was survivable: bookability was
+    // `hasRoom || googleConnected`, so a pasted room carried mentors past a
+    // fact that was always false.
+    //
+    // Making Google mandatory (27 Aug) removed that cover and turned a stale
+    // read into a total outage: every mentor would have been unbookable
+    // forever, INCLUDING after successfully connecting Google, because nothing
+    // would ever have set the column back to true.
+    //
+    // google_oauth_tokens is the only thing that actually knows. A row exists
+    // while the connection does, and clearGoogleState() deletes it on
+    // disconnect, on revoke, and on a 401 — so revoked access closes the door
+    // by itself rather than waiting for a flag nobody updates.
+    admin.from('google_oauth_tokens')
+      .select('user_id').eq('user_id', buddyId).maybeSingle(),
   ]);
   return {
     availability: avail ? { active: avail.active as boolean | null, timezone: avail.timezone as string | null } : null,
     hasRoom: prof?.buddy_meet_url != null,
-    googleConnected: prof?.google_calendar_connected === true,
+    googleConnected: !!token,
   };
 }
 

@@ -233,6 +233,30 @@ function rowToConfig(r: any): RepConfig {
 }
 
 /**
+ * Read rep configuration rows, keyed by rep id.
+ *
+ * Exported so that everything needing a rep's working window — capacity here,
+ * the first-contact SLA in lib/sales-sla, the follow-up board — decodes the
+ * row through `rowToConfig` rather than re-reading the columns by hand. The
+ * work_start_ist slice alone (Postgres returns 'HH:MM:SS') is the kind of
+ * detail a second decoder gets subtly wrong.
+ *
+ * Missing rep ids are simply absent from the map: NOT CONFIGURED is a real
+ * state, and inventing a default week for a counsellor whose terms were never
+ * entered is the same mistake as inventing a part-time quota (20260825a).
+ */
+export async function readRepConfigs(admin: any, repIds?: string[]): Promise<Map<string, RepConfig>> {
+  let q = admin.from('sales_rep_config').select('*');
+  if (repIds && repIds.length) q = q.in('rep_id', repIds);
+  const { data, error } = await q;
+  if (error) {
+    console.error('[sales-capacity] config read failed:', error.message);
+    return new Map();
+  }
+  return new Map(((data ?? []) as any[]).map((r) => [r.rep_id as string, rowToConfig(r)]));
+}
+
+/**
  * Capacity for every staff member, with the exact work items behind each
  * number.
  *

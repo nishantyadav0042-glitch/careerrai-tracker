@@ -7,7 +7,7 @@ import type { UnbookableReason } from '@/lib/session-assignment';
  * /api/sessions/schedule returns `state: 'needs_team'` and tells the student
  * "Our team will set your session time for you." Until now that promise had no
  * owner: `needs_team` was returned to the browser and written NOWHERE — no
- * notification, no queue, no alert. A student paid ₹299, could not book, and
+ * notification, no queue, no alert. A student paid, could not book, and
  * the only record was a sentence on their screen.
  *
  * THIS ADDS NO NEW SYSTEM. Two things already existed and neither was used:
@@ -179,7 +179,7 @@ export interface CreditBlockPatch {
 export const NEXT_ACTION_FOR: Record<UnbookableReason, string> = {
   no_availability: 'Mentor has no calendar — set their availability, then tell the student',
   not_taking_bookings: 'Mentor is not taking bookings — reopen their calendar or arrange the session by hand',
-  no_meeting_room: 'Mentor has no meeting room — connect their Google account or set a room, then tell the student',
+  no_meeting_room: 'Mentor has not connected Google — get them connected, then tell the student',
 };
 
 export function creditBlockPatch(

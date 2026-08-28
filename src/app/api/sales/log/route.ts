@@ -130,7 +130,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { data: cur } = await admin.from('lead_outreach').select('no_answer_count').eq('student_id', studentId).maybeSingle();
+  const { data: cur } = await admin.from('lead_outreach')
+    .select('no_answer_count, first_contact_at').eq('student_id', studentId).maybeSingle();
   const prevMisses = (cur?.no_answer_count as number | null) ?? 0;
 
   const plan = planDisposition(outcome, {
@@ -142,6 +143,12 @@ export async function POST(request: NextRequest) {
 
   const now = new Date().toISOString();
 
+  // FIRST contact, and only the first. Written once and never moved forward,
+  // because the SLA measures how long the STUDENT waited to hear from anyone —
+  // overwriting it on the fifth call would make every lead look instantly
+  // answered. `last_attempt_at` below is the one that tracks the latest call.
+  const firstContactAt = (cur?.first_contact_at as string | null) ?? now;
+
   // State first, then history — and BOTH checked. If state fails we stop before
   // writing history, so the two can never contradict each other.
   const { error: stateError } = await admin.from('lead_outreach').upsert({
@@ -150,6 +157,7 @@ export async function POST(request: NextRequest) {
     callback_at: plan.callbackAt,
     next_action_at: plan.nextActionAt,
     last_attempt_at: now,
+    first_contact_at: firstContactAt,
     no_answer_count: plan.noAnswerCount,
     notes: noteText || null,
     // owner_id is deliberately absent: ownership is written ONLY by the atomic

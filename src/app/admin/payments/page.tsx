@@ -48,7 +48,7 @@ export default async function AdminPaymentsPage() {
   const mrr = incoming.reduce((sum, r) => {
     if (r.status !== 'active' || !r.plan || !isPlanId(r.plan)) return sum;
     const p = PLANS[r.plan];
-    return sum + p.amountPaise / 100 / p.months;
+    return sum + p.offerPaise / 100 / p.months;
   }, 0);
    
   const weekFromNow = Date.now() + 7 * 24 * 3600 * 1000;

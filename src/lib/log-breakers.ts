@@ -54,7 +54,7 @@ export function cohortOf(r: LogBreakerRow, todayIst: string): LogBreakerCohort[]
 // ── The WhatsApp drafts ─────────────────────────────────────────────────────
 //
 // Rules, from the founder's own framing: sound like one person asking another
-// a real question. No selling, no ₹299, no guilt, no analytics-speak, no
+// a real question. No selling, no price, no guilt, no analytics-speak, no
 // "we noticed via our dashboard". One question, answerable in one line.
 // The founder sends these BY HAND — nothing here auto-sends, ever.
 

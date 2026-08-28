@@ -3,7 +3,14 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { PLANS, type PlanId } from '@/lib/plans';
+import { PLANS, SESSION_PRICING, type PlanId } from '@/lib/plans';
+
+// Anchors, all computed from lib/plans so a price change cannot leave a stale
+// "save ₹x" behind. The strike is the plan's own list price, not four times
+// monthly — the plan states what it is anchored against, so use that.
+const TILLCAT_SAVING = `₹${(((PLANS.tillcat.listPaise ?? PLANS.tillcat.offerPaise) - PLANS.tillcat.offerPaise) / 100).toLocaleString('en-IN')}`;
+const TILLCAT_PER_DAY = `₹${Math.round(PLANS.tillcat.offerPaise / (PLANS.tillcat.months * 30) / 100)}`;
+
 import { trackMeta } from '@/lib/track';
 import { track } from '@/lib/journey';
 import { readPaymentSurfaceSignals } from '@/lib/store-build';
@@ -76,7 +83,7 @@ function useBuddyCheckout() {
 
   async function pay(planId: PlanId, fullName?: string) {
     // Intent captured first, in every path.
-    track('buddy_plan_click', { plan: planId, price: PLANS[planId].display, amountPaise: PLANS[planId].amountPaise });
+    track('buddy_plan_click', { plan: planId, price: PLANS[planId].display, amountPaise: PLANS[planId].offerPaise });
     // Store builds ONLY (Apple/Play): finish payment in the REAL browser for the
     // live 1:1 mentorship service — an in-app card sheet would be rejected. Web
     // and browser-installed PWA fall straight through to inline Razorpay below.
@@ -234,7 +241,7 @@ export function BuddyBuyButtons({ fullName, sticky = false }: { fullName?: strin
           className="block w-full rounded-2xl bg-stone-900 px-4 py-4 text-center text-white shadow-xl shadow-stone-900/25 transition-transform active:scale-[0.99] disabled:opacity-60"
         >
           <span className="text-[15px] font-bold">
-            {busy === 'tillcat' ? 'Starting…' : 'Get my buddy till CAT · ₹2,999 →'}
+            {busy === 'tillcat' ? 'Starting…' : `Get my buddy till CAT · ${PLANS.tillcat.display} →`}
           </span>
         </PlanCta>
         {message && <p className="mt-2 text-center text-xs font-medium text-stone-700">{message}</p>}
@@ -257,11 +264,11 @@ export function BuddyBuyButtons({ fullName, sticky = false }: { fullName?: strin
           <span className="rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">Best value</span>
         </div>
         <div className="mt-1 flex items-baseline gap-2">
-          <span className="text-3xl font-extrabold">₹2,999</span>
-          <span className="text-xs text-stone-500 line-through">₹3,996</span>
-          <span className="text-[11px] font-semibold text-emerald-400">save ₹997</span>
+          <span className="text-3xl font-extrabold">{PLANS.tillcat.display}</span>
+          <span className="text-xs text-stone-500 line-through">{PLANS.tillcat.listDisplay}</span>
+          <span className="text-[11px] font-semibold text-emerald-400">save {TILLCAT_SAVING}</span>
         </div>
-        <p className="mt-1 text-[12px] text-stone-300">Your buddy all the way to exam day · about ₹25/day</p>
+        <p className="mt-1 text-[12px] text-stone-300">Your buddy all the way to exam day · about {TILLCAT_PER_DAY}/day</p>
         <span className="mt-2.5 block rounded-xl bg-orange-500 py-2.5 text-center text-sm font-bold text-white">
           {busy === 'tillcat' ? 'Starting…' : 'Start now →'}
         </span>
@@ -276,7 +283,7 @@ export function BuddyBuyButtons({ fullName, sticky = false }: { fullName?: strin
       >
         <div className="flex items-center justify-between">
           <span className="text-sm font-semibold text-stone-900">Just this month</span>
-          <span className="text-sm font-bold text-stone-900">{busy === 'monthly' ? 'Starting…' : '₹999'}</span>
+          <span className="text-sm font-bold text-stone-900">{busy === 'monthly' ? 'Starting…' : PLANS.monthly.display}</span>
         </div>
         <p className="mt-0.5 text-[11px] text-stone-500">Month to month · you&apos;ll decide again in 30 days</p>
       </PlanCta>
@@ -350,7 +357,7 @@ export function UnlockBuddyButton({
             </p>
 
             <div className="mt-5 space-y-2.5">
-              {/* The ladder, founder order (20 Aug): the ₹299 session is the
+              {/* The ladder, founder order (20 Aug): the single session is the
                   ENTRY POINT and the primary CTA; the subscriptions stay
                   clearly available as the core upsell. The rung LINKS rather
                   than charging here: BookSessionCard fetches mentor
@@ -367,7 +374,7 @@ export function UnlockBuddyButton({
                   <span className="rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">Start here</span>
                 </div>
                 <div className="mt-1 flex items-baseline gap-2">
-                  <span className="text-2xl font-extrabold">₹299</span>
+                  <span className="text-2xl font-extrabold">{SESSION_PRICING.display}</span>
                 </div>
                 <p className="mt-0.5 text-[11px] text-stone-300">One 1-on-1 with an IIM senior · no subscription</p>
                 <span className="mt-2 inline-block text-sm font-bold text-orange-300">See if a mentor has room →</span>
@@ -380,7 +387,7 @@ export function UnlockBuddyButton({
               >
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold text-stone-900">Go deeper — monthly</span>
-                  <span className="text-sm font-bold text-stone-900">{busy === 'monthly' ? 'Starting…' : '₹999'}</span>
+                  <span className="text-sm font-bold text-stone-900">{busy === 'monthly' ? 'Starting…' : PLANS.monthly.display}</span>
                 </div>
                 <p className="mt-0.5 text-[11px] text-stone-500">Month to month · you&apos;ll decide again in 30 days</p>
               </PlanCta>
@@ -395,11 +402,11 @@ export function UnlockBuddyButton({
                   <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-700">Best value</span>
                 </div>
                 <div className="mt-1 flex items-baseline gap-2">
-                  <span className="text-2xl font-extrabold text-stone-900">₹2,999</span>
-                  <span className="text-xs text-stone-400 line-through">₹3,996</span>
-                  <span className="text-[11px] font-semibold text-emerald-600">save ₹997</span>
+                  <span className="text-2xl font-extrabold text-stone-900">{PLANS.tillcat.display}</span>
+                  <span className="text-xs text-stone-400 line-through">{PLANS.tillcat.listDisplay}</span>
+                  <span className="text-[11px] font-semibold text-emerald-600">save {TILLCAT_SAVING}</span>
                 </div>
-                <p className="mt-0.5 text-[11px] text-stone-500">Your buddy all the way to exam day · about ₹25/day{busy === 'tillcat' ? ' · Starting…' : ''}</p>
+                <p className="mt-0.5 text-[11px] text-stone-500">Your buddy all the way to exam day · about {TILLCAT_PER_DAY}/day{busy === 'tillcat' ? ' · Starting…' : ''}</p>
               </PlanCta>
             </div>
 

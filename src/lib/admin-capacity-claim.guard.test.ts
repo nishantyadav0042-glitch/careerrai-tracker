@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { codeOnly } from './test-support/code-only';
 
 // ── The admin Capacity Engine card may only claim what the product does ─────
 //
@@ -33,13 +34,6 @@ const ENGINE = 'src/lib/capacity-engine.ts';
  * Stripping is the general fix -- dodging it by not writing the word would
  * mean the code cannot explain itself.
  */
-function codeOnly(src: string): string {
-  return src
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .split('\n')
-    .map((l) => l.replace(/\/\/.*$/, ''))
-    .join('\n');
-}
 
 /** Non-definition callers of capBudget in actual code. */
 function capBudgetIsWired(): boolean {

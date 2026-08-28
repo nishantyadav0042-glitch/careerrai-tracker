@@ -64,7 +64,7 @@ export default async function Buddy360Page({ params }: { params: Promise<{ id: s
         <div className="mb-3 rounded-2xl border-2 border-red-400 bg-red-50 p-3.5">
           <p className="text-[14px] font-bold text-red-800">Cannot run a session</p>
           <p className="mt-1 text-[12px] text-red-700">
-            {studentCount} student{studentCount === 1 ? '' : 's'} assigned and no meeting room set — booking is refused
+            {studentCount} student{studentCount === 1 ? '' : 's'} assigned and Google not connected — booking is refused
             until one exists. Message them their room, or set it from the profile.
           </p>
         </div>

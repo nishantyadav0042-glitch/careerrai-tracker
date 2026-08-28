@@ -2,7 +2,7 @@
  * ── THE 30-MINUTE REMINDER, DECIDED IN ONE PLACE ────────────────────────────
  *
  * The highest-intent message in the product: the student is about to be in a
- * room with a mentor they paid ₹299 for, and the join link is in their hand.
+ * room with a mentor they paid for, and the join link is in their hand.
  * 11 of the first 18 sessions expired — nobody joined — so the message that
  * arrives while there is still time to act is the one that matters.
  *

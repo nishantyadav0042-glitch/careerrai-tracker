@@ -53,11 +53,26 @@ function GoogleMark() {
 }
 
 export function ContinueWithGoogle({
-  label = 'Continue with Google', next,
+  label = 'Continue with Google', next, beforeRedirect,
 }: {
   label?: string;
   /** Where to land after sign-in. Defaults to the callback's own routing. */
   next?: string;
+  /**
+   * Runs once, immediately before the browser leaves for Google.
+   *
+   * This exists for exactly one caller: the final /start screen, which must
+   * park the onboarding draft server-side first — localStorage does not
+   * survive into /auth/callback, so answers given seconds earlier would
+   * otherwise be lost by choosing Google over OTP.
+   *
+   * It is a hook rather than a second copy of this button because there must
+   * stay ONE place that knows the scopes, the redirect URI and the
+   * provider-not-enabled message. A rejection here must never block the
+   * sign-in: losing a draft costs a student the questionnaire, losing the
+   * sign-in costs them the account.
+   */
+  beforeRedirect?: () => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,6 +81,12 @@ export function ContinueWithGoogle({
     if (busy) return;
     setBusy(true); setError(null);
     try {
+      if (beforeRedirect) {
+        // Never fatal. See the prop's own note: a failed stash means the
+        // student answers the questions again in-app, which is the behaviour
+        // that existed before this hook. A failed sign-in means no account.
+        try { await beforeRedirect(); } catch { /* proceed to Google anyway */ }
+      }
       const supabase = createClient();
       const redirectTo = `${window.location.origin}/auth/callback${
         next ? `?next=${encodeURIComponent(next)}` : ''

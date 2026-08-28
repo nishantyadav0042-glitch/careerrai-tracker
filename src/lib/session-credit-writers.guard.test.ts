@@ -106,9 +106,26 @@ describe('the credit state machine has exactly one writer', () => {
 
   it('only the authority may write a TERMINAL credit state', () => {
     const terminal = /status:\s*'(completed|refunded|booking_blocked)'/;
+    // SCOPED TO THE SESSION_CREDITS CALL CHAIN, not to the file (28 Aug 2026).
+    //
+    // This used to be `file mentions session_credits` AND `file contains a
+    // terminal status literal anywhere`. Those two facts can be about
+    // different tables: activate-payment.ts legitimately touches
+    // session_credits (it spends the credit that discounted a payment) and
+    // separately writes `status: 'refunded'` to STUDENT_PAYMENTS in
+    // settleRefund. Co-occurrence flagged it, and the honest fix is to make
+    // the guard precise rather than to except the file — an exception here
+    // would have blinded it to a genuine second credit writer in the same
+    // file forever after.
+    const chainAfterCreditsWrite = (c: string): string[] => {
+      const out: string[] = [];
+      const re = /from\('session_credits'\)/g;
+      for (let m = re.exec(c); m; m = re.exec(c)) out.push(c.slice(m.index, m.index + 400));
+      return out;
+    };
     const offenders = files
       .filter(([f]) => f !== AUTHORITY)
-      .filter(([, c]) => /from\('session_credits'\)/.test(c) && terminal.test(c))
+      .filter(([, c]) => chainAfterCreditsWrite(c).some((chain) => terminal.test(chain)))
       .map(([f]) => f);
     expect(
       offenders,

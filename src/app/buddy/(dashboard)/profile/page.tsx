@@ -53,7 +53,7 @@ export default async function BuddyProfilePage() {
 
   return (
     <div className="space-y-5 pb-24">
-      {/* The specialist fields. Leads the page while ₹299 sessions are opening,
+      {/* The specialist fields. Leads the page while paid sessions are opening,
           because these are what decide whether a mentor gets matched at all —
           an undeclared capacity is treated as zero, so an unfilled form is a
           mentor the system cannot send anyone to. */}

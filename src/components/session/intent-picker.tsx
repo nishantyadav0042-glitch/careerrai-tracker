@@ -7,14 +7,14 @@ import { SESSION_INTENTS, INTENT_LABEL, intentNeedsNote, MIN_NOTE_LENGTH,
 // Asked BEFORE the money, for two reasons. The mentor opens the call already
 // knowing the problem instead of spending the first ten minutes finding it —
 // and the company can finally answer the question it has never been able to:
-// what are students actually paying ₹299 to solve?
+// what are students actually paying to solve?
 //
 // Deliberately NOT a free-text box. Thirty-seven students typing the same
 // problem in thirty-seven different sentences is an anecdote; thirty-seven
 // rows carrying the same CATEGORY is a product decision. The optional note
 // exists for everything the categories cannot hold.
 //
-// MULTI-SELECT, up to MAX_INTENTS (founder, 25 Aug 2026). A ₹299 buyer rarely
+// MULTI-SELECT, up to MAX_INTENTS (founder, 25 Aug 2026). A single-session buyer rarely
 // has exactly one problem — "QA is weak AND my routine collapsed" is the
 // normal case, and a single-choice picker threw away the second half of it.
 //

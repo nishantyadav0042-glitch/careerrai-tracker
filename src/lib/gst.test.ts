@@ -10,7 +10,7 @@ import { PLANS } from './plans';
 
 describe('the split always balances', () => {
   it('base + gst equals gross, for every plan, both ways', () => {
-    const prices = [...Object.values(PLANS).map((p) => p.amountPaise), SESSION_PRICE_PAISE, 100, 1, 0];
+    const prices = [...Object.values(PLANS).map((p) => p.offerPaise), SESSION_PRICE_PAISE, 100, 1, 0];
     for (const p of prices) {
       for (const mode of ['inclusive', 'exclusive'] as const) {
         const t = splitTax(p, mode);
@@ -45,20 +45,20 @@ describe('WE ARE NOT REGISTERED, SO WE DO NOT COLLECT', () => {
   });
 
   it('every published price is charged EXACTLY as published', () => {
-    for (const p of [...Object.values(PLANS).map((x) => x.amountPaise), SESSION_PRICE_PAISE]) {
+    for (const p of [...Object.values(PLANS).map((x) => x.offerPaise), SESSION_PRICE_PAISE]) {
       for (const mode of ['inclusive', 'exclusive'] as const) {
         expect(splitTax(p, mode).grossPaise, `${p} ${mode}`).toBe(p);
       }
     }
   });
 
-  it('the ₹299 session costs ₹299 — nothing added, nothing carved out', () => {
+  it('the session costs exactly its published price — nothing added or carved out', () => {
     const t = splitTax(SESSION_PRICE_PAISE, 'exclusive');
-    expect(t.grossPaise).toBe(29900);
+    expect(t.grossPaise).toBe(SESSION_PRICE_PAISE);
     expect(t.gstPaise).toBe(0);
-    // And the mentor still receives the whole ₹299, which was the point.
-    expect(t.basePaise).toBe(29900);
-    expect(netToPlatformPaise(t, 29900)).toBe(0);
+    // And the mentor still receives the whole fee, which was the point.
+    expect(t.basePaise).toBe(SESSION_PRICE_PAISE);
+    expect(netToPlatformPaise(t, SESSION_PRICE_PAISE)).toBe(0);
   });
 
   it('no tax is ever collected while the switch is off', () => {

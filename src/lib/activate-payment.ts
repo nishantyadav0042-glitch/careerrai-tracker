@@ -1,3 +1,4 @@
+import { recordConversion, markConversionRefunded } from '@/lib/sales-earnings';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { PLANS, isPlanId, addMonthsClamped } from '@/lib/plans';
 import { grantPremiumAndQueueBuddy } from '@/lib/premium';
@@ -17,6 +18,13 @@ export interface PayableRow {
   id: string;
   student_id: string;
   plan: string;
+  /**
+   * OPTIONAL on purpose. The webhook and the checkout callback both select it
+   * and it decides whether activation may proceed (see mayActivatePayment);
+   * reconcile-payments filters `.eq('status','created')` in the query and does
+   * not select the column, so absent here means 'created' rather than unknown.
+   */
+  status?: string | null;
   coupon_code?: string | null;
   amount?: number | null;
   /** Session purchases only: the diagnostic finding that motivated the buy,
@@ -26,7 +34,7 @@ export interface PayableRow {
   /** What the STUDENT said they wanted, chosen at booking. */
   session_intent?: string | null;
   session_intent_note?: string | null;
-  /** Plan purchases only: the ₹299 session credit applied at order creation. */
+  /** Plan purchases only: the session credit applied at order creation. */
   session_credit_id?: string | null;
 }
 
@@ -88,22 +96,102 @@ export async function readWebhookPaymentRow(
  * webhook ACKed — so a refunded student kept premium forever, because
  * Razorpay never redelivers an acknowledged event. Retry once, then throw.
  */
+/**
+ * States a payment can never be activated OUT OF.
+ *
+ * 'paid' is a duplicate delivery — Razorpay redelivers, and that has always
+ * been a legitimate no-op 200.
+ *
+ * 'refunded' is the one added on 28 Aug 2026, and it is a REGRESSION FIX for
+ * the refund change made the same day. Both activation entry points guarded on
+ * `row.status !== 'paid'`. While a refunded payment wrongly kept status='paid'
+ * forever, that guard also — entirely by accident — blocked re-activation
+ * after a refund. Writing 'refunded' removed the accidental protection: a
+ * redelivered `payment.captured` (Razorpay retries an unacknowledged event for
+ * hours, easily spanning a same-day refund) would have passed the guard, put
+ * the row back to 'paid' beside a non-null refunded_at, and handed premium
+ * back to a student who had been refunded.
+ */
+const NON_ACTIVATABLE = new Set(['paid', 'refunded']);
+
+/**
+ * May this payment still be activated? The ONE definition, so the webhook, the
+ * checkout callback and any future caller cannot disagree about it.
+ *
+ * `undefined` is deliberately activatable: reconcile-payments selects its rows
+ * without the status column and filters `.eq('status','created')` in the
+ * query, so an absent status there means 'created', not "unknown and unsafe".
+ */
+export function mayActivatePayment(status: string | null | undefined): boolean {
+  return !NON_ACTIVATABLE.has(status ?? '');
+}
+
+export interface RefundTarget { paymentId: string; studentId: string }
+
 export async function readRefundTargetStudent(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   admin: { from: (t: string) => any },
   razorpayPaymentId: string,
-): Promise<string | null> {
+): Promise<RefundTarget | null> {
   let lastMessage = 'unknown';
   for (let attempt = 0; attempt < 2; attempt++) {
     const { data, error } = await admin
       .from('student_payments')
-      .select('student_id')
+      // OUR row id as well as the student (28 Aug). The refund has to reach
+      // three places now, not one: revoke premium, take the payment out of the
+      // paid ledger, and withdraw the counsellor's incentive on this sale
+      // (sales_conversions is keyed on our payment id, not Razorpay's).
+      .select('id, student_id')
       .eq('razorpay_payment_id', razorpayPaymentId)
       .maybeSingle();
-    if (!error) return (data?.student_id as string | undefined) ?? null;
+    if (!error) {
+      // Not in our ledger — a refund for someone else's payment. A legitimate
+      // null, and the caller ACKs 200.
+      if (!data?.student_id) return null;
+      // In our ledger but missing its own primary key is impossible, so it is
+      // corruption rather than an answer. Throwing keeps the module's rule
+      // intact: never let an unreadable row look like "belongs to nobody",
+      // which is precisely how a refunded student kept premium forever.
+      if (!data?.id) throw new Error('Refund target row has no payment id');
+      return { paymentId: data.id as string, studentId: data.student_id as string };
+    }
     lastMessage = error.message;
   }
   throw new Error(`Could not read payment for refund: ${lastMessage}`);
+}
+
+/**
+ * Take a refunded payment OUT of the paid ledger, and withdraw the incentive.
+ *
+ * Until 28 Aug 2026 the refund path revoked premium, wrote a timeline event
+ * and a security event, and then left `student_payments.status = 'paid'`
+ * forever. The status CHECK constraint had always permitted 'refunded';
+ * nothing had ever written it. Every downstream reader therefore counted money
+ * that had gone back: the founder's revenue screen, the rep portfolio's
+ * "Won (paid)" tile, and — from 2 September, when the two counsellors start —
+ * a 10% incentive on a sale the student had already been refunded for, which
+ * Clause 7 of both engagement letters says explicitly must not happen.
+ *
+ * Throws on failure so the webhook 500s and Razorpay redelivers: a refund we
+ * ACKed but never recorded is exactly the silent-loss shape that made this a
+ * bug in the first place.
+ */
+export async function settleRefund(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: { from: (t: string) => any },
+  target: RefundTarget,
+  at: string = new Date().toISOString(),
+): Promise<void> {
+  const { error } = await admin
+    .from('student_payments')
+    .update({ status: 'refunded', refunded_at: at })
+    .eq('id', target.paymentId)
+    // Only a row still claiming to be paid moves, so a redelivered refund
+    // cannot overwrite the original refunded_at with a later timestamp and
+    // quietly shift which month loses the incentive.
+    .eq('status', 'paid');
+  if (error) throw new Error(`Could not mark payment refunded: ${error.message}`);
+  await markConversionRefunded(admin, target.paymentId, at);
 }
 
 /**
@@ -113,7 +201,7 @@ export async function readRefundTargetStudent(
  * retries; cron → logged and retried next run).
  */
 /**
- * A paid ₹299 session: mark the payment, mint ONE credit, and put it in the
+ * A paid single session: mark the payment, mint ONE credit, and put it in the
  * assignment queue. Deliberately does NOT grant premium.
  *
  * The credit carries the finding that motivated the purchase, so the mentor
@@ -142,13 +230,53 @@ async function activateSessionCredit(
   // stamped it (activate_payment RPC does `paid_at = now()`), and this path
   // did not. Every Rs 299 payment therefore landed in the ledger as paid with
   // no timestamp, which is the operations invariant that caught this.
-  const { error: payErr } = await admin
+  // ── THE STATUS PRECONDITION IS THE GUARD ──────────────────────────────────
+  //
+  // This update was filtered on `.eq('id', row.id)` alone, so it flipped ANY
+  // row to 'paid' unconditionally — including one that had been refunded
+  // between the webhook's status read and this line. The subscription path had
+  // the identical hole in SQL (see 20260828c); this is the session half.
+  //
+  // Filtering on the status makes the DATABASE decide, atomically, instead of
+  // trusting a value read several statements ago. `.select('id')` is what makes
+  // the outcome observable: without it a no-op update and a successful one are
+  // indistinguishable, and the code below would go on to mint a session credit
+  // for a payment that had already been handed back.
+  const { data: moved, error: payErr } = await admin
     .from('student_payments')
     .update({ status: 'paid', paid_at: new Date().toISOString(), razorpay_payment_id: paymentId ?? null })
-    .eq('id', row.id);
+    .eq('id', row.id)
+    .in('status', ['created', 'failed'])
+    .select('id');
   if (payErr) {
     console.error(`[activate:${source}] session payment update failed:`, payErr.message);
     return false;
+  }
+  if (!moved || moved.length === 0) {
+    // Nothing moved, and the two reasons need OPPOSITE handling — so re-read
+    // the row rather than guessing. An early return for both was the first
+    // version of this fix and it introduced a worse bug than the one being
+    // fixed: if a delivery marked the payment paid and then failed to mint the
+    // credit, the retry would find 'paid', return true, and the student would
+    // have paid ₹399 for a session credit that never existed.
+    const { data: cur } = await admin
+      .from('student_payments').select('status').eq('id', row.id).maybeSingle();
+    const status = (cur as { status?: string } | null)?.status ?? null;
+
+    if (status === 'refunded') {
+      // A replay after a refund. Mint nothing.
+      console.warn(`[activate:${source}] session payment ${row.id} is refunded — not re-activating`);
+      return true;
+    }
+    if (status !== 'paid') {
+      // Neither moved nor settled: something else is wrong with this row.
+      console.error(`[activate:${source}] session payment ${row.id} did not move and is '${status}'`);
+      return false;
+    }
+    // Already 'paid' — a duplicate delivery, or a retry after the credit
+    // insert failed last time. FALL THROUGH: the credit insert below is
+    // guarded by its own payment_id lookup, so it is safe to repeat and
+    // necessary to attempt.
   }
 
   if (!existing) {
@@ -175,9 +303,9 @@ async function activateSessionCredit(
     }
   }
 
-  // ── The three messages the ₹299 actually buys ────────────────────────────
+  // ── The three messages a paid session actually buys ────────────────────────────
   //
-  // Until 24 Aug this line did not exist, and a ₹299 buyer received ZERO
+  // Until 24 Aug this line did not exist, and a session buyer received ZERO
   // messages — the 3-message entitlement was real but only the admin Mentor
   // Doors route ever issued one.
   //
@@ -187,7 +315,7 @@ async function activateSessionCredit(
   // a mentor to chat with.
   //
   // ON CONFLICT DO NOTHING via the UNIQUE(student_id) constraint: a student who
-  // already holds a grant (an earned door, or a previous ₹299) keeps the one
+  // already holds a grant (an earned door, or a previous session) keeps the one
   // they have. Buying twice must not silently reset a spent counter — the
   // allowance is raised deliberately, by a human, not by a repeat purchase.
   const { error: grantErr } = await admin.from('mentor_grants').insert({
@@ -257,7 +385,42 @@ export async function activatePaidOrder(
   paymentId: string | null,
   source: ActivationSource,
 ): Promise<boolean> {
-  // ── The ₹299 session takes a DIFFERENT road ──────────────────────────────
+  // ── A REFUNDED PAYMENT IS NEVER RE-ACTIVATED ──────────────────────────────
+  //
+  // Defence in depth, and the reason it is HERE rather than only at the two
+  // call sites: both of them independently wrote `row.status !== 'paid'`, and
+  // both were silently wrong the moment 'refunded' became a real status. A
+  // rule that every caller has to remember is a rule that gets forgotten by
+  // the third caller.
+  //
+  // Returns TRUE, not false: this is a legitimate no-op, not a failure. A
+  // false here would 500 the webhook and make Razorpay redeliver the same
+  // impossible event indefinitely.
+  if (!mayActivatePayment(row.status)) {
+    console.warn(`[activate:${source}] refused — payment ${row.id} is '${row.status}', not activatable`);
+    return true;
+  }
+
+  // ── WHO SOLD THIS, decided once, here ─────────────────────────────────────
+  //
+  // Deliberately ABOVE the plan branch, so the single session and every
+  // subscription are attributed by the same line of code. Putting it in each
+  // branch would be two copies of one rule, and the ₹399 session — the offer
+  // the counsellors actually pitch — is exactly the one that would drift.
+  //
+  // Runs before activation rather than after: Razorpay has already captured
+  // the money by the time we are called, so the sale is real whether or not
+  // our own activation then succeeds. It never throws and never blocks (D3),
+  // and `payment_id` is the primary key, so a redelivered webhook re-running
+  // this whole function cannot pay a counsellor twice.
+  await recordConversion(admin, {
+    paymentId: row.id,
+    studentId: row.student_id,
+    amountPaise: row.amount ?? 0,
+    plan: row.plan ?? null,
+  });
+
+  // ── The single session takes a DIFFERENT road ──────────────────────────────
   //
   // Every other plan here is a subscription: it flips is_premium and assigns a
   // permanent buddy. A session must do neither — the student stays free, and
@@ -284,7 +447,7 @@ export async function activatePaidOrder(
     return false;
   }
 
-  // The ₹299 entry ladder: the payment is real, so the credit that
+  // The entry ladder: the payment is real, so the credit that
   // discounted it is now spent. IS NULL guard — one credit can never
   // discount two payments, even under webhook retries.
   if (row.session_credit_id) {

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { SESSION_PRICING } from '@/lib/plans';
 import Link from 'next/link';
 import { X } from 'lucide-react';
 import { UnlockBuddyButton } from '@/components/unlock-buddy-sheet';
@@ -27,7 +28,7 @@ type DismissVia = 'backdrop' | 'close' | 'maybe_tomorrow';
 export function DailyBuddyNudge({ fullName }: { fullName?: string }) {
   const [show, setShow] = useState(false);
 
-  // The ₹299 rung also calls setShow(false) and is NOT one of these — it is a
+  // The single-session rung also calls setShow(false) and is NOT one of these — it is a
   // conversion, and counting it as an exit would make the rung look like it
   // repels students.
   const dismiss = (via: DismissVia) => {
@@ -153,7 +154,7 @@ export function DailyBuddyNudge({ fullName }: { fullName?: string }) {
           onClick={() => { track('buddy_nudge_rung', {}); setShow(false); }}
           className="mt-3 block rounded-xl border border-stone-200 px-4 py-2.5 text-center text-[13px] text-stone-700 transition-colors hover:border-stone-400"
         >
-          Not ready for that? <span className="font-semibold text-stone-900">Try one session — ₹299</span>
+          Not ready for that? <span className="font-semibold text-stone-900">Try one session — {SESSION_PRICING.display}</span>
         </Link>
 
         <button

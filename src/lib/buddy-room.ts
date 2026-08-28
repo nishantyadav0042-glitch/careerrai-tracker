@@ -317,5 +317,5 @@ export async function buddyBookingReadiness(buddyUserId: string): Promise<Bookin
 export const MENTOR_BLOCKER_COPY: Record<UnbookableReason, string> = {
   no_availability: 'Set your weekly hours so students can book a time with you.',
   not_taking_bookings: 'Your hours are switched off — turn them back on to take bookings.',
-  no_meeting_room: 'Set your meeting room before students can book a session.',
+  no_meeting_room: 'Connect Google to accept student sessions.',
 };

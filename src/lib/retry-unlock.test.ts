@@ -26,7 +26,20 @@ describe('retry-unlock cannot become a signature bypass', () => {
   });
 
   it('refuses anything not already captured — never flips created→paid', () => {
-    expect(route).toContain("pay.status !== 'paid'");
+    // The PROPERTY, not the spelling. This asserted the literal
+    // `"pay.status !== 'paid'"` until the 84c2be3 release audit — the same
+    // false-green shape that hid Incident #41, where a test named for
+    // idempotency asserted an implementation string and passed while the
+    // property was false.
+    //
+    // What must hold is that the ONLY status reaching the grant is 'paid'.
+    // The behavioural proof (created → 409, refunded → 409, no grant called)
+    // lives in retry-unlock.behaviour.test.ts; this keeps the source honest
+    // about which statuses it lets through.
+    const gate = route.slice(route.indexOf('pay.status'), route.indexOf('pay.status') + 200);
+    expect(gate, 'the gate must compare against paid').toMatch(/['"]paid['"]/);
+    expect(route, 'a status the gate does not name cannot be let through')
+      .not.toMatch(/pay\.status\s*===\s*['"](created|failed|refunded)['"]/);
   });
 
   it('never flips payment state: it does not activate a payment, only grants premium', () => {

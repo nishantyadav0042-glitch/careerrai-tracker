@@ -121,7 +121,13 @@ export async function POST(request: NextRequest) {
     if (slice.length === 0) break;
     for (const chunk of chunkIds(slice)) {
       const { error } = await admin.from('lead_outreach')
-        .upsert(chunk.map((id) => ({ student_id: id, owner_id: a.repId, updated_at: now })));
+        // assigned_at starts the first-contact SLA clock (lib/sales-sla). Set on
+        // every handover, including a re-distribution of a stale lead: the new
+        // owner's two hours begin when THEY receive it, not when the previous
+        // owner did.
+        .upsert(chunk.map((id) => ({
+          student_id: id, owner_id: a.repId, assigned_at: now, updated_at: now,
+        })));
       if (error) {
         console.error('[distribute] assign failed:', error.message);
         // Report what DID move. Silently rounding a partial run up to success is

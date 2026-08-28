@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { updateGoogleMeet, statusFor } from '@/lib/google-meet';
+import { updateGoogleMeet } from '@/lib/google-meet';
 import { audit } from '@/lib/integration-audit';
 import { dispatch } from '@/lib/notification-os';
 import { sessionNotificationUrl } from '@/lib/session-link';
@@ -30,6 +30,41 @@ interface RescheduleRequest {
  *
  * Only the buddy who owns the session may move it.
  */
+// ── TELLING THE STUDENT IS NOT PART OF THE RESCHEDULE ───────────────────────
+//
+// 27 Aug, same defect as its sibling in schedule-meeting: a bare `await
+// dispatch` inside the route's only try block turned a transport failure into
+// 500 "Couldn't move the meeting" for a move already committed by the update
+// above. The student's calendar was wrong, the mentor believed the move had
+// failed, and `rememberIdempotent` never recorded the replay.
+//
+// The profile read is inside the try too — `.single()` throws on no row, and a
+// student whose profile read fails is still a student whose session moved.
+//
+// NEVER fatal, never silent. Guarded by session-booking-notified.guard.test.ts.
+async function tellTheStudentItMoved(
+  admin: ReturnType<typeof createAdminClient>,
+  opts: { sessionId: string; studentId: string; istTime: string; meetLink: string | null },
+) {
+  try {
+    const { data: movedStudent } = await admin
+      .from('profiles').select('notif_prefs').eq('id', opts.studentId).single();
+    await dispatch({
+      userId: opts.studentId,
+      type: 'session_rescheduled',
+      title: '📅 Your session moved',
+      body: `New time: ${opts.istTime} IST. Same joining link — nothing else to do.`,
+      url: sessionNotificationUrl('student'),
+      data: { sessionId: opts.sessionId, meetLink: opts.meetLink },
+      reason: 'Buddy moved a scheduled session — old time in the student\'s head is now wrong',
+      expectedAction: 'view_session',
+      prefs: (movedStudent?.notif_prefs as Record<string, unknown>) ?? {},
+    });
+  } catch (err) {
+    console.error('[calendar/reschedule-meeting] reschedule notification failed', opts.sessionId, err);
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
@@ -93,28 +128,6 @@ export async function POST(request: NextRequest) {
     const meetLink = session.google_meet_link as string | null;
     const legacyEventId = session.google_event_id as string | null;
 
-    // Sessions booked under the permanent-room design have NO calendar event of
-    // their own — the link belongs to the buddy, not to this booking, so moving
-    // the session is a pure database operation and the link cannot change.
-    //
-    // Rows from before that change still carry their own event. Move it too, so
-    // the mentor's calendar does not disagree with the app.
-    if (legacyEventId) {
-      const moved = await updateGoogleMeet({
-        buddyUserId: user.id,
-        eventId: legacyEventId,
-        start,
-        durationMinutes: duration,
-        title: session.title ?? undefined,
-      });
-      // 'gone' means someone deleted it inside Google. That is not a reason to
-      // refuse a reschedule: the join link still works and the app row is the
-      // source of truth.
-      if (!moved.ok && moved.reason !== 'gone') {
-        return NextResponse.json({ error: moved.error, reason: moved.reason }, { status: statusFor(moved.reason) });
-      }
-    }
-
     const { data: movedRows, error: updateError } = await admin
       .from('video_sessions')
       .update({
@@ -170,18 +183,57 @@ export async function POST(request: NextRequest) {
     // Through dispatch() — SESSION_RESCHEDULED, P0 must-reach. The copy still
     // says the link is unchanged: a student who saved the old one assumes it
     // is dead and asks, which is the support ticket this line prevents.
-    const { data: movedStudent } = await admin
-      .from('profiles').select('notif_prefs').eq('id', session.student_id).single();
-    await dispatch({
-      userId: session.student_id,
-      type: 'session_rescheduled',
-      title: '📅 Your session moved',
-      body: `New time: ${istTime} IST. Same joining link — nothing else to do.`,
-      url: sessionNotificationUrl('student'),
-      data: { sessionId: session.id, meetLink },
-      reason: 'Buddy moved a scheduled session — old time in the student\'s head is now wrong',
-      expectedAction: 'view_session',
-      prefs: (movedStudent?.notif_prefs as Record<string, unknown>) ?? {},
+    // ── THE CALENDAR FOLLOWS THE DATABASE, NEVER LEADS IT ────────────────────
+    //
+    // This block used to run BEFORE the update. That was safe only while
+    // nothing could refuse the move: the row always accepted whatever the
+    // calendar had already been told. Once availability is enforced on UPDATE
+    // (20260827c, Incident #40), a refusal became reachable — and with the old
+    // order the mentor's Google calendar would already be sitting on a time the
+    // database had just rejected. One meeting, two truths, which is Incident
+    // #17 arriving from the opposite direction.
+    //
+    // So the authority decides first and the calendar is reconciled after.
+    //
+    // Which means a calendar failure can no longer refuse the reschedule — the
+    // session HAS moved, the student is about to be told so, and answering
+    // "couldn't move the meeting" would be a lie about a committed write (the
+    // same rule as the notifier below). Sessions booked under the permanent-room
+    // design have no event of their own and never enter this branch at all; for
+    // the legacy rows that do, the app row is already documented as the source
+    // of truth, so a stale Google event is a reconciliation problem and not a
+    // reason to fail the mentor's request.
+    if (legacyEventId) {
+      const moved = await updateGoogleMeet({
+        buddyUserId: user.id,
+        eventId: legacyEventId,
+        start,
+        durationMinutes: duration,
+        title: session.title ?? undefined,
+      });
+      // 'gone' means someone deleted it inside Google, which was already
+      // tolerated here. Everything else is now logged rather than returned.
+      if (!moved.ok && moved.reason !== 'gone') {
+        console.error(
+          '[calendar/reschedule-meeting] session moved but its legacy calendar event did not',
+          session.id, moved.reason, moved.error,
+        );
+        await audit({
+          subjectId: user.id, action: 'google.api_error', ok: false,
+          detail: {
+            at: 'reschedule.legacy_event', sessionId: session.id,
+            reason: moved.reason, to: start.toISOString(),
+            note: 'session moved in the database; its legacy calendar event did not follow',
+          },
+        });
+      }
+    }
+
+    await tellTheStudentItMoved(admin, {
+      sessionId: session.id,
+      studentId: session.student_id,
+      istTime,
+      meetLink,
     });
 
     await audit({

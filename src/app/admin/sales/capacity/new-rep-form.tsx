@@ -38,6 +38,9 @@ export function NewRepForm() {
   const [endIst, setEndIst] = useState('');
   const [capacity, setCapacity] = useState('');
   const [perDay, setPerDay] = useState('');
+  // Pay, stated at hire. Rupees in the box, paise on the wire.
+  const [fixedRs, setFixedRs] = useState('');
+  const [incentivePct, setIncentivePct] = useState('');
 
   // Mirrors checkEmploymentStatement on the server. The server is the
   // authority; this only saves a round trip and names the same missing fields.
@@ -47,6 +50,8 @@ export function NewRepForm() {
     endIst ? null : 'work_end_ist',
     capacity ? null : 'max_capacity_units',
     perDay ? null : 'max_new_per_day',
+    fixedRs === '' ? 'monthly_fixed_paise' : null,
+    incentivePct === '' ? 'incentive_percent' : null,
   ].filter(Boolean) as string[];
 
   async function submit() {
@@ -65,6 +70,8 @@ export function NewRepForm() {
         body.work_end_ist = endIst;
         body.max_capacity_units = Number(capacity);
         body.max_new_per_day = Number(perDay);
+        body.monthly_fixed_paise = Math.round(Number(fixedRs) * 100);
+        body.incentive_percent = Number(incentivePct);
       }
       const res = await fetch('/api/admin/create-sales-rep', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
@@ -73,6 +80,7 @@ export function NewRepForm() {
       if (!res.ok) { setMsg({ kind: 'err', text: data.error ?? 'Could not create the rep.' }); return; }
       setMsg({ kind: 'ok', text: `${fullName || data.email} can now sign in and reach /sales. Their capacity row is live below.` });
       setPassword(''); setEmail(''); setFullName(''); setPhone(''); setUserId('');
+      setFixedRs(''); setIncentivePct('');
       router.refresh();
     } catch {
       setMsg({ kind: 'err', text: 'Network error — nothing was created.' });
@@ -177,6 +185,25 @@ export function NewRepForm() {
             <label className="block"><span className={label}>New leads / day</span>
               <input className={input} type="number" min={1} max={100} value={perDay} onChange={(e) => setPerDay(e.target.value)} /></label>
           </div>
+
+          {/* Pay, stated at hire (28 Aug 2026). Same rule as the hours above:
+              there is no part-time default, and a seat whose payslip cannot be
+              computed is as unfinished as one with no working week. */}
+          <div className="mt-2 grid gap-2.5 sm:grid-cols-2">
+            <label className="block"><span className={label}>Fixed fee / month (₹)</span>
+              <input className={input} type="number" min={0} step={1} value={fixedRs}
+                onChange={(e) => setFixedRs(e.target.value)} placeholder="8000" /></label>
+            <label className="block"><span className={label}>Incentive on conversions (%)</span>
+              <input className={input} type="number" min={0} max={100} step={0.5} value={incentivePct}
+                onChange={(e) => setIncentivePct(e.target.value)} placeholder="10" /></label>
+          </div>
+          <p className="mt-1.5 text-[11px] leading-relaxed text-stone-500">
+            Both are required and neither has a default. The percentage applies
+            to what a student actually pays, per conversion, and a refund
+            withdraws only that one. Enter <strong>0%</strong> for a
+            fixed-pay-only seat — that is a real answer; leaving it blank is not,
+            and would show them “terms not set” instead of a payslip.
+          </p>
         </>
       )}
 

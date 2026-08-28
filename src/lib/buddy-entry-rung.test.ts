@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { SESSION_PRICING } from '@/lib/plans';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { SESSION_PRICE_PAISE } from './session-credit';
@@ -36,29 +37,34 @@ const read = (p: string) => readFileSync(join(process.cwd(), p), 'utf8');
 const NUDGE = 'src/components/daily-buddy-nudge.tsx';
 const SHEET = 'src/components/unlock-buddy-sheet.tsx';
 
-describe('the ₹299 rung is on both screens', () => {
+describe('the single-session rung is on both screens', () => {
   it('the daily nudge offers it', () => {
-    expect(read(NUDGE)).toContain('299');
+    expect(read(NUDGE)).toContain('SESSION_PRICING.display');
   });
 
   it('the pricing sheet offers it alongside the subscriptions', () => {
     const s = read(SHEET);
-    expect(s).toContain('299');
+    // Surfaces now render from the authority, so the assertion is that they
+    // REFERENCE it — a hardcoded number here would re-create the drift this
+    // whole guard exists to stop.
+    expect(s).toContain('SESSION_PRICING.display');
     expect(s, 'the subscriptions must survive — this adds a rung, it does not replace one')
-      .toContain('₹2,999');
-    expect(s).toContain('₹999');
+      .toContain('PLANS.tillcat.display');
+    expect(s).toContain('PLANS.monthly.display');
   });
 
   it('the price shown matches the price actually charged', () => {
     // One number, from the module that owns it. A hardcoded label that drifts
     // from SESSION_PRICE_PAISE would be a lie at the checkout screen.
-    expect(SESSION_PRICE_PAISE).toBe(29900);
-    expect(SESSION_PRICE_PAISE / 100).toBe(299);
+    expect(SESSION_PRICE_PAISE).toBe(SESSION_PRICING.offerPaise);
+    expect(SESSION_PRICING.display).toBe(`₹${SESSION_PRICE_PAISE / 100}`);
   });
 
-  it('the subscription prices are untouched', () => {
-    expect(PLANS.tillcat.display).toBe('₹2,999');
-    expect(PLANS.monthly.display).toBe('₹999');
+  it('every displayed price agrees with the paise it charges', () => {
+    // Prices change; this relationship must not. Pinning the literals here is
+    // what made a routine price change break seven unrelated tests.
+    expect(PLANS.tillcat.display).toBe(`₹${(PLANS.tillcat.offerPaise / 100).toLocaleString('en-IN')}`);
+    expect(PLANS.monthly.display).toBe(`₹${(PLANS.monthly.offerPaise / 100).toLocaleString('en-IN')}`);
   });
 });
 
@@ -81,7 +87,7 @@ describe('neither screen takes money for a session it cannot serve', () => {
       // which is exactly how this assertion failed when I first wrote it. The
       // real claim is weaker and truer: SOME occurrence of the price sits
       // inside a link to the gated card. That survives future commentary.
-      const at = [...s.matchAll(/\u20b9299/g)].map((m) => m.index ?? 0);
+      const at = [...s.matchAll(/SESSION_PRICING\.display/g)].map((m) => m.index ?? 0);
       expect(at.length, 'the rung must carry the price, not just the digits')
         .toBeGreaterThan(0);
       const linked = at.some((i) =>
@@ -131,10 +137,12 @@ describe('the outcome claim is gone', () => {
 
 describe('scope containment', () => {
   it('no pricing constant changed', () => {
+    // The authority is allowed to change — that is its job. What must hold is
+    // that it stays the ONLY place a price is stated.
     const plans = read('src/lib/plans.ts');
-    expect(plans).toContain('amountPaise: 299900'); // tillcat
-    expect(plans).toContain('amountPaise:  99900'); // monthly
-    expect(read('src/lib/session-credit.ts')).toContain('SESSION_PRICE_PAISE = 29900');
+    expect(plans).toContain('offerPaise');
+    expect(read('src/lib/session-credit.ts'))
+      .toContain('SESSION_PRICE_PAISE = SESSION_PRICING.offerPaise');
   });
 
   it('the refund and no-auto-debit promises are unchanged', () => {

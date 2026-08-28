@@ -1570,3 +1570,423 @@ other hid behind `if (status === 'ready')` on a fixture that never reached
 `ready`. **Both were written by the same person who wrote the fix, and both
 passed on the broken code. A test is not a test until it has been seen to
 fail.**
+
+## Incident #39 — the guard read one of the two routes it named (2026-08-27)
+
+**Severity:** P1 (Trust). A mentor was told a booking failed that had happened.
+
+**What happened.** `calendar/schedule-meeting` and `calendar/reschedule-meeting`
+each ran `await dispatch(...)` bare, inside the route's single `try`. A
+transport failure therefore fell through to the outer `catch` and answered the
+mentor with `500 "Couldn't create the session"` — for a session already
+committed by the insert above it. The mentor retried, hit the `session_exists`
+refusal, and held two contradictory answers about one booking.
+`rememberIdempotent()` sat below the dispatch and never ran, so the replay
+record that exists to make the retry safe was never written. The student's
+notification was lost with no retry path.
+
+**Why nobody saw it.** `session-booking-notified.guard.test.ts` named both
+booking routes in `BOOKING_ROUTES` — and then ran four of its six assertions
+against a hardcoded `sessions/schedule/route.ts`. The sibling route was checked
+only for "the token `dispatch(` appears somewhere in this file". Assertion (5),
+*notification failure can never fail a committed booking*, is the exact rule
+that was being broken, and it never ran on the file that broke it.
+
+Worse, (5) could not have worked where it was pointed even if it had run: it
+matched `catch (...) { ... console.error }` at FILE level, and every one of
+these routes has an outer `catch (error) { console.error(...) }`. The
+assertion was satisfied by the very handler whose catch was the problem.
+
+**The lesson.** *A guard's route list is not its scope.* Reading a file name in
+a table at the top of a guard tells you nothing about which assertions run
+against it. And **a structural assertion about error handling is meaningless
+without a scope** — `catch` and `console.error` exist in almost every route, so
+matching them anywhere in the file is close to matching nothing. Both
+assertions here are now evaluated inside the notifier's own function body,
+found by brace-matching.
+
+**The fix.** Each route owns a notifier (`tellTheStudent`,
+`tellTheStudentItMoved`) shaped like the one that was already correct,
+`tellBothParties`: try/catch, log, never rethrow. The guard now runs every
+assertion over every route in its table, adds `reschedule-meeting` to it, and
+adds a rule the old guard had no way to express — **no bare `dispatch(` may
+survive in the handler**, where the outer catch makes a transport failure fatal
+to a write that already committed.
+
+**How it was proven.** Three mutations, each run against the rewritten guard:
+restoring the inline dispatch (the original defect) failed 2 assertions;
+removing the notifier's try/catch failed 1; deleting the notifier call while
+leaving the function defined failed 1. Baseline green before and after, file
+byte-identical.
+
+A fourth mutation was caught by the guard's own construction rather than by
+intent: anchoring "notified before success" on `NextResponse.json(payload)`
+matched the `already: true` REPLAY return, which must NOT notify — a
+double-submit re-telling the student is a different defect. The anchor now
+names the new-booking success specifically.
+
+---
+
+## Incident #40 — the rules were real, and attached to the wrong verb (2026-08-27)
+
+**Severity:** P1 (Trust). Sessions could be moved outside a mentor's week.
+
+**What happened.** `calendar/reschedule-meeting` wrote a new `scheduled_at`
+after validating three things: that the timestamp parsed, that it was in the
+future, and that the duration was one of 20/30/45/60. It never read
+`buddy_availability`, never generated slots, and never checked time off. A
+mentor could move a student's session onto a day they do not work, to 3am, or
+into their own holiday, and nothing refused it.
+
+**Why nobody saw it.** The table looked guarded, and half of it was. Two
+triggers sit on `video_sessions`, and only one reaches an UPDATE:
+
+```
+set_video_session_span                   before insert OR UPDATE OF
+                                         scheduled_at, duration_minutes,
+                                         buddy_id   → the GIST exclusion still
+                                                      refuses a double-booking
+                                                      on a reschedule.
+video_session_within_availability_guard  before INSERT      ← only
+                                         → work days, hours and time off are
+                                           never re-read when a session MOVES.
+```
+
+So double-booking — the failure everyone thinks of first, and the one that
+would have been noticed — was covered the whole time. That is precisely what
+made the uncovered half invisible: a reschedule that collided with another
+session WAS refused, so the path looked defended.
+
+**The lesson.** *Coverage is per-verb, not per-table.* A constraint that fires
+on INSERT protects rows that are created, not rows that are changed, and the
+two are different populations. When reviewing an invariant, read the trigger's
+event list, not its name. **Half-covered reads as covered** — the rule that was
+enforced supplied the confidence that the rule that was not enforced borrowed.
+
+**The fix — one line, in the trigger.** The function was never wrong. It reads
+nothing but `new.*` and returns `new`, so it was always correct on an UPDATE and
+was simply never called on one. `20260827c_availability_on_update.sql` changes
+the trigger's event list and nothing else:
+
+```
+before insert
+  →  before insert or update of scheduled_at, duration_minutes, buddy_id
+```
+
+Proof that only the trigger moved, rather than an assurance that it did: the
+normalised md5 of `video_session_within_availability()` is
+`9f5965f220431a1c15fbe4b21cd792d1` on production and on careerrai-test, both
+before and after the migration.
+
+**The column list is load-bearing.** A bare `or update` would fire on every
+write to the row, including the status transitions that end a session's life. A
+6pm session completed at 7:05pm is normal and would have begun raising
+`check_violation` on a row nobody was rescheduling. Scoped to the three
+scheduling columns, the trigger fires only when the session is actually MOVED —
+mirroring `set_video_session_span` directly above it. The writer inventory says
+what that costs: of every `.update()` against video_sessions in the codebase,
+exactly ONE sets any of those columns, and it is the defective route.
+
+**A first attempt solved this in the application and was thrown away.** It
+re-checked availability inside `reschedule-meeting` through a new
+`offeredSlotProblem()` helper. It worked, and it was wrong: it made the mentor's
+week answerable in two places, which is Incident #23 waiting to happen. The
+founder's call — enforce at the single existing authority — deleted more code
+than it added. **When a rule already exists and is merely mis-scoped, widening
+its scope beats re-implementing it upstream.**
+
+Removing that helper exposed a consequence worth recording. With the check gone
+from the route, the legacy Google-calendar move ran BEFORE the database could
+refuse, so a rejected reschedule would have left the mentor's calendar sitting
+on a time the database had just declined — Incident #17 arriving from the
+opposite direction. The calendar sync now runs AFTER the row is committed, and a
+calendar failure can no longer refuse a move that already happened; it is logged
+and audited as `google.api_error` instead.
+
+**How it was proven.** `supabase/tests/reschedule_availability_probes.sql`:
+seven probes on careerrai-test, inside one block that raises at the end so every
+fixture rolls back. A valid reschedule is allowed. A non-working day, a time
+outside hours, mentor time off, and a lengthened session that overruns closing
+time are all refused. A non-scheduling write (title, status) is unaffected. A
+mentor with no availability row is unaffected, as documented.
+
+Non-vacuity, and the only result that really matters: with the trigger reverted
+to `before insert` — production's shape today — the Sunday move was **ALLOWED**
+and `scheduled_at` became 2026-08-30, a day the fixture mentor does not work.
+The defect reproduces on demand.
+
+---
+
+## Incident #41 — the mentor could give away the thing the product sells (2026-08-27)
+
+**Severity:** P0 (Trust, money). A paid session delivered against no payment.
+
+**What happened.** `grep -c session_credits` in
+`calendar/schedule-meeting/route.ts` returned **0**. The mentor-initiated
+booking path inserted a `video_sessions` row directly and never touched the
+ledger. So a mentor could book the very session a student had paid ₹299 for,
+and the credit never learned about it: it stayed `status='paid'` with
+`video_session_id` null while the session it bought went ahead.
+
+Both halves then compound. `hasOpenSessionCredit()` still counted the credit
+open, so the student could not buy another — they had paid, attended, and were
+now blocked from purchasing again by the entitlement they had already consumed.
+And any count of "sessions paid for" and "sessions delivered" disagreed with no
+row anywhere being wrong.
+
+**Why nobody saw it.** This is Incident #31's shape exactly — *a paid student
+fell out of the lifecycle and no row was wrong* — and it was missed for the same
+reason: every individual record is valid. There is no failing query to find,
+because the defect is a JOIN that nobody performs. The route also looked
+complete: it validated the mentor, the student's assignment, the duration, the
+slot, and the free-orientation allowance, and notified the student correctly.
+The one thing it did not do was the one thing nothing displays.
+
+An earlier pass over this route reported it as "notification-correct, credit
+gap" — and got the notification half wrong too (Incident #39). Both errors came
+from asserting behaviour from the presence of a name in a file rather than from
+reading the call, which is Law L2.
+
+**The founder's rule (27 Aug), and the correction that sharpened it.** The first
+reading was "guidance costs a credit", and it shipped a 409 for a student who
+had none. The founder narrowed it: the rule protects a PAID ENTITLEMENT, it does
+not price the session. *If the student holds an applicable paid credit, a
+mentor-initiated booking must consume it. If they hold none, the mentor's free
+booking is exactly what it always was.* Orientation never consumes one either
+way — spending ₹299 on the session we advertise as free is the same defect
+wearing the opposite sign.
+
+That distinction is the lesson: **the defect was never that mentor sessions were
+free, it was that the path a booking arrived through could bypass an
+entitlement.** Where there is no entitlement, there is nothing to bypass.
+
+**The fix.** Orientation, and guidance for a student holding no credit, keep the
+direct insert this route has always used. Guidance for a student who holds one
+goes through `book_session_credit()` — the RPC that already locks the credit,
+inserts the session, links it and moves the state in ONE transaction, and that
+writes the same eight columns the direct insert does. Inventing a ₹0 credit so
+the free path could share that writer was rejected: it would put a row in the
+ledger that every revenue count then has to special-case.
+
+**NO SECOND WRITER.** A credit-linking path written in TypeScript beside the one
+in plpgsql is Incident #23 aimed at money. `p_expected_buddy_id` is the booking
+mentor, so a credit assigned to someone else is refused by the database rather
+than by a check here that can drift out of step with it.
+
+**One distinction that is easy to lose and expensive to lose.** "We could not
+read the ledger" is not "this student owns nothing". Collapsing them hands out a
+paid session on a dropped connection — and it becomes reachable the moment
+no-credit stops being a refusal and becomes a fall-through. A credit read
+failure is a 503 that books nothing, with a test and a mutation holding it
+there.
+
+**Settlement needed no change, and that was verified rather than assumed.**
+`settle()` finds the credit with `.eq('video_session_id', sessionId)` and never
+learns who wrote the link, so a mentor-linked credit completes, releases and
+refuses to double-settle identically to a student-linked one.
+
+**How it was proven.** Eleven behaviour tests through the real `POST` handler,
+including: no credit falls back to the free booking; a credit READ FAILURE does
+not; a refused RPC never becomes a free session; `mentor_changed` never becomes
+a free session; two simultaneous attempts report one session and notify once;
+orientation never calls the RPC. Four mutations, all caught — removing the credit
+call (the pre-fix route, 10 failures), treating an unreadable ledger as
+no-credit, letting a refusal fall through to a free session, and making
+orientation consume a credit.
+
+**Cross-path parity is now held by a test, not by inspection.**
+`booking-paths-parity.behaviour.test.ts` drives both doors against the same
+credit: both call the same RPC with the same entitlement arguments, neither
+writes video_sessions directly while a credit exists, and settlement cannot tell
+them apart. It also surfaced a difference the database erases — the student path
+omits `p_session_type` and relies on the RPC's `default 'guidance'` while the
+mentor path passes it explicitly. Both write 'guidance', so the test normalises
+through the declared default rather than comparing the raw call: comparing raw
+would fail on a difference that does not exist, while still passing if one path
+later started sending 'onboarding'.
+
+**No migration.** This route now uses a function that already exists in
+production; nothing in the schema changed.
+
+---
+
+
+## Incident #40 — a refunded payment stayed 'paid' forever (2026-08-28)
+
+**Severity:** P1 (Trust, money). Every refund ever processed still counts as
+revenue. From 2 September it would also have paid commission on money that had
+been handed back.
+
+**What happened.** `api/payments/webhook` handled `refund.processed` by
+revoking premium, emitting a timeline event and logging a security event — and
+never touching `student_payments`. The row kept `status = 'paid'` permanently.
+The status CHECK constraint had listed `'refunded'` since the table was
+created; nothing had ever written it. So every reader that defines money as
+`status = 'paid'` counted refunds: the founder's revenue screen, the rep
+portfolio's "Won (paid)" tile and its booked-rupees figure.
+
+**Why it stayed invisible.** The refund path was audited twice and improved
+both times — Boundary 2 change 4 made the read throw rather than silently skip
+the revoke, and `webhook-ack.test.ts` has five tests on this branch. Every one
+of them asks *did the student lose premium*. Not one asks *did the ledger stop
+saying we were paid*. The tests encoded the belief that a refund is an
+entitlement problem; it is also an accounting problem, and the second half had
+no owner. Production had 6 paid rows and 0 refunded ones, so the number looked
+plausible on every screen.
+
+**What made it urgent.** Two engagement letters were signed on 28 Aug promising
+10% of what a converted student pays, "payable when the student's payment is
+realised and is not subsequently refunded". The system had no way to honour the
+second half of that clause, and the first payslip is due 7 October.
+
+**The fix.** `settleRefund()` in `lib/activate-payment.ts` writes
+`status='refunded'` and the new `refunded_at`, guarded by `.eq('status','paid')`
+so a redelivered webhook cannot move the timestamp into a different month. It
+throws on failure, so an unrecorded refund 500s and Razorpay redelivers rather
+than being ACKed and lost. It also stamps `sales_conversions.refunded_at`,
+which withdraws the incentive on that one transaction and nothing else.
+
+**The lesson, encoded.** `sales-earnings.guard.test.ts` asserts the webhook
+calls `settleRefund`, that it writes both columns, and that it only moves a row
+still claiming to be paid. The deeper rule: **a state change that revokes an
+entitlement must also correct the ledger that granted it.** Two systems learned
+about the refund; only one of them was asked about it in a test.
+
+**Related:** #15 (payment fix stranded on a branch), #36 (a credit welded to a
+cancelled session). All three are the same family — money and entitlement
+drifting apart because only one side had a test.
+
+---
+
+## Incident #34 — closed (2026-08-28)
+
+Fixed in `20260828b_claim_lead_lockdown.sql`, in its own migration as the
+original entry demanded. `claim_lead(uuid,uuid)`, `refresh_buddy_demo_account()`
+and `refresh_review_account_logs()` are now `service_role` only;
+`claim_lead(uuid,text)` is dropped. Verified against production: zero
+app-owned, non-trigger functions remain reachable by `anon`.
+
+**One correction to the original report, from reading the live grants rather
+than the write-up.** It named the `text` overload as "the worse one". That
+overload was already locked to `postgres` + `service_role` and was never
+reachable by anon. The exposed function was `claim_lead(uuid, uuid)`, which
+*did* validate that the new owner was a sales or admin profile — and never
+validated the caller. A stranger could not invent an owner, but could hand any
+lead to any real rep at will. Since 28 Aug that ownership also feeds
+`sales_conversions`, so the same hole had become a lever on payroll.
+
+**Encoded in:** `rpc-exposure.guard.test.ts` — asserts the revokes name `anon`
+and `authenticated` explicitly rather than relying on `PUBLIC` (Incident #33),
+that no later migration re-grants them, and that the lockdown is the last
+migration to touch `claim_lead`. The guard states plainly what it cannot see: a
+grant made by hand in the Supabase console.
+
+
+## Incident #41 — the fix removed the protection the bug was providing (2026-08-28)
+
+**Severity:** P0 (Trust, money). Caught during the verification pass on #40,
+before any real refund met it.
+
+**What happened.** #40's fix made the refund webhook write
+`student_payments.status = 'refunded'`. Correct in isolation. But both
+activation entry points — the Razorpay webhook and the checkout callback —
+guarded activation with `row.status !== 'paid'`, and while a refunded payment
+wrongly kept `status='paid'` FOREVER, that guard had also been the only thing
+preventing re-activation after a refund. Nobody knew it was doing that job.
+
+Writing the correct status removed the accidental protection:
+
+    pays → refund (status='refunded', premium revoked)
+         → Razorpay redelivers payment.captured (it retries for hours)
+         → 'refunded' !== 'paid' → guard passes
+         → activatePaidOrder runs again → status back to 'paid' beside a live
+           refunded_at, premium handed back to a refunded student
+
+**Why it was nearly invisible.** `razorpay.test.ts` had a test named "is
+idempotent — a replayed captured event cannot double-activate" whose entire
+body was `expect(route).toContain("row.status !== 'paid'")`. It asserted the
+IMPLEMENTATION STRING, so it passed while the property it was named for was
+false. Pinning that string would also have made the test the reason the bug
+could not be fixed. `callback.behaviour.test.ts` compounded it by mocking
+`@/lib/activate-payment` wholesale, so the predicate under test was a stub.
+
+**The fix.** One predicate, `mayActivatePayment(status)`, in the authority.
+'paid' and 'refunded' are both non-activatable; 'created', 'failed' and an
+absent status (reconcile-payments filters in the query) are activatable.
+Enforced INSIDE `activatePaidOrder` above every side effect — both call sites
+had independently written the same wrong guard, and a rule every caller must
+remember is one the third caller forgets. It returns `true`, not `false`, so a
+refused replay is a no-op rather than a 500 that makes Razorpay redeliver
+forever.
+
+**Two other readers were changed the same day by the same root cause.**
+`mission-queue.ts` used `.neq('status','paid')` to mean "reached checkout and
+did not complete" — a refunded student started matching it, and would have been
+surfaced to the founder as the product's strongest buying signal. The activation
+predicate and that filter are now both covered by
+`payment-status-semantics.guard.test.ts`.
+
+**The lesson, encoded.** **When you fix a bug, ask what the bug was protecting.**
+A wrong value that everything reads is load-bearing whether or not anyone
+designed it that way. Encoded in `refund-finality.test.ts` (the property, not
+the string) and `payment-status-semantics.guard.test.ts` (no reader may express
+"not paid" ambiguously).
+
+**Related:** #40, and #39 — both are tests that named the right property and
+asserted something else.
+
+
+## Incident #42 — the guard was in the caller, the bug was in the callee (2026-08-28)
+
+**Severity:** P0 (Trust, money). Found in the release audit of 84c2be3 and
+REPRODUCED against the real function before it could reach a real refund.
+
+**What happened.** #41 added `mayActivatePayment()` and enforced it inside
+`activatePaidOrder`. The audit then re-ran the same scenario end-to-end and it
+still failed:
+
+    1 captured + activated   payment=paid,     subscription=active
+    2 refunded               payment=refunded, subscription=free
+    3 activate_payment()     payment=PAID,     subscription=ACTIVE
+                             refunded_at still set → a row claiming both
+
+**Two root causes, both below the fix.**
+
+1. `activate_payment` guards its own write with `where ... and status != 'paid'`
+   — the exact defect #41 fixed in TypeScript, still written in SQL. 'refunded'
+   is not 'paid', so the row moved. The fix travelled to the callers and never
+   reached the callee.
+2. The `profiles` update had NO condition at all. Even where the payment row
+   correctly refused to move, premium was handed back regardless. That is the
+   half that actually costs money.
+
+**And why an application guard could never have been enough.**
+`activatePaidOrder` reads the status in one statement and writes in another,
+with an attribution read and an insert in between. A refund landing in that
+window passes a guard evaluated against a stale row. Check-then-act is not a
+guard; it is a race with good intentions.
+
+**The fix.** `SELECT ... FOR UPDATE` inside `activate_payment` (20260828c),
+taking the row lock that `settleRefund`'s own UPDATE contends for, so the two
+serialise in either order and exactly one truthful row survives. The refunded
+check returns before `profiles` is touched. The session path got the same
+treatment in application code: the update filters
+`.in('status', ['created','failed'])` and reads the affected rows back, so the
+DATABASE decides rather than a value read several statements ago.
+
+**One regression caught inside the fix.** The first version early-returned
+whenever no row moved. That would have meant: delivery one marks the payment
+paid, then fails to mint the credit; the retry finds 'paid', returns true, and
+the student has paid ₹399 for a session credit that never existed. The code now
+re-reads and distinguishes 'refunded' (mint nothing) from 'paid' (fall through
+and mint) from anything else (500 and let Razorpay redeliver). A surviving
+mutation showed that last branch was uncovered; it now has a test.
+
+**The lesson, encoded.** **A guard belongs in the write, not in the caller** —
+anything else is check-then-act. Encoded in `refund-finality.test.ts`
+(behavioural: refund mid-activation mints nothing, a retry after a failed mint
+still mints, a stuck row 500s) and in the migration's own assertions.
+
+**Related:** #40, #41. The three together are one story: a wrong value that
+everything read was load-bearing, fixing it broke the things leaning on it, and
+the fix had to go one layer deeper than the first attempt.

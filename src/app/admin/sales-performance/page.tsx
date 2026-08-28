@@ -2,11 +2,22 @@ import Link from 'next/link';
 import { requireAdmin } from '@/lib/admin-auth';
 import { cn } from '@/lib/utils';
 import { WorkspaceShell } from '@/components/admin/workspace-shell';
+import { SESSION_PRICE_PAISE } from '@/lib/session-credit';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Sales performance · CareerRai' };
 
-const PRICE = 999;
+// The one price a counsellor actually pitches — the single session — imported
+// from the same constant checkout charges.
+//
+// This was a hard-coded 999, and it is the SECOND time that literal has been
+// found on a rep surface: lib/sales-portfolio.ts carries a comment about
+// fixing exactly this in the 24 Aug research pass, and the copy on this screen
+// survived because the two files were never compared. It valued the pipeline
+// against an offer the script does not make, and it escaped the pricing sweep
+// because that guard matches paise (99900) and display strings ("₹999"), not a
+// bare rupee integer — a gap now closed by price-authority.guard.test.ts.
+const PRICE = SESSION_PRICE_PAISE / 100;
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 function istDate(iso: string): string {
@@ -121,7 +132,8 @@ export default async function SalesPerformancePage({ searchParams }: { searchPar
       workspaceId="sales"
       activeHref="/admin/sales-performance"
       title={`${repName} — portfolio`}
-      subtitle={`Only the leads ${repName.split(' ')[0]} owns and works — their book, their numbers.`}
+      subtitle={`Only the leads ${repName.split(' ')[0]} owns and works — their book, their numbers. `
+        + 'Pipeline, not payroll: what they are owed is on the Payroll screen.'}
     >
         {repList.length > 1 && (
           <div className="mb-3 flex flex-wrap gap-1.5">
@@ -142,7 +154,14 @@ export default async function SalesPerformancePage({ searchParams }: { searchPar
               { l: 'Working', v: working },
               { l: 'Interested', v: interested, note: `Rs ${(interested * PRICE).toLocaleString('en-IN')}` },
               { l: 'Callbacks', v: callbacks },
-              { l: 'Won (paid)', v: won, note: `Rs ${bookedRs.toLocaleString('en-IN')}` },
+              // NOT the payroll number, and labelled so nobody has to work that
+              // out. This counts students in THIS rep's book today who have
+              // ever paid — a pipeline fact. Incentive is paid from
+              // sales_conversions, which freezes the owner at the moment the
+              // money landed and is scoped to a month. The two legitimately
+              // differ after any reassignment, and a founder comparing them
+              // without this label would reasonably think one of them is broken.
+              { l: 'Ever paid (book)', v: won, note: `Rs ${bookedRs.toLocaleString('en-IN')}` },
               { l: 'Lost', v: notInterested },
             ].map((x) => (
               <div key={x.l} className="rounded-xl bg-white/10 p-2.5">

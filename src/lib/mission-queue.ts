@@ -2,6 +2,10 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { daysSinceLastLog } from '@/lib/streak-utils';
 import { SITE_URL } from '@/lib/site';
 import { resolveCatExamDate } from '@/lib/routine-engine';
+import { SESSION_PRICE_PAISE } from '@/lib/session-credit';
+
+/** The one price a message may quote, from the module that charges it. */
+const SESSION_RS = SESSION_PRICE_PAISE / 100;
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -120,7 +124,7 @@ function buildMessage(objective: Objective, first: string, ctx: MessageCtx): str
       return `${first}, your reminders have stopped, so your daily plan isn't reaching you at all — and only ${d} days are left. Nishant here, I built CareerRai. Bas app ek baar khol lo, reminders apne aap chalu ho jayenge. Jinka plan roz pahunchta hai unka syllabus October me khatam ho jata hai; baaki November me revision dhoondh rahe hote hain. ${SITE_URL}`;
 
     case 'buddy':
-      return `${first}, ab sirf ${d} din bache hain. You looked at Exam Buddy and left it. Nishant here, I built CareerRai, so let me be straight with you. Book one 45-minute session with an IIM buddy — wo tumhara actual prep padh ke aate hain, batate hain score kahan atka hai, aur you leave with a written next step. Rs 299, one time — aur full plan loge within 7 days to Rs 299 usme adjust ho jata hai. In ${d} dino me guesswork band karo, ek session karke dekho. ${SITE_URL}/student/buddy`;
+      return `${first}, ab sirf ${d} din bache hain. You looked at Exam Buddy and left it. Nishant here, I built CareerRai, so let me be straight with you. Book one 45-minute session with an IIM buddy — wo tumhara actual prep padh ke aate hain, batate hain score kahan atka hai, aur you leave with a written next step. Rs ${SESSION_RS}, one time — aur full plan loge within 7 days to Rs ${SESSION_RS} usme adjust ho jata hai. In ${d} dino me guesswork band karo, ek session karke dekho. ${SITE_URL}/student/buddy`;
 
     case 'install':
       return `${first}, your CAT plan is ready and sitting in your account, but the app isn't installed — so the plan and the reminders can't reach you. ${d} days left. Nishant here, I built CareerRai. 10 second ka kaam hai: ${SITE_URL} Chrome me kholo aur Add to Home Screen dabao. Plan bana pada hai, use to kar lo.`;
@@ -167,7 +171,17 @@ export async function buildMissionQueue(admin?: any, limit = 40): Promise<Missio
     db.from('founder_outreach').select('student_id, objective, action, snoozed_until, created_at').gte('created_at', sinceCooldown),
     // Someone who reached checkout and did not complete is the strongest
     // signal in the whole product — they tried to give us money.
-    db.from('student_payments').select('student_id, status, created_at').neq('status', 'paid').gte('created_at', since30d),
+    //
+    // 'refunded' is excluded alongside 'paid' (28 Aug 2026). This read was
+    // `.neq('status','paid')` and was correct only for as long as a refunded
+    // payment wrongly kept status='paid' forever. Once the refund webhook
+    // began writing the real status, a refunded student started matching
+    // "reached checkout and did not complete" — and they did complete. They
+    // paid and asked for the money back. Surfacing them as the product's
+    // strongest buying signal would send the founder to chase the one person
+    // who has already said no with their wallet.
+    db.from('student_payments').select('student_id, status, created_at')
+      .not('status', 'in', '("paid","refunded")').gte('created_at', since30d),
     db.from('session_requests').select('student_id, created_at').gte('created_at', since30d),
   ]);
 

@@ -91,7 +91,9 @@ describe('both write paths actually use the shared function — not just a same-
   });
 
   it('the pre-auth signup route imports and calls registerSubscription', () => {
-    const src = readFileSync('src/app/api/auth/verify-phone-otp/route.ts', 'utf8');
+    // The pre-auth registration moved into the shared onboarding authority
+    // on 29 Aug so the Google door runs it too; the rule is unchanged.
+    const src = readFileSync('src/lib/onboarding-apply.ts', 'utf8');
     expect(src).toContain("from '@/lib/push-subscription-registry'");
     expect(src).toContain('registerSubscription(');
     // The exact defect: writing notif_prefs as a bare object literal instead
@@ -101,7 +103,7 @@ describe('both write paths actually use the shared function — not just a same-
   });
 
   it('neither route hand-stamps push_subscribed_at itself anymore', () => {
-    for (const f of ['src/app/api/push/subscribe/route.ts', 'src/app/api/auth/verify-phone-otp/route.ts']) {
+    for (const f of ['src/app/api/push/subscribe/route.ts', 'src/lib/onboarding-apply.ts']) {
       const src = readFileSync(f, 'utf8');
       expect(src, f).not.toMatch(/push_subscribed_at:\s*\(/);
     }

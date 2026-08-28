@@ -245,6 +245,15 @@ export type EventName =
   // key for "does practising the log move onboarded → first real log".
   | 'log_tour_done'
   | 'install_click' | 'install_already' | 'install_dismissed' | 'install_escape'
+  // The ONLY event in this list that is proof of an install rather than of an
+  // intention to install. The browser fires `appinstalled` after the install
+  // actually completes, whatever route was used. It was handled client-side
+  // only — it flipped a button's label and redirected — so it never reached
+  // this server, and the lifetime install count was therefore unknowable from
+  // our own data. Recorded from 29 Aug; it says nothing about installs that
+  // happened before that date, and nothing about uninstalls, because the
+  // platform provides no uninstall event to listen for.
+  | 'app_installed'
   | 'install_guide_shown' | 'install_prompt_result' | 'install_prompt_shown'
   // iOS since the native app shipped: the App Store hand-off, and the quiet
   // Add-to-Home-Screen fallback for anyone the App Store fails.
@@ -252,7 +261,7 @@ export type EventName =
   | 'install_prompt_unavailable' | 'install_unsupported'
   | 'meta_escape_click' | 'meta_escape_dismissed' | 'meta_escape_shown'
   | 'pay_blocked_flag_off' | 'pay_checkout_opened' | 'pay_dismissed'
-  // The ₹299 single session — its own funnel, because it converts a FREE
+  // The single session — its own funnel, because it converts a FREE
   // student and we need to see it separately from subscription checkout.
   | 'session_book_click' | 'session_pay_dismissed' | 'session_pay_success'
   // The WhatsApp opt-in, as its own funnel: join vs skip is the only way to
@@ -331,7 +340,7 @@ export type EventName =
   // and it competes with every other auto-modal for a single daily slot — a
   // trade we have been making on assertion. `_rung` is deliberately separate
   // from `_dismissed`: four controls on that modal call the same setShow(false),
-  // and folding the ₹299 link in with them would record the deepest
+  // and folding the single-session link in with them would record the deepest
   // engagement on the screen as an abandonment.
   | 'buddy_nudge_shown' | 'buddy_nudge_dismissed'
   | 'buddy_nudge_cta' | 'buddy_nudge_rung';

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { codeOnly } from './test-support/code-only';
 
 // ── THE SWEEP AND THE RESOLVER MUST MEAN THE SAME THING ────────────────────
 //
@@ -19,11 +20,6 @@ import { join } from 'node:path';
 
 const ROUTE = join(process.cwd(), 'src/app/api/cron/push-recovery/route.ts');
 
-function codeOnly(src: string): string {
-  return src
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/(^|[^:])\/\/.*$/gm, '$1');
-}
 
 /** Just the sweep function, so a filter elsewhere in the file cannot satisfy this. */
 function sweepBody(): string {

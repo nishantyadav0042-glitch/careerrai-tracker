@@ -5,7 +5,7 @@ import { Play, Radio } from 'lucide-react';
 
 // ── The mentor's Start ──────────────────────────────────────────────────────
 //
-// The missing half of the ₹299 product. Sixteen sessions were sold and none
+// The missing half of the single-session product. Sixteen sessions were sold and none
 // was ever completed, because `active` was an unreachable state: legal in the
 // schema since the table was created, never written by any code. This button
 // is the only thing in the product that can write it.

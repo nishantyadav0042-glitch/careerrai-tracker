@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { codeOnly } from './test-support/code-only';
 import {
   safeReturnPath, newStateNonce, encodeOAuthState, verifyOAuthState,
   OAUTH_STATE_COOKIE, GOOGLE_SCOPES,
@@ -15,9 +16,6 @@ import {
  * on: an open redirect off our own domain, and no CSRF binding at all.
  */
 
-function codeOnly(src: string): string {
-  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
-}
 
 describe('safeReturnPath — a round trip cannot leave this origin', () => {
   it.each([

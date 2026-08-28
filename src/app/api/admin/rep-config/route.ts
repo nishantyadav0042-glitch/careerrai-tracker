@@ -18,6 +18,12 @@ const BOUNDS = {
   max_new_per_day: [1, 100],
   first_contact_sla_minutes: [5, 10080],
   capacity_override: [1, 200],
+  // Pay terms (28 Aug 2026). Editable here so a rate change agreed with a
+  // counsellor is one field, audited like every other ceiling — the letters
+  // say the founder tells them before a change takes effect, and an
+  // unaudited pay edit would make that promise unverifiable.
+  monthly_fixed_paise: [0, 100_000_000],
+  incentive_percent: [0, 100],
 } as const;
 
 function badRequest(msg: string) {
@@ -52,6 +58,16 @@ export async function POST(request: NextRequest) {
     if (body[key] === undefined) continue;
     if (body[key] === null && key === 'capacity_override') { patch.capacity_override = null; patch.override_until = null; continue; }
     const n = Number(body[key]);
+    // incentive_percent is the one term that is legitimately fractional — a
+    // 7.5% rate is an ordinary thing to agree with someone. Everything else
+    // here is a count or a paise amount and must stay whole; the column is
+    // numeric(5,2), so two decimals is the real limit and rounding to it here
+    // gives the founder a sentence instead of a 23514 from Postgres.
+    if (key === 'incentive_percent') {
+      if (!Number.isFinite(n) || n < lo || n > hi) return badRequest(`${key} must be between ${lo} and ${hi}.`);
+      patch[key] = Math.round(n * 100) / 100;
+      continue;
+    }
     if (!Number.isInteger(n) || n < lo || n > hi) return badRequest(`${key} must be a whole number between ${lo} and ${hi}.`);
     patch[key] = n;
   }

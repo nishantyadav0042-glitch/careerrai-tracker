@@ -137,7 +137,7 @@ export async function POST(request: NextRequest) {
     }
 
     // The student paid for a session that will not happen. Release the credit
-    // so they can rebook, instead of leaving ₹299 welded to a dead session
+    // so they can rebook, instead of leaving the payment welded to a dead session
     // with no exit in code — a silent refund they would have to ask for.
     if (!alreadySettled) {
       await settleCreditForSession(admin, session.id as string, 'cancelled');

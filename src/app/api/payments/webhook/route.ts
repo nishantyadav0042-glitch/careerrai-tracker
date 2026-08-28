@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { verifyRazorpayWebhook } from '@/lib/razorpay';
 import { revokePremium } from '@/lib/premium';
 import { logSecurityEvent } from '@/lib/security-log';
-import { activatePaidOrder, readWebhookPaymentRow, readRefundTargetStudent } from '@/lib/activate-payment';
+import { activatePaidOrder, readWebhookPaymentRow, readRefundTargetStudent, settleRefund, mayActivatePayment } from '@/lib/activate-payment';
 import { emitTimeline } from '@/lib/os/timeline';
 
 // Subscription state changes ONLY here, and only after the signature verifies.
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
         // Both of those remain legitimate 200s.
         const row = await readWebhookPaymentRow(admin, orderId);
 
-        if (row && row.status !== 'paid') {
+        if (row && mayActivatePayment(row.status)) {
           // Marks paid, activates the subscription, burns the coupon, grants
           // premium + queues the buddy. On failure we return 500 so Razorpay
           // retries — the status guard above means only the failed ops re-run.
@@ -64,16 +64,22 @@ export async function POST(request: NextRequest) {
         // BOUNDARY 2, change 4: same rule as the capture path — a failed read
         // throws → 500 → Razorpay redelivers. An ACKed refund we never
         // processed would leave a refunded student premium forever.
-        const refundStudentId = await readRefundTargetStudent(admin, refundedPaymentId);
-        if (refundStudentId) {
-          await revokePremium(admin, refundStudentId);
+        const target = await readRefundTargetStudent(admin, refundedPaymentId);
+        if (target) {
+          await revokePremium(admin, target.studentId);
+          // The money is out of the ledger and the counsellor's incentive on
+          // this sale is withdrawn. Before this line a refunded payment kept
+          // status='paid' forever, so it went on counting as revenue and would
+          // have been paid commission (Clause 7). Throws → 500 → Razorpay
+          // redelivers, rather than ACKing a refund we never recorded.
+          await settleRefund(admin, target);
           await emitTimeline(admin, {
-            entity: 'student', entityId: refundStudentId, kind: 'refunded',
+            entity: 'student', entityId: target.studentId, kind: 'refunded',
             summary: 'Refunded — premium revoked', actor: 'system',
             metadata: { paymentId: refundedPaymentId },
           });
           await logSecurityEvent(admin, {
-            type: 'payment_refunded', severity: 'warning', userId: refundStudentId,
+            type: 'payment_refunded', severity: 'warning', userId: target.studentId,
             metadata: { paymentId: refundedPaymentId },
           });
         }

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { decideBookability, type BookabilityFacts } from './session-assignment';
+import { codeOnly } from './test-support/code-only';
 
 // ── ONE BUSINESS RULE, ONE AUTHORITY, EVERYTHING ELSE A CONSUMER ────────────
 //
@@ -24,10 +25,13 @@ import { decideBookability, type BookabilityFacts } from './session-assignment';
 // decideBookability() is now the only place the rule exists. Adapters are
 // allowed; competing definitions are not.
 
+// The BOOKABLE baseline, so each test states only what it is varying. Google
+// connected is part of that baseline as of 27 Aug — it is now the requirement,
+// not one of two ways to satisfy one.
 const facts = (o: Partial<BookabilityFacts> = {}): BookabilityFacts => ({
   availability: { active: true },
   hasRoom: true,
-  googleConnected: false,
+  googleConnected: true,
   ...o,
 });
 
@@ -50,14 +54,31 @@ describe('the six states, enumerated', () => {
     expect(d).toMatchObject({ reason: 'no_meeting_room' });
   });
 
-  it('availability ✓ / room ✓ / google ✗ → BOOKABLE', () => {
-    // The case the old rule got wrong: a pasted link is a room.
-    expect(decideBookability(facts({ hasRoom: true, googleConnected: false })).bookable).toBe(true);
+  it('availability ✓ / room ✓ / google ✗ → NOT bookable — the 27 Aug reversal', () => {
+    // This case flipped. A pasted link used to satisfy the rule on the
+    // reasoning that "a room is a room". Google is now the mentor's
+    // infrastructure — Calendar event, Meet link, reminders — and a pasted URL
+    // provides none of it, so a legacy room no longer makes anyone bookable.
+    //
+    // The room is still RECORDED, and every session already booked against it
+    // still opens. This is about taking NEW bookings.
+    const d = decideBookability(facts({ hasRoom: true, googleConnected: false }));
+    expect(d.bookable).toBe(false);
+    expect(d).toMatchObject({ reason: 'no_meeting_room' });
   });
 
   it('availability ✓ / room ✗ / google ✓ → BOOKABLE', () => {
-    // Google can mint a room, so it satisfies the same half.
+    // Google alone is now the whole requirement: it can mint the room.
     expect(decideBookability(facts({ hasRoom: false, googleConnected: true })).bookable).toBe(true);
+  });
+
+  it('hasRoom cannot rescue a mentor, and cannot condemn one either', () => {
+    // Stated directly, because `hasRoom` is still in the facts and a reader
+    // could reasonably assume it still counts. Google decides alone.
+    for (const hasRoom of [true, false]) {
+      expect(decideBookability(facts({ hasRoom, googleConnected: true })).bookable).toBe(true);
+      expect(decideBookability(facts({ hasRoom, googleConnected: false })).bookable).toBe(false);
+    }
   });
 
   it('availability ✗ / room ✗ / google ✓ → not bookable', () => {
@@ -117,9 +138,6 @@ function walk(dir: string, out: string[] = []): string[] {
 }
 
 /** Comments stripped — this repo has repeatedly been bitten by guards that matched their own prose. */
-function codeOnly(src: string): string {
-  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
-}
 
 const files = walk(SRC)
   .map((f) => [f.slice(process.cwd().length + 1), codeOnly(readFileSync(f, 'utf8'))] as const)
@@ -157,5 +175,42 @@ describe('no second definition of mentor bookability', () => {
     for (const [f, c] of consumers) {
       expect(c, `${f} uses the rule without importing it`).toMatch(/from\s+['"](@\/lib\/session-assignment|\.\/session-assignment)['"]/);
     }
+  });
+});
+
+// ── THE FACT MUST COME FROM SOMETHING THAT IS STILL WRITTEN ─────────────────
+//
+// 27 Aug, caught before shipping and worth a permanent test.
+//
+// bookabilityFacts() read `profiles.google_calendar_connected` — a column
+// nothing in this codebase has written for weeks. Two other files already
+// carry comments saying so, each having been misled by it. It survived because
+// the rule was `hasRoom || googleConnected`: a pasted room carried every
+// mentor past a fact that was permanently false.
+//
+// Making Google mandatory removed that cover, and the stale read stopped being
+// cosmetic: with the column never set, EVERY mentor would have been unbookable
+// forever — including immediately after successfully connecting Google. A
+// correct rule reading a dead fact is still a total outage, and the rule looks
+// perfect while it happens.
+//
+// google_oauth_tokens is the only thing that knows: a row exists while the
+// connection does, and clearGoogleState() deletes it on disconnect, on revoke
+// and on a 401.
+describe('the connection fact is read from the token, not a dead column', () => {
+  const source = readFileSync('src/lib/session-assignment.ts', 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1');
+
+  it('bookabilityFacts asks google_oauth_tokens', () => {
+    expect(source).toMatch(/from\(['"]google_oauth_tokens['"]\)/);
+  });
+
+  it('bookabilityFacts never reads profiles.google_calendar_connected again', () => {
+    expect(
+      /google_calendar_connected/.test(source),
+      'that column is not written by anything — reading it makes every mentor '
+        + 'permanently unbookable, and the rule above will look correct while it does',
+    ).toBe(false);
   });
 });

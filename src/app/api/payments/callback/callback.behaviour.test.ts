@@ -24,7 +24,12 @@ const readRow = vi.hoisted(() => vi.fn());
 const emit = vi.hoisted(() => vi.fn(async () => {}));
 
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => currentAdmin }));
-vi.mock('@/lib/activate-payment', () => ({
+// Only the SIDE-EFFECTING functions are stubbed. mayActivatePayment is the
+// real one, deliberately: it is the rule that decides whether a replayed
+// capture may re-activate a refunded payment, and a stub of it would make
+// these tests pass no matter what that rule said.
+vi.mock('@/lib/activate-payment', async (orig) => ({
+  ...(await orig<Record<string, unknown>>()),
   activatePaidOrder: activate,
   readWebhookPaymentRow: readRow,
 }));

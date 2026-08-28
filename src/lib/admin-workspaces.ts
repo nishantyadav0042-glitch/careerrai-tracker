@@ -112,6 +112,10 @@ export const WORKSPACES: AdminWorkspace[] = [
       // each rep holds and how much more they could take. No automatic
       // assignment exists; every lead is still claimed manually.
       { label: 'Capacity', href: '/admin/sales/capacity', status: 'live' },
+      // Added 28 Aug 2026 with the two counsellor hires. Sits next to Capacity
+      // because both are answers about the same people — what they can carry,
+      // and what they are owed for carrying it.
+      { label: 'Payroll', href: '/admin/sales/payroll', status: 'live' },
       { label: 'Data quality', href: '/admin/sales/quality', status: 'live' },
       { label: 'Leads', href: '/admin/leads', status: 'live' },
       { label: 'Performance', href: '/admin/sales-performance', status: 'moved' },

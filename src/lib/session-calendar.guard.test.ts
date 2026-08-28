@@ -3,6 +3,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { join } from 'node:path';
 import { holdSessionOnCalendar } from './session-calendar';
+import { codeOnly } from './test-support/code-only';
 
 /**
  * ── EVERY BOOKING PATH REACHES GOOGLE CALENDAR THE SAME WAY ─────────────────
@@ -24,11 +25,6 @@ import { holdSessionOnCalendar } from './session-calendar';
 
 const ROOT = join(__dirname, '..');
 
-function codeOnly(src: string): string {
-  return src
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/(^|[^:])\/\/.*$/gm, '$1');
-}
 
 /** Every route that moves a video_session into 'scheduled'. */
 const BOOKING_ROUTES = [
@@ -109,6 +105,12 @@ function execSyncLike(): string[] {
   return out
     .filter((f) => !f.includes('.test.'))
     .filter((f) => !f.endsWith('src/lib/google-meet.ts')) // its definition
+    // grep -l matches raw bytes, so a COMMENT naming createCalendarHold() was
+    // reported as a second implementation (student/buddy/page.tsx explains, in
+    // prose, that the hold adds the student as an attendee). Re-check each hit
+    // against comment-stripped source, the same rule every other assertion in
+    // this file uses: an implementation is a CALL, never a sentence about one.
+    .filter((f) => /\bcreateCalendarHold\s*\(/.test(codeOnly(readFileSync(f, 'utf8'))))
     .map((f) => f.replace(/^src\//, ''))
     .sort();
 }

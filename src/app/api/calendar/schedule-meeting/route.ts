@@ -42,6 +42,177 @@ interface ScheduleMeetingRequest {
  * notifies the student in-app. Refuses if the pair already has a live session,
  * or if it would double-book the buddy.
  */
+// ── TELLING THE STUDENT IS NOT PART OF THE BOOKING ──────────────────────────
+//
+// 27 Aug. This dispatch was a bare `await` inside the route's only try block,
+// so a transport failure fell through to the outer catch and answered the
+// mentor with 500 "Couldn't create the session" — for a session already
+// committed at the insert above. The mentor then retried, hit the
+// `session_exists` refusal, and held two contradictory answers about one
+// booking. `rememberIdempotent` never ran either, so the replay that exists to
+// prevent exactly this was never recorded.
+//
+// Same rule as sessions/schedule's tellBothParties, and now the same shape:
+// NEVER fatal, never silent. The student's phone is not what makes the session
+// real — the row is. Guarded by session-booking-notified.guard.test.ts.
+async function tellTheStudent(opts: {
+  sessionId: string;
+  studentId: string;
+  buddyFirstName: string;
+  istTime: string;
+  isOrientation: boolean;
+  meetLink: string | null;
+  prefs: Record<string, unknown>;
+}) {
+  try {
+    await dispatch({
+      userId: opts.studentId,
+      type: 'session_scheduled',
+      title: opts.isOrientation
+        ? `🎯 Free Orientation with ${opts.buddyFirstName}`
+        : `📅 Session with ${opts.buddyFirstName}`,
+      body: bookedNotificationBody({
+        istTime: opts.istTime, isOrientation: opts.isOrientation, meetLink: opts.meetLink,
+      }),
+      url: sessionNotificationUrl('student'),
+      data: {
+        sessionId: opts.sessionId,
+        meetLink: opts.meetLink,
+        sessionType: opts.isOrientation ? 'onboarding' : 'guidance',
+      },
+      reason: 'Session booked by the buddy — the student holds the join link from second one',
+      expectedAction: 'view_session',
+      prefs: opts.prefs,
+    });
+  } catch (err) {
+    console.error('[calendar/schedule-meeting] booking notification failed', opts.sessionId, err);
+  }
+}
+
+// ── A GUIDANCE SESSION IS SOMETHING THE STUDENT PAID FOR ────────────────────
+//
+// Founder decision, 27 Aug: orientation is free, guidance consumes a credit.
+//
+// Before this, the mentor path inserted a session and never touched
+// session_credits. The student's payment sat 'paid' with video_session_id null
+// while the session it bought went ahead — so the ledger said "owed" and the
+// calendar said "delivered", and neither knew about the other. That is the
+// same class as Incident #31 (a paid student out of the lifecycle with no row
+// wrong) and it is invisible by construction: every individual row is valid.
+//
+// NO SECOND WRITER. book_session_credit() already locks the credit, inserts
+// the session, links it and moves the state in one transaction, and writes the
+// same eight columns the orientation insert does. p_expected_buddy_id is this
+// mentor, so booking against a credit assigned to someone else is refused by
+// the database rather than by a check here that can drift out of step with it.
+//
+// The rule is about ENTITLEMENT, not about price. If the student holds a paid
+// credit, the booking must consume it whichever side started the booking —
+// otherwise a mentor-initiated booking silently delivers a paid session while
+// the ledger still says the student is owed one. If they hold no credit, the
+// mentor's free booking is unchanged: there is no entitlement to bypass.
+/**
+ * What the credit authority decided. `no_credit` is not a failure — it is the
+ * answer "this student holds no paid entitlement", and the caller then books
+ * the free session the mentor path has always booked.
+ */
+type CreditBooking =
+  | { kind: 'booked'; sessionId: string }
+  | { kind: 'already'; sessionId: string }
+  | { kind: 'no_credit' }
+  | { kind: 'refused'; error: string; reason: string; status: number };
+
+async function bookAgainstCredit(
+  admin: ReturnType<typeof createAdminClient>,
+  opts: {
+    buddyId: string;
+    studentId: string;
+    title: string;
+    start: Date;
+    durationMinutes: number;
+    meetLink: string;
+  },
+): Promise<CreditBooking> {
+  // Same status set as the student's own booking route: booking_blocked is a
+  // credit whose mentor cancelled — paid for, undelivered, explicitly
+  // rebookable. Leaving it out was half of the stranded payment (Incident #36).
+  const { data: credit, error } = await admin
+    .from('session_credits')
+    .select('id, status, video_session_id')
+    .eq('student_id', opts.studentId)
+    .in('status', ['paid', 'assigned', 'scheduled', 'booking_blocked'])
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error('[calendar/schedule-meeting] credit read failed:', error.message);
+    // NOT a fall-through to a free session. "We could not read the ledger" and
+    // "this student owns nothing" are different answers, and treating the first
+    // as the second gives away a paid session on a dropped connection.
+    return {
+      kind: 'refused',
+      error: "Couldn't check this student's session credit — try again.",
+      reason: 'credit_read_failed',
+      status: 503,
+    };
+  }
+
+  // NO APPLICABLE PAID CREDIT. Founder decision, 27 Aug: this is not a
+  // refusal. A mentor booking for a student who has not bought a session keeps
+  // the behaviour it has always had — a free session — because that is a real
+  // and intended part of the product, not an accident. The rule being enforced
+  // is narrower than "guidance costs money": a paid entitlement must never be
+  // bypassed by the path the booking came in through. Where there is no
+  // entitlement there is nothing to bypass.
+  if (!credit) return { kind: 'no_credit' };
+
+  const { data: booking, error: rpcError } = await admin.rpc('book_session_credit', {
+    p_credit_id: credit.id,
+    p_student_id: opts.studentId,
+    p_expected_buddy_id: opts.buddyId,
+    p_start: opts.start.toISOString(),
+    p_duration_minutes: opts.durationMinutes,
+    p_meet_url: opts.meetLink,
+    p_title: opts.title,
+    p_session_type: 'guidance',
+  });
+
+  if (rpcError || !booking?.[0]) {
+    console.error('[calendar/schedule-meeting] booking failed:', rpcError?.message);
+    return {
+      kind: 'refused',
+      error: "Couldn't save the session — try again.",
+      reason: 'booking_failed',
+      status: 500,
+    };
+  }
+
+  const { outcome, session_id: sessionId, detail } = booking[0];
+
+  if (outcome === 'booked') return { kind: 'booked', sessionId: sessionId as string };
+  if (outcome === 'already_booked') return { kind: 'already', sessionId: sessionId as string };
+
+  // The two race outcomes have wording that already exists, written for a
+  // mentor rather than a student — one module, so the two booking paths cannot
+  // describe the same rule differently (lib/booking-constraints).
+  if (outcome === 'slot_taken' || outcome === 'session_exists') {
+    const refused = constraintFailure(
+      { code: outcome === 'slot_taken' ? '23P01' : '23505' }, 'buddy',
+    )!;
+    return { kind: 'refused', error: refused.message, reason: refused.reason, status: refused.status };
+  }
+
+  // unavailable / not_eligible / mentor_changed. `detail` comes from the
+  // database guard that refused it and is already a sentence.
+  return {
+    kind: 'refused',
+    error: detail ?? 'That booking is not available.',
+    reason: outcome as string,
+    status: 409,
+  };
+}
+
 export async function POST(request: NextRequest) {
   try {
     // ── Auth: caller must be a buddy ─────────────────────────────
@@ -188,38 +359,109 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Persist session ──────────────────────────────────────────
-    // No per-booking calendar event is created. The two database constraints
-    // below are the real rules; everything above only produces better error
-    // messages than Postgres would.
-    const { data: session, error: sessionError } = await admin
-      .from('video_sessions')
-      .insert({
-        buddy_id: user.id,
-        student_id: studentId,
-        title,
-        scheduled_at: start.toISOString(),
-        duration_minutes: durationMinutes,
-        session_status: 'scheduled',
-        session_type: isOrientation ? 'onboarding' : 'guidance',
-        google_meet_link: meetLink, // reused as the generic "join link" column
-      })
-      .select('id')
-      .single();
+    //
+    // WHICH WRITER, AND WHY THERE ARE TWO. Founder decision, 27 Aug:
+    // orientation is free, a guidance session costs a credit. That is one
+    // product rule with two different transactional shapes behind it, so the
+    // branch is here rather than inside either writer.
+    //
+    // Orientation: a direct insert. There is no credit to move, and inventing
+    // one so both paths could share a writer would put a ₹0 row in the ledger
+    // that every count of "sessions paid for" then has to special-case.
+    //
+    // Guidance: book_session_credit(). This route used to insert directly for
+    // both, and `grep -c session_credits` in this file returned 0 — a mentor
+    // could book the session a student had paid for and the credit never knew.
+    // The student's payment stayed 'paid' with video_session_id null, so
+    // hasOpenSessionCredit() still counted it open and the student could not
+    // buy another, while the session they were about to attend belonged to no
+    // payment at all.
+    //
+    // The RPC is not a convenience here, it is the only correct shape: it
+    // locks the credit, inserts the session, links it and moves the state in
+    // ONE transaction, and it writes the same eight columns this insert does.
+    // A second credit-linking path written in TypeScript is Incident #23 (a
+    // rule in N places drifts N−1 times) aimed at money.
+    let sessionId: string;
 
-    if (sessionError || !session) {
-      // The database is the authority on both booking rules, and it fires on
-      // races the SELECT above cannot see. A rule violation is a 409 with a
-      // sentence, never a 500 — see lib/booking-constraints.
-      const refused = constraintFailure(sessionError, 'buddy');
-      if (refused) {
-        await audit({
-          subjectId: user.id, action: 'booking.rejected', ok: false,
-          detail: { reason: refused.reason, studentId, startTime: start.toISOString(), viaConstraint: true },
+    // ORIENTATION never asks. It is the free onboarding session, gated above by
+    // free_onboarding_used, and spending a paid credit on it would take payment
+    // for the thing we advertise as free.
+    const booked: CreditBooking = isOrientation
+      ? { kind: 'no_credit' }
+      : await bookAgainstCredit(admin, {
+          buddyId: user.id,
+          studentId,
+          title,
+          start,
+          durationMinutes,
+          meetLink,
         });
-        return NextResponse.json({ error: refused.message, reason: refused.reason }, { status: refused.status });
+
+    if (booked.kind === 'refused') {
+      await audit({
+        subjectId: user.id, action: 'booking.rejected', ok: false,
+        detail: {
+          reason: booked.reason, studentId,
+          startTime: start.toISOString(), viaCredit: true,
+        },
+      });
+      return NextResponse.json(
+        { error: booked.error, reason: booked.reason },
+        { status: booked.status },
+      );
+    }
+
+    // The credit already points at a session: the mentor double-submitted, or
+    // the student booked this same credit from their own side a moment ago. The
+    // answer is that session, not a second one — and no second notification,
+    // because they were told when it was first booked.
+    if (booked.kind === 'already') {
+      const payload = { success: true, meetingId: booked.sessionId, meetLink, already: true };
+      await rememberIdempotent(user.id, 'schedule-meeting', idemKey, 200, payload);
+      return NextResponse.json(payload);
+    }
+
+    if (booked.kind === 'booked') {
+      // book_session_credit() has already written the row AND linked the credit
+      // inside one transaction. There is nothing left to insert.
+      sessionId = booked.sessionId;
+    } else {
+      // FREE SESSION — orientation, or a student who holds no paid entitlement.
+      // Unchanged from what this route has always done: no credit exists, so
+      // there is none to consume and none to bypass.
+      const { data: session, error: sessionError } = await admin
+        .from('video_sessions')
+        .insert({
+          buddy_id: user.id,
+          student_id: studentId,
+          title,
+          scheduled_at: start.toISOString(),
+          duration_minutes: durationMinutes,
+          session_status: 'scheduled',
+          session_type: isOrientation ? 'onboarding' : 'guidance',
+          google_meet_link: meetLink, // reused as the generic "join link" column
+        })
+        .select('id')
+        .single();
+
+      if (sessionError || !session) {
+        // The database is the authority on the booking rules, and it fires on
+        // races the SELECT above cannot see. A rule violation is a 409 with a
+        // sentence, never a 500 — see lib/booking-constraints.
+        const refused = constraintFailure(sessionError, 'buddy');
+        if (refused) {
+          await audit({
+            subjectId: user.id, action: 'booking.rejected', ok: false,
+            detail: { reason: refused.reason, studentId, startTime: start.toISOString(), viaConstraint: true },
+          });
+          return NextResponse.json({ error: refused.message, reason: refused.reason }, { status: refused.status });
+        }
+        console.error('video_sessions insert failed:', sessionError);
+        return NextResponse.json({ error: "Couldn't save the session — try again." }, { status: 500 });
       }
-      console.error('video_sessions insert failed:', sessionError);
-      return NextResponse.json({ error: "Couldn't save the session — try again." }, { status: 500 });
+
+      sessionId = session.id as string;
     }
 
     // ── Notify student in-app (this is where they get the join link) ──
@@ -237,21 +479,13 @@ export async function POST(request: NextRequest) {
     // transport ever saw: 19 session_scheduled rows, 0 pushes, ever. The
     // student's phone now lights up when push is on; the in-app row (with the
     // join link — the lesson from the two expired sessions) is unchanged.
-    await dispatch({
-      userId: studentId,
-      type: 'session_scheduled',
-      title: isOrientation
-        ? `🎯 Free Orientation with ${buddy.full_name.split(' ')[0]}`
-        : `📅 Session with ${buddy.full_name.split(' ')[0]}`,
-      body: bookedNotificationBody({ istTime, isOrientation, meetLink }),
-      url: sessionNotificationUrl('student'),
-      data: {
-        sessionId: session.id,
-        meetLink,
-        sessionType: isOrientation ? 'onboarding' : 'guidance',
-      },
-      reason: 'Session booked by the buddy — the student holds the join link from second one',
-      expectedAction: 'view_session',
+    await tellTheStudent({
+      sessionId,
+      studentId,
+      buddyFirstName: buddy.full_name.split(' ')[0],
+      istTime,
+      isOrientation,
+      meetLink,
       prefs: (student.notif_prefs as Record<string, unknown>) ?? {},
     });
 
@@ -270,7 +504,7 @@ export async function POST(request: NextRequest) {
     // committed and is the source of truth, so a Calendar failure must not undo
     // a booking the mentor has just been told succeeded.
     await holdSessionOnCalendar(admin, {
-      sessionId: session.id as string,
+      sessionId,
       studentId,
       buddyId: user.id,
       startIso: start.toISOString(),
@@ -283,10 +517,10 @@ export async function POST(request: NextRequest) {
 
     await audit({
       subjectId: user.id, action: 'booking.created',
-      detail: { sessionId: session.id, studentId, startTime: start.toISOString(), durationMinutes, sessionType },
+      detail: { sessionId, studentId, startTime: start.toISOString(), durationMinutes, sessionType },
     });
 
-    const payload = { success: true, meetingId: session.id, meetLink };
+    const payload = { success: true, meetingId: sessionId, meetLink };
     await rememberIdempotent(user.id, 'schedule-meeting', idemKey, 200, payload);
 
     return NextResponse.json(payload);

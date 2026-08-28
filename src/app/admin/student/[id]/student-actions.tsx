@@ -117,7 +117,7 @@ export function StudentActions({
       )}
       {!hasBuddy && suggested && !suggested.hasRoom && (
         <p className="mt-2 text-[11px] font-semibold text-amber-700">
-          No mentor with a meeting room is free — the assigned mentor must set a room before a session can be booked.
+          No mentor with Google connected is free — the assigned mentor must connect Google before a session can be booked.
         </p>
       )}
       {error && <p className="mt-2 text-[11px] font-semibold text-rose-600">{error}</p>}

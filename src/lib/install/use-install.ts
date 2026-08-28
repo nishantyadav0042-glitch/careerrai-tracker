@@ -12,7 +12,7 @@
 //  • Nothing here sniffs the UA directly — it all flows through getEnvironment().
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { track } from '@/lib/journey';
+import { track, flushEvents } from '@/lib/journey';
 import { getEnvironment } from './detect';
 import { resolveStrategy, explainStrategy } from './capabilities';
 import { escapeInAppBrowser, mintHandoffUrl, openAppStore } from './actions';
@@ -35,6 +35,18 @@ if (typeof window !== 'undefined') {
   window.addEventListener('appinstalled', () => {
     capturedInstalled = true;
     deferredPrompt = null;
+    // TELL THE SERVER. This is the one signal that PROVES an install happened,
+    // as opposed to install_click, which proves only that a button was tapped.
+    // It was handled purely client-side until 29 Aug, which is why the
+    // question "how many devices have ever installed CareerRai" had no
+    // answerable form: every stored signal was either an intention (a tap) or
+    // an observation of a launch (display_mode), never the install itself.
+    // Fired before the redirect below and flushed immediately, because that
+    // navigation would otherwise discard a queued event.
+    try {
+      track('app_installed', { source: 'appinstalled_event' });
+      flushEvents();
+    } catch { /* telemetry must never break an install */ }
     window.dispatchEvent(new Event('cr-install-done'));
     // Parity with the legacy button: after an Android install, forward this
     // browser tab into the app instead of stranding it on the marketing page.

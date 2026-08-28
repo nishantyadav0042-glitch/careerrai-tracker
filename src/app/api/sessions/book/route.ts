@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { SESSION_PRICING } from '@/lib/plans';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createRazorpayOrder } from '@/lib/razorpay';
@@ -126,7 +127,7 @@ export async function POST(request: NextRequest) {
     email: payer?.email || undefined,
   };
 
-  // 4. Only now, money. GST is currently off, so gross === ₹299.
+  // 4. Only now, money. GST is currently off, so gross === the session price.
   const tax = taxForPlan(SESSION_PLAN_ID, SESSION_PRICE_PAISE);
   const order = await createRazorpayOrder(
     tax.grossPaise,
@@ -208,7 +209,7 @@ export async function GET() {
     // reports how small we are (the no-small-numbers rule). It only ever
     // gates the button.
     alreadyBooked,
-    priceLabel: '₹299',
+    priceLabel: SESSION_PRICING.display,
     minutes: SESSION_MINUTES,
   });
 }

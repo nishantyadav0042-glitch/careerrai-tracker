@@ -19,7 +19,12 @@ import { START_STEP_KEYS, ACCEPTED_FUNNEL_STEPS } from './funnel-steps';
 // original. One component, one set of options, one meaning for "Not sure".
 
 const START_PAGE = 'src/app/start/page.tsx';
-const SIGNUP_ROUTE = 'src/app/api/auth/verify-phone-otp/route.ts';
+// MOVED, NOT WEAKENED (29 Aug). This mapping used to live inline inside
+// verify-phone-otp; it is now lib/onboarding-apply, the ONE authority both
+// the OTP and the Google doors call. The invariant below is unchanged —
+// only its address is. Asserting it against the authority means it now
+// covers BOTH doors instead of one.
+const SIGNUP_ROUTE = 'src/lib/onboarding-apply.ts';
 
 describe('the /start funnel asks the same question, with the same component', () => {
   it('weakest-section is a real step, positioned right after reality-check', () => {

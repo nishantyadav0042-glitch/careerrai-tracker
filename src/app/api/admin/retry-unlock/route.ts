@@ -25,11 +25,12 @@ import { NextRequest, NextResponse } from 'next/server';
 //
 // This route checked `status` and never looked at `plan`. Every automatic path
 // gets this right — activatePaidOrder() early-returns into activateSessionCredit()
-// for a ₹299 row and never reaches the premium grant, and create-order refuses
+// for a single-session row and never reaches the premium grant, and create-order refuses
 // anything isPlanId() rejects. This route was the only door left, and it is the
 // door a human reaches for whenever a credit sticks. Two real students —
-// Dhruv Vakadia and Nishant — hold unlimited buddy chat today because a ₹299
-// payment was retried through here. That is the ₹2,999 product, bought for ₹299.
+// Dhruv Vakadia and Nishant — hold unlimited buddy chat today because a single-session
+// payment was retried through here. That handed them the subscription product
+// for the price of one session.
 //
 // The check is an ALLOW-LIST, not `plan !== 'session'`. A deny-list would have
 // to be edited every time a non-subscription product is added, and the edit
@@ -64,7 +65,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Premium is a SUBSCRIPTION entitlement. A ₹299 session buys one session and
+  // Premium is a SUBSCRIPTION entitlement. A single session buys one session and
   // three messages; it must never buy continuous chat, however the payment is
   // repaired. If a session credit is stuck, the credit is what needs attention
   // — assigning a mentor — not the student's plan.
@@ -72,7 +73,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: `This is a "${pay.plan}" payment, not a subscription — unlocking premium is not what it bought.`,
-        hint: 'A ₹299 session grants one session and three messages. If it is stuck, assign a mentor to the session credit instead.',
+        hint: 'A single session grants one session and three messages. If it is stuck, assign a mentor to the session credit instead.',
       },
       { status: 409 },
     );

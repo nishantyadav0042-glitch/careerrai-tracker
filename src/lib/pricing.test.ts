@@ -15,7 +15,7 @@ const coupon = (over: Partial<ActiveCoupon> = {}): ActiveCoupon =>
   ({ id: 'c1', code: 'TEST', discount_type: 'percent', discount_value: 10,
      max_uses: null, used_count: 0, ...over });
 
-const BASE = PLANS.tillcat.amountPaise; // 299900
+const BASE = PLANS.tillcat.offerPaise; // ₹2,599
 
 describe('priceWithScholarship', () => {
   it('applies a percentage discount', () => {
@@ -108,8 +108,8 @@ describe('the plan catalogue is the single source of truth for price', () => {
   it('prices every plan in whole paise above the gateway floor', () => {
     for (const id of Object.keys(PLANS) as PlanId[]) {
       const plan = PLANS[id];
-      expect(Number.isInteger(plan.amountPaise)).toBe(true);
-      expect(plan.amountPaise).toBeGreaterThan(MIN_CHARGE_PAISE);
+      expect(Number.isInteger(plan.offerPaise)).toBe(true);
+      expect(plan.offerPaise).toBeGreaterThan(MIN_CHARGE_PAISE);
       expect(plan.months).toBeGreaterThan(0);
     }
   });
@@ -117,7 +117,7 @@ describe('the plan catalogue is the single source of truth for price', () => {
   it('keeps every display string consistent with its own amount', () => {
     for (const id of Object.keys(PLANS) as PlanId[]) {
       const plan = PLANS[id];
-      const rupees = plan.amountPaise / 100;
+      const rupees = plan.offerPaise / 100;
       const digitsInDisplay = plan.display.replace(/[^0-9]/g, '');
       expect(digitsInDisplay).toBe(String(rupees));
     }

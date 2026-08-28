@@ -220,6 +220,12 @@ describe('capture: the ₹299 session road', () => {
   it('a session capture mints ONE credit and never touches premium', async () => {
     currentClient = makeClient({
       'student_payments.select': () => ({ data: sessionRow, error: null }),
+      // The conditional update reports the row it moved. Modelled because the
+      // session path now filters on `.in('status', ['created','failed'])` and
+      // reads the affected rows back — a refund landing between the read and
+      // this write must move nothing, and "nothing moved" has to be
+      // distinguishable from "moved".
+      'student_payments.update': () => ({ data: [{ id: 'p1' }], error: null }),
       'session_credits.select': () => ({ data: null, error: null }),
     });
     const res = await POST(signedRequest(captured()));
@@ -232,6 +238,12 @@ describe('capture: the ₹299 session road', () => {
   it('a concurrent duplicate mint (23505) is SUCCESS: the credit exists exactly once', async () => {
     currentClient = makeClient({
       'student_payments.select': () => ({ data: sessionRow, error: null }),
+      // The conditional update reports the row it moved. Modelled because the
+      // session path now filters on `.in('status', ['created','failed'])` and
+      // reads the affected rows back — a refund landing between the read and
+      // this write must move nothing, and "nothing moved" has to be
+      // distinguishable from "moved".
+      'student_payments.update': () => ({ data: [{ id: 'p1' }], error: null }),
       'session_credits.select': () => ({ data: null, error: null }),
       'session_credits.insert': () => ({ data: null, error: { message: 'duplicate', code: '23505' } }),
     });
@@ -243,6 +255,12 @@ describe('capture: the ₹299 session road', () => {
   it('a REAL credit-mint failure is 500 — money arrived, entitlement did not', async () => {
     currentClient = makeClient({
       'student_payments.select': () => ({ data: sessionRow, error: null }),
+      // The conditional update reports the row it moved. Modelled because the
+      // session path now filters on `.in('status', ['created','failed'])` and
+      // reads the affected rows back — a refund landing between the read and
+      // this write must move nothing, and "nothing moved" has to be
+      // distinguishable from "moved".
+      'student_payments.update': () => ({ data: [{ id: 'p1' }], error: null }),
       'session_credits.select': () => ({ data: null, error: null }),
       'session_credits.insert': () => ({ data: null, error: { message: 'disk full', code: '58030' } }),
     });
@@ -253,6 +271,9 @@ describe('capture: the ₹299 session road', () => {
   it('a failed paid-stamp is 500 and the mint is never attempted', async () => {
     currentClient = makeClient({
       'student_payments.select': () => ({ data: sessionRow, error: null }),
+      // This test's own handler wins: the paid-stamp FAILS. Kept as the only
+      // update handler here — the generic "reports the moved row" one added to
+      // the other session fixtures would contradict the failure being tested.
       'student_payments.update': () => ({ data: null, error: { message: 'update failed' } }),
     });
     const res = await POST(signedRequest(captured()));
@@ -266,7 +287,7 @@ describe('capture: the ₹299 session road', () => {
 describe('refund: ACK semantics', () => {
   it('a valid refund revokes premium and ACKs 200', async () => {
     currentClient = makeClient({
-      'student_payments.select': () => ({ data: { student_id: 's9' }, error: null }),
+      'student_payments.select': () => ({ data: { id: 'pay_row_9', student_id: 's9' }, error: null }),
     });
     const res = await POST(signedRequest(refunded()));
     expect(res.status).toBe(200);
@@ -296,7 +317,7 @@ describe('refund: ACK semantics', () => {
 
   it('a failed revoke WRITE is 500 — a refunded student must not stay premium', async () => {
     currentClient = makeClient({
-      'student_payments.select': () => ({ data: { student_id: 's9' }, error: null }),
+      'student_payments.select': () => ({ data: { id: 'pay_row_9', student_id: 's9' }, error: null }),
       'profiles.update': () => ({ data: null, error: { message: 'update failed' } }),
     });
     const res = await POST(signedRequest(refunded()));

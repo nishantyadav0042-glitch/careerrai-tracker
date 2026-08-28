@@ -138,6 +138,13 @@ export async function POST(request: NextRequest) {
   const { error: stateError } = await admin.from('lead_outreach').upsert(unique.map((id) => ({
     student_id: id,
     owner_id: target.id,
+    // The new owner's SLA clock starts now. Reassignment is a fresh handover,
+    // so inheriting the previous owner's assigned_at would hand someone a lead
+    // that is already breached before they have seen it.
+    assigned_at: now,
+    // first_contact_at is deliberately NOT reset. It records when the STUDENT
+    // first heard from us, which is a fact about the student's experience and
+    // does not become untrue because we moved the lead between counsellors.
     updated_at: now,
   })));
   if (stateError) {

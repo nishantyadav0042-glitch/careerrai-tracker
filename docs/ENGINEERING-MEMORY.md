@@ -46,11 +46,17 @@
 | 31 | 2026-08-24 | A paid ₹299 student fell out of the lifecycle and no row was wrong | Trust (P0) | 1 of 2 paying students |
 | 32 | 2026-08-26 | The test database is a scaffold, not a replica — probes certified a hole | Process / testing | — (caught pre-prod) |
 | 33 | 2026-08-26 | `revoke from public` did not revoke it — Supabase grants anon/authenticated explicitly | Security | — (caught pre-prod) |
-| 34 | 2026-08-26 | **OPEN** — `claim_lead` is SECURITY DEFINER and callable by anon | Security (P1) | sales pipeline ownership |
+| 34 | 2026-08-26 | `claim_lead` is SECURITY DEFINER and callable by anon — *closed 2026-08-28* | Security (P1) | sales pipeline ownership |
 | 35 | 2026-08-26 | Deploy took the whole site down (runner build lost NEXT_PUBLIC_SUPABASE_URL) | Deploy / Growth | full cohort (874) |
 | 36 | 2026-08-27 | A cancelled session welded the ₹299 to a booking that would never happen | Trust (P0) | every future mentor cancellation |
 | 37 | 2026-08-27 | Daily Insight repeated for days — the suppression read had no upper bound | Learning (P1) | every student who opened Home twice |
 | 38 | 2026-08-27 | 71% of completions got the wrong topic — task ids are unique only within a day | Learning (P1) | every student the recovery rule fired for |
+| 39 | 2026-08-27 | The guard read one of the two routes it named — a lost notification failed a committed booking | Notification / Trust (P1) | every mentor-booked session whose dispatch failed |
+| 40 | 2026-08-28 | A refunded payment stayed `paid` forever — refunded money counted as revenue, and would have paid commission | Trust (money) (P1) | every refund ever processed; both counsellors from 2 Sept |
+| 41 | 2026-08-28 | Fixing #40 removed the accident that blocked re-activation — a replayed capture after a refund would have handed premium back | Trust (money) (P0) | any refunded student inside Razorpay's retry window |
+| 42 | 2026-08-28 | #41's fix was in the caller; the same defect sat in `activate_payment` SQL, and the profiles update had no guard at all | Trust (money) (P0) | any refunded student; reproduced before it shipped |
+| 40 | 2026-08-27 | The rules were real, and attached to the wrong verb — availability was `before insert` only | Trust (P1) | any student whose session was moved |
+| 41 | 2026-08-27 | A paid entitlement could be bypassed by the path the booking came through | Trust (P0, money) | every mentor-booked session for a paying student |
 
 > Entries 12 and 13 were never written. The gap is left visible rather than
 > renumbered — the numbers are referenced from commit messages and code

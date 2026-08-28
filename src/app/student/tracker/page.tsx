@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { SESSION_PRICING } from '@/lib/plans';
 import Link from 'next/link';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getAuthUser } from '@/lib/auth';
@@ -10,7 +11,6 @@ import { InsightCloud } from '@/components/insight-cloud';
 import { daySlot, slotGreeting } from '@/lib/day-slot';
 import { InsightBubble } from '@/components/home/insight-bubble';
 import { WeeklyReviewCard } from '@/components/home/weekly-review-card';
-import { CampaignOfferCard } from '@/components/campaign/offer-card';
 import { computeDailyInsight, loadSuppressedInsightKeys, recordInsightShown } from '@/lib/daily-insight';
 import { computeWeeklyInsight } from '@/lib/weekly-insight';
 import { CheckInGate } from '@/components/check-in-gate';
@@ -609,10 +609,10 @@ export default async function DailyTrackerPage() {
             Home — one line, nothing else).
             It sells nothing here: it names the offer and hands the student to
             /student/buddy, where the five recommended mentors, the reason for
-            each, and the ₹299 payment actually live. Home stays a study
+            each, and the session payment actually live. Home stays a study
             screen; the decision happens on the screen built for it.
             Hidden for anyone who already has a buddy or premium — showing a
-            paying student a "₹299" ask is the paywall-to-a-payer defect this
+            paying student a paid-session ask is the paywall-to-a-payer defect this
             codebase has already paid for once. */}
         {!profile?.is_premium && !buddyId && (
           <Link
@@ -620,7 +620,7 @@ export default async function DailyTrackerPage() {
             className="flex items-center justify-between gap-3 rounded-2xl border border-indigo-200 bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-3 shadow-sm active:scale-[0.99]"
           >
             <span className="text-[13.5px] font-extrabold leading-snug text-white">
-              Audit Your CAT Prep with IIM Alumni — ₹299
+              Audit Your CAT Prep with IIM Alumni — {SESSION_PRICING.display}
             </span>
             <ChevronRight className="h-4 w-4 shrink-0 text-white/80" />
           </Link>
@@ -640,7 +640,6 @@ export default async function DailyTrackerPage() {
             student's position and ABOVE nothing they need: the plan is still
             the product (founder, 12 Aug: in-app carries the sales load, but
             the app is not an advertisement). */}
-        <CampaignOfferCard />
 
         {/* 2 · TODAY'S PLAN — with whole-plan, busy-day and reset actions. */}
         {planBlock}
