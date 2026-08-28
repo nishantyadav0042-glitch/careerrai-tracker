@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { getAuthUser } from '@/lib/auth';
-import { exchangeCodeAndStore } from '@/lib/google-oauth';
+import { exchangeCodeAndStore, verifyOAuthState, OAUTH_STATE_COOKIE } from '@/lib/google-oauth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { ensureBuddyRoom } from '@/lib/buddy-room';
 import { audit } from '@/lib/integration-audit';
@@ -21,7 +22,38 @@ export async function GET(request: Request) {
   if (!user) return NextResponse.redirect(new URL('/login', request.url));
 
   const params = new URL(request.url).searchParams;
-  const back = decodeURIComponent(params.get('state') || '/buddy/profile');
+
+  // ── STATE IS CHECKED BEFORE ANYTHING ELSE (27 Aug audit, item 11) ─────────
+  //
+  // `back` used to be `decodeURIComponent(params.get('state'))` used verbatim
+  // in every redirect below — an open redirect, since `state` echoes the
+  // attacker-controlled `from` on /api/google/connect, and reachable without
+  // consent because the denied branch redirects too. And nothing tied the
+  // callback to the browser that began the flow, so a replayed callback could
+  // link an attacker's Google account to a victim's CareerRai account.
+  //
+  // verifyOAuthState checks the nonce against the httpOnly cookie set at
+  // connect time and re-validates the path to something on this origin. A
+  // mismatch is refused outright rather than followed.
+  const jar = await cookies();
+  const expectedNonce = jar.get(OAUTH_STATE_COOKIE)?.value ?? null;
+  const { ok: stateOk, returnPath: back } = verifyOAuthState(params.get('state'), expectedNonce);
+
+  /** Every exit clears the one-shot nonce, so a state can never be replayed. */
+  const leave = (url: URL) => {
+    const res = NextResponse.redirect(url);
+    res.cookies.set(OAUTH_STATE_COOKIE, '', { path: '/', maxAge: 0 });
+    return res;
+  };
+
+  if (!stateOk) {
+    await audit({
+      subjectId: user.id, action: 'google.connect_failed', ok: false,
+      detail: { stage: 'state', reason: expectedNonce ? 'state_mismatch' : 'no_state_cookie' },
+    });
+    return leave(new URL('/buddy/home?google=failed', request.url));
+  }
+
   const denied = params.get('error');
   const deniedDescription = params.get('error_description');
   const code = params.get('code');
@@ -40,7 +72,7 @@ export async function GET(request: Request) {
         googleErrorDescription: deniedDescription,
       },
     });
-    return NextResponse.redirect(new URL(`${back}?google=denied`, request.url));
+    return leave(new URL(`${back}?google=denied`, request.url));
   }
 
   const result = await exchangeCodeAndStore(code, user.id);
@@ -50,7 +82,7 @@ export async function GET(request: Request) {
       subjectId: user.id, action: 'google.connect_failed', ok: false,
       detail: { stage: 'token_exchange', reason: result.error },
     });
-    return NextResponse.redirect(new URL(`${back}?google=failed`, request.url));
+    return leave(new URL(`${back}?google=failed`, request.url));
   }
 
   const admin = createAdminClient();
@@ -61,13 +93,35 @@ export async function GET(request: Request) {
   // only moment it is ever created. Every session they run for the rest of
   // their time on CareerRai uses this link.
   //
-  // A failure is logged, not surfaced: the connection itself succeeded, and
-  // the first booking calls ensureBuddyRoom again anyway. Turning a working
-  // connection into "failed" over a retryable step would be a lie.
+  // ── A HALF-SUCCESS IS NOT A SUCCESS (27 Aug) ──────────────────────────────
+  //
+  // This used to console.error the failure and redirect ?google=connected
+  // anyway, on the reasoning that the connection itself had worked. That was
+  // true and still misleading: with Google now the ONLY mentor setup path, a
+  // mentor whose room was never minted has no room, is not bookable, and was
+  // being shown "Google connected" with nothing left to do. The paste-a-link
+  // card that used to be their way out has been removed.
+  //
+  // So the two outcomes are now told apart. `room_failed` is not a failed
+  // connection — the token is stored and reconnecting re-runs ensureBuddyRoom,
+  // which is the actual recovery — it is a connection that has not yet
+  // produced the thing the mentor needs. The UI states it honestly and offers
+  // that retry.
+  //
+  // Audited, not just logged: a failure nobody can read is a failure you debug
+  // twice, and this is the exact step that has never once succeeded in
+  // production (google_oauth_tokens has been empty for the product's life).
   if (profile?.role === 'buddy') {
     const room = await ensureBuddyRoom(user.id);
-    if (!room.ok) console.error('[google] permanent room not created:', room.reason, room.error);
+    if (!room.ok) {
+      console.error('[google] permanent room not created:', room.reason, room.error);
+      await audit({
+        subjectId: user.id, action: 'room.created', ok: false,
+        detail: { stage: 'post_connect', failure: room.reason, error: room.error },
+      });
+      return leave(new URL(`${back}?google=room_failed`, request.url));
+    }
   }
 
-  return NextResponse.redirect(new URL(`${back}?google=connected`, request.url));
+  return leave(new URL(`${back}?google=connected`, request.url));
 }

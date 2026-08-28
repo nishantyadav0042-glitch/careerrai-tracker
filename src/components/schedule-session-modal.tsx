@@ -62,7 +62,6 @@ export function ScheduleSessionModal({
   const [sessionType, setSessionType] = useState<SessionType>('guidance');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [ownLink, setOwnLink] = useState('');
   // Some failures have a one-tap fix. Knowing WHICH failure is what lets us
   // put the Connect button next to the message instead of sending a mentor
   // hunting through their profile for it.
@@ -120,9 +119,10 @@ export function ScheduleSessionModal({
           startTime: new Date(utcMs).toISOString(),
           durationMinutes: duration,
           sessionType,
-          // A mentor who hit an error and pasted their own room. The route has
-          // always accepted this; nothing ever offered it to them.
-          ...(ownLink.trim() ? { meetingLink: ownLink.trim() } : {}),
+          // No `meetingLink`. The route still accepts one for backwards
+          // compatibility, but the product no longer asks a mentor to supply
+          // meeting infrastructure by hand — the room comes from their Google
+          // connection, which is the single setup path as of 27 Aug.
         }),
       });
       const data = await res.json();
@@ -353,40 +353,14 @@ export function ScheduleSessionModal({
                   </div>
                 </div>
 
-                {/* The mentor's escape hatch. Founder, 9 Aug: if scheduling
-                    errors, tell the mentor they can make a Meet themselves in
-                    two minutes and share the link — so nobody panics and the
-                    session still happens on time. The route already accepted a
-                    pasted room; it was simply never offered when it was most
-                    needed. */}
-                {error && (
-                  <div className="mb-2 rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
-                    <p className="text-[12px] font-bold text-amber-900">
-                      Don&apos;t wait on this — start your own Meet instead.
-                    </p>
-                    <p className="text-[11px] leading-relaxed text-amber-800">
-                      Open <b>meet.google.com</b>, tap <b>New meeting</b>, copy the link and paste
-                      it below. The session still gets booked, your student still gets the link,
-                      and the call happens on time.
-                    </p>
-                    <input
-                      type="url"
-                      inputMode="url"
-                      value={ownLink}
-                      onChange={(e) => setOwnLink(e.target.value)}
-                      placeholder="https://meet.google.com/..."
-                      className="w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-[12px] outline-none focus:border-amber-500"
-                    />
-                    <a
-                      href="https://meet.google.com/new"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-block text-[11px] font-semibold text-amber-900 underline underline-offset-2"
-                    >
-                      Open Google Meet →
-                    </a>
-                  </div>
-                )}
+                {/* The paste-your-own-Meet escape hatch lived here: on any
+                    scheduling error it offered a URL box and booked the session
+                    against whatever the mentor pasted. Removed 27 Aug with the
+                    rest of the manual-room UX — a mentor should never have to
+                    supply meeting infrastructure by hand, and offering it at
+                    the moment of an error is where the two-paths confusion was
+                    at its worst. The route still accepts `meetingLink` for
+                    backwards compatibility; nothing in the product sends it. */}
                 {error && (
                   <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2.5">
                     <p className="text-sm text-red-600">{error}</p>
@@ -394,11 +368,11 @@ export function ScheduleSessionModal({
                         one tap, put the tap right here. */}
                     {needsGoogle && (
                       <a
-                        href="/buddy/schedule"
+                        href={connectHref}
                         className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-stone-900 shadow-sm ring-1 ring-stone-200 active:scale-[0.99]"
                         style={{ minHeight: 44 }}
                       >
-                        Set my meeting room
+                        <GoogleMark /> Connect Google
                       </a>
                     )}
                   </div>
@@ -419,7 +393,7 @@ export function ScheduleSessionModal({
                       Creating your Meet link…
                     </span>
                   ) : !isConnected ? (
-                    'Set your meeting room first'
+                    'Connect Google first'
                   ) : sessionType === 'onboarding' ? (
                     'Book Free Orientation'
                   ) : (

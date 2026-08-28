@@ -18,7 +18,23 @@ import { loadSuppressedInsightKeys, INSIGHT_SUPPRESS_DAYS } from './daily-insigh
 // actually applied, because that — not the returned rows — is where the bug
 // lived.
 
-const IST_TODAY = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+// ── Assert through the SAME authority the code uses ─────────────────────────
+//
+// These two assertions used to build their expected value from a plain IST
+// calendar date. loadSuppressedInsightKeys was deliberately moved off exactly
+// that, and its own comment says why: "a calendar 'today' made this the second
+// live definition of today in the codebase — the exact condition the study-day
+// module was written to end." The test kept the definition the fix removed.
+//
+// The study day rolls at 05:30 IST, so the two agree for 18.5 hours out of 24
+// and disagree between 00:00 and 05:30 IST. This suite therefore passed all
+// day and failed every night — it went red in CI at 20:14 UTC (01:44 IST) on
+// a PR that had not touched Daily Insight at all.
+//
+// Computing the expectation through studyDayString() is what stops the test
+// and the code drifting apart again: there is one definition of today, and
+// both sides read it.
+import { studyDayString } from './study-day';
 
 function adminSpy(rows: Array<{ insight_key: string; last_shown_on: string }>) {
   const filters: Array<{ op: string; col: string; val: unknown }> = [];
@@ -42,7 +58,7 @@ describe('insight suppression window', () => {
       upper,
       'The suppression read has no upper bound. Today\'s own row then suppresses today\'s insight, and because Home records a show on every render, each page load burns another candidate until only the exempt `progress` fallback is left.',
     ).toBeTruthy();
-    expect(upper!.val).toBe(IST_TODAY());
+    expect(upper!.val).toBe(studyDayString());
   });
 
   it('still excludes the last 7 days', async () => {
@@ -50,8 +66,7 @@ describe('insight suppression window', () => {
     await loadSuppressedInsightKeys(admin as never, 'stu-1');
     const lower = filters.find((f) => f.op === 'gt' && f.col === 'last_shown_on');
     expect(lower).toBeTruthy();
-    const expected = new Date(Date.now() - INSIGHT_SUPPRESS_DAYS * 86_400_000)
-      .toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+    const expected = studyDayString(new Date(Date.now() - INSIGHT_SUPPRESS_DAYS * 86_400_000));
     expect(lower!.val).toBe(expected);
   });
 
