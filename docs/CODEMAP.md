@@ -171,6 +171,44 @@ real Gemini API (set `GEMINI_LIVE_KEY`; skipped otherwise).
 ### Money
 - `lib/razorpay.ts` + `api/webhooks` — **the webhook is the source of truth**
   for `is_premium`. UI never flips it.
+- `lib/plans.ts` — **THE pricing authority.** Three products, `offerPaise` is
+  charged and `listPaise` is display-only. Nothing else may state a price;
+  `price-authority.guard.test.ts` rejects both display strings and bare rupee
+  integers outside it.
+- `lib/activate-payment.ts` — `activatePaidOrder()` on the way in,
+  `settleRefund()` on the way out. A refund writes `status='refunded'` +
+  `refunded_at` AND withdraws the incentive; before 28 Aug it did neither
+  (Incident #40).
+
+### Counsellor pay + follow-up (the sales OS's money half)
+```
+payment realised ─▶ recordConversion()  ── freezes lead_outreach.owner_id ──▶ sales_conversions
+refund processed ─▶ settleRefund()      ── stamps refunded_at ─────────────▶ sales_conversions
+                                                                                  │
+                        lib/sales-earnings.ts  computePayslip()  ◀────────────────┘
+                          ├─ /sales/earnings          the counsellor's own statement
+                          └─ /admin/sales/payroll     what the founder owes, with every row
+```
+- **`lib/sales-earnings.ts`** — the ONLY place a person's pay is computed.
+  Fixed fee + percent of realised, rounded per line to whole rupees so the
+  payslip reproduces the table printed in the engagement letters. Terms are
+  read from `sales_rep_config`; **absent terms return UNKNOWN, never ₹0**
+  (Law L1). `sales-earnings.guard.test.ts` sweeps for a second definition.
+- **`sales_conversions`** — the incentive ledger. `payment_id` is the primary
+  key (a redelivered webhook cannot double-pay) and `rep_id` is a **snapshot**,
+  deliberately not kept in step with `lead_outreach.owner_id`, which is mutable.
+  Never pay from `owner_id`.
+- **`lib/sales-sla.ts`** — first contact measured in the rep's own WORKING
+  minutes (`work_days` + hours), never wall clock: a lead handed over at 21:30
+  is due next working evening. `assigned_at` / `first_contact_at` on
+  `lead_outreach` are the two clocks; **NULL means unknown, never "on time"**.
+- **`lib/sales-board.ts`** — one counsellor's day: open promises bucketed
+  overdue/today/upcoming (from `sales_followup`) plus who is still waiting for a
+  first call. `promises: null` survives to the renderer — a failed read must
+  never render as "nothing due".
+- Part-time seats must STATE their terms, pay included
+  (`PART_TIME_REQUIRED_FIELDS`). There are no part-time defaults, and 0% is a
+  valid answer where silence is not.
 
 ### Observability (use these before guessing)
 - **`integration_audit_log`** table + `lib/integration-audit.ts` — every

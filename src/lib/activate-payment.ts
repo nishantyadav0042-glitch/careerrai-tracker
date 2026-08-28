@@ -1,3 +1,4 @@
+import { recordConversion, markConversionRefunded } from '@/lib/sales-earnings';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { PLANS, isPlanId, addMonthsClamped } from '@/lib/plans';
 import { grantPremiumAndQueueBuddy } from '@/lib/premium';
@@ -88,22 +89,72 @@ export async function readWebhookPaymentRow(
  * webhook ACKed — so a refunded student kept premium forever, because
  * Razorpay never redelivers an acknowledged event. Retry once, then throw.
  */
+export interface RefundTarget { paymentId: string; studentId: string }
+
 export async function readRefundTargetStudent(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   admin: { from: (t: string) => any },
   razorpayPaymentId: string,
-): Promise<string | null> {
+): Promise<RefundTarget | null> {
   let lastMessage = 'unknown';
   for (let attempt = 0; attempt < 2; attempt++) {
     const { data, error } = await admin
       .from('student_payments')
-      .select('student_id')
+      // OUR row id as well as the student (28 Aug). The refund has to reach
+      // three places now, not one: revoke premium, take the payment out of the
+      // paid ledger, and withdraw the counsellor's incentive on this sale
+      // (sales_conversions is keyed on our payment id, not Razorpay's).
+      .select('id, student_id')
       .eq('razorpay_payment_id', razorpayPaymentId)
       .maybeSingle();
-    if (!error) return (data?.student_id as string | undefined) ?? null;
+    if (!error) {
+      // Not in our ledger — a refund for someone else's payment. A legitimate
+      // null, and the caller ACKs 200.
+      if (!data?.student_id) return null;
+      // In our ledger but missing its own primary key is impossible, so it is
+      // corruption rather than an answer. Throwing keeps the module's rule
+      // intact: never let an unreadable row look like "belongs to nobody",
+      // which is precisely how a refunded student kept premium forever.
+      if (!data?.id) throw new Error('Refund target row has no payment id');
+      return { paymentId: data.id as string, studentId: data.student_id as string };
+    }
     lastMessage = error.message;
   }
   throw new Error(`Could not read payment for refund: ${lastMessage}`);
+}
+
+/**
+ * Take a refunded payment OUT of the paid ledger, and withdraw the incentive.
+ *
+ * Until 28 Aug 2026 the refund path revoked premium, wrote a timeline event
+ * and a security event, and then left `student_payments.status = 'paid'`
+ * forever. The status CHECK constraint had always permitted 'refunded';
+ * nothing had ever written it. Every downstream reader therefore counted money
+ * that had gone back: the founder's revenue screen, the rep portfolio's
+ * "Won (paid)" tile, and — from 2 September, when the two counsellors start —
+ * a 10% incentive on a sale the student had already been refunded for, which
+ * Clause 7 of both engagement letters says explicitly must not happen.
+ *
+ * Throws on failure so the webhook 500s and Razorpay redelivers: a refund we
+ * ACKed but never recorded is exactly the silent-loss shape that made this a
+ * bug in the first place.
+ */
+export async function settleRefund(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: { from: (t: string) => any },
+  target: RefundTarget,
+  at: string = new Date().toISOString(),
+): Promise<void> {
+  const { error } = await admin
+    .from('student_payments')
+    .update({ status: 'refunded', refunded_at: at })
+    .eq('id', target.paymentId)
+    // Only a row still claiming to be paid moves, so a redelivered refund
+    // cannot overwrite the original refunded_at with a later timestamp and
+    // quietly shift which month loses the incentive.
+    .eq('status', 'paid');
+  if (error) throw new Error(`Could not mark payment refunded: ${error.message}`);
+  await markConversionRefunded(admin, target.paymentId, at);
 }
 
 /**
@@ -257,6 +308,25 @@ export async function activatePaidOrder(
   paymentId: string | null,
   source: ActivationSource,
 ): Promise<boolean> {
+  // ── WHO SOLD THIS, decided once, here ─────────────────────────────────────
+  //
+  // Deliberately ABOVE the plan branch, so the single session and every
+  // subscription are attributed by the same line of code. Putting it in each
+  // branch would be two copies of one rule, and the ₹399 session — the offer
+  // the counsellors actually pitch — is exactly the one that would drift.
+  //
+  // Runs before activation rather than after: Razorpay has already captured
+  // the money by the time we are called, so the sale is real whether or not
+  // our own activation then succeeds. It never throws and never blocks (D3),
+  // and `payment_id` is the primary key, so a redelivered webhook re-running
+  // this whole function cannot pay a counsellor twice.
+  await recordConversion(admin, {
+    paymentId: row.id,
+    studentId: row.student_id,
+    amountPaise: row.amount ?? 0,
+    plan: row.plan ?? null,
+  });
+
   // ── The single session takes a DIFFERENT road ──────────────────────────────
   //
   // Every other plan here is a subscription: it flips is_premium and assigns a

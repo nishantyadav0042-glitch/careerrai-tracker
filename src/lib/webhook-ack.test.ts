@@ -266,7 +266,7 @@ describe('capture: the ₹299 session road', () => {
 describe('refund: ACK semantics', () => {
   it('a valid refund revokes premium and ACKs 200', async () => {
     currentClient = makeClient({
-      'student_payments.select': () => ({ data: { student_id: 's9' }, error: null }),
+      'student_payments.select': () => ({ data: { id: 'pay_row_9', student_id: 's9' }, error: null }),
     });
     const res = await POST(signedRequest(refunded()));
     expect(res.status).toBe(200);
@@ -296,7 +296,7 @@ describe('refund: ACK semantics', () => {
 
   it('a failed revoke WRITE is 500 — a refunded student must not stay premium', async () => {
     currentClient = makeClient({
-      'student_payments.select': () => ({ data: { student_id: 's9' }, error: null }),
+      'student_payments.select': () => ({ data: { id: 'pay_row_9', student_id: 's9' }, error: null }),
       'profiles.update': () => ({ data: null, error: { message: 'update failed' } }),
     });
     const res = await POST(signedRequest(refunded()));

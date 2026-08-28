@@ -87,6 +87,10 @@ function principalThen(rest: Handler): Handler {
 const PART_TIME_TERMS = {
   work_days: [2, 4], work_start_ist: '18:00', work_end_ist: '21:00',
   max_capacity_units: 12, max_new_per_day: 4,
+  // Pay joined the required statement on 28 Aug 2026 (see
+  // sales-rep-provisioning.ts). Without these two, every part-time fixture
+  // below is refused before it reaches the behaviour it means to test.
+  monthly_fixed_paise: 800_000, incentive_percent: 10,
 };
 
 beforeEach(() => {

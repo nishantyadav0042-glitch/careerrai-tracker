@@ -72,11 +72,22 @@ export async function POST(request: NextRequest) {
     if (typeof body[t] !== 'string' || !/^\d{2}:\d{2}$/.test(body[t])) return badRequest(`${t} must be HH:MM.`);
     config[t] = body[t];
   }
-  for (const [key, lo, hi] of [['max_capacity_units', 1, 200], ['max_new_per_day', 1, 100], ['first_contact_sla_minutes', 5, 10080]] as const) {
+  for (const [key, lo, hi] of [['max_capacity_units', 1, 200], ['max_new_per_day', 1, 100], ['first_contact_sla_minutes', 5, 10080], ['monthly_fixed_paise', 0, 100_000_000]] as const) {
     if (body[key] === undefined) continue;
     const n = Number(body[key]);
     if (!Number.isInteger(n) || n < lo || n > hi) return badRequest(`${key} must be a whole number between ${lo} and ${hi}.`);
     config[key] = n;
+  }
+
+  // The incentive rate is the one non-integer term — 10, or 7.5, never 10.005.
+  // Validated here rather than trusted to the CHECK constraint so the founder
+  // gets a sentence instead of a 23514.
+  if (body.incentive_percent !== undefined) {
+    const pct = Number(body.incentive_percent);
+    if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
+      return badRequest('incentive_percent must be between 0 and 100.');
+    }
+    config.incentive_percent = Math.round(pct * 100) / 100;
   }
 
   // `existing: null` is the truth here — this is a brand-new seat, so a

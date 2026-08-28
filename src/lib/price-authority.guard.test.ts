@@ -177,3 +177,42 @@ describe('checkout never trusts the browser', () => {
     expect(pricing, 'a list price must never reach a charge').not.toMatch(/listPaise/);
   });
 });
+
+// ── The gap that let ₹999 sit on a founder screen for four days ─────────────
+//
+// 28 Aug 2026. src/app/admin/sales-performance/page.tsx carried
+// `const PRICE = 999;` and valued the whole "Interested" pipeline against it.
+// The 27 Aug pricing sweep ran clean and missed it, because everything above
+// matches PAISE (99900) or DISPLAY STRINGS ("₹999") — and a bare rupee integer
+// in a const is neither. lib/sales-portfolio.ts even carries a comment about
+// removing the same literal on 24 Aug; the second copy was never compared.
+//
+// It also happened to equal a CURRENT price, so no "retired price" rule could
+// have caught it either. What makes it wrong is duplication, not staleness:
+// the next price change would have left it behind silently.
+describe('no bare rupee price integers outside the authority', () => {
+  const AUTHORITIES = new Set(['src/lib/plans.ts', 'src/lib/session-credit.ts']);
+
+  it('no module assigns a product price as a plain rupee number', () => {
+    const rupees = ALL_PRODUCTS.flatMap((p) => [
+      String(Math.round(p.offerPaise / 100)),
+      p.listPaise ? String(Math.round(p.listPaise / 100)) : '',
+    ]).filter(Boolean);
+    // A const/let/variable assigned one of our exact rupee amounts. Narrow on
+    // purpose: this is about a price hiding as an ordinary number, not about
+    // every occurrence of 999 in the tree.
+    const shape = new RegExp(`\\b(const|let|var)\\s+\\w*(price|amount|rate|value|mrp)\\w*\\s*(:\\s*number\\s*)?=\\s*(${rupees.join('|')})\\s*[;,]`, 'i');
+    const offenders = activeSourceFiles()
+      .filter((f) => !AUTHORITIES.has(f))
+      .filter((f) => shape.test(
+        // Comments stripped: this guard has been bitten before by matching its
+        // own explanatory prose about a price.
+        readFileSync(f, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1'),
+      ));
+    expect(
+      offenders,
+      'A product price is hard-coded as a rupee integer here. Import it from lib/plans.ts:\n  '
+        + offenders.join('\n  '),
+    ).toEqual([]);
+  });
+});

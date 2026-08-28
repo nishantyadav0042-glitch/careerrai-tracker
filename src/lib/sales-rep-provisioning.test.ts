@@ -24,6 +24,10 @@ const FULL_STATEMENT = {
   employment_type: 'part_time',
   work_days: [2, 4], work_start_ist: '18:00', work_end_ist: '21:00',
   max_capacity_units: 12, max_new_per_day: 4,
+  // Pay joined the statement on 28 Aug 2026 with the first two counsellor
+  // hires: a part-time seat whose payslip cannot be computed is the same
+  // silently-full-time failure, one column over.
+  monthly_fixed_paise: 800_000, incentive_percent: 10,
 };
 
 describe('part-time is described, never inherited', () => {
@@ -36,7 +40,8 @@ describe('part-time is described, never inherited', () => {
   it('refuses a PARTIAL statement — half a description is the same silent inheritance', () => {
     const r = checkEmploymentStatement({ employment_type: 'part_time', work_days: [2, 4], max_capacity_units: 12 }, null);
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.missing.sort()).toEqual(['max_new_per_day', 'work_end_ist', 'work_start_ist']);
+    if (!r.ok) expect(r.missing.sort()).toEqual(
+      ['incentive_percent', 'max_new_per_day', 'monthly_fixed_paise', 'work_end_ist', 'work_start_ist']);
   });
 
   it('accepts a fully described part-time seat', () => {
@@ -63,6 +68,26 @@ describe('part-time is described, never inherited', () => {
 
   it('treats an explicit null as unstated — a null work_days is not a statement', () => {
     expect(checkEmploymentStatement({ ...FULL_STATEMENT, work_days: null }, null).ok).toBe(false);
+  });
+
+  it('refuses a part-time seat whose PAY was never stated', () => {
+    // The gap that existed until 28 Aug 2026: hours, capacity and intake were
+    // all compulsory, and what the person earns was not asked at all. A
+    // counsellor could be fully provisioned, convert students all month, and
+    // have no computable payslip at the end of it.
+    const noPay = { ...FULL_STATEMENT };
+    delete (noPay as Record<string, unknown>).monthly_fixed_paise;
+    delete (noPay as Record<string, unknown>).incentive_percent;
+    const r = checkEmploymentStatement(noPay, null);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.missing.sort()).toEqual(['incentive_percent', 'monthly_fixed_paise']);
+  });
+
+  it('a counsellor on fixed pay only states 0% — silence is what is refused', () => {
+    // Zero is an answer. readTerms() treats a stated 0 as STATED and computes
+    // a real payslip from it; only null produces "terms not set".
+    expect(checkEmploymentStatement(
+      { ...FULL_STATEMENT, incentive_percent: 0 }, null).ok).toBe(true);
   });
 });
 

@@ -1809,3 +1809,74 @@ later started sending 'onboarding'.
 production; nothing in the schema changed.
 
 ---
+
+
+## Incident #40 — a refunded payment stayed 'paid' forever (2026-08-28)
+
+**Severity:** P1 (Trust, money). Every refund ever processed still counts as
+revenue. From 2 September it would also have paid commission on money that had
+been handed back.
+
+**What happened.** `api/payments/webhook` handled `refund.processed` by
+revoking premium, emitting a timeline event and logging a security event — and
+never touching `student_payments`. The row kept `status = 'paid'` permanently.
+The status CHECK constraint had listed `'refunded'` since the table was
+created; nothing had ever written it. So every reader that defines money as
+`status = 'paid'` counted refunds: the founder's revenue screen, the rep
+portfolio's "Won (paid)" tile and its booked-rupees figure.
+
+**Why it stayed invisible.** The refund path was audited twice and improved
+both times — Boundary 2 change 4 made the read throw rather than silently skip
+the revoke, and `webhook-ack.test.ts` has five tests on this branch. Every one
+of them asks *did the student lose premium*. Not one asks *did the ledger stop
+saying we were paid*. The tests encoded the belief that a refund is an
+entitlement problem; it is also an accounting problem, and the second half had
+no owner. Production had 6 paid rows and 0 refunded ones, so the number looked
+plausible on every screen.
+
+**What made it urgent.** Two engagement letters were signed on 28 Aug promising
+10% of what a converted student pays, "payable when the student's payment is
+realised and is not subsequently refunded". The system had no way to honour the
+second half of that clause, and the first payslip is due 7 October.
+
+**The fix.** `settleRefund()` in `lib/activate-payment.ts` writes
+`status='refunded'` and the new `refunded_at`, guarded by `.eq('status','paid')`
+so a redelivered webhook cannot move the timestamp into a different month. It
+throws on failure, so an unrecorded refund 500s and Razorpay redelivers rather
+than being ACKed and lost. It also stamps `sales_conversions.refunded_at`,
+which withdraws the incentive on that one transaction and nothing else.
+
+**The lesson, encoded.** `sales-earnings.guard.test.ts` asserts the webhook
+calls `settleRefund`, that it writes both columns, and that it only moves a row
+still claiming to be paid. The deeper rule: **a state change that revokes an
+entitlement must also correct the ledger that granted it.** Two systems learned
+about the refund; only one of them was asked about it in a test.
+
+**Related:** #15 (payment fix stranded on a branch), #36 (a credit welded to a
+cancelled session). All three are the same family — money and entitlement
+drifting apart because only one side had a test.
+
+---
+
+## Incident #34 — closed (2026-08-28)
+
+Fixed in `20260828b_claim_lead_lockdown.sql`, in its own migration as the
+original entry demanded. `claim_lead(uuid,uuid)`, `refresh_buddy_demo_account()`
+and `refresh_review_account_logs()` are now `service_role` only;
+`claim_lead(uuid,text)` is dropped. Verified against production: zero
+app-owned, non-trigger functions remain reachable by `anon`.
+
+**One correction to the original report, from reading the live grants rather
+than the write-up.** It named the `text` overload as "the worse one". That
+overload was already locked to `postgres` + `service_role` and was never
+reachable by anon. The exposed function was `claim_lead(uuid, uuid)`, which
+*did* validate that the new owner was a sales or admin profile — and never
+validated the caller. A stranger could not invent an owner, but could hand any
+lead to any real rep at will. Since 28 Aug that ownership also feeds
+`sales_conversions`, so the same hole had become a lever on payroll.
+
+**Encoded in:** `rpc-exposure.guard.test.ts` — asserts the revokes name `anon`
+and `authenticated` explicitly rather than relying on `PUBLIC` (Incident #33),
+that no later migration re-grants them, and that the lockdown is the last
+migration to touch `claim_lead`. The guard states plainly what it cannot see: a
+grant made by hand in the Supabase console.

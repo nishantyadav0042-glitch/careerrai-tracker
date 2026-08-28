@@ -21,6 +21,8 @@ export default async function SalesLayout({ children }: { children: React.ReactN
         <nav className="mb-3 flex gap-1.5">
           <Link href="/sales" className="rounded-full bg-white px-3.5 py-1.5 text-[13px] font-bold text-stone-800 ring-1 ring-stone-200">Calls</Link>
           <Link href="/sales/leads" className="rounded-full bg-white px-3.5 py-1.5 text-[13px] font-semibold text-stone-500 ring-1 ring-stone-200 hover:text-stone-800">My leads</Link>
+          <Link href="/sales/followups" className="rounded-full bg-white px-3.5 py-1.5 text-[13px] font-semibold text-stone-500 ring-1 ring-stone-200 hover:text-stone-800">Follow-ups</Link>
+          <Link href="/sales/earnings" className="rounded-full bg-white px-3.5 py-1.5 text-[13px] font-semibold text-stone-500 ring-1 ring-stone-200 hover:text-stone-800">Earnings</Link>
           <Link href="/sales/summary" className="rounded-full bg-white px-3.5 py-1.5 text-[13px] font-semibold text-stone-500 ring-1 ring-stone-200 hover:text-stone-800">My summary</Link>
         </nav>
         {children}
