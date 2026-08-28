@@ -1,4 +1,4 @@
-// ── The ₹299 session's state machine ────────────────────────────────────────
+// ── The single session's state machine ────────────────────────────────────────
 //
 // One vocabulary, one transition table, shared by every caller. The DATABASE
 // is the enforcer (trigger video_session_lifecycle_guard, migration

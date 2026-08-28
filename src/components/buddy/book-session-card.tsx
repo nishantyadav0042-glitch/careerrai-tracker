@@ -10,7 +10,7 @@ import { IntentPicker, intentIsComplete } from '@/components/session/intent-pick
 import type { SessionIntent } from '@/lib/session-intent';
 import { payFunnel } from '@/lib/payment-funnel-client';
 
-// ── The ₹299 door, in the Buddy section ─────────────────────────────────────
+// ── The single-session door, in the Buddy section ─────────────────────────────────────
 //
 // One session, bought by a free student. The card only ever renders three
 // honest states, and two of them refuse to take money:
@@ -51,7 +51,7 @@ export function BookSessionCard({ findingKind, findingEvidence, mentorFirst, has
   // tappable link behind.
   // WHY, captured before the money. The mentor opens the call already knowing
   // the problem, and the company can finally answer what students are actually
-  // paying ₹299 to solve.
+  // paying to solve.
   const [intents, setIntents] = useState<SessionIntent[]>([]);
   const [intentNote, setIntentNote] = useState('');
   const readyToPay = intentIsComplete(intents, intentNote);

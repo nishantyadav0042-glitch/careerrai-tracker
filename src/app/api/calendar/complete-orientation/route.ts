@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
     // path, it now reaches its terminal state instead of staying 'scheduled'
     // forever. Every OTHER completion/cancel/expiry route already settles;
     // this was the one exception, and an exception is where the next stranded
-    // ₹299 would have come from.
+    // the payment would have come from.
     await settleCreditForSession(admin, sessionId as string, 'completed');
 
     // Through dispatch() — the retention bridge should reach the student's

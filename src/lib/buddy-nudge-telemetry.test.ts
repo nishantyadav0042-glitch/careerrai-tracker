@@ -112,7 +112,7 @@ describe('scope containment — this gate changes nothing but telemetry', () => 
     const s = read(NUDGE);
     expect(s).toContain('Don&apos;t prep alone');
     expect(s).toContain('An IIM senior who has cleared CAT');
-    expect(s).toContain('Try one session — ₹299');
+    expect(s).toContain('Try one session — {SESSION_PRICING.display}');
     expect(s).toContain('Maybe tomorrow');
   });
 

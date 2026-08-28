@@ -151,7 +151,7 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  // The ₹299 this session delivered is now spent. Without this the credit sat
+  // The credit this session delivered is now spent. Without this the credit sat
   // at 'scheduled' forever, blocking the student from ever buying a second
   // session and permanently consuming a seat of their mentor's capacity.
   if (sessionCompleted && sessionId) {

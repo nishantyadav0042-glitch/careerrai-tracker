@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
   // this student hold a profiles.buddy_id?" — no plan, no premium, no
   // entitlement. The 3-message cap sat inside `if (!pair)`, so any student
   // with a buddy_id skipped it and received the continuous chat that only the
-  // subscription plans buy. For the ₹299 product that is not an edge case:
+  // subscription plans buy. For the single-session product that is not an edge case:
   // pairing a session buyer with their mentor is exactly how they would get a
   // buddy_id.
   //
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
   let pair = await resolvePair(admin, user.id, studentId);
   if (!pair) {
     // Not paired by profiles.buddy_id, but the entitlement names the buddy —
-    // a ₹299 buyer or a Mentor Door student talking to their matched mentor.
+    // a single-session buyer or a Mentor Door student talking to their matched mentor.
     if (entitlement.kind === 'unlimited') {
       return NextResponse.json({ error: 'Not paired' }, { status: 403 });
     }

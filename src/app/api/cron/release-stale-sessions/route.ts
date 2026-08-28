@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
       //
       // Until now every record of an expiry went to an INTERNAL ledger — the
       // timeline, the audit log, owner='ops' on the credit — and the person
-      // who paid ₹299 for the session got nothing at all. Their booking
+      // who paid for the session got nothing at all. Their booking
       // vanished, their entitlement moved into a recovery queue they cannot
       // see, and the only way they learned any of it was by opening the app
       // and noticing. That is a silent loss of exactly the kind this cycle

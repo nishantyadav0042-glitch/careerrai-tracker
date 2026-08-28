@@ -4,7 +4,7 @@ import { readMentorRoster, matchMentor } from '@/lib/session-credit';
 
 // ── The missing middle ──────────────────────────────────────────────────────
 //
-// A ₹299 purchase minted a credit and then nothing happened: session_credits
+// A single-session purchase minted a credit and then nothing happened: session_credits
 // carried buddy_id and video_session_id that no code ever wrote, so a human
 // had to create the session by hand.
 //
@@ -13,10 +13,10 @@ import { readMentorRoster, matchMentor } from '@/lib/session-credit';
 // the honest handling of "nobody is available", which previously did not exist
 // because nothing tried.
 //
-// THE RELATIONSHIP RULE (founder, explicit): a ₹299 session assigns
+// THE RELATIONSHIP RULE (founder, explicit): a single session assigns
 // session_credits.buddy_id and NEVER profiles.buddy_id. A one-off session and
 // an ongoing premium mentorship are different relationships, and conflating
-// them would quietly hand a ₹299 buyer the continuous product.
+// them would quietly hand a session buyer the continuous product.
 
 export type AssignFailure =
   /** Roster or load read failed. NOT "sold out" — we must not refuse on a blip. */
@@ -128,7 +128,7 @@ export type Bookability =
  *     Google — a requirement this codebase had already removed as "a design
  *     mistake", leaving those two chasing a problem that no longer existed
  *
- * A student had paid ₹299 two days earlier and could not pick a time.
+ * A student had paid two days earlier and could not pick a time.
  */
 export interface BookabilityFacts {
   /** The availability row, or null when the mentor has never described a week. */

@@ -100,7 +100,7 @@ describe('a ₹299 session payment can NEVER be unlocked into premium', () => {
 });
 
 describe('a genuine subscription still unlocks', () => {
-  it.each(['monthly', 'quarterly', 'halfyear', 'tillcat'])('%s is repaired as before', async (plan) => {
+  it.each(['monthly', 'tillcat'])('%s is repaired as before', async (plan) => {
     payment = { ...payment, plan, amount: 99900 };
     premiumAfter = true;   // the grant landed
     const res = await POST(req());

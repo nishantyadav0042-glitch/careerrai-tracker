@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
 
     const admin = createAdminClient();
 
-    // ── The ₹299 entry ladder (founder, 20 Aug 2026) ──────────────────────
+    // ── The single-session entry ladder (founder, 20 Aug 2026) ──────────────────────
     // A session bought in the last CREDIT_WINDOW_DAYS credits against ANY
     // plan. Applied AFTER scholarship/coupon, capped at the price itself.
     // The credit row is marked spent only when this payment activates
@@ -196,8 +196,8 @@ export async function POST(request: NextRequest) {
     // is exempt from mandatory app-store billing. Not framed as "digital content".
     // GST decides what Razorpay actually charges. Subscriptions are quoted
     // inclusive, so gross === finalPaise and nothing about them changes. The
-    // ₹299 session is quoted exclusive — the mentor must receive the full
-    // ₹299 — so the student is charged ₹352.82.
+    // session is quoted exclusive — the mentor must receive the full session
+    // fee — so the student is charged that fee plus tax.
     const tax = taxForPlan(plan, effectivePaise);
     const order = await createRazorpayOrder(
       tax.grossPaise,

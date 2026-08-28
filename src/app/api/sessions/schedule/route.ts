@@ -39,7 +39,7 @@ async function loadCredit(admin: ReturnType<typeof createAdminClient>, studentId
     // mentor cancelled or nobody joined: paid for, not delivered, mentor still
     // attached (rule 8), and explicitly rebookable.
     //
-    // Leaving it out was the other half of the stranded ₹299, and the worse
+    // Leaving it out was the other half of the stranded payment, and the worse
     // half. The release fires, the student is told "your booking is back — pick
     // a new time", and then this filter 404s them with "No session to
     // schedule." No admin surface reads session_credits either, so ops cannot
@@ -66,7 +66,7 @@ async function loadCredit(admin: ReturnType<typeof createAdminClient>, studentId
 // This route tells a paying student "Our team will set your session time for
 // you" and, until now, wrote that promise NOWHERE — no notification, no queue,
 // no alert. `needs_team` was returned to the browser and that was the entire
-// record. A student paid ₹299, could not book, and nothing in the system knew.
+// record. A student paid, could not book, and nothing in the system knew.
 //
 // NO NEW SYSTEM. Two things already existed and neither was used: the Exception
 // Contract (lib/os/exception.ts — the founder's "one primitive, not another
@@ -197,7 +197,7 @@ export async function GET() {
 // ── AND BOTH PEOPLE ARE TOLD (27 Aug) ───────────────────────────────────────
 //
 // This route booked a session and dispatched NOTHING. Not to the student who
-// had just paid ₹299, and not to the mentor whose hour had just been taken.
+// had just paid, and not to the mentor whose hour had just been taken.
 // The sibling path (/api/calendar/schedule-meeting) has told the student since
 // the Event OS cycle; this one — the student's OWN self-serve path — never
 // did, so the journey was covered on one side and silent on the other.

@@ -14,9 +14,9 @@ import { MENTOR_FREE_MESSAGES } from '@/lib/mentor-doors';
 // entitlement check of any kind. The 3-message cap lived in the `if (!pair)`
 // branch, so ANY student holding a buddy_id skipped it entirely.
 //
-// That is not an edge case for the ₹299 product: connecting a session buyer to
+// That is not an edge case for the single-session product: connecting a session buyer to
 // their mentor is exactly how they would acquire a buddy_id, and it would have
-// handed them the ₹2,999 continuous-chat product for ₹299.
+// handed them the continuous-chat product for the price of one session.
 //
 // PAIRING AND ENTITLEMENT ARE DIFFERENT QUESTIONS:
 //   resolvePair          — WHO is on the other end (unchanged, still correct)
@@ -27,7 +27,7 @@ import { MENTOR_FREE_MESSAGES } from '@/lib/mentor-doors';
 export type ChatEntitlement =
   /** Mentors, and students on a subscription plan. */
   | { kind: 'unlimited'; reason: 'mentor' | 'subscription' }
-  /** A ₹299 buyer, or a free student who earned a Mentor Door. */
+  /** A single-session buyer, or a free student who earned a Mentor Door. */
   | { kind: 'limited'; buddyId: string; used: number; allowance: number; remaining: number }
   /** No relationship, or the entitlement is spent. */
   | { kind: 'exhausted'; buddyId: string; used: number; allowance: number }
@@ -61,9 +61,9 @@ export async function resolveChatEntitlement(
   if (me.role === 'buddy') return { kind: 'unlimited', reason: 'mentor' };
   if (me.role !== 'student') return { kind: 'none', reason: 'not_a_student' };
 
-  // The subscription plans (₹999 / ₹2,499 / ₹2,999) are what continuous chat
+  // The subscription plans are what continuous chat
   // is FOR. is_premium is the existing single authority for that — set only by
-  // the subscription activation path, never by the ₹299 one.
+  // the subscription activation path, never by the single-session one.
   if (me.is_premium === true) return { kind: 'unlimited', reason: 'subscription' };
 
   // Everyone else is limited, and the grant is the entitlement record. A

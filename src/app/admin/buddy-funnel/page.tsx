@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { SESSION_PRICING } from '@/lib/plans';
 import { requireAdmin } from '@/lib/admin-auth';
 import { BUDDY_FUNNEL_STEPS, MIN_FOR_RATE, ratesAreMeaningful, rateOrNull, type FunnelStepCount } from '@/lib/os/buddy-funnel';
 
@@ -64,7 +65,7 @@ export default async function BuddyFunnelPage() {
         <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3">
           <p className="text-[13px] font-semibold text-amber-900">Too early for conversion rates.</p>
           <p className="mt-0.5 text-[12px] leading-snug text-amber-800">
-            The ₹299 offer went live on 17 Aug with no promotion behind it. Fewer than {MIN_FOR_RATE} people
+            The single-session offer went live on 17 Aug with no promotion behind it. Fewer than {MIN_FOR_RATE} people
             have reached the entry step, so a percentage here would read as a finding without being one.
             Counts are shown; rates appear on their own once the base can carry them.
           </p>
@@ -109,10 +110,10 @@ export default async function BuddyFunnelPage() {
       {/* WHICH FINDING PRODUCED THE CLICK. */}
       <div className="mt-6 rounded-xl border border-stone-200 bg-white p-4">
         <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400">
-          ₹299 clicks by trigger
+          {SESSION_PRICING.display} clicks by trigger
         </p>
         {byTrigger.size === 0 ? (
-          <p className="mt-2 text-[13px] text-stone-500">No ₹299 clicks recorded yet.</p>
+          <p className="mt-2 text-[13px] text-stone-500">No {SESSION_PRICING.display} clicks recorded yet.</p>
         ) : (
           <ul className="mt-2 space-y-1">
             {[...byTrigger.entries()].sort((a, b) => b[1] - a[1]).map(([t, n]) => (
@@ -141,7 +142,7 @@ export default async function BuddyFunnelPage() {
         <div className="mt-2 grid grid-cols-3 gap-3">
           <div>
             <p className="text-2xl font-bold tabular-nums text-stone-900">{paidSessions}</p>
-            <p className="text-[11px] text-stone-500">₹299 sessions paid</p>
+            <p className="text-[11px] text-stone-500">{SESSION_PRICING.display} sessions paid</p>
           </div>
           <div>
             <p className="text-2xl font-bold tabular-nums text-stone-900">{paid.length}</p>

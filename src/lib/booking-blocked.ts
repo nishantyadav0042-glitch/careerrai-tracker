@@ -7,7 +7,7 @@ import type { UnbookableReason } from '@/lib/session-assignment';
  * /api/sessions/schedule returns `state: 'needs_team'` and tells the student
  * "Our team will set your session time for you." Until now that promise had no
  * owner: `needs_team` was returned to the browser and written NOWHERE — no
- * notification, no queue, no alert. A student paid ₹299, could not book, and
+ * notification, no queue, no alert. A student paid, could not book, and
  * the only record was a sentence on their screen.
  *
  * THIS ADDS NO NEW SYSTEM. Two things already existed and neither was used:

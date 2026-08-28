@@ -46,7 +46,7 @@ export default async function BuddyPage({
   const profile = await readPremiumProfile(admin, user.id);
 
   // Freemium (rebuilt 14 Aug, founder: "buddy screen is too much — keep only
-  // the student's weakness, the buddy profile + why, and ₹299 book now").
+  // the student's weakness, the buddy profile + why, and one price").
   // Three blocks: their own diagnosed weaknesses, ONE matched mentor with the
   // reason, one price. LockedBuddyHub (fear hero, USP stack, price cards) is
   // retired from this route; the Till-CAT plan survives as one line.

@@ -26,7 +26,7 @@ export interface PayableRow {
   /** What the STUDENT said they wanted, chosen at booking. */
   session_intent?: string | null;
   session_intent_note?: string | null;
-  /** Plan purchases only: the ₹299 session credit applied at order creation. */
+  /** Plan purchases only: the session credit applied at order creation. */
   session_credit_id?: string | null;
 }
 
@@ -113,7 +113,7 @@ export async function readRefundTargetStudent(
  * retries; cron → logged and retried next run).
  */
 /**
- * A paid ₹299 session: mark the payment, mint ONE credit, and put it in the
+ * A paid single session: mark the payment, mint ONE credit, and put it in the
  * assignment queue. Deliberately does NOT grant premium.
  *
  * The credit carries the finding that motivated the purchase, so the mentor
@@ -175,9 +175,9 @@ async function activateSessionCredit(
     }
   }
 
-  // ── The three messages the ₹299 actually buys ────────────────────────────
+  // ── The three messages a paid session actually buys ────────────────────────────
   //
-  // Until 24 Aug this line did not exist, and a ₹299 buyer received ZERO
+  // Until 24 Aug this line did not exist, and a session buyer received ZERO
   // messages — the 3-message entitlement was real but only the admin Mentor
   // Doors route ever issued one.
   //
@@ -187,7 +187,7 @@ async function activateSessionCredit(
   // a mentor to chat with.
   //
   // ON CONFLICT DO NOTHING via the UNIQUE(student_id) constraint: a student who
-  // already holds a grant (an earned door, or a previous ₹299) keeps the one
+  // already holds a grant (an earned door, or a previous session) keeps the one
   // they have. Buying twice must not silently reset a spent counter — the
   // allowance is raised deliberately, by a human, not by a repeat purchase.
   const { error: grantErr } = await admin.from('mentor_grants').insert({
@@ -257,7 +257,7 @@ export async function activatePaidOrder(
   paymentId: string | null,
   source: ActivationSource,
 ): Promise<boolean> {
-  // ── The ₹299 session takes a DIFFERENT road ──────────────────────────────
+  // ── The single session takes a DIFFERENT road ──────────────────────────────
   //
   // Every other plan here is a subscription: it flips is_premium and assigns a
   // permanent buddy. A session must do neither — the student stays free, and
@@ -284,7 +284,7 @@ export async function activatePaidOrder(
     return false;
   }
 
-  // The ₹299 entry ladder: the payment is real, so the credit that
+  // The entry ladder: the payment is real, so the credit that
   // discounted it is now spent. IS NULL guard — one credit can never
   // discount two payments, even under webhook retries.
   if (row.session_credit_id) {

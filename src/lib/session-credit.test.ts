@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { SESSION_PRICING } from './plans';
 import { readFileSync } from 'node:fs';
 import {
   remainingCapacity, rosterCapacity, canSellSession, matchMentor,
@@ -131,8 +132,8 @@ describe('the upgrade credit is a discount, never a refund', () => {
 });
 
 describe('the shape of the product', () => {
-  it('is one SKU at ₹299 — the diagnosis picks the reason, not the price list', () => {
-    expect(SESSION_PRICE_PAISE).toBe(29900);
+  it('is one SKU at one price — the diagnosis picks the reason, not the price list', () => {
+    expect(SESSION_PRICE_PAISE).toBe(SESSION_PRICING.offerPaise);
   });
 
   it('caps specialities at two, so specialist means something', () => {

@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { SESSION_PRICING } from '@/lib/plans';
 import { readFileSync } from 'node:fs';
 import { resolveChatEntitlement, consumeChatMessage, upgradeMessage } from './chat-entitlement';
 import { MENTOR_FREE_MESSAGES } from './mentor-doors';
@@ -213,14 +214,13 @@ describe('₹299 issues the entitlement it sells', () => {
 
 describe('one pricing authority, one allowance authority', () => {
   it('the session price still comes from session-credit', () => {
-    expect(SESSION_PRICE_PAISE).toBe(29900);
+    expect(SESSION_PRICE_PAISE).toBe(SESSION_PRICING.offerPaise);
   });
 
   it('the subscription plans are unchanged and all of them are continuous', () => {
     // Read, not assumed: the repo has THREE subscription plans.
-    expect(PLANS.monthly.amountPaise).toBe(99900);
-    expect(PLANS.quarterly.amountPaise).toBe(249900);
-    expect(PLANS.tillcat.amountPaise).toBe(299900);
+    expect(PLANS.monthly.offerPaise).toBe(99900);
+    expect(PLANS.tillcat.offerPaise).toBe(259900);
   });
 
   it('the free allowance is three', () => {

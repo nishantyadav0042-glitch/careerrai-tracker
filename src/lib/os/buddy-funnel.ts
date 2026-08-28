@@ -1,6 +1,7 @@
+import { SESSION_PRICING } from '@/lib/plans';
 // ── The IIM Buddy funnel, counted from events that already exist ───────────
 //
-// Founder, 19 Aug: "Don't ask 'did ₹299 convert?'. Ask how many saw it, how
+// Founder, 19 Aug: "Don't ask 'did the session convert?'. Ask how many saw it, how
 // many clicked, how many reached checkout, how many paid, why non-buyers
 // stopped, which trigger produced the highest intent, did buyers return."
 //
@@ -26,7 +27,7 @@ export const BUDDY_FUNNEL_STEPS = [
   { key: 'buddy_nudge_shown', label: 'Intervention shown', note: 'Rai surfaced a reason to talk to someone' },
   { key: 'buddy_unlock_open', label: 'Buddy sheet opened', note: 'Student went looking on their own' },
   { key: 'buddy_nudge_cta', label: 'Intervention clicked', note: 'From the nudge, not the menu' },
-  { key: 'session_book_click', label: '₹299 clicked', note: 'Single session' },
+  { key: 'session_book_click', label: `${SESSION_PRICING.display} clicked`, note: 'Single session' },
   { key: 'pay_checkout_opened', label: 'Checkout opened', note: 'Any plan' },
   { key: 'pay_order_created', label: 'Order created', note: 'Reached the payment provider' },
   { key: 'session_pay_dismissed', label: 'Dismissed at pay sheet', note: 'Reason unknown — we do not ask' },

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { PLANS, SESSION_PRICING } from '@/lib/plans';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { createClient } from '@/lib/supabase/client';
@@ -163,7 +164,7 @@ const SLIDES: Slide[] = [
   {
     badge: 'Your role',
     title: 'One student. One mentor. You.',
-    body: 'Students pay for a real IIM senior in their corner — not videos, not a batch. Some start with one ₹299 session; others keep you with them at ₹999/month. Your name, your mock advice, your nudges. That personal attention IS the product.',
+    body: `Students pay for a real IIM senior in their corner — not videos, not a batch. Some start with one ${SESSION_PRICING.display} session; others keep you with them at ${PLANS.monthly.display}/month. Your name, your mock advice, your nudges. That personal attention IS the product.`,
     visual: <PairVisual />,
   },
   {

@@ -200,7 +200,7 @@ export function classifyLane(s: LaneSignals): LaneVerdict {
     return {
       dueReason: 'conversion', dueLabel: 'Buddy interest',
       why,
-      action: 'Pitch the ₹299 session — intent is warm, lead with their prep',
+      action: 'Pitch the single session — intent is warm, lead with their prep',
       sortBoost: s.buddyTaps * 1000 + (s.intentDoor ? 500 : 0) + s.momentumScore,
     };
   }

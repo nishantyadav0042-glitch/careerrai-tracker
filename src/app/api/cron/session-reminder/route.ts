@@ -13,7 +13,7 @@ import {
 //
 // session-tomorrow tells both people the day before. This is the one that
 // arrives while there is still time to act: the student is minutes from a
-// mentor they paid ₹299 for, and the join link is in the message.
+// mentor they paid for, and the join link is in the message.
 //
 // 11 of the first 18 sessions carry status 'expired' — the state
 // release-stale-sessions writes when the hour passed and nobody closed it out.

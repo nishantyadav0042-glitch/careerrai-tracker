@@ -94,7 +94,7 @@ async function tellTheStudent(opts: {
 // Founder decision, 27 Aug: orientation is free, guidance consumes a credit.
 //
 // Before this, the mentor path inserted a session and never touched
-// session_credits. The student's ₹299 sat 'paid' with video_session_id null
+// session_credits. The student's payment sat 'paid' with video_session_id null
 // while the session it bought went ahead — so the ledger said "owed" and the
 // calendar said "delivered", and neither knew about the other. That is the
 // same class as Incident #31 (a paid student out of the lifecycle with no row
@@ -108,7 +108,7 @@ async function tellTheStudent(opts: {
 //
 // The rule is about ENTITLEMENT, not about price. If the student holds a paid
 // credit, the booking must consume it whichever side started the booking —
-// otherwise a mentor-initiated booking silently delivers a ₹299 session while
+// otherwise a mentor-initiated booking silently delivers a paid session while
 // the ledger still says the student is owed one. If they hold no credit, the
 // mentor's free booking is unchanged: there is no entitlement to bypass.
 /**
@@ -135,7 +135,7 @@ async function bookAgainstCredit(
 ): Promise<CreditBooking> {
   // Same status set as the student's own booking route: booking_blocked is a
   // credit whose mentor cancelled — paid for, undelivered, explicitly
-  // rebookable. Leaving it out was half of the stranded ₹299 (Incident #36).
+  // rebookable. Leaving it out was half of the stranded payment (Incident #36).
   const { data: credit, error } = await admin
     .from('session_credits')
     .select('id, status, video_session_id')
@@ -372,7 +372,7 @@ export async function POST(request: NextRequest) {
     // Guidance: book_session_credit(). This route used to insert directly for
     // both, and `grep -c session_credits` in this file returned 0 — a mentor
     // could book the session a student had paid for and the credit never knew.
-    // The student's ₹299 stayed 'paid' with video_session_id null, so
+    // The student's payment stayed 'paid' with video_session_id null, so
     // hasOpenSessionCredit() still counted it open and the student could not
     // buy another, while the session they were about to attend belonged to no
     // payment at all.
@@ -385,7 +385,7 @@ export async function POST(request: NextRequest) {
     let sessionId: string;
 
     // ORIENTATION never asks. It is the free onboarding session, gated above by
-    // free_onboarding_used, and spending a ₹299 credit on it would take payment
+    // free_onboarding_used, and spending a paid credit on it would take payment
     // for the thing we advertise as free.
     const booked: CreditBooking = isOrientation
       ? { kind: 'no_credit' }

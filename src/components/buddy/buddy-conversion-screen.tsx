@@ -8,7 +8,7 @@ import { PLANS } from '@/lib/plans';
 //
 // Founder + review, 14 Aug. The mental model of this page is not "here is why
 // you need a mentor" — it is "we just showed you something about your own
-// preparation you weren't seeing clearly", followed by "₹299 → let's fix it".
+// preparation you weren't seeing clearly", followed by "one session → let's fix it".
 //
 //   1. WEAK SPOTS — up to three, and ONLY real weaknesses. The first build
 //      padded this to three with status facts (SYLLABUS 41/46 · MOCKS 1 day
@@ -21,7 +21,7 @@ import { PLANS } from '@/lib/plans';
 //   2. RED STRIP — one line, nothing after it. 1 in 3, the sourced figure.
 //   3. THE PERSON — one mentor, why them, and the 5-student cap (enforced by
 //      a DB trigger, so it is a promise and not a poster).
-//   4. ₹299 — an audit of the weak spots above.
+//   4. One paid session — an audit of the weak spots above.
 //   5. TILL CAT — one line.
 //
 // The rule for every line here: minimum words, maximum directness.
@@ -137,7 +137,7 @@ export function BuddyConversionScreen({ firstName, findings, bullets, gapCount, 
         </div>
       )}
 
-      {/* ── 4. ₹299 — a prep audit of the gaps above, not "a session" ────── */}
+      {/* ── 4. One session — a prep audit of the gaps above, not "a session" ────── */}
       <BookSessionCard
         findingKind={topKind}
         findingEvidence={findings[0]?.evidence ?? null}

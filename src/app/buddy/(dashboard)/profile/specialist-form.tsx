@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import { SESSION_PRICING } from '@/lib/plans';
 
 // ── "Which students should reach you?" ──────────────────────────────────────
 //
-// The mentor-facing half of the ₹299 launch. Framed entirely around what the
+// The mentor-facing half of the single-session launch. Framed entirely around what the
 // mentor gets — students matched to them — because a form framed as
 // "complete your profile" is admin, and admin does not get filled in.
 //
@@ -97,7 +98,7 @@ export function SpecialistForm({ initial }: {
       <div>
         <h2 className="text-[15px] font-extrabold text-stone-900">Which students should reach you?</h2>
         <p className="mt-1 text-[12.5px] leading-relaxed text-stone-600">
-          We&apos;re opening single ₹299 sessions, and we match each student to the Buddy
+          We&apos;re opening single {SESSION_PRICING.display} sessions, and we match each student to the Buddy
           who fits their actual problem. These answers decide which students reach you.
         </p>
       </div>

@@ -1,4 +1,4 @@
-// ── The ₹299 session, as a rule set ─────────────────────────────────────────
+// ── The single session, as a rule set ─────────────────────────────────────────
 //
 // One paid session with an IIM Buddy, bought by a FREE student, priced at the
 // point where a student will risk finding out rather than commit. It is the
@@ -19,7 +19,15 @@
 //     could oversell refuses instead.
 
 export const SESSION_PLAN_ID = 'session' as const;
-export const SESSION_PRICE_PAISE = 29900;
+
+// DERIVED, NOT DEFINED. The session price lives in lib/plans.ts beside the two
+// membership plans, so that every price CareerRai charges has one home. These
+// two lines are a re-export for the dozen modules that already import
+// SESSION_PRICE_PAISE from here — they keep working, and none of them gains a
+// second definition to drift from.
+export const SESSION_PRICE_PAISE = SESSION_PRICING.offerPaise;
+/** Struck-through anchor for the single session. Display only, never charged. */
+export const SESSION_MRP_PAISE = SESSION_PRICING.listPaise;
 export const SESSION_MINUTES = 45;
 
 /** The upgrade window. A CREDIT against Till-CAT, never a refund — sessions
@@ -218,11 +226,11 @@ export const SPECIALITY_LABEL: Record<Speciality, string> = {
  * The one eligible upgrade credit, or null.
  *
  * Founder ruling (20 Aug 2026): the session is the ENTRY POINT and its price
- * credits against ANY plan checkout sells — monthly, quarterly, Till-CAT,
+ * credits against ANY plan checkout sells — monthly, Till-CAT,
  * half-year — bought inside the window. Only unspent-on-upgrade,
  * non-refunded credits count, and only ONE — crediting three sessions
  * against one plan is a discount we never agreed to. This is what turns the
- * ₹299 from a cheaper substitute into a low-risk way to find out.
+ * the price from a cheaper substitute into a low-risk way to find out.
  */
 /**
  * Read a student's session credits for the upgrade discount — or THROW.
@@ -330,7 +338,7 @@ export async function hasOpenSessionCredit(
   // and assignment_failed — the two states a student lands in when they have
   // PAID and we have failed to deliver. This function gates sessions/book,
   // the route that SELLS a credit. So a student whose mentor cancelled could
-  // be sold a second ₹299 while we already owed them the first.
+  // be sold a second session while we already owed them the first.
   //
   // That hole was latent until this branch: before 20260827a, rule 5 made a
   // release impossible, so nothing could put a credit into booking_blocked by
@@ -401,7 +409,7 @@ export function upgradeCreditPaise(
   return pickUpgradeCredit(credits, now)?.paise ?? 0;
 }
 
-// ── What happens to the ₹299 when its session ends ─────────────────────────
+// ── What happens to the credit when its session ends ─────────────────────────
 //
 // THE authority for that question. Before this existed there was none: the
 // credit lifecycle had no terminal writer at all. Nothing anywhere set
@@ -455,6 +463,7 @@ export type CreditSettlement =
  * means "stuck since", and it is what decides how loudly the exception speaks.
  */
 import { creditBlockPatch } from './booking-blocked';
+import { SESSION_PRICING } from '@/lib/plans';
 import type { UnbookableReason } from './session-assignment';
 
 export async function markBookingBlocked(

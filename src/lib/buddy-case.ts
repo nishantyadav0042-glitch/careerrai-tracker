@@ -396,7 +396,7 @@ export function topFindings(all: CaseFinding[], limit = 3): CaseFinding[] {
 
 /**
  * The session this student should be offered, chosen by their strongest
- * finding — so the ₹299 is an answer to a problem they just read about,
+ * finding — so the session is an answer to a problem they just read about,
  * never a product bolted onto the page.
  */
 export function sessionPitch(top: CaseFinding | undefined): { label: string; cta: string } {

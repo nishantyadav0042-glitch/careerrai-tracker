@@ -20,25 +20,27 @@
 //
 // ── DECISION 1: subscription prices are GST-INCLUSIVE ───────────────────────
 //
-// ₹2,999 stays ₹2,999 at checkout. The tax is carved OUT of it (base ₹2,541 +
-// GST ₹458), not added on top.
+// A Till-CAT price stays exactly what the button said at checkout. The tax is
+// carved OUT of it — on today's ₹2,599 that is base ₹2,203 + GST ₹396 — never
+// added on top.
 //
-// A student who taps a ₹2,999 button and lands on ₹3,539 has been surprised by
-// ₹540 at the exact moment they were deciding, and 77% of our checkouts are
+// A student who taps a ₹2,599 button and lands on ₹3,067 has been surprised by
+// ₹468 at the exact moment they were deciding, and 77% of our checkouts are
 // already abandoned. It would also silently invalidate every price we have
-// ever published — the campaign card, the sales script, the Pooja manual.
+// ever published — the pricing card, the sales script, the Pooja manual.
 // Indian consumer pricing is quoted inclusive by convention; we follow it.
 //
 // ── DECISION 2: the session is GST-EXCLUSIVE, and it has to be ──────────────
 //
-// The founder's ruling is that the mentor receives ₹299 for a session. If the
-// student also paid ₹299, the tax would have to come out of the mentor's fee
-// (base ₹253) and the mentor would not receive what they were promised. So
-// the session is quoted as ₹299 + GST, and the student pays ₹353.
+// The founder's ruling is that the mentor receives the full session fee. If
+// the student paid that same figure inclusive of tax, the tax would come out
+// of the mentor's share — on today's ₹399 the mentor would get ₹338 — and they
+// would not receive what they were promised. So the session is quoted
+// exclusive: the fee plus GST, which on ₹399 means the student pays ₹471.
 //
 // This is the honest arrangement, and it is worth being explicit that at this
-// price CareerRai keeps NOTHING from a session — the entire ₹299 is the
-// mentor's and the ₹54 is the government's, so the payment-gateway fee comes
+// price CareerRai keeps NOTHING from a session — the whole fee is the mentor's
+// and the tax is the government's, so the payment-gateway fee comes
 // out of our pocket. That is a defensible choice while the session's job is
 // conversion into Till-CAT rather than margin. It is not a mistake, but it
 // must be a decision made with open eyes, so it is written down here.
@@ -47,8 +49,9 @@
  * THE SWITCH. False until CareerRai is GST-registered.
  *
  * While false: nothing is added, nothing is carved out, gstPaise is 0 and the
- * student is charged the published price. The ₹299 session therefore costs
- * ₹299 — a cleaner number than ₹352.82, and one the pitch can say out loud.
+ * student is charged the published price. The session therefore costs exactly
+ * what the button says — a cleaner number than the tax-inclusive arithmetic,
+ * and one the pitch can say out loud.
  */
 export const GST_ENABLED = false;
 

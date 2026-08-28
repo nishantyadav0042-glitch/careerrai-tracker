@@ -1,4 +1,5 @@
 import { ArrowRight } from 'lucide-react';
+import { SESSION_PRICING } from '@/lib/plans';
 import Link from 'next/link';
 import type { CaseFinding } from '@/lib/buddy-case';
 
@@ -57,7 +58,7 @@ function primaryIim(raw: string | null): string | null {
 }
 
 export function BuddyInterventionCard({
-  finding, mentor, selfFixHref, onBookHref, priceLabel = '₹299',
+  finding, mentor, selfFixHref, onBookHref, priceLabel = SESSION_PRICING.display,
 }: {
   /** The strongest TRUE thing we know is going wrong. */
   finding: CaseFinding;
