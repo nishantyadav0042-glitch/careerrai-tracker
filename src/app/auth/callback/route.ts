@@ -7,6 +7,17 @@ export async function GET(request: NextRequest) {
   const code       = searchParams.get('code');
   const token_hash = searchParams.get('token_hash');
   const type       = searchParams.get('type');
+  // Where to land afterwards, when the caller asked for somewhere specific —
+  // "Continue with Google" from a post-payment prompt should come back to the
+  // page that sent them, not to the generic tracker.
+  //
+  // Same-origin paths ONLY. `next` arrives on the URL, so echoing it into a
+  // redirect unchecked is an open redirect: //evil.com is a protocol-relative
+  // URL that leaves this site entirely. This is the check /api/google/connect
+  // already applies to its own return path.
+  const rawNext = searchParams.get('next');
+  const next = rawNext && rawNext.startsWith('/') && !rawNext.startsWith('//')
+    && !/[\r\n]/.test(rawNext) ? rawNext : null;
 
   const pending: Array<{ name: string; value: string; options: Record<string, unknown> }> = [];
   const supabase = createServerClient(
@@ -134,7 +145,7 @@ export async function GET(request: NextRequest) {
   // under /student/* while onboarding_completed is false), not on a
   // specific landing page, so there's no reason to route new signups
   // through an extra redirect hop first.
-  const normalDest = role === 'buddy' ? '/buddy/students' : '/student/tracker';
+  const normalDest = next ?? (role === 'buddy' ? '/buddy/students' : '/student/tracker');
 
   if (isNewUser) {
     await admin.from('profiles').insert({

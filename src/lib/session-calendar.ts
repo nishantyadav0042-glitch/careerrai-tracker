@@ -1,104 +1,117 @@
-import { createAdminClient } from '@/lib/supabase/admin';
-import { createCalendarHold } from '@/lib/google-meet';
+import { createCalendarHold } from './google-meet';
 
-// ── PUTTING A BOOKED SESSION ON THE MENTOR'S CALENDAR ───────────────────────
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+// ── ONE PLACE A BOOKED SESSION REACHES GOOGLE CALENDAR ───────────────────────
 //
-// ONE implementation, both booking doors. It lived inside
-// sessions/schedule/route.ts as a private function, which meant the student
-// self-serve path put sessions on the mentor's calendar and the mentor-booked
-// path (calendar/schedule-meeting) did not — a gap nothing surfaced, because
-// every symptom of it is an ABSENCE:
+// 28 Aug. A session could be booked two ways and only one of them told Google.
+// /api/sessions/schedule (the student picking their own slot) placed a BUSY
+// hold on the mentor's calendar and stored its event id;
+// /api/calendar/schedule-meeting (the mentor booking for a student) made ZERO
+// Calendar calls. Same product event, two different outcomes.
 //
-//   · the mentor's hour was never blocked, so they saw a free slot and could
-//     give it away
-//   · the student was never added as an attendee, so Google never sent them
-//     the invite or its reminders
-//   · no google_event_id was stored, so a later cancel or reschedule had
-//     nothing to move
+// That asymmetry is not cosmetic, because the rest of the lifecycle assumes the
+// event exists: reschedule-meeting moves `google_event_id` and cancel-meeting
+// deletes it. A mentor-created booking therefore produced a session with
+// nothing to move and nothing to delete — the mentor's own hour never showed as
+// busy, so they could give the slot away to someone else, which is precisely
+// the failure the hold was introduced to prevent.
 //
-// Nothing errored. The session existed, the link worked, and the calendar side
-// of it simply never happened for half the bookings.
+// It has cost nothing so far only because google_oauth_tokens has been empty
+// for the product's entire life. The moment one mentor connects, the two paths
+// start behaving differently. So this is the single authority both call, and
+// `session-calendar.guard.test.ts` fails if a third booking path ever skips it.
 //
 // A HOLD, NOT A ROOM. createCalendarHold sends no conferenceData, so the
 // one-room-per-buddy invariant is untouched and the join link carried in the
-// event is the buddy's existing permanent one. Minting a second room here is
-// the shape of Incident #21.
+// hold is the buddy's existing permanent one.
 //
-// BEST EFFORT, AND THAT IS DELIBERATE. Until a mentor connects Google this
-// returns 'not_connected' every time. That must never cost a student a booking
-// they already hold: the session exists, the credit is spent, and the app row
-// is the source of truth. no_overlapping_buddy_sessions is what actually
-// prevents double-booking — the calendar is a courtesy to the human, not a
-// lock.
-//
-// The event id lands on video_sessions.google_event_id, a contract
-// cancel-meeting and reschedule-meeting already honour: cancel deletes it only
-// when it differs from the buddy's permanent anchor, reschedule PATCHes it so
-// the Meet link survives the move.
+// BEST EFFORT, AND DELIBERATELY SO. A booking is already committed by the time
+// this runs — the session exists and, on the student path, the credit is spent.
+// Failing the request because Google was slow would take away something the
+// student already holds. The database constraint no_overlapping_buddy_sessions
+// is what actually prevents double-booking; the calendar is a courtesy to the
+// human, not a lock. Never fatal, and never silent either: a silent failure
+// here is the defect this module exists to close.
 
-export interface SessionCalendarInput {
+export interface SessionCalendarHold {
   sessionId: string;
   studentId: string;
   buddyId: string;
+  /** Session start, ISO 8601. */
   startIso: string;
   durationMinutes: number;
-  /** The buddy's permanent room link, carried into the event description. */
+  /** The buddy's permanent room, carried into the hold so the invite has it. */
   meetUrl: string | null;
-  /** For log lines, so two callers stay tellable apart in production. */
-  source: 'sessions/schedule' | 'calendar/schedule-meeting';
+  /** Event title. Defaults to the student's first name, as the student path has always used. */
+  title?: string;
 }
 
+export type CalendarHoldResult =
+  /** The hold exists on the mentor's calendar and its id is stored. */
+  | { held: true; eventId: string }
+  /**
+   * No hold. `reason` is 'not_connected' until a mentor connects Google, which
+   * is the EXPECTED answer today and not an error.
+   */
+  | { held: false; reason: string };
+
 /**
- * Never throws, never returns a failure the caller must handle: by the time
- * this runs the booking is already committed, and there is no answer it could
- * give that should change what the student is told.
+ * Put a booked session on the mentor's Google Calendar, and remember the event.
+ *
+ * Callers must not branch on the result to decide whether the booking counts —
+ * the booking is already real. It is returned so a caller can log or report
+ * honestly, and so tests can assert the outcome.
  */
-export async function holdTheMentorsHour(
-  admin: ReturnType<typeof createAdminClient>,
-  opts: SessionCalendarInput,
-): Promise<void> {
+export async function holdSessionOnCalendar(
+  admin: { from: (t: string) => any },
+  opts: SessionCalendarHold,
+): Promise<CalendarHoldResult> {
   try {
     const { data: student } = await admin
       .from('profiles').select('full_name, email').eq('id', opts.studentId).maybeSingle();
 
     const studentFirst = ((student?.full_name as string | null) ?? 'a student').split(' ')[0];
 
-    // THE STUDENT'S EMAIL IS THE WHOLE INVITE. createCalendarHold turns it into
-    // an `attendees` entry, and the request goes out with sendUpdates=all, so
-    // Google itself delivers the invitation and applies the calendar's default
-    // reminders. With no email we send attendees:[] and the student gets
-    // nothing — no invite, no reminder — while the event still blocks the
-    // mentor's hour. That asymmetry is why student Google sign-in matters:
-    // it is what puts an address here.
     const hold = await createCalendarHold({
       buddyUserId: opts.buddyId,
-      title: `CareerRai 1:1 — ${studentFirst}`,
+      title: opts.title ?? `CareerRai 1:1 — ${studentFirst}`,
       start: new Date(opts.startIso),
       durationMinutes: opts.durationMinutes,
       meetLink: opts.meetUrl,
+      // The student's calendar invite depends on us knowing their address. When
+      // we do not, the hold is still placed — the mentor's hour is protected
+      // either way, and the student still has the link in-app.
       studentEmail: (student?.email as string | null) ?? null,
     });
 
     if (!hold.ok) {
-      // 'not_connected' is the EXPECTED answer until a mentor connects Google.
-      // Logged at info so it does not drown the real failures.
-      console.log(`[${opts.source}] calendar hold skipped`, opts.sessionId, hold.reason);
-      return;
+      // Logged at info, not error: 'not_connected' is the normal answer until a
+      // mentor connects Google, and shouting about it would drown the failures
+      // that actually matter.
+      console.log('[session-calendar] hold skipped', opts.sessionId, hold.reason);
+      return { held: false, reason: hold.reason };
     }
 
     const { error } = await admin
       .from('video_sessions')
       .update({ google_event_id: hold.eventId })
       .eq('id', opts.sessionId);
+
     if (error) {
-      // The hold exists in Google but we cannot address it later. Say so
-      // loudly: a cancel will now leave a stale hold on the mentor's calendar.
+      // The hold exists in Google but we cannot address it again. Say so
+      // loudly: cancel and reschedule both key off google_event_id, so from
+      // here a cancellation leaves a stale hold on the mentor's calendar.
       console.error(
-        `[${opts.source}] hold created but id not stored`,
+        '[session-calendar] hold created but id not stored',
         opts.sessionId, hold.eventId, error.message,
       );
+      return { held: false, reason: 'id_not_stored' };
     }
+
+    return { held: true, eventId: hold.eventId };
   } catch (err) {
-    console.error(`[${opts.source}] calendar hold failed`, opts.sessionId, err);
+    console.error('[session-calendar] hold failed', opts.sessionId, err);
+    return { held: false, reason: 'threw' };
   }
 }

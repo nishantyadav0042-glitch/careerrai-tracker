@@ -6,11 +6,9 @@ import { Settings, Video } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { NotifPrefsPanel } from '@/components/notif-prefs-panel';
-import { GoogleConnectCard } from '@/components/buddy/google-connect-card';
 import { LogoutButton } from '@/components/logout-button';
 import type { NotifPrefs } from '@/types';
 import { sessionsVisibleFrom } from '@/lib/session-window';
-import { buddyBookingReadiness } from '@/lib/buddy-room';
 import { SpecialistForm } from './specialist-form';
 
 export default async function BuddyProfilePage() {
@@ -20,14 +18,11 @@ export default async function BuddyProfilePage() {
 
   const admin = createAdminClient();
   const { data: profile } = await admin.from('profiles').select(
-    'full_name, email, notif_prefs, specialities, strongest_section, own_weakest_section, attempt_number, previous_percentile, languages, weekly_session_cap, notice_hours, buddy_story'
+    'full_name, email, notif_prefs, buddy_meet_url, specialities, strongest_section, own_weakest_section, attempt_number, previous_percentile, languages, weekly_session_cap, notice_hours, buddy_story'
   ).eq('id', user.id).single();
   if (!profile) redirect('/login');
 
-  const [googleReadiness, { count: studentCount }, { data: upcomingSessions }] = await Promise.all([
-    // The one adapter over decideBookability(), never a second opinion about
-    // whether this mentor is connected.
-    buddyBookingReadiness(user.id),
+  const [{ count: studentCount }, { data: upcomingSessions }] = await Promise.all([
     admin
       .from('profiles')
       .select('id', { count: 'exact' })
@@ -58,7 +53,7 @@ export default async function BuddyProfilePage() {
 
   return (
     <div className="space-y-5 pb-24">
-      {/* The specialist fields. Leads the page while single sessions are opening,
+      {/* The specialist fields. Leads the page while ₹299 sessions are opening,
           because these are what decide whether a mentor gets matched at all —
           an undeclared capacity is treated as zero, so an unfilled form is a
           mentor the system cannot send anyone to. */}
@@ -118,15 +113,12 @@ export default async function BuddyProfilePage() {
         </Card>
       </div>
 
-      {/* The integration, above the sessions that depend on it. Shown ALWAYS
-          — including when it is missing, because "you cannot take bookings
-          until this is connected" is the single most useful thing an unset
-          mentor can be told. */}
-      <GoogleConnectCard
-        connected={googleReadiness.googleConnected}
-        email={googleReadiness.googleEmail}
-        from="/buddy/profile"
-      />
+      {/* The meeting-room card used to sit here, showing the mentor their own
+          buddy_meet_url with a copy button. Removed 27 Aug: the room is an
+          implementation detail of the Google connection now, and a mentor who
+          has to understand it is a mentor we have handed our plumbing to.
+          Setup lives on /buddy/home and /buddy/schedule as one action —
+          Connect Google — and nowhere else. */}
 
       {/* Upcoming sessions */}
       {(upcomingSessions?.length ?? 0) > 0 && (

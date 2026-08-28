@@ -1,32 +1,25 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 import { join } from 'node:path';
+import { holdSessionOnCalendar } from './session-calendar';
 
 /**
- * ── EVERY BOOKED SESSION REACHES THE MENTOR'S CALENDAR ──────────────────────
+ * ── EVERY BOOKING PATH REACHES GOOGLE CALENDAR THE SAME WAY ─────────────────
  *
- * 27 Aug. createCalendarHold() had exactly one caller: the student self-serve
- * route. calendar/schedule-meeting — the path a mentor uses to book for their
- * own student — created the session, sent the notification, and never touched
- * Google. So for half of all bookings:
+ * 28 Aug. A session could be booked two ways and only one told Google.
+ * /api/sessions/schedule placed a BUSY hold and stored its event id;
+ * /api/calendar/schedule-meeting made zero Calendar calls. The rest of the
+ * lifecycle assumes the event exists — reschedule moves `google_event_id`,
+ * cancel deletes it — so a mentor-created booking had nothing to move and
+ * nothing to delete, and the mentor's hour never showed as busy.
  *
- *   · the mentor's hour was not blocked, and they could give it away
- *   · the student was never an attendee, so Google sent no invite and no
- *     reminder
- *   · no google_event_id was stored, so cancel and reschedule had nothing to
- *     act on
+ * It cost nothing only because google_oauth_tokens has been empty for the
+ * product's entire life. The moment one mentor connects, the paths diverge.
  *
- * NOTHING ERRORED. Every symptom was an absence — the session existed, the
- * link worked, and the calendar half simply did not happen. That is the same
- * shape as the notification defect on this very route: one of two doors
- * covered, and nothing noticing the other.
- *
- * So the rule is structural, not behavioural. A behaviour test proves today's
- * two routes both call it; this proves that a THIRD booking path cannot be
- * written without one, and that neither existing path can quietly drop it.
- *
- * Comments are stripped before matching, so the prose above can never satisfy
- * an assertion below.
+ * Comments are stripped before matching. The prose above names every symbol
+ * being asserted, and this repo has repeatedly shipped guards that matched
+ * their own explanation.
  */
 
 const ROOT = join(__dirname, '..');
@@ -37,84 +30,121 @@ function codeOnly(src: string): string {
     .replace(/(^|[^:])\/\/.*$/gm, '$1');
 }
 
-/** Every route that creates a video_sessions row a human will attend. */
+/** Every route that moves a video_session into 'scheduled'. */
 const BOOKING_ROUTES = [
   'app/api/sessions/schedule/route.ts',
   'app/api/calendar/schedule-meeting/route.ts',
 ];
 
-describe('both booking doors put the session on the calendar', () => {
-  it.each(BOOKING_ROUTES)('%s exists — the guard is checking, not skipping', (rel) => {
+describe('both booking paths hold the mentor’s calendar', () => {
+  it.each(BOOKING_ROUTES)('%s exists', (rel) => {
     expect(existsSync(join(ROOT, rel)), `${rel} moved — update this guard`).toBe(true);
   });
 
-  it.each(BOOKING_ROUTES)('%s calls the shared calendar holder', (rel) => {
+  it.each(BOOKING_ROUTES)('%s REACHES holdSessionOnCalendar on the booking path', (rel) => {
     const code = codeOnly(readFileSync(join(ROOT, rel), 'utf8'));
-    expect(code, `${rel} must import lib/session-calendar`)
-      .toMatch(/from\s+['"]@\/lib\/session-calendar['"]/);
-    // A CALL, not merely an import — matching an identifier followed by `(`
-    // that is not a declaration, so a dead import cannot satisfy it.
+
+    // Mutation testing caught the first version of this assertion passing on
+    // `if (false) await holdSessionOnCalendar(...)` — the call text was present
+    // and the guard was satisfied by dead code, which is precisely the defect
+    // shape it exists to stop (a route that books and reaches Google nowhere).
+    //
+    // Two things are required now. The call must be a STATEMENT — `await` at
+    // the start of its own line, so no same-line condition can disable it. And
+    // it must sit INSIDE the POST handler, ahead of the success return, so it
+    // cannot drift into a helper nothing invokes.
+    const postAt = code.search(/export\s+async\s+function\s+POST\s*\(/);
+    expect(postAt, `${rel}: POST handler not found — update this guard`).toBeGreaterThan(-1);
+    const post = code.slice(postAt);
+
+    // The LAST such return, not the first. sessions/schedule answers
+    // `{ ok: true, ..., already: true }` early for an idempotent replay, long
+    // before a hold is placed — anchoring on that one made this assertion fail
+    // against correct code.
+    const successes = [...post.matchAll(/return\s+NextResponse\.json\(\s*(?:payload|\{\s*ok:\s*true)/g)];
+    expect(successes.length, `${rel}: success return not found — update this guard`).toBeGreaterThan(0);
+    const successAt = successes[successes.length - 1].index!;
+
     expect(
-      /(?<!function\s)\bholdTheMentorsHour\s*\(/.test(code),
-      `${rel} books a session and never puts it on the mentor's calendar`,
+      /(?:^|\n)\s*await\s+holdSessionOnCalendar\s*\(/.test(post.slice(0, successAt)),
+      `${rel} books a session but never places a calendar hold before answering `
+      + 'success. Reschedule and cancel both key off google_event_id, so a booking '
+      + 'without a hold leaves them nothing to move or delete — and the mentor can '
+      + 'give the same slot away. A call behind a disabled branch does not count.',
     ).toBe(true);
   });
 
-  it('there is ONE implementation, and the routes do not re-implement it', () => {
-    // The defect was a private copy living inside one route. If a route calls
-    // createCalendarHold directly again, the two doors can diverge exactly as
-    // they did before.
+  it.each(BOOKING_ROUTES)('%s imports the ONE calendar authority', (rel) => {
+    const code = codeOnly(readFileSync(join(ROOT, rel), 'utf8'));
+    expect(code).toMatch(/from\s+['"]@\/lib\/session-calendar['"]/);
+  });
+
+  it('no booking route calls createCalendarHold directly any more', () => {
+    // The inline implementation in sessions/schedule was the reason the sibling
+    // route never got one: there was nothing shared to call.
     for (const rel of BOOKING_ROUTES) {
       const code = codeOnly(readFileSync(join(ROOT, rel), 'utf8'));
       expect(
-        /\bcreateCalendarHold\s*\(/.test(code),
-        `${rel} calls createCalendarHold directly — go through lib/session-calendar`,
-      ).toBe(false);
+        code,
+        `${rel} should go through lib/session-calendar, not build its own hold`,
+      ).not.toMatch(/\bcreateCalendarHold\s*\(/);
     }
   });
 
-  it('lib/session-calendar is the only caller of createCalendarHold', () => {
-    const callers: string[] = [];
-    const walk = (dir: string) => {
-      for (const name of readdirSync(dir)) {
-        const p = join(dir, name);
-        if (statSync(p).isDirectory()) walk(p);
-        else if (/\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name)) {
-          const c = codeOnly(readFileSync(p, 'utf8'));
-          if (/\bcreateCalendarHold\s*\(/.test(c)) callers.push(p.replace(`${ROOT}/`, ''));
-        }
-      }
-    };
-    walk(ROOT);
-    // The definition itself plus the one authority that calls it.
-    expect(callers.sort()).toEqual(['lib/google-meet.ts', 'lib/session-calendar.ts']);
-  });
-
-  it('the hold can never fail the booking that already happened', () => {
-    // By the time it runs the credit is spent and the session exists. A
-    // calendar outcome that could change the student's answer would be the
-    // fatal-notification defect wearing a calendar hat.
-    const src = codeOnly(readFileSync(join(ROOT, 'lib/session-calendar.ts'), 'utf8'));
-    expect(src).toMatch(/\btry\s*\{/);
+  it('lib/session-calendar is the only non-test caller of createCalendarHold', () => {
+    const hits = execSyncLike();
     expect(
-      /catch\s*\([\s\S]{0,40}\)\s*\{[\s\S]{0,200}console\.error/.test(src),
-      'session-calendar must catch and LOG, never rethrow into a booking route',
-    ).toBe(true);
-    expect(src, 'it must return void, so no caller can branch on the outcome')
-      .toMatch(/Promise<void>/);
+      hits,
+      'a second calendar-hold implementation appeared; there must be exactly one',
+    ).toEqual(['lib/session-calendar.ts']);
+  });
+});
+
+/** Files under src/ that CALL createCalendarHold, excluding tests and the lib itself. */
+function execSyncLike(): string[] {
+  const out = execSync(
+    `grep -rl "createCalendarHold(" src --include=*.ts --include=*.tsx || true`,
+    { encoding: 'utf8' },
+  ).split('\n').filter(Boolean);
+  return out
+    .filter((f) => !f.includes('.test.'))
+    .filter((f) => !f.endsWith('src/lib/google-meet.ts')) // its definition
+    // grep -l matches raw bytes, so a COMMENT naming createCalendarHold() was
+    // reported as a second implementation (student/buddy/page.tsx explains, in
+    // prose, that the hold adds the student as an attendee). Re-check each hit
+    // against comment-stripped source, the same rule every other assertion in
+    // this file uses: an implementation is a CALL, never a sentence about one.
+    .filter((f) => /\bcreateCalendarHold\s*\(/.test(codeOnly(readFileSync(f, 'utf8'))))
+    .map((f) => f.replace(/^src\//, ''))
+    .sort();
+}
+
+describe('holdSessionOnCalendar never lets Google cost someone a booking', () => {
+  const admin = (opts: { profile?: unknown; updateError?: { message: string } } = {}) => ({
+    from: () => ({
+      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: opts.profile ?? null }) }) }),
+      update: () => ({ eq: async () => ({ error: opts.updateError ?? null }) }),
+    }),
   });
 
-  it('the student is carried as an attendee, which is what sends the invite', () => {
-    // The reminder path is not "we connected Google". It is: an email becomes
-    // an attendee, and createCalendarHold posts with sendUpdates=all so Google
-    // itself delivers the invitation and its default reminders. Drop the
-    // email and the student silently gets nothing.
-    const src = codeOnly(readFileSync(join(ROOT, 'lib/session-calendar.ts'), 'utf8'));
-    expect(src).toMatch(/studentEmail:/);
-    expect(src).toMatch(/select\(['"]full_name, email['"]\)/);
+  const base = {
+    sessionId: 's1', studentId: 'stu', buddyId: 'bud',
+    startIso: '2026-09-01T10:00:00.000Z', durationMinutes: 45, meetUrl: 'https://meet/x',
+  };
 
-    const meet = codeOnly(readFileSync(join(ROOT, 'lib/google-meet.ts'), 'utf8'));
-    expect(meet, 'the hold must invite the attendee').toMatch(/sendUpdates=all/);
-    expect(meet, 'the hold must carry calendar reminders').toMatch(/reminders:\s*\{\s*useDefault:\s*true\s*\}/);
+  it('reports not-held rather than throwing when Google is unreachable', async () => {
+    // No mentor has ever connected Google, so createCalendarHold answers
+    // 'not_connected' every time today. That must never surface as an error to
+    // a student who already holds a real, committed booking.
+    const res = await holdSessionOnCalendar(admin() as never, base);
+    expect(res.held).toBe(false);
+    expect(res).toHaveProperty('reason');
+  });
+
+  it('never throws even when the database read itself explodes', async () => {
+    const exploding = { from: () => { throw new Error('connection lost'); } };
+    await expect(holdSessionOnCalendar(exploding as never, base)).resolves.toMatchObject({
+      held: false,
+    });
   });
 });

@@ -157,49 +157,37 @@ describe('a session leaves the schedule an hour after it starts', () => {
 });
 
 describe('a mentor who hits a scheduling error is never stuck', () => {
+  // ── THE FIX CHANGED; THE PROPERTY DID NOT (27 Aug) ─────────────────────────
+  //
+  // These two tests used to require the 9 Aug escape hatch: on any scheduling
+  // error, a "start your own Meet" box where the mentor pasted a link, sent to
+  // the route as `meetingLink`. That was the second way to configure meeting
+  // infrastructure, and the founder removed the manual-room UX entirely —
+  // Google Connect is now the one mentor setup path.
+  //
+  // So the assertions are inverted rather than deleted. The property they
+  // protect is still exactly right and still enforced below: a mentor looking
+  // at a red error at 6:28pm with a student waiting must see the fix next to
+  // the error, not go hunting for it. The fix is now Connect Google.
   const modal = readFileSync('src/components/schedule-session-modal.tsx', 'utf8');
+  const code = modal.replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1');
 
-  // 27 Aug: the escape hatch these two tests guarded — "open meet.google.com,
-  // make a room, paste it here" — was REMOVED, and the rule they encode had to
-  // move with it rather than be deleted.
-  //
-  // The old hatch solved a real problem (a mentor stuck at 6:28pm with a
-  // student waiting) by offering a second way to get a meeting link. That
-  // second way is exactly what the founder removed: a setup question with two
-  // right answers, which is why nine mentors reached production with two
-  // pasted rooms, zero Google connections and no clear next step.
-  //
-  // "Never stuck" survives; "never stuck by pasting a link" does not. The
-  // error must still carry its own way out, and now there is only one.
-
-  it('offers the ONE fix, in the error itself — never a second way to make a link', () => {
-    expect(modal, 'the paste-your-own-room hatch must be gone')
-      .not.toContain('meet.google.com/new');
-    expect(modal, 'the modal must not send a hand-pasted link')
-      .not.toContain('meetingLink');
-    expect(modal, 'no room-vs-Google decision may survive here')
-      .not.toMatch(/paste/i);
-    expect(modal).toContain('Connect Google');
+  it('no longer asks the mentor to supply a room by hand', () => {
+    expect(code, 'the make-your-own-room link is manual-room UX').not.toContain('meet.google.com/new');
+    expect(code, 'the product must not send a hand-pasted meetingLink').not.toContain('meetingLink');
+    expect(code.toLowerCase()).not.toContain('new meeting');
   });
 
-  it('the way out appears WITH the error, not somewhere else', () => {
-    // A fix the mentor has to go hunting for is a fix that does not get used
-    // at 6:28pm with a student waiting. Unchanged in spirit, one fix instead
-    // of two.
-    //
-    // Asserted as CONTAINMENT, not as a character distance. The first version
-    // of this allowed 600 characters between the two, which passed only because
-    // of how long the old block happened to be; the rewritten block is 737 and
-    // failed while being perfectly correct. A byte count was never the rule —
-    // "inside the error, above the submit button" is.
-    const errorBlock = modal.indexOf('{error && (');
-    const submitButton = modal.indexOf('onClick={handleCreate}');
-    const wayOut = modal.indexOf('Connect Google', errorBlock);
-
-    expect(errorBlock, 'the error block itself is gone').toBeGreaterThan(-1);
-    expect(submitButton, 'the submit button is gone — update this guard').toBeGreaterThan(-1);
-    expect(wayOut, 'the error carries no way out').toBeGreaterThan(-1);
-    expect(wayOut, 'the fix must sit inside the error, not after the form')
-      .toBeLessThan(submitButton);
+  it('the recovery appears WITH the error, not somewhere else', () => {
+    const firstErrorBlock = code.indexOf('{error && (');
+    expect(firstErrorBlock).toBeGreaterThan(-1);
+    // The one-tap fix for the one recoverable failure class (not_connected /
+    // auth_expired) sits inside that same error block.
+    const recovery = code.indexOf('needsGoogle && (');
+    expect(recovery, 'an error with no way out is a dead end').toBeGreaterThan(-1);
+    expect(Math.abs(recovery - firstErrorBlock)).toBeLessThan(600);
+    expect(code.slice(firstErrorBlock)).toMatch(/Connect Google/);
   });
 });

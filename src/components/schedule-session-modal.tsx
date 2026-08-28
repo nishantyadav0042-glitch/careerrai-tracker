@@ -119,6 +119,10 @@ export function ScheduleSessionModal({
           startTime: new Date(utcMs).toISOString(),
           durationMinutes: duration,
           sessionType,
+          // No `meetingLink`. The route still accepts one for backwards
+          // compatibility, but the product no longer asks a mentor to supply
+          // meeting infrastructure by hand — the room comes from their Google
+          // connection, which is the single setup path as of 27 Aug.
         }),
       });
       const data = await res.json();
@@ -213,15 +217,15 @@ export function ScheduleSessionModal({
                   <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5">
                     <p className="text-sm font-bold text-stone-900">One step before you can book</p>
                     <p className="mt-0.5 text-[13px] leading-relaxed text-stone-700">
-                      Connect your Google Calendar to schedule sessions, create Google Meet
-                      links, and manage session reminders. You only do this once.
+                      Sessions run on your own Google Meet room. Connect once and every
+                      session you ever book uses the same link — you never do this again.
                     </p>
                     <a
                       href={connectHref}
                       className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-bold text-stone-900 shadow-sm ring-1 ring-stone-200 active:scale-[0.99]"
                       style={{ minHeight: 48 }}
                     >
-                      <GoogleMark /> Connect Google
+                      <GoogleMark /> Connect Google Calendar
                     </a>
                   </div>
                 )}
@@ -349,6 +353,14 @@ export function ScheduleSessionModal({
                   </div>
                 </div>
 
+                {/* The paste-your-own-Meet escape hatch lived here: on any
+                    scheduling error it offered a URL box and booked the session
+                    against whatever the mentor pasted. Removed 27 Aug with the
+                    rest of the manual-room UX — a mentor should never have to
+                    supply meeting infrastructure by hand, and offering it at
+                    the moment of an error is where the two-paths confusion was
+                    at its worst. The route still accepts `meetingLink` for
+                    backwards compatibility; nothing in the product sends it. */}
                 {error && (
                   <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2.5">
                     <p className="text-sm text-red-600">{error}</p>

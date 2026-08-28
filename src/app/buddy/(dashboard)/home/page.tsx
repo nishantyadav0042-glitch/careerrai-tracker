@@ -4,7 +4,7 @@ import { getAuthUser } from '@/lib/auth';
 import { BuddyTriageView } from './buddy-triage-view';
 import { MeetingWidget } from '@/components/meeting-widget';
 import { buddyBookingReadiness } from '@/lib/buddy-room';
-import { GoogleConnectCard } from '@/components/buddy/google-connect-card';
+import { GoogleConnect } from '@/components/buddy/google-connect';
 import { UrgentRequestsPanel } from './urgent-requests-panel';
 import { CheckInDrafts } from './checkin-drafts';
 import { checkInBecause, type CheckInSignal } from '@/lib/os/buddy-checkin';
@@ -141,16 +141,47 @@ export default async function BuddyHomePage({
         </Link>
       )}
 
-      {/* Connect Google — on the HOME screen, not buried in the profile.
-          A mentor who cannot book needs to see the reason and the fix on the
-          first screen they land on, not discover it three taps deep after
-          filling in a booking form. Disappears the moment it's done. */}
-      {!readiness.googleConnected && (
-        <GoogleConnectCard
-          connected={false}
-          from="/buddy/home"
-          googleStatus={googleStatus}
-        />
+      {/* Setup — on the HOME screen, not buried in the profile. A mentor who
+          cannot book needs to see the reason and the fix on the first screen
+          they land on, not discover it three taps deep after filling in a
+          booking form. Disappears the moment it's done.
+
+          TWO THINGS, KEPT SEPARATE (founder, 27 Aug): connect Google, and set
+          your availability. They are different problems with different fixes,
+          so merging them into one card — as the old room/Google/hours screen
+          did — only ever told a mentor "something is wrong" without saying
+          which thing. Each renders only while its own step is outstanding. */}
+      {!readiness.ready && (
+        <div className="space-y-3">
+          {(!readiness.googleConnected || !readiness.hasRoom) && (
+            <GoogleConnect
+              googleConnected={readiness.googleConnected}
+              hasRoom={readiness.hasRoom}
+              googleEmail={readiness.googleEmail}
+              from="/buddy/home"
+              googleStatus={googleStatus}
+            />
+          )}
+          {!readiness.hasAvailability && (
+            <Link
+              href="/buddy/schedule"
+              className="flex items-center gap-3 rounded-2xl border-2 border-orange-300 bg-orange-50 p-4"
+            >
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-orange-500">
+                <Plus className="h-4 w-4 text-white" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-bold text-stone-900">Set your availability</p>
+                <p className="mt-0.5 text-[13px] leading-relaxed text-stone-600">
+                  Students can only pick times you have opened.
+                </p>
+              </div>
+              <span className="shrink-0 rounded-lg bg-stone-900 px-3 py-1.5 text-xs font-semibold text-white">
+                Set hours →
+              </span>
+            </Link>
+          )}
+        </div>
       )}
 
       {/* Next session widget */}

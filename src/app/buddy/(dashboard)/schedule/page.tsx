@@ -4,7 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { MeetingWidget } from '@/components/meeting-widget';
-import { GoogleConnectCard } from '@/components/buddy/google-connect-card';
+import { GoogleConnect } from '@/components/buddy/google-connect';
 import { SessionReadiness } from '@/components/buddy/session-readiness';
 import { buddyBookingReadiness } from '@/lib/buddy-room';
 
@@ -52,17 +52,19 @@ export default async function BuddySchedulePage({
       </div>
 
       <div className="max-w-2xl mx-auto px-4 py-6 space-y-4">
-        {/* Two things, in the order they have to happen: connect Google, then
-            open your hours. There is no third option and no choice to make. */}
-        <GoogleConnectCard
-          connected={readiness.googleConnected}
-          email={readiness.googleEmail}
+        {/* Connect Google leads, and it is the ONLY meeting-infrastructure
+            path a mentor sees. The paste-your-own-room card that used to sit
+            below this was the second visible way to configure the same thing;
+            removing it is the 27 Aug simplification. */}
+        <GoogleConnect
+          googleConnected={readiness.googleConnected}
+          hasRoom={readiness.hasRoom}
+          googleEmail={readiness.googleEmail}
           from="/buddy/schedule"
           googleStatus={googleStatus}
         />
         <SessionReadiness
           canBook={readiness.ready}
-          googleConnected={readiness.googleConnected}
           availability={{
             configured: availabilityRow != null,
             work_days: (availabilityRow?.work_days as number[] | undefined),

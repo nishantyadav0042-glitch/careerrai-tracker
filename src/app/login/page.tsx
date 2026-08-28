@@ -5,7 +5,7 @@ import { ArrowRight, Eye, EyeOff, Smartphone, ChevronLeft, KeyRound } from 'luci
 import Image from 'next/image';
 import Link from 'next/link';
 import { InstallButton } from '@/components/install/install-button';
-import { ContinueWithGoogle } from '@/components/continue-with-google';
+import { ContinueWithGoogle } from '@/components/auth/continue-with-google';
 import { cn } from '@/lib/utils';
 import { track } from '@/lib/journey';
 
@@ -208,17 +208,20 @@ function LoginForm() {
                   <ArrowRight className="w-4 h-4 text-white ml-auto transition-transform group-hover:translate-x-0.5" />
                 </Link>
 
-                {/* Google leads, because it is the fastest door and asks for
-                    nothing to be typed. It NEVER replaces the two below: 924 of
-                    this app's accounts are phone-only, and hiding their way in
-                    behind Google would lock them out of their own product. */}
+                {/* Continue with Google — one tap, and it both signs up and
+                    logs in, so it sits above the two mode-specific buttons
+                    rather than inside either. Identity scopes only; a student
+                    is never asked for calendar permission (see the component).
+                    Mobile OTP and password stay exactly as visible as before —
+                    Google is an addition, never a replacement, and nothing
+                    here is required to pay. */}
                 <div className="pt-1">
                   <ContinueWithGoogle />
                 </div>
 
                 <div className="flex items-center gap-3 pt-1">
                   <span className="h-px flex-1 bg-stone-200" />
-                  <span className="text-[11px] font-medium text-stone-400">or</span>
+                  <span className="text-[11px] font-semibold uppercase tracking-widest text-stone-400">or</span>
                   <span className="h-px flex-1 bg-stone-200" />
                 </div>
 

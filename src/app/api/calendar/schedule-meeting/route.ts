@@ -8,7 +8,7 @@ import { constraintFailure } from '@/lib/booking-constraints';
 import { idempotencyKey, replayIdempotent, rememberIdempotent } from '@/lib/idempotency';
 import { bookedNotificationBody, sessionNotificationUrl } from '@/lib/session-link';
 import { dispatch } from '@/lib/notification-os';
-import { holdTheMentorsHour } from '@/lib/session-calendar';
+import { holdSessionOnCalendar } from '@/lib/session-calendar';
 
 const ALLOWED_DURATIONS = [20, 30, 45, 60];
 const ALLOWED_SESSION_TYPES = ['guidance', 'onboarding', 'review', 'doubt_solving', 'mock_review'] as const;
@@ -479,27 +479,6 @@ export async function POST(request: NextRequest) {
     // transport ever saw: 19 session_scheduled rows, 0 pushes, ever. The
     // student's phone now lights up when push is on; the in-app row (with the
     // join link — the lesson from the two expired sessions) is unchanged.
-    // ── THE MENTOR'S CALENDAR, AND THE STUDENT'S INVITE ──────────────────────
-    //
-    // This route never did this. Only the student self-serve path put a
-    // session on the mentor's Google Calendar, so a mentor-booked session
-    // blocked no hour, sent no invitation and stored no event id — and every
-    // symptom of that was an absence, which is why nothing surfaced it.
-    //
-    // Same shared implementation as sessions/schedule (lib/session-calendar),
-    // so the two doors cannot drift. Best effort by construction: the booking
-    // is already committed above and no calendar outcome may change what the
-    // student is told.
-    await holdTheMentorsHour(admin, {
-      source: 'calendar/schedule-meeting',
-      sessionId,
-      studentId,
-      buddyId: user.id,
-      startIso: start.toISOString(),
-      durationMinutes,
-      meetUrl: meetLink,
-    });
-
     await tellTheStudent({
       sessionId,
       studentId,
@@ -508,6 +487,32 @@ export async function POST(request: NextRequest) {
       isOrientation,
       meetLink,
       prefs: (student.notif_prefs as Record<string, unknown>) ?? {},
+    });
+
+    // ── AND THE MENTOR'S CALENDAR KNOWS (28 Aug) ─────────────────────────────
+    //
+    // This route made ZERO Google Calendar calls while its sibling
+    // (/api/sessions/schedule) placed a BUSY hold and stored the event id. Same
+    // product event, two different outcomes — and the rest of the lifecycle
+    // assumes the event exists, since reschedule-meeting moves google_event_id
+    // and cancel-meeting deletes it. A mentor-created booking left nothing to
+    // move and nothing to delete, and the mentor's own hour never showed as
+    // busy, so they could hand the same slot to someone else.
+    //
+    // Through the ONE authority both paths now share, never a second
+    // implementation. Best-effort by design: the session row is already
+    // committed and is the source of truth, so a Calendar failure must not undo
+    // a booking the mentor has just been told succeeded.
+    await holdSessionOnCalendar(admin, {
+      sessionId,
+      studentId,
+      buddyId: user.id,
+      startIso: start.toISOString(),
+      durationMinutes,
+      meetUrl: meetLink,
+      // This route already composed a title (orientation vs 1:1) before saving
+      // the session; reuse it so the calendar entry and the app agree.
+      title,
     });
 
     await audit({
