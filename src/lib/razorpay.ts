@@ -37,6 +37,17 @@ export interface RazorpayPayment {
   id: string;
   status: string;
   amount: number;
+  // ── The diagnosis fields (Incident #58) ──────────────────────────────────
+  // Razorpay has always returned these; this type simply stopped describing
+  // them, so every caller was type-blind to the only answer to "why did it
+  // fail". They are optional because a captured payment carries no error, and
+  // nullable because Razorpay sends explicit nulls rather than omitting keys.
+  method?: string | null;
+  error_code?: string | null;
+  error_description?: string | null;
+  error_source?: string | null;
+  error_step?: string | null;
+  error_reason?: string | null;
 }
 
 /**

@@ -4,6 +4,7 @@ import { authorizedCron } from '@/lib/cron-auth';
 import { withCronTracking } from '@/lib/cron-run-tracker';
 import { fetchOrderPayments } from '@/lib/razorpay';
 import { activatePaidOrder } from '@/lib/activate-payment';
+import { failureFacts } from '@/lib/payment-failure';
 
 export const maxDuration = 300;
 
@@ -25,6 +26,11 @@ const MIN_AGE_MINUTES = 10;
 // Razorpay orders expire; past this an unpaid order is simply abandoned.
 const MAX_AGE_DAYS = 7;
 const BATCH = 50;
+// How many already-settled failures we ask Razorpay about per tick. Small on
+// purpose: this is a backlog drain running every 15 minutes, not a burst, and
+// it shares a run with the money-critical rescue loop above — it must never be
+// the reason that loop times out.
+const EXPLAIN_BATCH = 20;
 
 export async function POST(request: NextRequest) {
   if (!authorizedCron(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -46,13 +52,16 @@ export async function POST(request: NextRequest) {
       .order('created_at', { ascending: true })
       .limit(BATCH);
 
-    if (!stuck?.length) return NextResponse.json({ checked: 0, rescued: 0, abandoned: 0 });
+    // NO EARLY RETURN on an empty `stuck`. It used to bail here, and with the
+    // explain pass below that would have meant the backlog of unexplained
+    // failures was only ever drained on the rare tick that also happened to
+    // find an in-flight order — i.e. almost never.
 
     let rescued = 0;
     let abandoned = 0;
     const errors: string[] = [];
 
-    for (const row of stuck) {
+    for (const row of stuck ?? []) {
       const orderId = row.razorpay_order_id as string;
       try {
         const payments = await fetchOrderPayments(orderId);
@@ -79,8 +88,12 @@ export async function POST(request: NextRequest) {
         // No capture. Record the real end-state so abandoned checkouts stop
         // being indistinguishable from in-flight ones — this is what makes
         // checkout drop-off measurable instead of a permanent 'created' row.
-        if (payments.some((p) => p.status === 'failed')) {
-          await admin.from('student_payments').update({ status: 'failed' }).eq('id', row.id);
+        //
+        // And record WHY (Incident #58). Razorpay already told us in this same
+        // response; writing only the status threw the diagnosis away.
+        const facts = failureFacts(payments, new Date().toISOString());
+        if (facts) {
+          await admin.from('student_payments').update({ status: 'failed', ...facts }).eq('id', row.id);
           abandoned++;
         }
       } catch (e) {
@@ -89,7 +102,53 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ checked: stuck.length, rescued, abandoned, errors: errors.length });
+    // ── THE EXPLAIN PASS (Incident #58) ────────────────────────────────────
+    //
+    // The loop above only ever looks at rows still sitting at 'created'. The
+    // moment one is marked 'failed' it leaves that population forever, so a
+    // row that was failed BEFORE this cron learned to record a reason would
+    // stay unexplained for the rest of its life — including the two 25 Aug
+    // iOS attempts that are the whole reason this exists.
+    //
+    // Razorpay keeps payment history indefinitely, so the answer is still
+    // there for the asking. This pass asks once per row, oldest first, and
+    // stamps failure_seen_at whether or not an error code came back — which is
+    // what stops it asking the same row again tomorrow and what keeps "we
+    // asked and got nothing" distinguishable from "we never asked".
+    //
+    // No MIN_AGE and no MAX_AGE here on purpose: these rows are already
+    // settled, so there is no webhook to wait for, and an old unexplained
+    // failure is exactly as worth explaining as a new one.
+    let explained = 0;
+    const { data: unexplained } = await admin
+      .from('student_payments')
+      .select('id, razorpay_order_id')
+      .eq('status', 'failed')
+      .is('failure_seen_at', null)
+      .not('razorpay_order_id', 'is', null)
+      .order('created_at', { ascending: true })
+      .limit(EXPLAIN_BATCH);
+
+    for (const row of unexplained ?? []) {
+      const orderId = row.razorpay_order_id as string;
+      try {
+        const facts = failureFacts(await fetchOrderPayments(orderId), new Date().toISOString());
+        // A row marked 'failed' whose order shows no failed attempt is a
+        // contradiction we must not paper over: stamp the timestamp so it is
+        // not re-queried forever, and leave every reason column NULL so it
+        // reads as "asked, no failure reported" rather than as a real cause.
+        await admin
+          .from('student_payments')
+          .update(facts ?? { failure_seen_at: new Date().toISOString() })
+          .eq('id', row.id);
+        explained++;
+      } catch (e) {
+        errors.push(orderId);
+        console.error(`[reconcile-payments] explain ${orderId}:`, e instanceof Error ? e.message : e);
+      }
+    }
+
+    return NextResponse.json({ checked: stuck?.length ?? 0, rescued, abandoned, explained, errors: errors.length });
   });
 }
 

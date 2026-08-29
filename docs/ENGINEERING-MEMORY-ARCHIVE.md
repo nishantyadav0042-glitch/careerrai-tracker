@@ -2983,3 +2983,47 @@ With that read silently empty, `paidIds` is empty, `isClosedForSales` returns fa
 **Lesson.** *A fake that accepts everything proves nothing about the arguments. When a harness stubs a method as "returns the same thing regardless", it has silently declared that method's constraints untestable — and constraints are where scale walls live. Any collection passed whole to a backend needs a test that models the backend REFUSING it, at a size the real data will actually reach.*
 
 **Second lesson.** *One checked error rescued six unchecked ones. `lead_outreach` threw only because a previous incident forced it to inspect its error; the six reads beside it still swallow theirs. Error-checking one read in a fan-out does not protect the fan-out — it just decides which failure you get to see.*
+
+## Incident #58
+
+**2026-08-29 · Payments / diagnosis (P0) · we paid Razorpay for the answer and threw it in the bin**
+
+**The symptom.** The founder asked whether payments work on iPhone and Android. Attributing every order ever created to the device that created it (`student_events.platform` + `display_mode`, joined on the minute the order was minted) gives:
+
+| surface | paid | failed | created (never settled) |
+|---|---|---|---|
+| iOS — installed (`ios_app` + `standalone`) | **0** | 2 | 6 |
+| iOS — mobile Safari (`browser`) | 1 | 0 | 0 |
+| Android — installed (`standalone`) | 2 | 1 | 10 |
+
+**Eight orders from an installed iOS surface, zero paid, ever.** The same platform in Safari converted 1 of 1. This is not a hypothesis about iOS any more; it is a measurement.
+
+**Why nobody could say why — and this is the actual defect.** `reconcile-payments` runs every 15 minutes (96 runs/day, verified in `cron_runs`) and asks Razorpay directly what happened to every unpaid order. Razorpay answers with the whole payment entity: `method`, `error_code`, `error_description`, `error_source`, `error_step`. The cron read **one** field —
+
+```ts
+if (payments.some((p) => p.status === 'failed')) {
+  await admin.from('student_payments').update({ status: 'failed' }).eq('id', row.id);
+}
+```
+
+— wrote a bare status, and discarded the rest. `RazorpayPayment` was even *typed* as `{ id, status, amount }`, so every caller was type-blind to the diagnosis. `student_payments` had no column that could have held it.
+
+The discarded fields are the entire question. `method='upi'` with `error_step='payment_initiation'` is the app-switch gap the iOS wrapper is suspected of — a `upi://` deep link a WKWebView never hands to the UPI app. `method='card'` with `error_step='payment_authentication'` and `error_source='bank'` is an ordinary decline and means our app is innocent. **Those two demand opposite work, cost differently, and were indistinguishable in our ledger.** The most expensive open question in the product had an answer arriving four times an hour, and we deleted it four times an hour.
+
+**Why this had to be fixed before any iOS change.** `src/app/probe/escape/page.tsx` already says it: production shows `pay_escape_browser {opened:true}` seven times out of seven, which proves the wrapper returned a window object and proves nothing about which browser rendered it — *"building a payment flow on that gap is the speculative change we were told not to make."* The same applies here. Shipping a WKWebView workaround on a guess about UPI would have been a native change, outside this repo, justified by nothing. Recording what Razorpay already tells us costs one migration and turns the guess into a reading.
+
+**The fix.** `lib/payment-failure.ts` — `failureFacts()`, a pure function that copies what Razorpay reported and **deliberately refuses to classify it**. A classifier here would turn `method: 'upi'` into "the app-switch bug" on the strength of a guess. Six columns on `student_payments`; the failing path in the cron writes them alongside the status.
+
+**The half that is easy to forget.** The rescue loop only ever selects `status='created'`. The moment a row is marked `failed` it leaves that population **forever** — so every failure that predates this fix, including the two 25 Aug iOS attempts that prompted it, would have stayed unexplained for life. A second *explain pass* selects `status='failed' AND failure_seen_at IS NULL`, asks Razorpay once, and stamps the row. Razorpay retains payment history indefinitely, so the August answers are still recoverable; five rows were waiting when the migration landed.
+
+That pass exposed a trap. The route began `if (!stuck?.length) return ...` — and with no order in flight on most ticks, the backlog would have drained *almost never* while every unit test still passed. Removing that early return is load-bearing: restoring it as a mutation fails four tests.
+
+**Why `failure_seen_at` is a column and not an inference.** L1. `failure_code IS NULL` conflates two different states: *we never asked Razorpay* (a hole in our instrumentation) and *we asked and Razorpay named no error* (a fact about the payment). Only a separate timestamp separates them, and every reader must be able to. It is stamped unconditionally, including when the explain pass finds no failed attempt at all — which is also what stops that row being re-queried forever.
+
+**Proof.** Seven mutations of `payment-failure.ts` (first-failure-instead-of-last, missing null guard, conditional timestamp, no length bound, no trim, no type guard, any-attempt-counts) each fail a test. Six mutations of the cron — including reverting to the original status-only write and restoring the early return — each fail; a no-op control edit stays green.
+
+**Lesson.** *A field you read and do not store is not evidence you have, it is evidence you destroyed. When a system already queries an external source of truth, storing its whole answer is nearly free and discarding it is permanent — Razorpay had been telling us why every payment failed since the first one, four times an hour, and no amount of later analysis could recover a single one of those answers from our own database.*
+
+**Second lesson.** *A backfill is part of the fix, not a follow-up. A change that only records new data leaves the incident that motivated it permanently unexplained — the failures you already have are the ones you most need explained, and they are exactly the ones outside the new code path.*
+
+**Still open, deliberately.** *Why* installed iOS fails is UNKNOWN until the explain pass reports. No iOS behaviour was changed in this commit, because nothing yet justifies one. Separately noted: the session checkout mints orders through `/api/sessions/book` rather than `/api/payments/create-order`, so it emits no `payment_order_created` event and does not share the 30-minute duplicate-order reuse guard — two `session` orders were minted 2.5 minutes apart for the same student on 25 Aug. Not fixed here; not money-losing (an unpaid order costs nothing), but it is a real divergence between two order-minting paths.
