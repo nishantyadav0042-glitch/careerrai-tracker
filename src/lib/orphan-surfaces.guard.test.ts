@@ -174,17 +174,21 @@ describe('orphan surfaces are declared, not discovered', () => {
 
 const KNOWN_PARKED_MODULES: Record<string, string> = {
   'src/lib/sales-distribution.ts':
-    'PARKED 29 Aug, and the wiring is blocked on a fact rather than on code: ' +
-    'neither counsellor account exists yet. Verified in production the day it ' +
-    'was written — no row in auth.users for either email, none in profiles, ' +
-    'none in the test project, and no sales_rep_provisioned entry in 24 hours ' +
-    'of admin_audit_log. Its consumer is /api/admin/enrol-book, which would ' +
-    'refuse anyway: portfolioIntakeLimit returns NOT_CONFIGURED for a seat ' +
-    'with no capacity row. It is not speculative work — it was dry-run against ' +
-    'a 975-student production snapshot (965 enrolled, 10 paid excluded, every ' +
-    'lane split within one, zero duplicates, zero lost, deterministic). ' +
-    'UNPARK THE DAY the two seats exist: wire it into enrol-book and delete ' +
-    'this entry in the same commit.',
+    'PARKED 29 Aug, note rewritten the same evening when its stated blocker ' +
+    'stopped being true. The two counsellor seats now exist and BATCH 1 IS ' +
+    'ENROLLED: 124 high-intent students, 62 each, every lane split exactly ' +
+    'evenly (16 checkout-abandoned 8/8, 10 intent-door 5/5, 98 buddy-CTA ' +
+    '49/49). This module computed that allocation; the write itself was the ' +
+    'same deal expressed as SQL — order by (lane_rank, created_at, id), then ' +
+    'alternate — which is exactly equivalent because the deal cursor carries ' +
+    'across lanes. The two implementations were run independently and agreed ' +
+    'to the student, which is a stronger check than either alone. ' +
+    'STILL UNWIRED because /api/admin/enrol-book takes per-seat COUNTS, not a ' +
+    'stratified plan, so wiring it means changing that route contract. ' +
+    'UNPARK WITH BATCH 2 (851 students remain): teach enrol-book to accept a ' +
+    'plan, route it through here, and delete this entry in the same commit. ' +
+    'Until then this file is the reference implementation and the tested ' +
+    'authority for what a fair book looks like.',
   'src/lib/facts/registry.ts':
     'PARKED. The canonical fact registry: one place a fact is DEFINED, so a ' +
     'second definition cannot be added quietly. Every producer in it is pure. ' +
