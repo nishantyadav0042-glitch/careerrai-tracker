@@ -10,6 +10,7 @@ import { Sparkles, Heart } from 'lucide-react';
 import { trackMeta } from '@/lib/track';
 import { readPaymentSurfaceSignals } from '@/lib/store-build';
 import { paymentSurface, usesRedirectCheckout } from '@/lib/payment-surface';
+import { ensureTransactableOrigin } from '@/lib/checkout-origin-guard';
 import { loadRazorpay, failureMessage, redirectCheckoutOptions, checkoutCallbackUrl } from '@/lib/razorpay-checkout';
 import { track } from '@/lib/journey';
 
@@ -53,6 +54,12 @@ export function MembershipCard({ status, plan, renewsAt, fullName, scholarship }
     // never minted" is distinguishable from "never tapped Pay".
     payFunnel('payment_cta_clicked', { plan: planId, surface: 'membership' });
     try {
+      // Incident #59: Razorpay refuses careerrai-daily.vercel.app outright, so
+      // an order minted here can never be paid. Move to the checkout origin
+      // BEFORE minting — a hand-off after the order exists would strand a live
+      // order on a dead domain. A no-op on every transactable origin.
+      if ((await ensureTransactableOrigin('profile')).move) return;
+
       const res = await fetch('/api/payments/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

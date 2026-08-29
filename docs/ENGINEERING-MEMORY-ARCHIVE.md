@@ -3027,3 +3027,41 @@ That pass exposed a trap. The route began `if (!stuck?.length) return ...` — a
 **Second lesson.** *A backfill is part of the fix, not a follow-up. A change that only records new data leaves the incident that motivated it permanently unexplained — the failures you already have are the ones you most need explained, and they are exactly the ones outside the new code path.*
 
 **Still open, deliberately.** *Why* installed iOS fails is UNKNOWN until the explain pass reports. No iOS behaviour was changed in this commit, because nothing yet justifies one. Separately noted: the session checkout mints orders through `/api/sessions/book` rather than `/api/payments/create-order`, so it emits no `payment_order_created` event and does not share the 30-minute duplicate-order reuse guard — two `session` orders were minted 2.5 minutes apart for the same student on 25 Aug. Not fixed here; not money-losing (an unpaid order costs nothing), but it is a real divergence between two order-minting paths.
+
+## Incident #59
+
+**2026-08-29 · Payments / conversion (P0) · we served a paywall on a domain Razorpay refuses**
+
+**What #58 made visible.** The moment the reconcile cron stopped discarding Razorpay's failure fields, the very first read of the five recorded failures answered a question that had been open for weeks — and the answer was not the one anyone expected:
+
+```
+order_TTc9Xwf45TqoaR   upi / payment_initiation / source=INTERNAL
+order_TTcAJRnVkWzuXC   upi / payment_initiation / source=INTERNAL
+  "Payment blocked as website does not match registered website(s)"
+```
+
+`source=internal` means **Razorpay refused, before the student ever chose how to pay**. Not a bank decline, not a UPI timeout, not iOS.
+
+**The controlled experiment production handed us.** Both orders belong to one student on `careerrai-daily.vercel.app`, minted 44 seconds apart. Nine minutes later the same student, same plan, same amount, same phone, paid — on `careerrai.in`. And the whole ledger agrees: **13 orders minted from the legacy origin, 0 paid; 20 from the canonical origin, 5 paid.** 101 students used the legacy origin in the seven days to 29 Aug; the most recent was 90 minutes before this was written.
+
+**Why the domain exists at all, and why it is not a mistake.** CareerRai serves from two live origins on one deployment. `careerrai-daily.vercel.app` was deliberately left serving rather than redirected, because installed PWAs and their push subscriptions live on it and a canonical redirect would break them (`lib/site.ts`, `proxy.ts`). Both origins are real and both carry signed-in students. The repo already knew this and had already paid for it once — the ten-day Google OAuth investigation that ended in `APP_ORIGINS` existed for exactly this reason.
+
+**So the defect is not the second origin. It is that the payment flow never knew the difference.** Every other cross-origin hazard in this codebase had been handled: OAuth round-trips, cookie scoping, session hand-off. Payments — the one flow where the cost is measured in rupees rather than in a re-login — had no origin concept at all.
+
+**What this cost, and the honest bound on it.** Between 0 and 13 orders. The two blocked ones are certain. The other 11 legacy-origin orders never produced a Razorpay payment attempt of any kind, so nothing distinguishes "the block stopped them" from "they changed their mind". Claiming 13 lost sales would be exactly the kind of precise-looking number this file exists to prevent.
+
+**The fix.** `lib/payment-origin.ts` decides — purely — whether the current origin can transact, and `lib/checkout-origin-guard.ts` moves the student to `careerrai.in` before an order is minted, reusing the existing one-time encrypted session hand-off rather than inventing a second way to move a session between origins. `/pay/continue` lands them back on the same paywall, signed in.
+
+Three properties carry all the risk, and all three are mutation-proven:
+
+- **Fail-closed.** `needsCheckoutHandoff` fires only on an origin positively established as non-transactable. localhost, previews, unknown hosts, lookalike hosts, wrong scheme — all return false. The inverted rule ("anything that isn't the canonical origin") would hand every developer and every preview reviewer off to production; that mutation fails three tests.
+- **Before the order, never after.** A hand-off after minting would strand a live Razorpay order on a domain that can never pay it — and the 30-minute reuse guard would then hand that dead order back for the next half hour. Moving the gate below the mint fails the surface guard.
+- **Never claims to have moved without navigating.** All three callers `return` on `move: true`. A hand-off that reported success without navigating would leave the student on a button that does nothing at all — worse than the block, which is at least visible. Every failure path resolves to `move: false` and lets today's checkout run unchanged.
+
+`checkout-surfaces-gated.guard.test.ts` pins the wiring in all three surfaces, because these three components have drifted before: only two emit `payment_order_created`, and only two share the duplicate-order reuse guard — which is why one student minted three session orders in nine minutes.
+
+**Registering the second domain in the Razorpay dashboard also clears the block, and should still be done.** It is not a substitute. It leaves the product one console setting away from silently losing every payment again, on any origin anyone adds later. A payment page belongs on the payment domain, and that should be a property of the code.
+
+**Lesson.** *A second origin is not a deployment detail, it is a second product. Everything host-scoped has to be re-decided for it — cookies, OAuth, push, and payments — and payments are the one where the failure is silent, because a blocked checkout looks exactly like a student who changed their mind. This repo had already answered the question three times for three other subsystems and never noticed that the fourth had not been asked.*
+
+**Second lesson.** *The fix for #58 paid for itself in five minutes. Storing what Razorpay already told us turned "iOS payments are broken, cause unknown" into a named mechanism on a different axis entirely — and the previous report's confident device-level numbers, built on a proxy join, were wrong in both directions. Instrument first, theorise second.*
