@@ -55,6 +55,43 @@ export function googleConfigured(): boolean {
  * independently — it rejects any redirect_uri not registered on the client —
  * which is why BOTH origins must be listed there.
  */
+// ── THE CREDENTIALS, CLEANED — Incident #44 taught this the hard way ────────
+//
+// NEXT_PUBLIC_SUPABASE_URL carried an invisible U+FEFF that broke every Google
+// sign-in for a day. The same paste that puts one there puts one anywhere, and
+// a client secret with a stray character fails as
+// "The provided client secret is invalid." — a message that accuses Google
+// Cloud of holding a different secret when the value is simply not the one the
+// dashboard shows.
+//
+// Narrow on purpose: BOM, zero-width space, and surrounding whitespace. A
+// secret wrong in any other way still fails loudly.
+const cleanEnv = (raw: string | undefined): string =>
+  (raw ?? '').replace(/^[\uFEFF\u200B\s]+/, '').replace(/[\uFEFF\u200B\s]+$/, '');
+
+export const googleClientId = (): string => cleanEnv(process.env.GOOGLE_CLIENT_ID);
+export const googleClientSecret = (): string => cleanEnv(process.env.GOOGLE_CLIENT_SECRET);
+
+/**
+ * The shape of the configured secret, with nothing secret in it.
+ *
+ * Reports only what distinguishes a good value from a mangled one: its length,
+ * whether it carries Google's `GOCSPX-` prefix, and whether cleaning changed
+ * it. Enough to answer "is this the value the dashboard shows" without ever
+ * printing the value.
+ */
+export function googleSecretShape() {
+  const raw = process.env.GOOGLE_CLIENT_SECRET ?? '';
+  const clean = cleanEnv(raw);
+  return {
+    present: clean.length > 0,
+    length: clean.length,
+    hasGooglePrefix: clean.startsWith('GOCSPX-'),
+    hadStrayCharacters: raw !== clean,
+    rawLength: raw.length,
+  };
+}
+
 export function googleRedirectUri(origin?: string | null): string {
   return `${resolveAppOrigin(origin ?? SITE_URL)}/api/google/callback`;
 }
@@ -97,6 +134,8 @@ const RETURN_FALLBACK = '/buddy/home';
  * from one fails the build.
  */
 export const OAUTH_STATE_COOKIE = 'g_oauth_state';
+/** Holds the PKCE verifier for the length of the round trip. httpOnly. */
+export const OAUTH_PKCE_COOKIE = 'g_oauth_pkce';
 
 /**
  * A return path that cannot leave this origin.
@@ -121,6 +160,37 @@ export function newStateNonce(): string {
   return Array.from(crypto.getRandomValues(new Uint8Array(16)))
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
+}
+
+// ── PKCE, BECAUSE A CODE IN A URL IS NOT A SECRET ──────────────────────────
+//
+// Google Cloud flags this app: "not configured to use secure OAuth flows and
+// may be vulnerable to impersonation." It is right. The authorization code
+// arrives as a query parameter on a redirect — it lands in browser history,
+// in any Referer that leaks, in a proxy log. Anyone who obtains one before we
+// redeem it can exchange it, because the client secret alone does not prove
+// the exchange came from the browser that started the flow.
+//
+// PKCE closes that: we keep a random verifier server-side, send only its
+// SHA-256 hash to Google at consent, and present the verifier at exchange.
+// A stolen code is worthless without a verifier that never left our server.
+//
+// The student flow has had this all along — Supabase does it, visible as
+// `code_challenge_method=s256` in its authorize URL. The mentor flow, which
+// carries the far more powerful calendar.events scope, did not.
+
+/** A high-entropy verifier. 32 bytes hex = 64 chars, inside RFC 7636's 43-128. */
+export function newCodeVerifier(): string {
+  return Array.from(crypto.getRandomValues(new Uint8Array(32)))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+/** base64url(SHA-256(verifier)) — the S256 challenge, unpadded per the RFC. */
+export async function codeChallengeFor(verifier: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
+  return btoa(String.fromCharCode(...new Uint8Array(digest)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 /** `state` on the wire: an unguessable nonce, then the return path. */
@@ -148,9 +218,11 @@ export function verifyOAuthState(
 }
 
 /** Where we send a mentor to grant access. `state` carries nonce + return path. */
-export function googleConsentUrl(state: string, origin?: string | null): string {
+export function googleConsentUrl(
+  state: string, origin?: string | null, codeChallenge?: string,
+): string {
   const p = new URLSearchParams({
-    client_id: process.env.GOOGLE_CLIENT_ID!,
+    client_id: googleClientId(),
     redirect_uri: googleRedirectUri(origin),
     response_type: 'code',
     scope: GOOGLE_SCOPES,
@@ -161,6 +233,11 @@ export function googleConsentUrl(state: string, origin?: string | null): string 
     prompt: 'consent',
     include_granted_scopes: 'true',
     state,
+    // Only when the caller supplies one, so the read-only /api/google/status
+    // probe keeps working without inventing a verifier it would never redeem.
+    ...(codeChallenge
+      ? { code_challenge: codeChallenge, code_challenge_method: 'S256' }
+      : {}),
   });
   return `${OAUTH_AUTH}?${p.toString()}`;
 }
@@ -189,16 +266,20 @@ export async function exchangeCodeAndStore(
   code: string,
   userId: string,
   origin?: string | null,
+  codeVerifier?: string | null,
 ): Promise<{ ok: true; email: string | null } | { ok: false; error: string }> {
   const tok = await postToken({
     code,
-    client_id: process.env.GOOGLE_CLIENT_ID!,
-    client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+    client_id: googleClientId(),
+    client_secret: googleClientSecret(),
     // MUST equal the redirect_uri sent at consent, byte for byte — Google
     // rejects the exchange otherwise. The callback runs ON the originating
     // origin, so passing its own origin here reproduces it exactly.
     redirect_uri: googleRedirectUri(origin),
     grant_type: 'authorization_code',
+    // Proves this exchange comes from the browser that began the flow. Google
+    // rejects a mismatch, so a leaked code cannot be redeemed elsewhere.
+    ...(codeVerifier ? { code_verifier: codeVerifier } : {}),
   });
   if (!tok.access_token) {
     return { ok: false, error: tok.error_description || tok.error || 'Google did not return a token.' };
@@ -275,8 +356,8 @@ export async function getAccessToken(userId: string): Promise<string | null> {
   if (stillValid) return data.access_token;
 
   const tok = await postToken({
-    client_id: process.env.GOOGLE_CLIENT_ID!,
-    client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+    client_id: googleClientId(),
+    client_secret: googleClientSecret(),
     refresh_token: data.refresh_token,
     grant_type: 'refresh_token',
   });

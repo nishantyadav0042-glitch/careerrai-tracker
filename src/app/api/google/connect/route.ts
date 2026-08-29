@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import {
   googleConfigured, googleConsentUrl, safeReturnPath, newStateNonce, encodeOAuthState,
-  OAUTH_STATE_COOKIE,
+  newCodeVerifier, codeChallengeFor, OAUTH_STATE_COOKIE, OAUTH_PKCE_COOKIE,
 } from '@/lib/google-oauth';
 
 export const dynamic = 'force-dynamic';
@@ -78,15 +78,26 @@ export async function GET(request: Request) {
   // `state_mismatch` — a message that points at CSRF and says nothing about
   // encoding. The audit row said `stage: state, reason: state_mismatch` on a
   // flow where nothing was tampered with at all.
+  // PKCE. The verifier stays here, in an httpOnly cookie; only its SHA-256
+  // goes to Google. See google-oauth's own note — this is what closes the
+  // "not configured to use secure OAuth flows" finding, and it matters most on
+  // this flow, which carries calendar.events.
+  const verifier = newCodeVerifier();
+  const challenge = await codeChallengeFor(verifier);
+
   const res = NextResponse.redirect(
-    googleConsentUrl(encodeOAuthState(nonce, from), origin),
+    googleConsentUrl(encodeOAuthState(nonce, from), origin, challenge),
   );
-  res.cookies.set(OAUTH_STATE_COOKIE, nonce, {
+  const cookie = {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    // Lax, not Strict: the callback arrives as a top-level navigation FROM
+    // accounts.google.com, and Strict would withhold both cookies exactly then.
+    sameSite: 'lax' as const,
     path: '/',
     maxAge: STATE_TTL_SECONDS,
-  });
+  };
+  res.cookies.set(OAUTH_STATE_COOKIE, nonce, cookie);
+  res.cookies.set(OAUTH_PKCE_COOKIE, verifier, cookie);
   return res;
 }

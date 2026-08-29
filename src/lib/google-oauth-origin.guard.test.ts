@@ -144,14 +144,24 @@ describe('the callback is observable, and the surfaces stay separate', () => {
     const exchangeAt = callback.indexOf('exchangeCodeAndStore(');
     expect(stateAt).toBeGreaterThan(-1);
     expect(exchangeAt).toBeGreaterThan(stateAt);
-    expect(callback).toMatch(/exchangeCodeAndStore\(code,\s*user\.id,\s*origin\)/);
+    // Arity-tolerant on purpose. This assertion pinned the exact three-argument
+    // call and went red when PKCE added a fourth — while the property it exists
+    // to protect (the exchange runs on the SAME origin that began the flow) was
+    // never in doubt. Pin the property, not the signature.
+    expect(callback).toMatch(/exchangeCodeAndStore\(\s*code,\s*user\.id,\s*origin\b/);
   });
 
   it('the connect route starts the flow on the request origin', () => {
     const connect = read('app/api/google/connect/route.ts');
     expect(connect).toMatch(/const origin = new URL\(request\.url\)\.origin/);
-    // The real call nests encodeURIComponent(...), so match across it.
-    expect(connect).toMatch(/googleConsentUrl\([\s\S]{0,200}?,\s*origin\s*\)/);
+    // Match across the state argument, and allow the PKCE challenge that now
+    // follows origin. What must hold is that `origin` is what the consent URL
+    // is built on — not how many arguments come after it.
+    expect(connect).toMatch(/googleConsentUrl\([\s\S]{0,200}?,\s*origin\b/);
+
+    // The state argument must NOT be re-encoded — googleConsentUrl's own
+    // URLSearchParams does that, and encoding twice is Incident #45.
+    expect(connect).not.toMatch(/googleConsentUrl\(\s*encodeURIComponent/);
   });
 
   // TEST 8 — student login must not have been touched

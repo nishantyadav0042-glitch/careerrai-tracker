@@ -58,6 +58,8 @@
 | 40 | 2026-08-27 | The rules were real, and attached to the wrong verb — availability was `before insert` only | Trust (P1) | any student whose session was moved |
 | 41 | 2026-08-27 | A paid entitlement could be bypassed by the path the booking came through | Trust (P0, money) | every mentor-booked session for a paying student |
 | 43 | 2026-08-29 | Google signup looped back into onboarding — the stash endpoint inverted its throttle and rejected every request ever made, and the claim sat in a branch a DB trigger made unreachable | Growth / Learning (P0) | every student who chose Continue with Google; 0 drafts stored in the feature's lifetime |
+| 44 | 2026-08-29 | An invisible U+FEFF in `NEXT_PUBLIC_SUPABASE_URL` made `new URL()` reject it — 9 of 10 Google callbacks died on "PKCE code verifier not found", a message that never mentions a URL | Growth (P0) | every Google sign-in for a day; 3 accounts left with 0 coverage rows |
+| 45 | 2026-08-29 | The OAuth `state` was encoded twice, so the callback's `indexOf(':')` found no colon and read the nonce as empty — every mentor Google Calendar connection ever attempted was refused as `state_mismatch` | Trust (P0) | all mentors; 0 rows in google_oauth_tokens across the project's life |
 
 > Entries 12 and 13 were never written. The gap is left visible rather than
 > renumbered — the numbers are referenced from commit messages and code

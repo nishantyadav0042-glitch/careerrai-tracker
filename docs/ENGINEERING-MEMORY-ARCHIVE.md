@@ -2092,3 +2092,132 @@ two proxies for it, they cannot drift into a loop.
 **Zero is a finding.** `total_drafts_ever: 0` was the moment this stopped being
 a hypothesis. A feature whose table has never held a row has never run — no
 amount of reading the code establishes that, and no amount of code review had.
+
+---
+
+## Incident #44 — an invisible character in an environment variable (2026-08-29)
+
+**Symptom.** Every Google sign-in failed. The student was bounced to `/login`
+after granting consent. Three Google accounts existed in production with
+`onboarding_completed = false` and zero coverage rows: Supabase had created the
+account, and our callback had never completed the exchange.
+
+**What the logs said.**
+
+```
+[auth/callback] exchangeCodeForSession error:
+PKCE code verifier not found in storage.
+```
+
+Nine of ten callbacks on 29 Aug, across five hours and four separate deploys —
+eight of eight on careerrai.in. The one success was a same-origin vercel.app
+flow, which is what made an origin theory look plausible for an hour.
+
+**Root cause.** `NEXT_PUBLIC_SUPABASE_URL` in the Vercel environment carried a
+leading **U+FEFF byte-order mark**. It is invisible in the dashboard, in log
+output and in an editor; it is not whitespace, so nothing trims it; and every
+copy-paste carries it forward. `new URL()` rejects the string outright.
+
+**How it was found.** Not by reading code — the code is correct and greps
+clean. A diagnostic endpoint was added that asks Supabase what it sends Google,
+and the probe threw on its own URL:
+
+```
+TypeError: Failed to parse URL from ￼https://pobhpszlsozeonejtzqy.supabase.co/...
+```
+
+The BOM is visible there only as a rendering artefact. What made it certain was
+Node refusing to parse a string that reads as an ordinary URL.
+
+**Fix.** Sixteen files read those two variables raw, so cleaning one would have
+left fifteen holes. One authority, `lib/supabase/env`, owns them. Stripping is
+deliberately narrow — BOM, zero-width space, surrounding whitespace: the
+characters a paste adds. A URL wrong in any other way still fails loudly rather
+than being silently rewritten into one that works.
+
+**Lessons.**
+
+**An error message names the layer that noticed, not the layer that broke.**
+"PKCE code verifier not found in storage" points at cookies, storage and
+origins. It never mentions a URL. Four rounds of investigation went into
+redirect URIs, OAuth clients and stale browser tabs because the message pointed
+there. When a message names a layer, check whether that layer is even reachable
+before searching it.
+
+**Configuration is input, and input is hostile.** Every string from an
+environment variable deserves the same suspicion as a request body. The app now
+sanitises it once, centrally, exactly as it does for any other untrusted input.
+
+**Functions, not constants, for environment reads.** The first version of the
+authority exported `const`s. Those evaluate at import — before anything a test
+sets in `beforeAll` — so they captured empty strings and
+`oauth-callback-routing.guard` went red immediately. Reading per call preserves
+the timing every caller had before the module existed, and that property is now
+pinned by a test rather than remembered.
+
+---
+
+## Incident #45 — the OAuth state was encoded twice (2026-08-29)
+
+**Symptom.** "Connect Google" for mentors had never worked once. Not degraded —
+never. `google_oauth_tokens` held **0 rows across the project's entire life**,
+and Google Cloud's own OAuth dashboard reported *"No data is available for this
+project"* for traffic, errors and users.
+
+**Root cause.** `/api/google/connect` built its consent URL as:
+
+```js
+googleConsentUrl(encodeURIComponent(encodeOAuthState(nonce, from)))
+```
+
+`googleConsentUrl` assembles its query with `URLSearchParams`, which
+percent-encodes every value itself. The state went to Google **encoded twice**.
+
+The state is `<nonce>:<returnPath>`. Google received
+`nonce%253A%252Fbuddy%252Fhome`; the single decode a query parser performs left
+`nonce%3A%2Fbuddy%2Fhome`. Then:
+
+```js
+const sep = raw.indexOf(':');            // -1 — the colon is still %3A
+const nonce = sep === -1 ? '' : ...      // nonce = ''
+```
+
+Empty nonce, so `verifyOAuthState` refused the callback as `state_mismatch`.
+
+**The audit row, on a flow nobody had tampered with:**
+
+```json
+{"stage": "state", "reason": "state_mismatch"}
+```
+
+**How it was isolated.** The callback has two exits that redirect to
+`?google=failed`. The token-exchange one writes to console; the state one only
+audits. Vercel showed the callback returning 307 with **no console line**,
+which named the branch before any code was read. The audit row then named the
+reason.
+
+**Lessons.**
+
+**A security error on a flow nobody attacked is a bug report, not an attack.**
+`state_mismatch` names CSRF. It cost four separate investigations — redirect
+URIs, OAuth clients, consent screens, verification status — none of which were
+ever wrong. Google accepted the request the entire time; the application was
+rejecting its own callback. When a security check fires on a flow with no
+attacker, suspect the check's inputs before its premise.
+
+**Two encoders that each behave correctly can still corrupt a value between
+them.** `encodeOAuthState` and `verifyOAuthState` agree with each other
+perfectly, and a unit test of the pair passes forever. The corruption happened
+in transit, in the URL, where neither function looks. The regression test
+therefore drives the WHOLE trip: build the real consent URL, parse it as a
+browser and Google do, hand it back to the callback.
+
+**Make the failure branch distinguishable in the logs.** The one thing that
+made this tractable in minutes rather than hours was that the two
+`?google=failed` exits differed in what they wrote. Two exits that log
+identically are one exit as far as an investigation is concerned.
+
+**Zero is a finding, again.** `0 rows ever` in a token table, and "no data
+available" in Google's own console, say the feature has never run. Incident #43
+turned on the same signal four hours earlier and it still took a day to look
+for it here.
