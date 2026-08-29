@@ -2221,3 +2221,142 @@ identically are one exit as far as an investigation is concerned.
 available" in Google's own console, say the feature has never run. Incident #43
 turned on the same signal four hours earlier and it still took a day to look
 for it here.
+
+---
+
+## Incident #46 — the client secret belonged to a different client (2026-08-29)
+
+**Area.** Trust OS — mentor Google Calendar connection.
+
+**Symptom.** With #43, #44 and #45 fixed, `Connect Google` still failed. The
+mentor walked the entire consent journey, pressed Allow, and landed on
+`/buddy/home?google=failed`. The audit row named the stage exactly —
+`{"stage": "token_exchange"}` — and the log carried Google's own words:
+**"The provided client secret is invalid."**
+
+**Why it surfaced fourth.** Google checks the secret LAST. `client_id` and
+`redirect_uri` are validated at the consent screen; the secret is not looked at
+until the code is redeemed, at the final step. So a wrong secret is invisible
+until everything else is right: the consent screen renders normally, the
+client-recognition check passes, and the failure appears only after the mentor
+has done all the work. Three earlier bugs each masked it.
+
+**What the shape check could not see.** `googleSecretShape()` reported
+`present: true, length: 35, hasGooglePrefix: true, hadStrayCharacters: false`.
+That is a perfectly well-formed Google client secret. It was well-formed AND
+wrong — a valid secret belonging to a different OAuth client. After #44, where
+an invisible U+FEFF in a URL was the whole bug, a shape check was the right
+instinct; it simply answered a question that was no longer the question.
+
+**Root cause.** `GOOGLE_CLIENT_SECRET` in Vercel did not belong to
+`GOOGLE_CLIENT_ID` `307670815298`.
+
+**Fix.** A new secret generated on that client and saved to Vercel, plus a
+probe that makes the pairing checkable in one request instead of a six-screen
+mentor journey. It posts a deliberately fake authorization code to Google's
+token endpoint and reads which question Google refuses first: `invalid_client`
+means the pair is wrong, `invalid_grant` means the pair authenticated and only
+the fake code failed.
+
+**Verified in production**, `/api/google/status` on the deployment carrying the
+new secret:
+
+```json
+{"probed": true, "secretMatchesClient": true, "googleError": "invalid_grant",
+ "googleErrorDescription": "Malformed auth code."}
+```
+
+Google authenticated the client and rejected only the fake code. That is the
+pass, and it is the first time this pairing has ever been shown correct.
+
+**Lessons.**
+
+**Well-formed is not correct.** Four checks said the secret was fine — present,
+right length, right prefix, no stray characters — and every one of them was
+true. Shape validation answers "is this the kind of thing I expect", never "is
+this the right one". Only the system that owns the credential can answer the
+second, so ask it.
+
+**An error message names the layer that noticed, not the layer that broke —
+and that cuts both ways.** `PKCE code verifier not found` (#44) was a URL.
+`state_mismatch` (#45) was an encoder. "The provided client secret is invalid"
+was, for once, exactly what it said — and by then the message had been
+disbelieved three times running. Neither reflex is a method. Check what the
+message claims before deciding whether to believe it.
+
+**Make the last check the first check.** The order a protocol validates in is
+not the order to debug in. Google validates the secret last, so the flow
+reveals it last. A probe that asks the token endpoint directly reverses that.
+
+---
+
+## Incident #47 — a health check that could only see one kind of failure (2026-08-29)
+
+**Area.** Trust OS — mentor Google Calendar connection / diagnostics.
+
+**Symptom.** `/api/google/status` reported `googleRecognizesClient: true` and
+"Google recognizes this client" while a mentor starting the flow on
+`careerrai-daily.vercel.app` received **"Access blocked. Error 400:
+redirect_uri_mismatch"** every time. The founder, reading the endpoint,
+reasonably believed all callback URIs were registered. They were not.
+
+**Root cause.** The check fetched the consent URL, followed every redirect,
+and searched roughly 800 KB of returned HTML for the string `invalid_client`:
+
+```js
+const probe = await fetch(googleConsentUrl('probe'), { redirect: 'follow' });
+googleRecognizesClient = !(await probe.text()).includes('invalid_client');
+```
+
+That detects exactly one failure — a deleted OAuth client — and is structurally
+blind to the more common one. Google answers an unregistered redirect URI with
+`redirect_uri_mismatch`, a response that contains no `invalid_client` anywhere,
+so the absence of that substring was scored as health. The check also only ever
+asked about ONE URI (the canonical origin's), while the app ships two.
+
+**How it was found.** Not by the check, and not by the test suite, which was
+green. By asking Google about each URI individually and including a control:
+
+| redirect_uri | Google's verdict |
+|---|---|
+| `https://careerrai.in/api/google/callback` | registered (302 to sign-in) |
+| `https://careerrai-daily.vercel.app/api/google/callback` | **redirect_uri_mismatch** |
+| `https://pobhpszlsozeonejtzqy.supabase.co/auth/v1/callback` | registered |
+| `https://careerrai.in/definitely-not-registered` (control) | redirect_uri_mismatch |
+
+The control is what makes the table evidence rather than an assertion: it
+proves the method can still tell the two answers apart.
+
+**Fix.** `lib/google-consent-probe.ts`. Google decides this before rendering
+anything and says so in one header, so the probe follows no redirects and reads
+the `Location`: `/v3/signin/…` means accepted, `/signin/oauth/error?authError=…`
+means refused, and the base64 protobuf in `authError` carries the error name in
+plain ASCII. One small request per URI instead of a megabyte, no consent screen
+reached, no auth state created. Every run also probes a URI that cannot be
+registered; if Google calls THAT one registered, the method has stopped
+discriminating and every verdict in the run is withdrawn rather than reported.
+
+**Lessons.**
+
+**A check that can only detect one failure mode reports health it cannot see.**
+`!body.includes('invalid_client')` is not "the client is healthy", it is "this
+one string is absent" — and the two were silently equated in the endpoint's
+own summary line. Name what a check actually measures, and let the message say
+only that.
+
+**Searching a rendered page for a substring is not asking a question.** The
+answer was in a header the check discarded by following the redirect. Following
+redirects turned a precise machine-readable verdict into a megabyte of HTML to
+guess at.
+
+**A negative control is part of the check, not part of the test.** In
+production, a classifier with no control degrades to "everything passes" the
+day the upstream response shape changes — the most dangerous failure available,
+because it is indistinguishable from success. Shipping the control means the
+endpoint can say UNKNOWN about itself (L1).
+
+**The green suite was green throughout.** 4515 tests passed while this check
+was blind, because nothing tested what it claimed to measure against what
+Google actually returns. The regression test now uses REAL captured Location
+headers from both outcomes; invented fixtures would only have proved the code
+agrees with the same wrong idea of Google that wrote it.

@@ -3,6 +3,7 @@ import {
   googleConfigured, googleRedirectUri, googleConsentUrl, GOOGLE_SCOPES, googleSecretShape, googleClientId, googleClientSecret, OAUTH_TOKEN,
 } from '@/lib/google-oauth';
 import { APP_ORIGINS, SITE_URL } from '@/lib/site';
+import { probeRedirectUri, withRedirectUri } from '@/lib/google-consent-probe';
 import { supabaseUrl } from '@/lib/supabase/env';
 
 export const dynamic = 'force-dynamic';
@@ -17,6 +18,15 @@ export const dynamic = 'force-dynamic';
 // actually using?" — this answers it in one request instead of a redeploy.
 export async function GET() {
   const configured = googleConfigured();
+  // The NUMERIC PREFIX identifies which client is deployed. It is the public
+  // half of a public identifier (every page using Google sign-in ships its
+  // full client id to every visitor) — while the old suffix fingerprint showed
+  // the last 24 chars, which for EVERY Google client id is
+  // "…ps.googleusercontent.com". A fingerprint identical for every possible
+  // value fingerprints nothing.
+  const clientIdPrefix = process.env.GOOGLE_CLIENT_ID
+    ? `${process.env.GOOGLE_CLIENT_ID.split('-')[0]}-…`
+    : null;
   const redirectUri = googleRedirectUri();
   // CareerRai serves from two origins and an OAuth round trip must finish on
   // the one it started on, so BOTH callback URIs must be registered on the
@@ -24,20 +34,26 @@ export async function GET() {
   // Authorized redirect URIs?" without a redeploy or a code read.
   const allRedirectUris = APP_ORIGINS.map((o) => `${o}/api/google/callback`);
 
-  // THE decisive check, run by the server against Google itself: fetch our own
-  // consent URL and read Google's verdict. 'invalid_client' in the reply means
-  // the client id this deployment carries no longer exists at Google — which
-  // is exactly what a deleted-and-recreated OAuth client looks like, and what
-  // three days of "it's not connecting" turned out to be. No login required;
-  // Google renders its error (or its sign-in page) to anyone.
-  let googleRecognizesClient: boolean | null = null;
-  if (configured) {
-    try {
-      const probe = await fetch(googleConsentUrl('probe'), { redirect: 'follow' });
-      const body = await probe.text();
-      googleRecognizesClient = !body.includes('invalid_client');
-    } catch { /* network blip — unknown, not false */ }
-  }
+  // ── WHICH CALLBACK URIs DOES GOOGLE ACTUALLY HOLD? (29 Aug) ─────────────
+  //
+  // The check that used to live here fetched the consent URL, followed every
+  // redirect, and searched the resulting HTML for `invalid_client`. It could
+  // therefore detect exactly one failure — a deleted OAuth client — and was
+  // blind to the one production actually had: a client that exists and does
+  // not list the URI we send. Google calls that `redirect_uri_mismatch`, which
+  // contains no `invalid_client` anywhere, so the endpoint reported a cheerful
+  // `googleRecognizesClient: true` while a mentor starting on the legacy PWA
+  // origin got "Access blocked. Error 400" every single time.
+  //
+  // Each shipped origin is now asked about individually, using the REAL
+  // consent-URL builder, so what is tested is exactly what a mentor's browser
+  // would be sent — not a reconstruction of it that can drift.
+  const redirectUriCheck = configured ? await probeRedirectUris() : null;
+  // Kept, because it answers a different question and other things read it:
+  // does this client EXIST at Google. A redirect_uri_mismatch proves it does
+  // — Google had to look the client up to compare URIs against it.
+  const googleRecognizesClient = redirectUriCheck?.clientRecognized ?? null;
+
   // ── THE STUDENT FLOW, PROVEN RATHER THAN ASSUMED (29 Aug) ────────────────
   //
   // Everything above describes the MENTOR calendar client, which this app
@@ -74,10 +90,9 @@ export async function GET() {
     // suffix fingerprint showed the last 24 chars, which for EVERY Google
     // client id is "…ps.googleusercontent.com". A fingerprint that is
     // identical for every possible value fingerprints nothing.
-    clientIdPrefix: process.env.GOOGLE_CLIENT_ID
-      ? `${process.env.GOOGLE_CLIENT_ID.split('-')[0]}-…`
-      : null,
+    clientIdPrefix,
     googleRecognizesClient,
+    redirectUriCheck,
     hasSecret: !!process.env.GOOGLE_CLIENT_SECRET,
     // Shape only, never the value. A Google client secret is `GOCSPX-` + 28
     // characters; anything else is not the string the dashboard shows, and
@@ -87,8 +102,14 @@ export async function GET() {
     message: !configured
       ? 'GOOGLE_CLIENT_ID and/or GOOGLE_CLIENT_SECRET are missing from this deployment.'
       : googleRecognizesClient === false
-        ? 'Google does NOT recognize the deployed client id (invalid_client) — the OAuth client was deleted. Create a new OAuth client in Google Cloud Console and update both env vars.'
-        : `Google recognizes this client. Whitelist exactly this redirect URI: ${redirectUri}`,
+        ? 'Google does NOT recognize the deployed client id — the OAuth client was deleted. Create a new OAuth client in Google Cloud Console and update both env vars.'
+        : redirectUriCheck?.methodValid === false
+          ? 'The redirect-URI check could not validate itself against its own control, so its verdicts are withheld. Treat the URIs as UNKNOWN, not as correct.'
+          : redirectUriCheck?.missing.length
+            ? `Google does NOT hold ${redirectUriCheck.missing.length} of the callback URIs this app sends. Add each of these to Authorized redirect URIs on client ${clientIdPrefix ?? '(unknown)'}: ${redirectUriCheck.missing.join(', ')}`
+            : redirectUriCheck?.allRegistered
+              ? 'Every callback URI this app sends is registered on the deployed client.'
+              : `Google recognizes this client. Whitelist exactly this redirect URI: ${redirectUri}`,
   }, { status: configured ? 200 : 503 });
 }
 
@@ -209,4 +230,57 @@ async function probeClientSecret() {
   } catch (e) {
     return { probed: false, reason: String(e) };
   }
+}
+
+/**
+ * Ask Google, one URI at a time, which of our callbacks it will accept.
+ *
+ * ── THE CONTROL IS NOT DECORATION ──────────────────────────────────────────
+ *
+ * This probe classifies by the shape of a redirect Google chose to send. That
+ * shape is Google's to change, and the day it changes, a check with no control
+ * quietly starts calling everything registered — the most dangerous possible
+ * failure, because it looks exactly like success. So every run also asks about
+ * a URI that CANNOT be registered. If Google calls that one registered, the
+ * method is not discriminating, and every verdict in the same run is withdrawn
+ * rather than reported. A trustworthy UNKNOWN beats a precise lie.
+ */
+async function probeRedirectUris() {
+  // Built by the REAL consent-URL builder, once per shipped origin, so the
+  // thing under test is the exact URL a mentor's browser would be sent.
+  const uris = await Promise.all(
+    APP_ORIGINS.map(async (origin) => ({
+      uri: googleRedirectUri(origin),
+      ...(await probeRedirectUri(googleConsentUrl('probe', origin))),
+    })),
+  );
+
+  // Same client, same request, one URI nobody would ever register.
+  const controlUri = `${SITE_URL}/api/google/callback/__careerrai_control_never_registered__`;
+  const control = {
+    uri: controlUri,
+    ...(await probeRedirectUri(withRedirectUri(googleConsentUrl('probe'), controlUri))),
+  };
+  const methodValid = control.registered === false;
+
+  // A mismatch proves the client EXISTS — Google looked it up to compare URIs
+  // against it. Only invalid_client/deleted_client says otherwise, and an
+  // unreachable Google says neither.
+  const errors = uris.map((u) => (u.registered === false ? u.googleError : null));
+  const clientRecognized =
+    uris.some((u) => u.registered === true) ? true
+      : errors.some((e) => e === 'deleted_client' || e === 'invalid_client') ? false
+        : errors.some((e) => e === 'redirect_uri_mismatch') ? true
+          : null;
+
+  return {
+    probed: true,
+    methodValid,
+    control,
+    uris,
+    // Withheld unless the control proved the method still tells the two apart.
+    missing: methodValid ? uris.filter((u) => u.registered === false).map((u) => u.uri) : [],
+    allRegistered: methodValid && uris.every((u) => u.registered === true),
+    clientRecognized,
+  };
 }
