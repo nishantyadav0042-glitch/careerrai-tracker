@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin';
-import { SITE_URL } from '@/lib/site';
+import { SITE_URL, resolveAppOrigin } from '@/lib/site';
 import { audit } from '@/lib/integration-audit';
 
 // ── Google account connection (mentors) ─────────────────────────────────────
@@ -33,8 +33,30 @@ export function googleConfigured(): boolean {
   return !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
 }
 
-export function googleRedirectUri(): string {
-  return `${SITE_URL}/api/google/callback`;
+/**
+ * The callback URL for a flow that STARTED on `origin`.
+ *
+ * ── WHY THIS TAKES AN ORIGIN (29 Aug 2026, production incident) ────────────
+ *
+ * It used to be `${SITE_URL}/api/google/callback` — always careerrai.in. But
+ * CareerRai serves from TWO live origins (see APP_ORIGINS in lib/site), and
+ * cookies are host-scoped. A mentor signed in on careerrai-daily.vercel.app
+ * started the flow there, Google returned them to careerrai.in, and that
+ * origin held neither their session nor the OAuth state nonce. The callback's
+ * first line found no user and redirected to /login — indistinguishable from
+ * being logged out, and the one branch in that route that wrote no audit row,
+ * so it left no trace at all. Ten days were spent looking at Google Cloud,
+ * where nothing was ever wrong.
+ *
+ * An OAuth round trip must start and finish on ONE origin. The caller passes
+ * the origin the request actually arrived on; resolveAppOrigin refuses
+ * anything not on the allowlist and falls back to canonical, so a spoofed Host
+ * cannot aim this anywhere but our own domain. Google enforces the same rule
+ * independently — it rejects any redirect_uri not registered on the client —
+ * which is why BOTH origins must be listed there.
+ */
+export function googleRedirectUri(origin?: string | null): string {
+  return `${resolveAppOrigin(origin ?? SITE_URL)}/api/google/callback`;
 }
 
 // ── THE `state` PARAMETER, DONE PROPERLY (27 Aug audit, item 11) ────────────
@@ -126,10 +148,10 @@ export function verifyOAuthState(
 }
 
 /** Where we send a mentor to grant access. `state` carries nonce + return path. */
-export function googleConsentUrl(state: string): string {
+export function googleConsentUrl(state: string, origin?: string | null): string {
   const p = new URLSearchParams({
     client_id: process.env.GOOGLE_CLIENT_ID!,
-    redirect_uri: googleRedirectUri(),
+    redirect_uri: googleRedirectUri(origin),
     response_type: 'code',
     scope: GOOGLE_SCOPES,
     // offline + consent is what actually returns a refresh_token. Without
@@ -163,12 +185,19 @@ async function postToken(body: Record<string, string>): Promise<TokenResponse> {
 }
 
 /** Exchange the one-time code for tokens and persist them. */
-export async function exchangeCodeAndStore(code: string, userId: string): Promise<{ ok: true; email: string | null } | { ok: false; error: string }> {
+export async function exchangeCodeAndStore(
+  code: string,
+  userId: string,
+  origin?: string | null,
+): Promise<{ ok: true; email: string | null } | { ok: false; error: string }> {
   const tok = await postToken({
     code,
     client_id: process.env.GOOGLE_CLIENT_ID!,
     client_secret: process.env.GOOGLE_CLIENT_SECRET!,
-    redirect_uri: googleRedirectUri(),
+    // MUST equal the redirect_uri sent at consent, byte for byte — Google
+    // rejects the exchange otherwise. The callback runs ON the originating
+    // origin, so passing its own origin here reproduces it exactly.
+    redirect_uri: googleRedirectUri(origin),
     grant_type: 'authorization_code',
   });
   if (!tok.access_token) {

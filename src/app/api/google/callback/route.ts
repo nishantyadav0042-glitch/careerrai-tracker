@@ -5,6 +5,7 @@ import { exchangeCodeAndStore, verifyOAuthState, OAUTH_STATE_COOKIE } from '@/li
 import { createAdminClient } from '@/lib/supabase/admin';
 import { ensureBuddyRoom } from '@/lib/buddy-room';
 import { audit } from '@/lib/integration-audit';
+import { SITE_URL } from '@/lib/site';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,8 +19,39 @@ export const dynamic = 'force-dynamic';
 // "they never got here". A failure nobody can read is a failure you debug
 // twice.
 export async function GET(request: Request) {
+  const origin = new URL(request.url).origin;
   const user = await getAuthUser();
-  if (!user) return NextResponse.redirect(new URL('/login', request.url));
+
+  // ── THE BRANCH THAT COST TEN DAYS ────────────────────────────────────────
+  //
+  // This used to redirect to /login and write NOTHING. It is the only exit in
+  // this route that left no trace, and it was the one production actually
+  // took: a mentor signed in on careerrai-daily.vercel.app was returned by
+  // Google to careerrai.in, whose cookie jar held no session, so `user` was
+  // null and they landed on a login screen looking logged out. Every other
+  // failure here is audited, so the empty audit log read as "the callback
+  // never ran" — and the investigation went to Google Cloud, where nothing
+  // was wrong, instead of to these two lines.
+  //
+  // The origin mismatch itself is fixed (googleRedirectUri now returns to the
+  // originating origin). This stays because a session can still be absent for
+  // ordinary reasons — an expired cookie, a sign-out in another tab — and
+  // when it is, the trail must say so. No token, code or secret is recorded:
+  // only which origin the callback landed on and that no session was found.
+  if (!user) {
+    await audit({
+      subjectId: null,
+      action: 'google.connect_failed',
+      ok: false,
+      detail: {
+        stage: 'no_session_at_callback',
+        callbackOrigin: origin,
+        canonicalOrigin: SITE_URL,
+        originMismatch: origin !== SITE_URL,
+      },
+    });
+    return NextResponse.redirect(new URL('/login?error=session_lost', request.url));
+  }
 
   const params = new URL(request.url).searchParams;
 
@@ -75,7 +107,7 @@ export async function GET(request: Request) {
     return leave(new URL(`${back}?google=denied`, request.url));
   }
 
-  const result = await exchangeCodeAndStore(code, user.id);
+  const result = await exchangeCodeAndStore(code, user.id, origin);
   if (!result.ok) {
     console.error('[google] connect failed:', result.error);
     await audit({
