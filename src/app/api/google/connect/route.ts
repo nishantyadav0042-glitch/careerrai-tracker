@@ -10,9 +10,33 @@ export const dynamic = 'force-dynamic';
 // The state cookie is httpOnly so script cannot read it, and sameSite 'lax'
 // because Google's callback is a top-level GET navigation from another site —
 // 'strict' would drop the cookie on exactly the request that needs it and the
-// flow would fail for everyone. Short-lived: a consent screen left open for ten
-// minutes is a flow that has been abandoned.
-const STATE_TTL_SECONDS = 600;
+// flow would fail for everyone.
+//
+// ── TEN MINUTES WAS A GUESS ABOUT A JOURNEY NOBODY HAD WALKED ─────────────
+//
+// 29 Aug 2026. The old value assumed "a consent screen left open for ten
+// minutes is abandoned". That is true of the SHORT flow this was written for
+// — pick account, press Allow — and false of the one a real mentor gets while
+// the app is unverified:
+//
+//   account chooser → "Google hasn't verified this app" → Advanced →
+//   "Go to careerrai.in (unsafe)" → consent → tick the calendar checkbox →
+//   scroll → Continue
+//
+// Six screens, two of which are scary enough that a careful person stops and
+// reads them, and one of which (the checkbox) is easy to miss and worth
+// re-reading. Ten minutes is a plausible time for a cautious first-time
+// mentor, and blowing the budget does not look like a timeout: the cookie is
+// simply gone, verifyOAuthState sees no nonce, and the callback refuses with
+// `no_state_cookie` and redirects to ?google=failed. The mentor did everything
+// right, waited, and got told it failed.
+//
+// Thirty minutes covers a slow, interrupted read of Google's own screens. It
+// does not weaken the CSRF protection the nonce provides: the value is random,
+// httpOnly, single-use, and cleared on EVERY exit from the callback (see the
+// `leave` helper there), so a longer window is a longer time in which exactly
+// one legitimate redemption remains possible.
+const STATE_TTL_SECONDS = 1800;
 
 // Step 1 of connecting a mentor's Google account: bounce them to consent.
 export async function GET(request: Request) {
