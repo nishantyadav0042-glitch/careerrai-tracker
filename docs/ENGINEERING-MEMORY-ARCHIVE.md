@@ -2936,3 +2936,19 @@ two days that "declared" was mistaken for "running" (#55, this, and the earlier
 `sales_ready` assumption). A scheduled job is not running because it is
 scheduled, and the check is one query — `cron_runs` grouped by path, looking for
 zero.
+
+**Lesson encoded (same day).** Both #55 and this were found by a human thinking
+to ask, which is not a control. `lib/cron-liveness.ts` now compares every path
+declared in `vercel.json` against `cron_runs` and reports anything that has
+never run or has gone quiet for a generous multiple of its own period; the
+nightly `integrity-check` calls it and alerts through the existing channel. No
+new cron and no new dashboard — the job that already exists to notice we are
+flying blind now also notices when the instruments have stopped.
+
+Validated against the real table rather than fixtures, which is what caught the
+defect that would have made it useless: `cron_runs` stores the path the
+scheduler actually called, query string included, so matching declared paths as
+raw strings reported the healthy four-slot `study-companion` route as never-run.
+An alert that cries wolf on a working job trains you to ignore it. On real
+production data it now flags exactly two jobs — `outcome-sweep` and
+`purge-session-handoffs` — and nothing else across 39 healthy paths.
