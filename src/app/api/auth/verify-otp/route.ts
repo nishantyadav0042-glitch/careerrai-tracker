@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { clientIp } from '@/lib/request-ip';
 import { registerAttemptAndCheck, clearAttempts } from '@/lib/attempt-throttle';
 import { logSecurityEvent } from '@/lib/security-log';
+import { supabaseUrl, supabaseAnonKey } from '@/lib/supabase/env';
 
 export async function POST(request: NextRequest) {
   try {
@@ -31,8 +32,8 @@ export async function POST(request: NextRequest) {
 
     const pending: Array<{ name: string; value: string; options: Record<string, unknown> }> = [];
     const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      supabaseUrl(),
+      supabaseAnonKey(),
       {
         cookies: {
           getAll: () => request.cookies.getAll(),

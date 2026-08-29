@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { decryptHandoff } from '@/lib/session-handoff-crypto';
+import { supabaseUrl, supabaseAnonKey } from '@/lib/supabase/env';
 
 // Consumes a one-time PWA hand-off token (see /api/install/handoff) and
 // establishes the session in THIS context — the installed iOS PWA. The token
@@ -31,8 +32,8 @@ export async function POST(request: NextRequest) {
 
   const pending: Array<{ name: string; value: string; options: Record<string, unknown> }> = [];
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl(),
+    supabaseAnonKey(),
     {
       cookies: {
         getAll: () => request.cookies.getAll(),

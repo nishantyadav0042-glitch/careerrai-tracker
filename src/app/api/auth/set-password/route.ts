@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { supabaseUrl, supabaseAnonKey } from '@/lib/supabase/env';
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,8 +16,8 @@ export async function POST(request: NextRequest) {
 
     const pending: Array<{ name: string; value: string; options: Record<string, unknown> }> = [];
     const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      supabaseUrl(),
+      supabaseAnonKey(),
       {
         cookies: {
           getAll: () => request.cookies.getAll(),

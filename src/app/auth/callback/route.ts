@@ -3,6 +3,7 @@ import { createServerClient } from '@supabase/ssr';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { applyOnboarding, type OnboardingPayload } from '@/lib/onboarding-apply';
 import { COOKIE as ONBOARDING_DRAFT_COOKIE } from '@/app/api/auth/stash-onboarding/route';
+import { supabaseUrl, supabaseAnonKey } from '@/lib/supabase/env';
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
@@ -23,8 +24,8 @@ export async function GET(request: NextRequest) {
 
   const pending: Array<{ name: string; value: string; options: Record<string, unknown> }> = [];
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl(),
+    supabaseAnonKey(),
     {
       cookies: {
         getAll: () => request.cookies.getAll(),

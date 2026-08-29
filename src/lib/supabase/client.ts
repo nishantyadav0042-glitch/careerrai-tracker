@@ -2,6 +2,7 @@
 
 import { createBrowserClient } from '@supabase/ssr';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { supabaseUrl, supabaseAnonKey } from '@/lib/supabase/env';
 
 // ── Singleton, not a factory ─────────────────────────────────────────────
 //
@@ -28,8 +29,8 @@ let client: SupabaseClient | undefined;
 export function createClient() {
   if (!client) {
     client = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      supabaseUrl(),
+      supabaseAnonKey()
     );
   }
   return client;
