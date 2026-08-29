@@ -26,6 +26,18 @@ name: Cron fallback
 # and "did the counsellors change anything?" has no data behind it at all.
 # Scheduled 30 minutes after Vercel's attempt; the sweep only fills matured
 # NULL windows, so running twice is a no-op rather than a double count.
+#
+# purge-session-handoffs (added 29 Aug 2026) is the same story and worse in
+# consequence. Declared on Vercel on 27 Aug at '20 * * * *' and never fired
+# once, while the table it exists to drain held 595 rows — every one still
+# carrying an encrypted Supabase access+refresh token pair, all of them dead
+# (used or expired), the oldest from 12 July. The purge shipped; the liability
+# it was written to remove never shrank by a single row.
+#
+# Hourly at :50, trailing the :20 primary by 30 minutes and clearing the next
+# hour's primary by the same margin. Hourly rather than daily because the mint
+# rate has run as high as 58 hand-offs a day, and the retention window IS the
+# security control here — the encryption only defends a database-only leak.
 
 on:
   schedule:
@@ -41,6 +53,7 @@ on:
     - cron: '25 4 * * *'    # renewal-reminders
     - cron: '55 9 * * *'   # sales-ready
     - cron: '15 2 * * *'   # outcome-sweep
+    - cron: '50 * * * *'   # purge-session-handoffs
   workflow_dispatch:
     inputs:
       endpoint:
@@ -105,6 +118,8 @@ jobs:
                 call "/api/cron/sales-ready" ;;
               "15 2 * * *")
                 call "/api/cron/outcome-sweep" ;;
+              "50 * * * *")
+                call "/api/cron/purge-session-handoffs" ;;
               *)
                 echo "::error::Unrecognized schedule string: $SCHEDULE"
                 FAILED=1 ;;
@@ -124,7 +139,8 @@ jobs:
               /api/cron/expire-subscriptions \
               /api/cron/renewal-reminders \
               /api/cron/sales-ready \
-              /api/cron/outcome-sweep
+              /api/cron/outcome-sweep \
+              /api/cron/purge-session-handoffs
             do
               call "$p"
             done
