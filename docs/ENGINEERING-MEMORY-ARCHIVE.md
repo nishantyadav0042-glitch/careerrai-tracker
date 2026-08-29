@@ -2952,3 +2952,34 @@ raw strings reported the healthy four-slot `study-companion` route as never-run.
 An alert that cries wolf on a working job trains you to ignore it. On real
 production data it now flags exactly two jobs — `outcome-sweep` and
 `purge-session-handoffs` — and nothing else across 39 healthy paths.
+
+---
+
+## Incident #57
+
+**2026-08-30 · Growth / sales ops (P0) · both counsellors locked out on their first morning**
+
+**What was wrong.** `/sales` rendered *"This page didn't load. Your data is safe — please try again."* The founder sent a screenshot; Vercel's error table showed
+`Error: Could not read the sales queue state: Bad Request`, 6 occurrences across 2 users on `/sales` and `/admin/sales`, first seen 28 Aug and still firing on the newest deploy.
+
+PostgREST puts `.in()` lists in the **query string**. `buildCallQueue` passed every free student — 975 of them — to seven separate reads. At ~39 characters per UUID that is a **~38,000 character URL**, and the request comes back 400 every single time, for everybody.
+
+**Why it was worse than one broken page.** Only `readLeadOutreach` inspects its error (Boundary 2, added in #P0-B). It threw, and the throw is the only reason anyone found out. The other six reads swallow the failure and continue with empty data — including:
+
+```
+db.from('student_payments').select('student_id').eq('status','paid').in('student_id', ids)
+```
+
+With that read silently empty, `paidIds` is empty, `isClosedForSales` returns false for a paying customer, and a student who has already paid gets dealt to a counsellor as a cold lead. That is Incident #52's failure mode arriving through a different door — and the loud crash next to it is the only thing that stopped it shipping quietly.
+
+**This is a scale wall, not a typo.** It appeared the week the base crossed roughly 850 students. Nothing about the query was wrong when it was written; the data grew into the limit. `docs/SCALE-CONTRACT.md` says to build today's correct system with a 100,000-student path — this is exactly the class of defect it exists to catch, and it was missed because the read looked innocent.
+
+**How 4,723 passing tests missed a total outage.** Every fake database in the suite implements `.in()` as `() => c` — it accepts any argument and returns everything. A harness that cannot reject an argument cannot fail on the argument being too large, so the bug was invisible to the entire test suite *by construction*. The suite was green while the product was down for its only two users.
+
+**The fix.** `selectInChunks()` walks the id list in batches of 150 (~5,900 characters of URL) and concatenates the rows, returning the first error with whatever it had — so `readLeadOutreach` can still fail closed. All seven reads use it.
+
+`queue-url-limit.guard.test.ts` models the one property the other harnesses miss: it records every `.in()` length and returns `{error: 'Bad Request'}` above a threshold, exactly as the server does. Reverting the chunking reproduces the production error string verbatim and fails four tests.
+
+**Lesson.** *A fake that accepts everything proves nothing about the arguments. When a harness stubs a method as "returns the same thing regardless", it has silently declared that method's constraints untestable — and constraints are where scale walls live. Any collection passed whole to a backend needs a test that models the backend REFUSING it, at a size the real data will actually reach.*
+
+**Second lesson.** *One checked error rescued six unchecked ones. `lead_outreach` threw only because a previous incident forced it to inspect its error; the six reads beside it still swallow theirs. Error-checking one read in a fan-out does not protect the fan-out — it just decides which failure you get to see.*
