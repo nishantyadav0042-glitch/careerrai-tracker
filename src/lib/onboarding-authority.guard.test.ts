@@ -240,11 +240,19 @@ describe('a Google student and an OTP student are the same student', () => {
     await applyOnboarding(a.admin, 'same-user', FULL_DRAFT);
     await applyOnboarding(b.admin, 'same-user', FULL_DRAFT);
 
-    const strip = (v: Record<string, unknown>) => {
-      const { ...rest } = v;
-      delete (rest as Record<string, unknown>).onboarding_last_activity_at;
-      return rest;
-    };
+    // Wall-clock stamps are not part of the parity claim, and comparing them
+    // makes this test fail whenever the two calls straddle a millisecond. It
+    // stripped onboarding_last_activity_at by name and missed
+    // study_hours_set_at, which setDailyHours writes — so it went red in CI on
+    // 29 Aug for a one-millisecond difference and nothing else. Named fields
+    // are a list someone has to remember to extend; the SHAPE cannot be
+    // forgotten, so any full ISO-8601 instant is dropped. A plain date
+    // (syllabus_target_date) has no T and no Z and stays compared, because
+    // "both doors set the same target date" is exactly the claim.
+    const isInstant = (x: unknown) =>
+      typeof x === 'string' && /^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/.test(x);
+    const strip = (v: Record<string, unknown>) =>
+      Object.fromEntries(Object.entries(v).filter(([, val]) => !isInstant(val)));
     expect(a.writes.map((w) => strip(w.values))).toEqual(b.writes.map((w) => strip(w.values)));
     expect(a.upserts.map((r) => r.topic)).toEqual(b.upserts.map((r) => r.topic));
   });

@@ -1995,13 +1995,14 @@ the fix had to go one layer deeper than the first attempt.
 
 ## Incident #43 — three defects, one loop: the Google signup that could not be escaped (2026-08-29)
 
-**Symptom (founder, in his own words).** "जब I logged in, मतलब onboarding में
-मैंने सारे जो भी अपना basic steps वगैरह थे, coverage metrics को मैंने tick कर
-दिया. उसके बाद जो अपना login वाला option आता है Google का, तो उसको जैसे ही मैंने
-Google के through login किया तो वो वापस मेरे को onboarding करने को दे रहा है…
-it's a loop." He answered all 53 topic questions, chose Continue with Google,
-and was returned to the start of onboarding. Answering again reached the same
-screen. There was no exit. Phone OTP was unaffected throughout.
+**Symptom (founder, reported in Hindi; translated here because these documents
+have to be readable by every reviewer).** "When I logged in — I had ticked all
+my basic onboarding steps and the coverage metrics. After that comes the login
+option with Google, and the moment I logged in through Google it sent me back
+to do onboarding again… it's a loop." He answered all 53 topic questions, chose
+Continue with Google, and was returned to the start of onboarding. Answering
+again reached the same screen. There was no exit. Phone OTP was unaffected
+throughout.
 
 **Blast radius.** Every student who chose Google since the feature shipped.
 `select count(*) from onboarding_drafts` returned **0** — not zero unconsumed,
