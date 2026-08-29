@@ -144,19 +144,25 @@ describe('C3 — one lane authority, thresholds in config', () => {
       todayIst: today, createdAt: null, buddyTaps: 0, intentDoor: false, momentumScore: 0,
       logDates: Array.from({ length: BROKEN_STREAK_MIN_RUN - 1 }, (_, i) => daysAgo(i + 1)),
     });
-    expect(short.dueReason).not.toBe('broken_streak');
+    expect(short?.dueReason).not.toBe('broken_streak');
     // Exactly the minimum is.
     const atMin = classifyLane({
       todayIst: today, createdAt: null, buddyTaps: 0, intentDoor: false, momentumScore: 0,
       logDates: Array.from({ length: BROKEN_STREAK_MIN_RUN }, (_, i) => daysAgo(i + 1)),
     });
-    expect(atMin.dueReason).toBe('broken_streak');
+    expect(atMin?.dueReason).toBe('broken_streak');
     // A signup older than the configured window has missed the activation lane.
     const stale = classifyLane({
       todayIst: today, createdAt: new Date(Date.parse(today) - (NEW_LEAD_MAX_AGE_DAYS + 1) * 86_400_000).toISOString(),
       logDates: [], buddyTaps: 0, intentDoor: false, momentumScore: 0,
     });
-    expect(stale.dueReason).toBe('fresh');
+    // CHANGED 29 Aug 2026 (SALES-OS.md §5). This used to assert 'fresh',
+    // because `fresh` was the unconditional fallthrough — every student in the
+    // book was an opportunity forever and the queue could never be short. A
+    // signup past its activation window with no other signal now has NO lane:
+    // they are backlog, still owned and still visible in the portfolio, but
+    // never dealt into a day to pad it.
+    expect(stale, 'a stale signup with no signal is backlog, not an opportunity').toBeNull();
     expect(GOING_COLD_SILENT_DAYS).toBeGreaterThan(0);
   });
 

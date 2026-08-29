@@ -78,7 +78,8 @@ export interface ConversionView {
   timeline: TimelineItem[];
   /** WHY this student is worth calling — the same verdict the queue card
    *  shows, so the reason survives a rep opening the student directly (C4). */
-  lane: LaneVerdict;
+  /** NULL when no lane justifies contact today — the student is backlog. */
+  lane: LaneVerdict | null;
   /** What the student said their problem was, in their own words, at signup. */
   painPoints: string[];
 }

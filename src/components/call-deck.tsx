@@ -13,7 +13,12 @@ const DUE_CLS: Record<string, string> = {
 const OUTCOMES: { key: string; label: string; cls: string }[] = [
   { key: 'interested', label: 'Interested', cls: 'bg-amber-500 text-white' },
   { key: 'callback', label: 'Callback', cls: 'bg-sky-600 text-white' },
-  { key: 'converted', label: 'Converted', cls: 'bg-emerald-600 text-white' },
+  // NOT "Converted" (Incident #52). A rep cannot know that money arrived — only
+  // the payment ledger converts a student. Tapping this records strong buying
+  // intent; if a payment exists the student is converted, and if it does not
+  // they stay in the book and the founder gets an exception. The label says
+  // what the rep can actually observe, so the button never lies to them.
+  { key: 'converted', label: 'Ready to pay', cls: 'bg-emerald-600 text-white' },
   { key: 'not_interested', label: 'Not interested', cls: 'bg-stone-700 text-white' },
   // The student said stop calling. Closes the lead forever (dnd ≠ "no to the
   // offer" — it's "no to the contact"). Note is mandatory: record who said it.
@@ -76,6 +81,15 @@ export function CallDeck({ queue }: { queue: CallLead[] }) {
             <div className="flex items-center justify-between gap-2">
               <a href={`/sales/student/${lead.studentId}`} className="truncate text-[15px] font-bold text-stone-900 hover:underline">{lead.name}</a>
               <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${DUE_CLS[lead.dueReason]}`}>{lead.dueLabel}</span>
+              {/* WHICH GOAL THIS CALL IS FOR (§4). The counsellor must know
+                  before they open their mouth whether they are here to get a
+                  student studying again or to talk about paying — opening with
+                  the wrong one is the difference between help and a pitch. */}
+              <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide ${
+                lead.objective === 'conversion' ? 'bg-emerald-100 text-emerald-800' : 'bg-sky-100 text-sky-800'}`}>
+                {lead.objective}
+                {lead.objectiveSecondary ? ` + ${lead.objectiveSecondary}` : ''}
+              </span>
             </div>
             <div className="mt-0.5 flex items-center gap-2">
               <p className="text-xs text-stone-500">{lead.phone ?? 'no phone'}</p>
@@ -89,6 +103,24 @@ export function CallDeck({ queue }: { queue: CallLead[] }) {
               {lead.why.map((w, i) => (
                 <p key={i} className="text-[12px] font-semibold leading-snug text-stone-700">{w}</p>
               ))}
+              {/* WHAT WAS SAID LAST TIME. This is the whole reason the second
+                  call is better than the first. It used to live one tap deeper
+                  on the 360, which meant it was read when there was time and
+                  skipped when there wasn't — and the student repeated
+                  themselves to the same company twice. */}
+              {lead.lastInteraction && (
+                <div className="mt-1.5 rounded-lg bg-stone-100 px-2.5 py-1.5">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-stone-400">
+                    Last time · {new Date(lead.lastInteraction.atIso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                    {lead.lastInteraction.outcome ? ` · ${lead.lastInteraction.outcome.replace(/_/g, ' ')}` : ''}
+                  </p>
+                  {lead.lastInteraction.note && (
+                    <p className="mt-0.5 text-[12px] font-semibold italic leading-snug text-stone-700">
+                      &ldquo;{lead.lastInteraction.note}&rdquo;
+                    </p>
+                  )}
+                </div>
+              )}
               <p className="mt-1 text-[12px] font-bold text-teal-700">→ {lead.action}</p>
             </div>
             {/* The weakness brief — what she reads before dialing */}
@@ -133,7 +165,21 @@ function Disposition({ lead, onDispose }: { lead: CallLead; onDispose: (l: CallL
   const [callbackAt, setCallbackAt] = useState('');
   const [saving, setSaving] = useState(false);
   const needsCallback = outcome === 'callback';
-  const canSave = note.trim().length > 0; // callback time defaults to 6 PM if untouched
+  // ── A NOTE IS REQUIRED ONLY WHERE IT CARRIES SOMETHING A FIELD CANNOT ────
+  //
+  // This used to be `note.trim().length > 0` for EVERY connected outcome, so
+  // the Save button stayed disabled until the rep typed something on all five.
+  // Sixty calls a day like that produces "ok", "x", "talked" by the end of the
+  // first week — and once the remarks are junk the timeline is junk, which
+  // destroys the one thing that makes the second call better than the first.
+  //
+  // So it is mandatory exactly where the free text IS the record: the student
+  // refused (why), or asked never to be contacted again (who said it, and when
+  // — see the DND note above). For interested / callback / converted the
+  // structured fields already carry the meaning, and a short remark is welcome
+  // but never extorted. SALES-OS.md §8.
+  const NOTE_REQUIRED = new Set(['not_interested', 'dnd']);
+  const canSave = !NOTE_REQUIRED.has(outcome) || note.trim().length > 0;
 
   return (
     <div className="space-y-2.5 border-t border-stone-100 bg-stone-50 px-4 py-3">

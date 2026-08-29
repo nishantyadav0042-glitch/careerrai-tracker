@@ -76,19 +76,94 @@ describe('employment_type cannot be routed around', () => {
     expect(offenders, `these write sales_rep_config without calling checkEmploymentStatement(): ${offenders.join(', ')}`).toEqual([]);
   });
 
-  it('no route moves students to a rep without asking repAllocationLimit', () => {
-    // The two routes ANSWER differently and that is deliberate:
+  it('no route moves students to a rep without asking a stated ceiling', () => {
+    // The routes ANSWER differently and that is deliberate:
     // /api/admin/distribute-leads refuses, because nobody named the
     // recipient; /api/admin/reassign-lead assigns anyway and states the
     // consequence, because admin override is unconditional by a decision that
-    // predates this work. What neither may do is not ask.
+    // predates this work. What none of them may do is not ask.
     //
     // An earlier version of this check accepted a bare getTeamCapacity() call
     // as sufficient. It was vacuous: deleting the enforcement from
     // distribute-leads while leaving the capacity READ in place still passed.
     // Verified by injecting exactly that.
-    const offenders = bulkOwnershipWriters().filter((f) => !/repAllocationLimit\s*\(/.test(code(f)));
-    expect(offenders, `these change lead ownership without consulting repAllocationLimit(): ${offenders.join(', ')}`).toEqual([]);
+    //
+    // TWO CEILINGS SINCE 29 AUG 2026, because there are two questions (see the
+    // note above portfolioIntakeLimit in sales-rep-provisioning.ts):
+    //
+    //   repAllocationLimit    may this rep take more LIVE WORK now?
+    //   portfolioIntakeLimit  may this seat be responsible for more PEOPLE?
+    //
+    // Either satisfies this guard; NEITHER does not. Widening it to "one of
+    // two" is the whole risk in this test, which is why the next one pins the
+    // two apart — an ownership writer that consults the wrong ceiling would
+    // pass here and fail there.
+    const offenders = bulkOwnershipWriters()
+      .filter((f) => !/repAllocationLimit\s*\(|portfolioIntakeLimit\s*\(/.test(code(f)));
+    expect(offenders, `these change lead ownership without consulting a stated ceiling: ${offenders.join(', ')}`).toEqual([]);
+  });
+
+  it('the live-work ceiling and the portfolio ceiling are not interchangeable', () => {
+    // The bug this prevents is subtle and was real for five days: enrolling a
+    // book through repAllocationLimit caps a seat at ~200 students, because
+    // 'never_contacted' consumes a capacity unit and max_capacity_units is
+    // CHECKed at 200 — while the operating model is ~1,000 students per seat.
+    // Gating live work through portfolioIntakeLimit is the mirror error: it
+    // would hand a part-timer unlimited same-day work.
+    const enrol = 'src/app/api/admin/enrol-book/route.ts';
+    const liveWork = 'src/app/api/admin/distribute-leads/route.ts';
+
+    expect(code(enrol), 'enrol-book must gate on the PORTFOLIO ceiling').toMatch(/portfolioIntakeLimit\s*\(/);
+    expect(code(enrol), 'enrol-book must not gate a book on live-work capacity').not.toMatch(/repAllocationLimit\s*\(/);
+
+    expect(code(liveWork), 'distribute-leads must gate on the LIVE-WORK ceiling').toMatch(/repAllocationLimit\s*\(/);
+    expect(code(liveWork), 'distribute-leads must not hand out live work against the portfolio ceiling').not.toMatch(/portfolioIntakeLimit\s*\(/);
+  });
+
+  it('enrolment can never overwrite an existing owner — it must be ON CONFLICT DO NOTHING', () => {
+    // Founder requirement, 29 Aug 2026: "re-running the operation must not
+    // create duplicate assignments", "one active owner per student", "no
+    // accidental loss".
+    //
+    // The pool filter that skips already-enrolled students is a READ. Between
+    // that read and the write, a double click or a concurrent admin can claim
+    // the same student. With ON CONFLICT DO UPDATE — the default for a plain
+    // Supabase .upsert() — the second writer silently moves a student from one
+    // rep's book to the other's. ignoreDuplicates:true is what makes the
+    // guarantee structural rather than a property of the filter.
+    const enrol = code('src/app/api/admin/enrol-book/route.ts');
+    const from = enrol.indexOf("from('lead_outreach')");
+    const at = from < 0 ? -1 : enrol.indexOf('.upsert(', from);
+    const block = at < 0 ? '' : enrol.slice(at, at + 400);
+    expect(block, 'the enrolment upsert was not found — this guard would be vacuous').toContain('owner_id');
+    expect(block, 'enrolment must use ignoreDuplicates (ON CONFLICT DO NOTHING)').toContain('ignoreDuplicates: true');
+  });
+
+  it('enrolment reports the rows the database created, not the rows it asked for', () => {
+    // With DO NOTHING the two genuinely differ under contention. Counting the
+    // request instead of the result would report 500 students enrolled when a
+    // concurrent run took 200 of them — a precise lie (L1).
+    const enrol = code('src/app/api/admin/enrol-book/route.ts');
+    expect(enrol, 'the insert must select back what landed').toMatch(/\.select\('student_id'\)/);
+    expect(enrol, 'the per-rep count must come from what landed, not slice.length')
+      .not.toMatch(/enrolled\.push\(\{\s*repId: a\.repId,\s*count: slice\.length\s*\}\)/);
+  });
+
+  it('a bulk enrolment never stamps assigned_at, which would fake an SLA breach per student', () => {
+    // assigned_at starts the first-contact clock. Stamping it while enrolling
+    // the back catalogue would report every imported student as a breach by
+    // lunchtime. firstContactSla() renders a null assigned_at as 'unknown' and
+    // tallies it separately, which is the honest answer.
+    const enrol = code('src/app/api/admin/enrol-book/route.ts');
+    // Take the written payload as a fixed window after the upsert call rather
+    // than trying to balance parentheses with a regex — a lazy `\)` stops at
+    // the first `)` inside the map callback and silently matches nothing,
+    // which is how this guard passed while proving nothing on its first run.
+    const from = enrol.indexOf("from('lead_outreach')");
+    const at = from < 0 ? -1 : enrol.indexOf('.upsert(', from);
+    const upsertBlock = at < 0 ? '' : enrol.slice(at, at + 300);
+    expect(upsertBlock, 'the enrolment upsert was not found — this guard would be vacuous').toContain('owner_id');
+    expect(upsertBlock, 'enrol-book must not set assigned_at').not.toContain('assigned_at');
   });
 });
 

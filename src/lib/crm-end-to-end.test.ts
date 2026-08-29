@@ -45,17 +45,40 @@ const asRep = (id: string) => ({ id, role: 'sales' as const });
 const asAdmin = { id: BOSS, role: 'admin' as const };
 
 /** Fake DB: `outreach` rows drive lead state; everything else is empty but OK. */
-function db(outreach: Record<string, unknown>[], opts: { outreachFails?: boolean } = {}) {
+function db(outreach: Record<string, unknown>[], opts: { outreachFails?: boolean; paidIds?: string[]; abandonedIds?: string[] } = {}) {
   const chain = (table: string) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const c: any = {};
-    for (const m of ['select', 'in', 'eq', 'gte', 'lt', 'gt', 'not', 'order', 'limit']) c[m] = () => c;
+    // The chain records any status filter it was given. Two different reads
+    // hit student_payments — paid rows and abandoned ones — and a harness that
+    // returned the same data to both would have silently made every abandoned
+    // checkout look like a paid student. It did, until this test caught it.
+    let statusFilter: ((s: string) => boolean) | null = null;
+    for (const m of ['select', 'gte', 'lt', 'gt', 'not', 'order', 'limit']) c[m] = () => c;
+    c.eq = (col: string, val: unknown) => { if (col === 'status') statusFilter = (s) => s === val; return c; };
+    c.neq = (col: string, val: unknown) => { if (col === 'status') statusFilter = (s) => s !== val; return c; };
+    c.in = (col: string, vals: unknown[]) => {
+      if (col === 'status') statusFilter = (s) => (vals as string[]).includes(s);
+      return c;
+    };
     c.then = (ok: (r: unknown) => unknown) => {
       if (table === 'profiles') return Promise.resolve({ data: STAFF, error: null }).then(ok);
       if (table === 'lead_outreach') {
         return Promise.resolve(
           opts.outreachFails ? { data: null, error: { message: 'connection reset' } } : { data: outreach, error: null },
         ).then(ok);
+      }
+      // The payment ledger. Two reads share this table: paid rows (the only
+      // thing that converts a student, #52) and unpaid rows (abandoned
+      // checkouts — the strongest commercial signal). The harness returns both
+      // sets; the queue's own .eq/.neq filters are no-ops here, so each read
+      // gets everything and the callers' Sets do the separating.
+      if (table === 'student_payments') {
+        const paid = (opts.paidIds ?? []).map((id) => ({ student_id: id, status: 'paid', created_at: new Date().toISOString(), plan: 'monthly' }));
+        const abandoned = (opts.abandonedIds ?? []).map((id) => ({ student_id: id, status: 'created', created_at: new Date().toISOString(), plan: 'monthly' }));
+        const all = [...paid, ...abandoned];
+        const f = statusFilter as ((s: string) => boolean) | null;
+        return Promise.resolve({ data: f ? all.filter((r) => f(r.status)) : all, error: null }).then(ok);
       }
       return Promise.resolve({ data: [], error: null }).then(ok);
     };
@@ -73,7 +96,11 @@ describe('Scenario A — a new lead reaches the rep', () => {
     const lead = queue.find((l) => l.studentId === 'fresh-1');
     expect(lead, 'a never-called free student must surface as a lead').toBeTruthy();
     expect(lead!.dueReason).toBe('fresh');
-    expect(lead!.dueLabel).toBe('New lead');
+    // Relabelled 29 Aug 2026 (§5). 'New lead' was a lie for most of the people
+    // it described: a student who signed up four months ago and has never been
+    // called is not new, they are neglected. The label now says the actual
+    // reason they are in the queue.
+    expect(lead!.dueLabel).toBe('Never contacted');
     expect(totalOpen).toBe(2);
   });
 
@@ -156,14 +183,46 @@ describe('Scenario C — a promised follow-up never disappears', () => {
   });
 });
 
-describe('Scenario D — a closed lead stays closed', () => {
-  it('converted and not_interested never re-enter the queue', async () => {
-    for (const status of ['converted', 'not_interested']) {
-      const { queue, totalOpen } = await buildCallQueue(db([
-        { student_id: 'fresh-1', status, next_action_at: null, last_attempt_at: null, no_answer_count: 0, callback_at: null, owner: null },
-      ]), asAdmin);
+describe('Scenario D — what actually closes a student (Incident #52)', () => {
+  const row = (status: string) => ([{
+    student_id: 'fresh-1', status, next_action_at: null, last_attempt_at: null,
+    no_answer_count: 0, callback_at: null, owner: null,
+  }]);
+
+  // The student's own words close the relationship. These are unchanged.
+  it("the student's own refusal closes them for good", async () => {
+    for (const status of ['not_interested', 'dnd', 'unqualified']) {
+      const { queue, totalOpen } = await buildCallQueue(db(row(status)), asAdmin);
       expect(queue.find((l) => l.studentId === 'fresh-1'), `${status} must never be called again`).toBeFalsy();
       expect(totalOpen).toBe(1);
+    }
+  });
+
+  it('a paid student leaves the sales queue', async () => {
+    const { queue } = await buildCallQueue(db(row('converted'), { paidIds: ['fresh-1'] }), asAdmin);
+    expect(queue.find((l) => l.studentId === 'fresh-1')).toBeFalsy();
+  });
+
+  // THIS ASSERTION USED TO SAY THE OPPOSITE, and the opposite was the bug.
+  //
+  // Until 29 Aug 2026 this scenario asserted that a typed `converted` never
+  // re-enters the queue. That is precisely how one mistaken tap deleted a
+  // student from every future queue with no payment anywhere — the counsellor
+  // whose job is to convert them would never see them again. The payment
+  // ledger is the only conversion truth (SALES-OS.md §3 rule 1), so a claim
+  // without money keeps the student in the book.
+  it('a claimed conversion with NO payment keeps the student in the queue', async () => {
+    const { queue } = await buildCallQueue(db(row('converted')), asAdmin);
+    expect(
+      queue.find((l) => l.studentId === 'fresh-1'),
+      'a mistaken tap must not delete a student from the sales system',
+    ).toBeTruthy();
+  });
+
+  it('payment closes a student whatever their typed status says', async () => {
+    for (const status of ['interested', 'no_answer', 'called', 'follow_up']) {
+      const { queue } = await buildCallQueue(db(row(status), { paidIds: ['fresh-1'] }), asAdmin);
+      expect(queue.find((l) => l.studentId === 'fresh-1'), `${status} + paid must leave the queue`).toBeFalsy();
     }
   });
 });
@@ -265,5 +324,50 @@ describe('the CRM is reachable, not merely registered', () => {
     const signal = readFileSync('src/app/admin/sales-queue/page.tsx', 'utf8');
     expect(signal).not.toContain('buildCallQueue');
     expect(signal).toContain('Sales-ready');
+  });
+});
+
+
+describe('Scenario F — the student who tried to pay and stopped', () => {
+  const row = () => ([{
+    student_id: 'fresh-1', status: 'not_contacted', next_action_at: null,
+    last_attempt_at: null, no_answer_count: 0, callback_at: null, owner: null,
+  }]);
+
+  it('an abandoned checkout outranks every non-promise lane', async () => {
+    const { queue } = await buildCallQueue(db(row(), { abandonedIds: ['fresh-1'] }), asAdmin);
+    const lead = queue.find((l) => l.studentId === 'fresh-1');
+    expect(lead, 'a student who tried to pay must be surfaced').toBeTruthy();
+    expect(lead!.dueReason).toBe('checkout_abandoned');
+    expect(lead!.objective).toBe('conversion');
+  });
+
+  it('the card says what happened, in money terms', async () => {
+    const { queue } = await buildCallQueue(db(row(), { abandonedIds: ['fresh-1'] }), asAdmin);
+    const lead = queue.find((l) => l.studentId === 'fresh-1')!;
+    expect(lead.why.join(' ')).toMatch(/never completed payment/);
+    expect(lead.action).toMatch(/price, trust/);
+  });
+
+  // The guard in payment-status-semantics caught this before it shipped: a
+  // refunded student COMPLETED a purchase and reversed it. Telling them "you
+  // started paying and stopped" would be wrong and insulting.
+  it('a student who paid is not treated as an abandoned checkout', async () => {
+    const { queue } = await buildCallQueue(
+      db(row(), { paidIds: ['fresh-1'], abandonedIds: ['fresh-1'] }), asAdmin);
+    expect(queue.find((l) => l.studentId === 'fresh-1'),
+      'paid closes a student — an old abandoned attempt is history, not intent').toBeFalsy();
+  });
+
+  it('a promise the student made still outranks intent we merely observed', async () => {
+    const { queue } = await buildCallQueue(db([{
+      student_id: 'fresh-1', status: 'follow_up',
+      callback_at: new Date(Date.now() - 3600_000).toISOString(),
+      next_action_at: new Date(Date.now() - 3600_000).toISOString(),
+      last_attempt_at: new Date(Date.now() - 86_400_000).toISOString(),
+      no_answer_count: 0, owner: null,
+    }], { abandonedIds: ['fresh-1'] }), asAdmin);
+    const lead = queue.find((l) => l.studentId === 'fresh-1')!;
+    expect(lead.dueReason, 'a callback they asked for beats a checkout we observed').toBe('callback');
   });
 });

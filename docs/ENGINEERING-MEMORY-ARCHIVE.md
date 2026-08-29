@@ -2477,3 +2477,222 @@ noticed rather than the layer that broke. The thing that finally closed it was
 not a better guess: it was building probes that make the system state a fact
 about itself, and shipping a control alongside each one so the probe can say
 UNKNOWN when it has stopped working.
+
+---
+
+## Incident #49 — ownership was bound to a person, and the database was willing to lose a book (2026-08-29)
+
+**Area.** Sales operations — lead ownership, rep succession.
+
+**Symptom.** None yet. This was found by asking a question nobody had asked:
+the founder said "if Anshul stops turning up tomorrow and someone else takes
+his seat, what happens to his students?" The answer was that nothing happens
+automatically, and that the two tables holding the answer disagreed with each
+other.
+
+**Root cause.** Two foreign keys, written five days apart in the same
+migration, with opposite delete behaviour:
+
+```
+lead_outreach.owner_id  → profiles(id) ON DELETE SET NULL
+sales_followup.owner_id → profiles(id) ON DELETE RESTRICT
+```
+
+One event — the departing rep's profile is removed — had two outcomes. The
+students would be silently unowned, with nothing raised anywhere and no screen
+showing it; the promises made to those students would simultaneously block the
+delete with a foreign-key error naming a table the founder has never heard of.
+So the founder either got an unexplained failure, or got no error and an
+invisible orphaning of an entire book.
+
+**Why SET NULL is the dangerous half.** It is the database quietly deciding
+that "nobody owns these students now" is an acceptable resting state. It is
+not: ownership is the thing that makes a student get called. A silently unowned
+book is a thousand students who will never hear from anyone, and the system
+would report no problem at all.
+
+**Fix.** Both constraints become RESTRICT, so the tables agree and a rep who
+owns students cannot be deleted at all. The founder is forced through
+`transfer_sales_book()` — one transaction that moves every owned lead and every
+OPEN promise together, records the counts and the reason, and cannot half-happen.
+A refusal at the FK is not an obstacle to succession, it *is* succession: it
+converts a silent data loss into a visible "hand the book over first."
+
+**What made it cheap.** Both tables had 0 rows. Verified immediately before
+writing the migration. The same change after two counsellors have worked a book
+for a month is a lock on every lead plus a reconciliation problem. The cheap day
+to fix a constraint is the day before it holds data.
+
+**Prevention.** `src/lib/sales-succession.ts` (pure decision), the RESTRICT
+constraints and `transfer_sales_book()` (the atomic move),
+`unownedBookException()` so an unowned book is an Exception the founder sees
+rather than a silence, and `src/lib/sales-succession.test.ts` — whose first
+assertion is that a book moves even when the SOURCE seat is already switched
+off, because succession is only ever needed on the day the rep has stopped
+working.
+
+---
+
+## Incident #50 — one ceiling was answering two different questions (2026-08-29)
+
+**Area.** Sales operations — capacity vs portfolio.
+
+**Symptom.** None yet, because no book had been built. Had one been, a seat
+could never have held more than about 200 students, against an operating model
+of roughly 1,000 per seat — and the refusal would have arrived as "they can
+take 0 right now (capacity)", which reads like a correct answer.
+
+**Root cause.** Three facts that were individually right:
+
+* `never_contacted` is an `ActiveReason`, so a freshly assigned student
+  consumes a capacity unit until somebody calls them.
+* `max_capacity_units` is CHECKed between 1 and 200.
+* `/api/admin/distribute-leads` gated assignment on `repAllocationLimit`.
+
+Together they meant the ceiling written to stop a part-timer being buried in
+live work was also, invisibly, a ceiling on how many people they could be
+responsible for. The column comment already said the right thing — "Ceiling on
+ACTIVE work items ... a rep who retains 200 students holds 200 relationships and
+may still have 50 free units" — but nothing enforced that distinction at the one
+place it mattered, so the comment was documentation of an intention rather than
+of a behaviour.
+
+**The distinction, in the founder's words.** "The salesman shouldn't manage
+1,000 students. The salesman manages today's opportunities. The system manages
+the 1,000-student portfolio."
+
+**Fix.** Two questions, two functions. `repAllocationLimit` still gates live
+work (capacity units, daily fuse) and is unchanged. `portfolioIntakeLimit` gates
+responsibility — the seat must be configured and active, the book must have
+headroom under a sanity fuse set well above the operating model so it never
+shapes a decision. Work capacity keeps binding the daily queue, which is where a
+part-timer's five hours actually bind. It no longer binds who exists in the book.
+
+**Prevention.** `src/lib/sales-portfolio-intake.test.ts` pins the two apart —
+its central test asserts that a rep at their live-work ceiling may still take
+students into their book. `sales-employment-binding.guard.test.ts` was widened
+from "every ownership writer calls `repAllocationLimit`" to "…calls one of the
+two ceilings", and then immediately narrowed again by a second test asserting
+the two are NOT interchangeable, so a route that consults the wrong one passes
+the first check and fails the second. Widening a guard without adding that
+second test would have been the real regression here.
+
+---
+
+## Incident #51 — the sales system had never held a lead (2026-08-29)
+
+**Area.** Growth / sales operations — the gap between having students and having
+a book.
+
+**Symptom.** Production, on the day two part-time counsellors were hired:
+
+```
+profiles       985 rows (974 students)
+lead_outreach    0 rows
+```
+
+`call-queue.ts` and `sales-portfolio.ts` both read `lead_outreach`. Anshul and
+Neelam would each have logged in on their first morning to an empty screen. Not
+a bug in the queue — an empty input to it.
+
+**Root cause.** No route could turn a STUDENT into a LEAD in bulk.
+`/api/admin/distribute-leads` derives its "unassigned" pool as `lead_outreach
+WHERE owner_id IS NULL`, so it can only redistribute rows that already exist;
+against zero rows it reports "That pool is empty" forever.
+`/api/admin/reassign-lead` moves students one at a time. The enrolment step
+between "we have 974 students" and "a counsellor has a book" had simply never
+been written, and nothing failed loudly enough to reveal that — every component
+downstream of it worked correctly on an empty set.
+
+**The near-miss inside the fix.** The obvious implementation stamps
+`assigned_at` on every enrolled row, as `distribute-leads` correctly does.
+`assigned_at` starts the first-contact SLA clock. Doing that to a backfill of
+974 students who signed up across four months would have started 974 two-hour
+clocks at once and reported every one of them as a breach by lunchtime — a panel
+full of red measuring nothing except that a backfill had happened. The
+enrolment route leaves `assigned_at` NULL; `firstContactSla()` already renders
+that as `unknown` and tallies it separately from `breached`, which is the honest
+answer. Speed-to-lead is about a new student arriving and being called, not
+about the day the back catalogue was imported.
+
+**Fix.** `/api/admin/enrol-book` — a separate door from `distribute-leads`
+because the two do different things and are gated differently: one hands out
+live work, the other assigns responsibility (Incident #50).
+
+**Prevention.** A guard test asserts the enrolment upsert never contains
+`assigned_at`. Its first assertion checks that the upsert payload was found at
+all, added after the first version of that guard passed while matching an empty
+string — a guard that greps nothing proves nothing.
+
+**Wider lesson.** Every component of the sales system was individually correct
+and fully tested, and the system as a whole could not have been used, because
+nothing tested the step that produces its input. "All the parts work" and "a
+person can do their job with this" are different claims, and only the second one
+matters on the first morning.
+
+---
+
+## Incident #52 — a mistaken tap deleted a student from the sales system (2026-08-29)
+
+**Area.** Sales operations — conversion truth.
+
+**Symptom.** None yet. Found by the Contract × Repo audit the founder ordered
+before implementation, while `lead_outreach` still had zero rows.
+
+**Root cause.** Two independently reasonable pieces of code:
+
+* `call-queue.ts` held `CLOSED = {'converted','not_interested','dnd'}` and
+  skipped those students with the comment *"gone forever"*.
+* `/api/sales/log` accepted `converted` as an ordinary call outcome — it is in
+  `CALL_OUTCOMES` — and nothing consulted the payment ledger before writing it.
+
+Together: a counsellor who tapped "Converted" by mistake, or optimistically
+after a promising call, **permanently removed that student from every future
+queue**. No payment required, no exception raised, no way back. The two people
+whose entire job is retention and conversion would never see that student again.
+
+**The detail that would have made it hard to find.** `/sales/leads` filters
+Active as `!paid && status in (…,'converted')`, so the same student still
+appeared under "Active" in the portfolio while being invisible in the queue.
+Two surfaces, opposite answers — and the one a counsellor actually works from
+was the one that hid them. A founder checking "is this student still in the
+book?" on the portfolio screen would have been told yes.
+
+**Why it had never fired.** `lead_outreach` has never held a row. The bug was
+written against an empty table and would have gone live on the same day 965
+students were enrolled.
+
+**A test was asserting the bug.** `crm-end-to-end.test.ts` Scenario D asserted
+*"converted and not_interested never re-enter the queue"* — the old rule, stated
+as a guarantee. It passed for the whole life of the defect. The test was
+rewritten rather than deleted, and now asserts the four cases that actually
+matter, including the one that used to be inverted.
+
+**Fix.** `src/lib/sales-conversion-truth.ts`. `isClosedForSales()` closes a
+student on the payment ledger and on the two things the student themselves said
+(`not_interested`, `dnd`, plus `unqualified`) — never on a typed status. The
+queue now reads `student_payments` directly rather than trusting the
+`is_premium` profile flag, which a failed webhook can leave stale.
+`resolveConvertedClaim()` downgrades an unbacked claim to `interested` while
+keeping the rep's own outcome in `sales_activity` with `self_reported`
+provenance, so what they believed survives as history and only the state is
+corrected. The mismatch becomes a founder exception, because a claimed
+conversion with no money is either a failed payment or a misused button and both
+need a look.
+
+**An unreadable ledger is not "unpaid".** `resolveConvertedClaim(null)` keeps
+the student actionable and says the payment could not be verified. Treating a
+transient database error as "they did not pay" would downgrade a real conversion
+— the same class of lie in the opposite direction (L1).
+
+**Prevention.** Eight mutations killed with zero survivors on the new module. A
+guard test reintroduces the literal `CLOSED` set and fails, verified by
+injection. Contract §3 rule 1 amended: it used to claim this was "already true
+in code", which was the most dangerous sentence in the document — a Constitution
+asserting a property nothing enforced.
+
+**Wider lesson.** The audit was ordered because the founder refused to let
+implementation start on an unverified contract. It found a P0 that had survived
+every test suite, because the suite encoded the same assumption the code did.
+A contract that describes intended behaviour and a test that asserts current
+behaviour can agree with each other and both be wrong.

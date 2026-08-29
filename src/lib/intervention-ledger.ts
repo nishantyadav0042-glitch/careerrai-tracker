@@ -96,7 +96,11 @@ export async function captureStateSnapshot(admin: any, studentId: string, nowMs 
 
   return {
     stateBefore,
-    lane: lane.dueReason,
+    // NULL when no lane justifies contact today (call-queue §5). The
+    // intervention still happened and is still worth learning from — a rep may
+    // call a backlog student deliberately — so the row is written with a null
+    // lane rather than being dropped or given a lane it does not have.
+    lane: lane?.dueReason ?? null,
     daysSinceLastLog,
     streakBefore: (streak?.current_streak as number | null) ?? null,
     priorInterventions: priorCount ?? 0,

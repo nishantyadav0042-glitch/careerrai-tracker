@@ -27,29 +27,29 @@ function days(...ago: number[]): string[] {
 describe('the founder’s worked examples classify as he described them', () => {
   it('“Studied 5 of last 7 days → 0 of last 3” is GOING COLD', () => {
     const v = classifyLane(base({ logDates: days(3, 4, 5, 6, 8) }));
-    expect(v.dueReason).toBe('going_cold');
-    expect(v.why.join(' ')).toMatch(/5 of the 7 days before/);
-    expect(v.why.join(' ')).toMatch(/0 in the last 3/);
-    expect(v.action.toLowerCase()).toContain('call today');
+    expect(v!.dueReason).toBe('going_cold');
+    expect(v!.why.join(' ')).toMatch(/5 of the 7 days before/);
+    expect(v!.why.join(' ')).toMatch(/0 in the last 3/);
+    expect(v!.action.toLowerCase()).toContain('call today');
   });
 
   it('“Joined 2 days ago, hasn’t submitted first study log” is NEW — NEVER LOGGED', () => {
     const v = classifyLane(base({ createdAt: new Date(Date.parse(TODAY) - 2 * 86_400_000).toISOString() }));
-    expect(v.dueReason).toBe('new_never_logged');
-    expect(v.why.join(' ')).toMatch(/2 days ago/);
-    expect(v.action).toMatch(/Day 1/);
+    expect(v!.dueReason).toBe('new_never_logged');
+    expect(v!.why.join(' ')).toMatch(/2 days ago/);
+    expect(v!.action).toMatch(/Day 1/);
   });
 
   it('a 6-day daily run that ended yesterday is BROKEN STREAK, not going-cold', () => {
     const v = classifyLane(base({ logDates: days(1, 2, 3, 4, 5, 6) }));
-    expect(v.dueReason).toBe('broken_streak');
-    expect(v.why.join(' ')).toMatch(/6-day streak/);
+    expect(v!.dueReason).toBe('broken_streak');
+    expect(v!.why.join(' ')).toMatch(/6-day streak/);
   });
 
   it('declared buddy intent is the CONVERSION lane, with the taps as evidence', () => {
     const v = classifyLane(base({ buddyTaps: 2, logDates: days(1) }));
-    expect(v.dueReason).toBe('conversion');
-    expect(v.why.join(' ')).toMatch(/2×/);
+    expect(v!.dueReason).toBe('conversion');
+    expect(v!.why.join(' ')).toMatch(/2×/);
   });
 });
 
@@ -63,11 +63,20 @@ describe('lane discipline', () => {
       base({ buddyTaps: 1 }),
       base({ logDates: days(0, 1, 2) }),
     ];
+    // A NULL verdict has nothing to explain and is a legitimate answer since
+    // §5 removed the catch-all lane — but a version of this test that only
+    // skipped nulls would pass if the classifier returned null for everything.
+    // So it counts the real verdicts too.
+    let verdicts = 0;
     for (const c of cases) {
       const v = classifyLane(c);
+      if (v === null) continue;
+      verdicts++;
       expect(v.why.length, `lane ${v.dueReason} has no why[]`).toBeGreaterThan(0);
       expect(v.action.length, `lane ${v.dueReason} has no action`).toBeGreaterThan(0);
     }
+    expect(verdicts, 'this guard proves nothing if every case classified as null')
+      .toBeGreaterThanOrEqual(4);
   });
 
   it('retention beats conversion: a going-cold student with buddy taps is called for retention', () => {
@@ -75,17 +84,25 @@ describe('lane discipline', () => {
     // Intent is real, but a student going cold is losing the thing the pitch
     // depends on — the lanes check retention predicates first.
     const v = classifyLane(base({ logDates: days(3, 4, 5, 6, 8), buddyTaps: 2 }));
-    expect(v.dueReason).toBe('going_cold');
+    expect(v!.dueReason).toBe('going_cold');
   });
 
   it('a signup a few hours old is NOT called — 1-day grace before the activation lane', () => {
     const v = classifyLane(base({ createdAt: new Date(Date.parse(TODAY) + 3 * 3600_000).toISOString() }));
-    expect(v.dueReason).not.toBe('new_never_logged');
+    // Since §5 this is null rather than a `fresh` fallthrough — which honours
+    // the grace period more strictly than before, not less.
+    expect(v?.dueReason).not.toBe('new_never_logged');
   });
 
   it('a student active today never lands in a retention lane', () => {
     const v = classifyLane(base({ logDates: days(0, 1, 2, 3, 4) }));
-    expect(['conversion', 'fresh']).toContain(v.dueReason);
+    // Updated 29 Aug 2026 (§5): a student studying today, with no buddy intent
+    // and past their activation window, now classifies as NO LANE rather than
+    // falling through to `fresh`. The assertion this test exists for is
+    // unchanged and still holds — they are never pulled into a retention lane.
+    expect(v === null || ['conversion', 'fresh'].includes(v.dueReason)).toBe(true);
+    expect(v?.dueReason).not.toBe('going_cold');
+    expect(v?.dueReason).not.toBe('broken_streak');
   });
 });
 
