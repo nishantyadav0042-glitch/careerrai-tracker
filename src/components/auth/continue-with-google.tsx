@@ -53,11 +53,26 @@ function GoogleMark() {
 }
 
 export function ContinueWithGoogle({
-  label = 'Continue with Google', next, beforeRedirect,
+  label = 'Continue with Google', next, beforeRedirect, variant = 'secondary',
 }: {
   label?: string;
   /** Where to land after sign-in. Defaults to the callback's own routing. */
   next?: string;
+  /**
+   * How much weight the button carries on its screen.
+   *
+   * 'secondary' — the bordered default, for screens where Google is one door
+   * among several (/login, the post-payment prompt).
+   * 'primary'   — the filled CTA, for the end of /start where Google IS the
+   * recommended way in and mobile OTP is the fallback beneath it (founder,
+   * 29 Aug). Google's own dark button variant puts the full-colour mark on a
+   * near-black field, so this stays within their brand guidance rather than
+   * recolouring the mark.
+   *
+   * A prop rather than a second component: there must stay ONE place that
+   * knows the scopes, the redirect URI and the provider-not-enabled message.
+   */
+  variant?: 'primary' | 'secondary';
   /**
    * Runs once, immediately before the browser leaves for Google.
    *
@@ -120,13 +135,17 @@ export function ContinueWithGoogle({
     }
   }
 
+  const styles = variant === 'primary'
+    ? 'rounded-2xl bg-stone-900 py-4 text-sm font-semibold text-white transition-all hover:bg-stone-800 active:scale-[0.98] disabled:opacity-60'
+    : 'rounded-xl border border-stone-300 bg-white py-3 text-sm font-bold text-stone-800 transition-colors hover:border-stone-900 disabled:opacity-60';
+
   return (
     <div>
       <button
         type="button"
         onClick={() => void go()}
         disabled={busy}
-        className="flex w-full items-center justify-center gap-2 rounded-xl border border-stone-300 bg-white py-3 text-sm font-bold text-stone-800 transition-colors hover:border-stone-900 disabled:opacity-60"
+        className={`flex w-full items-center justify-center gap-2 ${styles}`}
         style={{ minHeight: 48 }}
       >
         <GoogleMark /> {busy ? 'Opening Google…' : label}

@@ -28,13 +28,22 @@ import { isCovered } from '@/lib/coverage-status';
 // clamped to this year..+3 so a tampered payload cannot set an arbitrary
 // countdown; percentiles, hours and array lengths are all bounded the same way.
 //
-// FIRST SIGNUP ONLY. Callers must apply this to a brand-new or stub profile
-// and never to a returning student's real one — a replayed draft would
-// otherwise overwrite months of real progress with a stale funnel answer. The
-// guard belongs to the caller because only the caller knows whether the
-// account it just touched already existed (Incident #42's lesson: a guard in
-// the caller is not a guard in the callee, so callers are asserted by
+// UNFINISHED ONBOARDING ONLY. Callers must apply this to a profile that has
+// not completed onboarding, and never to a student who has — a replayed draft
+// would otherwise overwrite months of real progress with a stale funnel
+// answer. The guard belongs to the caller because only the caller knows which
+// profile it is holding (Incident #42's lesson: a guard in the caller is not a
+// guard in the callee, so callers are asserted by
 // onboarding-authority.guard.test.ts rather than trusted).
+//
+// The test of "unfinished" is onboarding_completed, NOT "we just inserted this
+// row". /auth/callback used the latter and the claim never ran once: an
+// auth.users trigger inserts the profile before that route is reached, so its
+// brand-new branch was unreachable for every Google signup — and a student who
+// abandoned a signup halfway could never recover, because their profile
+// existed. onboarding_completed is also the flag the student layout gates on,
+// so "may I apply a draft" and "will this student be sent back through
+// onboarding" are one fact rather than two proxies that can disagree.
 
 /** Whitelisted answers from the pre-auth /start funnel. */
 export interface OnboardingPayload {

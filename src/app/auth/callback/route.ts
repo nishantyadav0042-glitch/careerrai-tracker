@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
 
   const { data: existing } = await admin
     .from('profiles')
-    .select('id, password_set, role')
+    .select('id, password_set, role, onboarding_completed')
     .eq('id', userId)
     .maybeSingle();
 
@@ -159,32 +159,6 @@ export async function GET(request: NextRequest) {
       subscription_status: role === 'student' ? 'free' : null,
       password_set: false,
     });
-
-    // ── THE /start ANSWERS THEY GAVE BEFORE CHOOSING THIS DOOR ──────────────
-    //
-    // A student completes the whole onboarding questionnaire and only then
-    // picks Google or OTP. The OTP door posts the draft with the request that
-    // creates the account; Google cannot, because the browser has been to
-    // accounts.google.com and back and localStorage never reached this server.
-    // So the draft was parked before the redirect and is claimed here by the
-    // opaque id in an HttpOnly cookie.
-    //
-    // Without this a Google student arrived with an empty profile and the
-    // student layout sent them straight back through the questions they had
-    // just answered — the single worst moment to ask someone to start again.
-    //
-    // SAME AUTHORITY AS OTP, deliberately: lib/onboarding-apply, never a second
-    // copy of the mapping. And only inside `isNewUser`, so a replayed cookie on
-    // a returning student's login can never overwrite their real profile with a
-    // stale funnel answer.
-    //
-    // Best effort, and that is the point: the account and session already
-    // exist. A student must never be bounced out of a signup that succeeded
-    // because a draft lookup failed — they land in-app and answer in the
-    // Blueprint Builder instead, which is exactly the pre-existing behaviour.
-    if (role === 'student') {
-      await claimOnboardingDraft(admin, request, userId);
-    }
   } else {
     await admin
       .from('profiles')
@@ -193,6 +167,60 @@ export async function GET(request: NextRequest) {
         ...(role === 'student' && entry?.assigned_buddy_id ? { buddy_id: entry.assigned_buddy_id } : {}),
       })
       .eq('id', userId);
+  }
+
+  // ── THE /start ANSWERS THEY GAVE BEFORE CHOOSING THIS DOOR ────────────────
+  //
+  // A student completes the whole onboarding questionnaire and only then picks
+  // Google or OTP. The OTP door posts the draft with the request that creates
+  // the account; Google cannot, because the browser has been to
+  // accounts.google.com and back and localStorage never reached this server. So
+  // the draft was parked before the redirect and is claimed here by the opaque
+  // id in an HttpOnly cookie.
+  //
+  // Without this a Google student arrived with an empty profile and the student
+  // layout sent them straight back through the questions they had just
+  // answered — the single worst moment to ask someone to start again.
+  //
+  // ── WHY THIS IS NOT `isNewUser` (29 Aug, and it never could have been) ────
+  //
+  // It was, and the claim therefore never ran once. `on_auth_user_created` on
+  // auth.users inserts the profile INSIDE the same transaction that creates the
+  // auth user, which happens in GoTrue before this route is reached: production
+  // shows profiles.created_at 21ms EARLIER than auth.users.created_at for both
+  // Google signups on 29 Aug. So `existing` is always non-null here, `isNewUser`
+  // is always false for Google, and a condition that reads as "brand new" was
+  // structurally unreachable. Location in the code is not behaviour.
+  //
+  // The real condition was never newness — it is that this profile has not
+  // finished onboarding. A trigger-created stub has not. A student who
+  // abandoned a signup halfway has not, and gating on newness left them
+  // permanently unable to recover: their profile existed, so the draft could
+  // never apply, so onboarding_completed stayed false, so the student layout
+  // sent them back to /start, where finishing it produced the same dead end.
+  // That is the loop the founder hit, and it had no exit.
+  //
+  // The guard that actually matters is unchanged in strength: a student who HAS
+  // completed onboarding is never touched, so a replayed cookie still cannot
+  // overwrite a real profile with a stale funnel answer. `onboarding_completed`
+  // is also the exact flag the student layout gates on, so the condition to
+  // apply a draft and the condition to be sent back through onboarding are now
+  // the same fact rather than two proxies for it.
+  //
+  // SAME AUTHORITY AS OTP, deliberately: lib/onboarding-apply, never a second
+  // copy of the mapping.
+  //
+  // Best effort, and that is the point: the account and session already exist.
+  // A student must never be bounced out of a signup that succeeded because a
+  // draft lookup failed — they land in-app and answer in the Blueprint Builder
+  // instead, which is exactly the pre-existing behaviour.
+  //
+  // The stored role wins over the allowlist-derived one for this check: a
+  // buddy whose allowlist entry was later deactivated must not be treated as a
+  // student and handed a funnel draft.
+  const effectiveRole = role === 'buddy' ? 'buddy' : (existing?.role ?? 'student');
+  if (effectiveRole === 'student' && existing?.onboarding_completed !== true) {
+    await claimOnboardingDraft(admin, request, userId);
   }
 
   // Students skip the set-password wall (day-2 in-app reminder instead —

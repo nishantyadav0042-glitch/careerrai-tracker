@@ -133,23 +133,76 @@ describe('the onboarding mapping exists in exactly one place', () => {
     }
   });
 
-  it('neither door may apply a draft to an account that already existed', () => {
-    // The authority cannot know this — only the caller knows whether the
-    // account it just touched is new. Incident #42: a guard in the caller is
-    // not a guard in the callee, so the callers are asserted, not trusted.
+  it('neither door may apply a draft to a student who finished onboarding', () => {
+    // The authority cannot know this — only the caller knows which profile it
+    // is holding. Incident #42: a guard in the caller is not a guard in the
+    // callee, so the callers are asserted, not trusted.
     const otp = read(OTP_ROUTE);
     expect(otp).toMatch(/if\s*\(\s*\(\s*isStub\s*\|\|\s*!existing\s*\)[\s\S]{0,120}?applyOnboarding/);
 
+    // ── THIS ASSERTION USED TO DEMAND THE BUG ────────────────────────────
+    //
+    // It required the Google claim to sit inside `if (isNewUser)`, and that
+    // branch is unreachable: an auth.users trigger inserts the profile before
+    // this route runs, so `existing` is never null for a Google signup. The
+    // guard passed for a month while the feature it guarded never executed
+    // once — a structural assertion proving only that code is in a place, not
+    // that it runs (L2).
+    //
+    // What it is here to protect is unchanged and is asserted directly: a
+    // student who has COMPLETED onboarding must never have a draft applied
+    // over their real profile. That is now a condition on the data rather than
+    // on a branch, so it cannot be satisfied by an unreachable one.
     const google = read(GOOGLE_ROUTE);
-    const at = google.indexOf('claimOnboardingDraft(');
+    const at = google.indexOf('claimOnboardingDraft(admin');
     expect(at, 'the Google door no longer claims a draft').toBeGreaterThan(-1);
-    // The claim must sit inside the isNewUser branch.
-    const newUserAt = google.search(/if\s*\(\s*isNewUser\s*\)/);
-    const elseAt = google.indexOf('} else {', newUserAt);
-    expect(newUserAt).toBeGreaterThan(-1);
-    expect(at > newUserAt && at < elseAt,
-      'the Google door claims a draft outside its isNewUser branch — a returning '
-      + "student's real profile could be overwritten by a stale funnel answer").toBe(true);
+
+    const guard = google.slice(Math.max(0, at - 260), at);
+    expect(guard,
+      'the Google door claims a draft without first checking onboarding_completed — '
+      + "a completed student's real profile could be overwritten by a stale funnel answer")
+      .toMatch(/onboarding_completed\s*!==\s*true/);
+    expect(guard, 'the Google door must only apply a draft to a student')
+      .toMatch(/effectiveRole\s*===\s*['"]student['"]/);
+
+    // And the column has to be READ, or the check above is comparing undefined
+    // to true and passing for everyone.
+    expect(google, 'onboarding_completed is never selected, so the guard reads undefined')
+      .toMatch(/\.select\([^)]*onboarding_completed/);
+  });
+
+  it('the stash endpoint rejects only when the throttle says BLOCKED', () => {
+    // 29 Aug. registerAttemptAndCheck returns TRUE when the caller is over the
+    // limit. This route read `if (!ok) return 429`, so it answered 429 to every
+    // request from the first one onward and stored zero drafts in its entire
+    // life — onboarding_drafts held 0 rows ever. Every student who chose Google
+    // lost the answers they had just given and was sent back through them.
+    //
+    // The inversion is invisible in a green test suite and invisible in the UI
+    // (the stash is best-effort by design), so it is pinned here.
+    const code = read('app/api/auth/stash-onboarding/route.ts');
+    const call = /(const\s+(\w+)\s*=\s*await\s+registerAttemptAndCheck\([\s\S]*?\);)\s*if\s*\((!?)\s*(\w+)\s*\)/
+      .exec(code);
+    expect(call, 'the stash endpoint no longer throttles at all').not.toBeNull();
+    const [, , assigned, negation, tested] = call!;
+    expect(tested, 'the throttle result is tested under a different name').toBe(assigned);
+    expect(negation,
+      'the stash endpoint returns 429 when the throttle says NOT blocked — inverted, '
+      + 'which makes the endpoint reject every request from the very first one').toBe('');
+  });
+
+  it('parking a draft does not spend the login lockout budget', () => {
+    // A /start completion is not a guess at a credential. Counted in the same
+    // per-IP pool it was, and on CGNAT — one exit IP for an entire campus or
+    // carrier — enough honest funnel traffic would push that IP past the LOGIN
+    // lockout and lock real students out of their own accounts.
+    const code = read('app/api/auth/stash-onboarding/route.ts');
+    expect(code, 'the stash endpoint shares the credential throttle pool')
+      .toMatch(/scope:\s*\w+/);
+
+    const throttle = read('lib/attempt-throttle.ts');
+    expect(throttle, 'the per-IP count is taken across every scope at once')
+      .toMatch(/\.eq\(\s*['"]scope['"]\s*,\s*scope\s*\)[\s\S]{0,80}?\.eq\(\s*['"]ip['"]/);
   });
 });
 
@@ -187,11 +240,19 @@ describe('a Google student and an OTP student are the same student', () => {
     await applyOnboarding(a.admin, 'same-user', FULL_DRAFT);
     await applyOnboarding(b.admin, 'same-user', FULL_DRAFT);
 
-    const strip = (v: Record<string, unknown>) => {
-      const { ...rest } = v;
-      delete (rest as Record<string, unknown>).onboarding_last_activity_at;
-      return rest;
-    };
+    // Wall-clock stamps are not part of the parity claim, and comparing them
+    // makes this test fail whenever the two calls straddle a millisecond. It
+    // stripped onboarding_last_activity_at by name and missed
+    // study_hours_set_at, which setDailyHours writes — so it went red in CI on
+    // 29 Aug for a one-millisecond difference and nothing else. Named fields
+    // are a list someone has to remember to extend; the SHAPE cannot be
+    // forgotten, so any full ISO-8601 instant is dropped. A plain date
+    // (syllabus_target_date) has no T and no Z and stays compared, because
+    // "both doors set the same target date" is exactly the claim.
+    const isInstant = (x: unknown) =>
+      typeof x === 'string' && /^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/.test(x);
+    const strip = (v: Record<string, unknown>) =>
+      Object.fromEntries(Object.entries(v).filter(([, val]) => !isInstant(val)));
     expect(a.writes.map((w) => strip(w.values))).toEqual(b.writes.map((w) => strip(w.values)));
     expect(a.upserts.map((r) => r.topic)).toEqual(b.upserts.map((r) => r.topic));
   });
