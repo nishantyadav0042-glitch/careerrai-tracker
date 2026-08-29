@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
+import { homeForRole } from '@/lib/admin-auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { applyOnboarding, type OnboardingPayload } from '@/lib/onboarding-apply';
 import { COOKIE as ONBOARDING_DRAFT_COOKIE } from '@/app/api/auth/stash-onboarding/route';
@@ -224,10 +225,30 @@ export async function GET(request: NextRequest) {
     await claimOnboardingDraft(admin, request, userId);
   }
 
+  // ── LAND THEM WHERE THEY ACTUALLY WORK (30 Aug 2026) ────────────────────
+  //
+  // `normalDest` above is computed from `role`, which is derived from the
+  // ALLOWLIST ENTRY (`entry?.person_type`) and can only ever be 'student' or
+  // 'buddy'. It never consults the profile, so a signed-in SALES counsellor
+  // coming through this callback was typed as a student and dropped on
+  // /student/tracker — the study tracker — with no path to their queue and no
+  // indication one existed.
+  //
+  // The password login route has always got this right (`role === 'sales' ?
+  // '/sales'`), so it only bit the Google button, which is the one on the
+  // login screen. Anshul had never signed in at all; that is the door he would
+  // have used on his first morning.
+  //
+  // `effectiveRole` is the profile's own role and is already computed above
+  // for the onboarding gate. Use it, and use the one canonical mapping rather
+  // than a fourth hand-written ternary — three copies of this decision are how
+  // the sales case went missing from one of them.
+  const roleDest = next ?? (effectiveRole === 'buddy' ? '/buddy/students' : homeForRole(effectiveRole));
+
   // Students skip the set-password wall (day-2 in-app reminder instead —
   // see SetPasswordReminder); buddies/admins still set one immediately.
   const hasPassword = existing?.password_set === true;
-  const dest = (role === 'student' || hasPassword) ? normalDest : `/set-password?dest=${encodeURIComponent(normalDest)}`;
+  const dest = (effectiveRole === 'student' || hasPassword) ? roleDest : `/set-password?dest=${encodeURIComponent(roleDest)}`;
 
   const res = NextResponse.redirect(`${origin}${dest}`);
   pending.forEach(({ name, value, options }) =>
