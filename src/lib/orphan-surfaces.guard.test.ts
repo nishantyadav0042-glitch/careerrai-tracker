@@ -173,6 +173,18 @@ describe('orphan surfaces are declared, not discovered', () => {
 // mistake this file's own header records making once already.
 
 const KNOWN_PARKED_MODULES: Record<string, string> = {
+  'src/lib/sales-distribution.ts':
+    'PARKED 29 Aug, and the wiring is blocked on a fact rather than on code: ' +
+    'neither counsellor account exists yet. Verified in production the day it ' +
+    'was written — no row in auth.users for either email, none in profiles, ' +
+    'none in the test project, and no sales_rep_provisioned entry in 24 hours ' +
+    'of admin_audit_log. Its consumer is /api/admin/enrol-book, which would ' +
+    'refuse anyway: portfolioIntakeLimit returns NOT_CONFIGURED for a seat ' +
+    'with no capacity row. It is not speculative work — it was dry-run against ' +
+    'a 975-student production snapshot (965 enrolled, 10 paid excluded, every ' +
+    'lane split within one, zero duplicates, zero lost, deterministic). ' +
+    'UNPARK THE DAY the two seats exist: wire it into enrol-book and delete ' +
+    'this entry in the same commit.',
   'src/lib/facts/registry.ts':
     'PARKED. The canonical fact registry: one place a fact is DEFINED, so a ' +
     'second definition cannot be added quietly. Every producer in it is pure. ' +
