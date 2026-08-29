@@ -81,6 +81,15 @@ export function CallDeck({ queue }: { queue: CallLead[] }) {
             <div className="flex items-center justify-between gap-2">
               <a href={`/sales/student/${lead.studentId}`} className="truncate text-[15px] font-bold text-stone-900 hover:underline">{lead.name}</a>
               <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${DUE_CLS[lead.dueReason]}`}>{lead.dueLabel}</span>
+              {/* WHICH GOAL THIS CALL IS FOR (§4). The counsellor must know
+                  before they open their mouth whether they are here to get a
+                  student studying again or to talk about paying — opening with
+                  the wrong one is the difference between help and a pitch. */}
+              <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide ${
+                lead.objective === 'conversion' ? 'bg-emerald-100 text-emerald-800' : 'bg-sky-100 text-sky-800'}`}>
+                {lead.objective}
+                {lead.objectiveSecondary ? ` + ${lead.objectiveSecondary}` : ''}
+              </span>
             </div>
             <div className="mt-0.5 flex items-center gap-2">
               <p className="text-xs text-stone-500">{lead.phone ?? 'no phone'}</p>
@@ -94,6 +103,24 @@ export function CallDeck({ queue }: { queue: CallLead[] }) {
               {lead.why.map((w, i) => (
                 <p key={i} className="text-[12px] font-semibold leading-snug text-stone-700">{w}</p>
               ))}
+              {/* WHAT WAS SAID LAST TIME. This is the whole reason the second
+                  call is better than the first. It used to live one tap deeper
+                  on the 360, which meant it was read when there was time and
+                  skipped when there wasn't — and the student repeated
+                  themselves to the same company twice. */}
+              {lead.lastInteraction && (
+                <div className="mt-1.5 rounded-lg bg-stone-100 px-2.5 py-1.5">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-stone-400">
+                    Last time · {new Date(lead.lastInteraction.atIso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                    {lead.lastInteraction.outcome ? ` · ${lead.lastInteraction.outcome.replace(/_/g, ' ')}` : ''}
+                  </p>
+                  {lead.lastInteraction.note && (
+                    <p className="mt-0.5 text-[12px] font-semibold italic leading-snug text-stone-700">
+                      &ldquo;{lead.lastInteraction.note}&rdquo;
+                    </p>
+                  )}
+                </div>
+              )}
               <p className="mt-1 text-[12px] font-bold text-teal-700">→ {lead.action}</p>
             </div>
             {/* The weakness brief — what she reads before dialing */}

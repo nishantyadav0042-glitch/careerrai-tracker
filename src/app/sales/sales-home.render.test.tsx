@@ -108,6 +108,7 @@ describe('/sales on day one', () => {
         dueReason: 'fresh', dueLabel: 'New lead', why: ['No study logs in 30 days'],
         action: 'Introduction call — learn where they are in prep',
         status: 'not_contacted', noAnswerCount: 0, buddyTaps: 0,
+        objective: 'retention', objectiveSecondary: null, lastInteraction: null,
       } satisfies CallLead],
       connectedToday: 0, dueNow: 0, totalOpen: 1,
     });

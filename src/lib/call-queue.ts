@@ -3,6 +3,7 @@ import { getRosterMomentum, bandMeta } from '@/lib/momentum';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { scoreConversion, conversionTier } from '@/lib/sales-score';
 import { isClosedForSales } from '@/lib/sales-conversion-truth';
+import { classifyObjective, type SalesObjective } from '@/lib/sales-objective';
 import {
   GOING_COLD_SILENT_DAYS, GOING_COLD_MIN_PRIOR_DAYS,
   BROKEN_STREAK_MIN_RUN, BROKEN_STREAK_MAX_DAYS_SINCE,
@@ -50,6 +51,19 @@ export interface CallLead {
   hot: boolean;
   brief: string[];              // the diagnostic the rep reads before dialing
   dueReason: DueReason; dueLabel: string;
+  /** Which of the two business goals this call is for (SALES-OS.md §4). */
+  objective: SalesObjective;
+  /** The other goal, when it also applies. One student is always ONE card. */
+  objectiveSecondary: SalesObjective | null;
+  /**
+   * What was said last time, ready before the counsellor dials.
+   *
+   * This is the difference between the second call and the first. It lived one
+   * tap deeper on the 360, which meant it was read when there was time and
+   * skipped when there wasn't — so the student repeated themselves and the
+   * relationship never compounded. NULL only when nobody has spoken to them.
+   */
+  lastInteraction: { atIso: string; outcome: string | null; note: string | null } | null;
   why: string[];                // WHY THIS STUDENT IS HERE — evidence, real numbers
   action: string;               // the recommended move, one line
   status: string | null; noAnswerCount: number;
@@ -281,7 +295,7 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
   const ids = free.map((r) => r.id);
   if (ids.length === 0) return { queue: [], connectedToday: 0, dueNow: 0, totalOpen: 0 };
 
-  const [{ data: profs }, { data: eng }, { data: reports }, outreach, { data: paidRows }] = await Promise.all([
+  const [{ data: profs }, { data: eng }, { data: reports }, outreach, { data: paidRows }, { data: lastActs }] = await Promise.all([
     db.from('profiles').select('id, created_at, target_percentile, cat_percentile, starting_percentile, pain_points, dream_colleges, is_repeater').in('id', ids),
     db.from('student_engagement').select('student_id, buddy_cta_clicks, mock_opened, intent_door_at').in('student_id', ids),
     db.from('daily_reports').select('student_id, report_date').in('student_id', ids).gte('report_date', since30),
@@ -293,7 +307,28 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
     // itself. Read here so the queue closes a student on the ledger rather
     // than on a status somebody typed.
     db.from('student_payments').select('student_id').eq('status', 'paid').in('student_id', ids),
+    // WHAT WAS SAID LAST TIME. Bounded and cheap: newest-first across the
+    // whole book, reduced to one row per student below. A counsellor who has
+    // to open another screen to remember the previous conversation will stop
+    // doing it by the second week, and the student ends up repeating
+    // themselves to the same company twice.
+    db.from('sales_activity')
+      .select('student_id, created_at, status, note')
+      .in('student_id', ids)
+      .order('created_at', { ascending: false })
+      .limit(2000),
   ]);
+  const lastBy = new Map<string, { atIso: string; outcome: string | null; note: string | null }>();
+  for (const a of ((lastActs ?? []) as any[])) {
+    // Ordered newest-first, so the FIRST row seen for a student is their most
+    // recent interaction — later rows are older and deliberately ignored.
+    if (lastBy.has(a.student_id)) continue;
+    lastBy.set(a.student_id, {
+      atIso: a.created_at as string,
+      outcome: (a.status as string | null) ?? null,
+      note: (a.note as string | null) ?? null,
+    });
+  }
   const profById = new Map((profs ?? []).map((p: any) => [p.id, p]));
   const engById = new Map((eng ?? []).map((e: any) => [e.student_id, e]));
   // Per-student log DATES, not just counts — the lane classifier reads the
@@ -452,7 +487,27 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
       }
     }
 
+    // WHICH GOAL IS THIS CALL FOR (§4). A live commercial signal is
+    // perishable and takes the primary slot; the retention need still travels
+    // with the card as secondary context so one call covers both.
+    const objectiveVerdict = classifyObjective({
+      lane: dueReason,
+      // The commercial signals the queue can actually see today: the student
+      // reached for the paid option, or came back to it a second time. The
+      // abandoned-checkout signal is the strongest one we have and is NOT wired
+      // in yet — it is the next piece of work, and until it lands those 16
+      // students classify on their other signals rather than on the money.
+      hasCommercialSignal: buddyTaps >= 1 || intentDoor,
+      // Never logged at all counts as retention need — it is activation, which
+      // is the most valuable form of retention we have and applies to roughly
+      // three-quarters of the base.
+      hasRetentionNeed: RETENTION_LANES.has(dueReason) || dates.length === 0,
+    });
+
     cands.push({
+      objective: objectiveVerdict.primary,
+      objectiveSecondary: objectiveVerdict.secondary,
+      lastInteraction: lastBy.get(r.id) ?? null,
       studentId: r.id, name: r.full_name ?? 'Student', firstName: (r.full_name ?? '').trim().split(' ')[0] || 'there',
       phone: r.phone, waNumber: waNumber(r.phone),
       convScore: conv, tier, momentumScore: r.score, momentumBand: bandMeta(r.band).label, hot: tier === 'hot',
