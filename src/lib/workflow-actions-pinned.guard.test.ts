@@ -68,4 +68,17 @@ describe('GUARD: every GitHub Action is pinned to a commit SHA', () => {
     expect(existsSync(cfg), 'pinning without an updater trades one risk for another').toBe(true);
     expect(readFileSync(cfg, 'utf8')).toMatch(/package-ecosystem:\s*github-actions/);
   });
+
+  it('the updater waits before adopting a release, rather than taking it on day zero', () => {
+    // Semgrep's dependabot-missing-cooldown, and it is the same argument as the
+    // pinning itself: a SHA protects against a tag being repointed, and an
+    // updater that takes every release the moment it appears hands part of that
+    // back. A bad release is usually caught in its first days.
+    const cfg = readFileSync(join(__dirname, '..', '..', '.github', 'dependabot.yml'), 'utf8');
+    expect(cfg, 'add a cooldown: block — an updater with none adopts day-zero releases')
+      .toMatch(/cooldown:/);
+    const days = /default-days:\s*(\d+)/.exec(cfg);
+    expect(days, 'cooldown needs a default-days').not.toBeNull();
+    expect(Number(days![1])).toBeGreaterThan(0);
+  });
 });
