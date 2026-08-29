@@ -21,6 +21,7 @@ import { StoreBuildDetector } from '@/components/store-build-detector';
 import { TimetablePrompt } from '@/components/timetable-prompt';
 import { CrashReporter } from '@/components/crash-reporter';
 import { SessionLossNotice } from '@/components/session-loss-notice';
+import { StoragePersistenceProbe } from '@/components/storage-persistence-probe';
 import { BuddyDemoTour } from '@/components/buddy-demo-tour';
 import { CoverageReviewGate } from '@/components/coverage-review-gate';
 import { isReviewDue } from '@/lib/coverage-review';
@@ -178,6 +179,13 @@ export default async function StudentLayout({ children }: { children: React.Reac
       {/* One listener for every student route — mounting it per page would
           stack duplicate notices on navigation. */}
       <SessionLossNotice />
+      {/* Asks the browser to stop treating this app's storage as disposable.
+          An installed PWA whose storage is "best-effort" can have its whole
+          origin evicted — cookies included — when the phone is short of
+          space, and that is the only explanation still standing for the
+          repeat-logout report. It also records whether storage was ALREADY
+          persistent, which is what will refute the theory if it is wrong. */}
+      <StoragePersistenceProbe />
       {/* Buddy demo overlay: banner + guided tour, keyed off the cr_demo
           cookie set at login for buddydemo@careerrai.in. Renders null for
           everyone else. */}
