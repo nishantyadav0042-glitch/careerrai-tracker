@@ -79,7 +79,11 @@ describe('Scenario A — a new lead reaches the rep', () => {
     const lead = queue.find((l) => l.studentId === 'fresh-1');
     expect(lead, 'a never-called free student must surface as a lead').toBeTruthy();
     expect(lead!.dueReason).toBe('fresh');
-    expect(lead!.dueLabel).toBe('New lead');
+    // Relabelled 29 Aug 2026 (§5). 'New lead' was a lie for most of the people
+    // it described: a student who signed up four months ago and has never been
+    // called is not new, they are neglected. The label now says the actual
+    // reason they are in the queue.
+    expect(lead!.dueLabel).toBe('Never contacted');
     expect(totalOpen).toBe(2);
   });
 

@@ -121,3 +121,32 @@ describe('Incident #52 stays fixed', () => {
       .toMatch(/if \(!r\.phone \|\| r\.phone\.trim\(\) === ''\) continue;/);
   });
 });
+
+describe('§5 — no catch-all lane (the "42 means 42" rule)', () => {
+  it('classifyLane can return null, and the queue treats null as backlog', () => {
+    const q = read('src/lib/call-queue.ts');
+    expect(q, 'the classifier must be able to say "no signal"')
+      .toMatch(/export function classifyLane\([^)]*\):\s*LaneVerdict \| null/);
+    expect(q, 'an already-contacted student with no signal is not dealt a card')
+      .toMatch(/if \(o\?\.last_attempt_at\) continue;/);
+  });
+
+  it('a never-contacted student is still surfaced — that IS the reason', () => {
+    const q = read('src/lib/call-queue.ts');
+    expect(q).toContain("dueLabel = 'Never contacted'");
+  });
+
+  it('the disposition form does not extort a note on every connected call', () => {
+    const d = read('src/components/call-deck.tsx');
+    expect(d, 'a note required on all five outcomes produces "ok" and "x" within a week')
+      .not.toMatch(/const canSave = note\.trim\(\)\.length > 0;/);
+    expect(d, 'it stays mandatory where the free text IS the record')
+      .toMatch(/NOTE_REQUIRED = new Set\(\['not_interested', 'dnd'\]\)/);
+  });
+
+  it('the rep is not offered a button that claims money arrived', () => {
+    const d = read('src/components/call-deck.tsx');
+    expect(d, "only the payment ledger converts a student, so the chip must not say 'Converted'")
+      .not.toMatch(/key: 'converted', label: 'Converted'/);
+  });
+});

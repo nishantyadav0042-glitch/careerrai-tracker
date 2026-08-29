@@ -13,7 +13,12 @@ const DUE_CLS: Record<string, string> = {
 const OUTCOMES: { key: string; label: string; cls: string }[] = [
   { key: 'interested', label: 'Interested', cls: 'bg-amber-500 text-white' },
   { key: 'callback', label: 'Callback', cls: 'bg-sky-600 text-white' },
-  { key: 'converted', label: 'Converted', cls: 'bg-emerald-600 text-white' },
+  // NOT "Converted" (Incident #52). A rep cannot know that money arrived — only
+  // the payment ledger converts a student. Tapping this records strong buying
+  // intent; if a payment exists the student is converted, and if it does not
+  // they stay in the book and the founder gets an exception. The label says
+  // what the rep can actually observe, so the button never lies to them.
+  { key: 'converted', label: 'Ready to pay', cls: 'bg-emerald-600 text-white' },
   { key: 'not_interested', label: 'Not interested', cls: 'bg-stone-700 text-white' },
   // The student said stop calling. Closes the lead forever (dnd ≠ "no to the
   // offer" — it's "no to the contact"). Note is mandatory: record who said it.
@@ -133,7 +138,21 @@ function Disposition({ lead, onDispose }: { lead: CallLead; onDispose: (l: CallL
   const [callbackAt, setCallbackAt] = useState('');
   const [saving, setSaving] = useState(false);
   const needsCallback = outcome === 'callback';
-  const canSave = note.trim().length > 0; // callback time defaults to 6 PM if untouched
+  // ── A NOTE IS REQUIRED ONLY WHERE IT CARRIES SOMETHING A FIELD CANNOT ────
+  //
+  // This used to be `note.trim().length > 0` for EVERY connected outcome, so
+  // the Save button stayed disabled until the rep typed something on all five.
+  // Sixty calls a day like that produces "ok", "x", "talked" by the end of the
+  // first week — and once the remarks are junk the timeline is junk, which
+  // destroys the one thing that makes the second call better than the first.
+  //
+  // So it is mandatory exactly where the free text IS the record: the student
+  // refused (why), or asked never to be contacted again (who said it, and when
+  // — see the DND note above). For interested / callback / converted the
+  // structured fields already carry the meaning, and a short remark is welcome
+  // but never extorted. SALES-OS.md §8.
+  const NOTE_REQUIRED = new Set(['not_interested', 'dnd']);
+  const canSave = !NOTE_REQUIRED.has(outcome) || note.trim().length > 0;
 
   return (
     <div className="space-y-2.5 border-t border-stone-100 bg-stone-50 px-4 py-3">

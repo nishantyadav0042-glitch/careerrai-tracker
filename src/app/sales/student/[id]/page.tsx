@@ -84,11 +84,26 @@ export default async function ConvertPage({ params }: { params: Promise<{ id: st
           the reason survives opening the student directly (C4, 24 Aug). */}
       <div className="mt-3 rounded-2xl border border-stone-200 bg-white p-4">
         <p className="mb-1.5 text-[11px] font-bold uppercase tracking-widest text-stone-400">Why call {v.firstName} today</p>
-        <p className="text-[13px] font-extrabold text-stone-900">{v.lane.dueLabel}</p>
-        {v.lane.why.map((w, i) => (
-          <p key={i} className="mt-0.5 text-[12.5px] font-semibold leading-snug text-stone-700">{w}</p>
-        ))}
-        <p className="mt-1.5 text-[12.5px] font-bold text-teal-700">→ {v.lane.action}</p>
+        {/* A NULL lane is an honest answer, not a blank (§5). A rep can open
+            any student in their book directly, including one the queue did not
+            surface — and telling them "nothing is happening with this student
+            today" is more useful than inventing a reason to justify the visit. */}
+        {v.lane === null ? (
+          <>
+            <p className="text-[13px] font-extrabold text-stone-900">No signal today</p>
+            <p className="mt-0.5 text-[12.5px] font-semibold leading-snug text-stone-700">
+              Nothing has changed for {v.firstName} that puts them in today&rsquo;s queue. They stay in your book.
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="text-[13px] font-extrabold text-stone-900">{v.lane.dueLabel}</p>
+            {v.lane.why.map((w, i) => (
+              <p key={i} className="mt-0.5 text-[12.5px] font-semibold leading-snug text-stone-700">{w}</p>
+            ))}
+            <p className="mt-1.5 text-[12.5px] font-bold text-teal-700">&rarr; {v.lane.action}</p>
+          </>
+        )}
         {/* The student's own words at signup — the most quotable thing a rep
             has, and it previously died inside the queue brief. */}
         {v.painPoints.length > 0 && (

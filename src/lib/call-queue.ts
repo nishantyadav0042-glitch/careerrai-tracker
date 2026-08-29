@@ -141,7 +141,15 @@ function trailingRunLength(sortedDaysAgo: number[]): number {
   return run;
 }
 
-export function classifyLane(s: LaneSignals): LaneVerdict {
+/**
+ * Which lane, if any, justifies contacting this student today.
+ *
+ * NULL IS A REAL ANSWER (§5, 29 Aug 2026). It means "no signal today" — the
+ * student is backlog, not an opportunity. Before this the function ended in an
+ * unconditional `fresh` verdict, which made every student in the book an
+ * opportunity forever and the no-padding rule unenforceable.
+ */
+export function classifyLane(s: LaneSignals): LaneVerdict | null {
   const daysAgo = [...new Set(s.logDates)]
     .map((d) => daysBetweenIst(d, s.todayIst))
     .filter((n) => n >= 0)
@@ -206,12 +214,21 @@ export function classifyLane(s: LaneSignals): LaneVerdict {
     };
   }
 
-  return {
-    dueReason: 'fresh', dueLabel: 'New lead',
-    why: [lastLog != null ? `Last study: ${fmt(lastLog)}` : 'No study logs in 30 days'],
-    action: 'Introduction call — learn where they are in prep',
-    sortBoost: 0,
-  };
+  // ── NO CATCH-ALL LANE (SALES-OS.md §5, added 29 Aug 2026) ────────────────
+  //
+  // `fresh` used to be the unconditional fallthrough — documented as "everyone
+  // else". That quietly made the contract's central promise unkeepable: with a
+  // book of any size the lane always has candidates, so the queue can NEVER be
+  // short. It always fills to the cap, and "if there are 42 real opportunities,
+  // show 42" becomes decoration.
+  //
+  // A student with no behavioural signal is not automatically an opportunity.
+  // The one exception is not a behaviour at all and so is decided at the call
+  // site, where our own outreach state is known: a student NOBODY HAS EVER
+  // CALLED is always worth a first conversation. Everyone else with nothing
+  // happening is backlog — still owned, still in the portfolio, reachable
+  // through the ranked pool, but never auto-dealt to pad somebody's day.
+  return null;
 }
 
 /**
@@ -409,9 +426,30 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
         todayIst, createdAt: (prof?.created_at as string | null) ?? null, logDates: dates,
         buddyTaps, intentDoor, momentumScore: r.score,
       });
-      dueReason = lane.dueReason; dueLabel = lane.dueLabel; why = lane.why; action = lane.action;
-      const BAND: Record<string, number> = { going_cold: 4_000_000, broken_streak: 3_500_000, new_never_logged: 3_000_000, conversion: 1_000_000, fresh: 0 };
-      sort = BAND[lane.dueReason] + lane.sortBoost + (lane.dueReason === 'fresh' ? conv : 0);
+      if (lane === null) {
+        // NO BEHAVIOURAL SIGNAL. Two very different students land here, and
+        // collapsing them was the old `fresh` catch-all (§5).
+        //
+        // Nobody has ever called them → that IS the reason. A student sitting
+        // in a book having never once been spoken to is the most basic
+        // opportunity there is, and it is what the first weeks of a new book
+        // consist of.
+        //
+        // Already contacted, and nothing has changed since → backlog. Not
+        // dealt. This is what makes "if there are 42 real opportunities, show
+        // 42" true instead of decorative: without it the queue always fills to
+        // the cap, because there is always another quiet student to pad with.
+        if (o?.last_attempt_at) continue;
+        dueReason = 'fresh';
+        dueLabel = 'Never contacted';
+        why = ['Nobody at CareerRai has spoken to this student yet'];
+        action = 'Introduction call — learn where they are in prep';
+        sort = conv;
+      } else {
+        dueReason = lane.dueReason; dueLabel = lane.dueLabel; why = lane.why; action = lane.action;
+        const BAND: Record<string, number> = { going_cold: 4_000_000, broken_streak: 3_500_000, new_never_logged: 3_000_000, conversion: 1_000_000, fresh: 0 };
+        sort = BAND[lane.dueReason] + lane.sortBoost + (lane.dueReason === 'fresh' ? conv : 0);
+      }
     }
 
     cands.push({

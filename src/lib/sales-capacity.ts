@@ -348,7 +348,10 @@ export async function getTeamCapacity(admin: any, nowMs: number = Date.now()): P
     const item = classifyWorkItem({
       studentId: sid, name: names.get(sid) ?? 'Student', status: o.status ?? null,
       nextActionAt: o.next_action_at ?? null, hasOverdueFollowup: overdueFollowup.has(sid),
-      retentionLane: lane.dueReason, laneDetail: lane.why[0] ?? null, nowMs,
+      // A null lane means no signal today; classifyWorkItem already accepts
+      // that (retentionLane is DueReason | null) and simply does not count a
+      // retention work item for this student.
+      retentionLane: lane?.dueReason ?? null, laneDetail: lane?.why[0] ?? null, nowMs,
     });
     if (item) {
       if (!itemsByRep.has(rep)) itemsByRep.set(rep, []);
