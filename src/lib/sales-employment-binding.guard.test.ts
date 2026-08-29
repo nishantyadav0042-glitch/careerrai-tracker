@@ -120,6 +120,35 @@ describe('employment_type cannot be routed around', () => {
     expect(code(liveWork), 'distribute-leads must not hand out live work against the portfolio ceiling').not.toMatch(/portfolioIntakeLimit\s*\(/);
   });
 
+  it('enrolment can never overwrite an existing owner — it must be ON CONFLICT DO NOTHING', () => {
+    // Founder requirement, 29 Aug 2026: "re-running the operation must not
+    // create duplicate assignments", "one active owner per student", "no
+    // accidental loss".
+    //
+    // The pool filter that skips already-enrolled students is a READ. Between
+    // that read and the write, a double click or a concurrent admin can claim
+    // the same student. With ON CONFLICT DO UPDATE — the default for a plain
+    // Supabase .upsert() — the second writer silently moves a student from one
+    // rep's book to the other's. ignoreDuplicates:true is what makes the
+    // guarantee structural rather than a property of the filter.
+    const enrol = code('src/app/api/admin/enrol-book/route.ts');
+    const from = enrol.indexOf("from('lead_outreach')");
+    const at = from < 0 ? -1 : enrol.indexOf('.upsert(', from);
+    const block = at < 0 ? '' : enrol.slice(at, at + 400);
+    expect(block, 'the enrolment upsert was not found — this guard would be vacuous').toContain('owner_id');
+    expect(block, 'enrolment must use ignoreDuplicates (ON CONFLICT DO NOTHING)').toContain('ignoreDuplicates: true');
+  });
+
+  it('enrolment reports the rows the database created, not the rows it asked for', () => {
+    // With DO NOTHING the two genuinely differ under contention. Counting the
+    // request instead of the result would report 500 students enrolled when a
+    // concurrent run took 200 of them — a precise lie (L1).
+    const enrol = code('src/app/api/admin/enrol-book/route.ts');
+    expect(enrol, 'the insert must select back what landed').toMatch(/\.select\('student_id'\)/);
+    expect(enrol, 'the per-rep count must come from what landed, not slice.length')
+      .not.toMatch(/enrolled\.push\(\{\s*repId: a\.repId,\s*count: slice\.length\s*\}\)/);
+  });
+
   it('a bulk enrolment never stamps assigned_at, which would fake an SLA breach per student', () => {
     // assigned_at starts the first-contact clock. Stamping it while enrolling
     // the back catalogue would report every imported student as a breach by

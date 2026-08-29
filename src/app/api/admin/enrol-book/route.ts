@@ -152,11 +152,34 @@ export async function POST(request: NextRequest) {
     cursor += slice.length;
     if (slice.length === 0) break;
 
+    let landed = 0;
     for (const chunk of chunkIds(slice)) {
+      // ── ON CONFLICT DO NOTHING, AND THE REASON IS IDEMPOTENCY ─────────────
+      //
+      // `ignoreDuplicates: true` is what makes this route safe to re-run. The
+      // first version used a plain upsert (ON CONFLICT DO UPDATE), which reads
+      // as harmless because the pool above already filters out students who
+      // have a lead_outreach row. It is not harmless: that filter is a READ,
+      // and between the read and this write a second enrolment — a double
+      // click, a retry after a timeout, a concurrent admin — can claim the
+      // same student. DO UPDATE would then silently move a student who already
+      // belongs to Anshul into Neelam's book, changing ownership nobody asked
+      // to change and splitting the student's history across two reps.
+      //
+      // DO NOTHING makes that impossible at the database, not at the filter:
+      // an existing owner is never overwritten by an enrolment, so re-running
+      // this route any number of times converges on the same assignment.
+      // Changing an owner deliberately is what /api/admin/transfer-book and
+      // /api/admin/reassign-lead are for, and both record history.
+      //
       // assigned_at deliberately omitted — see the header note. updated_at is
       // set so the stale-lead pool in distribute-leads treats these as fresh.
-      const { error } = await admin.from('lead_outreach')
-        .upsert(chunk.map((id) => ({ student_id: id, owner_id: a.repId, updated_at: now })), { onConflict: 'student_id' });
+      const { data: inserted, error } = await admin.from('lead_outreach')
+        .upsert(
+          chunk.map((id) => ({ student_id: id, owner_id: a.repId, updated_at: now })),
+          { onConflict: 'student_id', ignoreDuplicates: true },
+        )
+        .select('student_id');
       if (error) {
         console.error('[enrol-book] enrol failed:', error.message);
         // Report what DID land. Rounding a partial run up to success is how a
@@ -166,13 +189,21 @@ export async function POST(request: NextRequest) {
           enrolled,
         }, { status: 500 });
       }
-      await admin.from('sales_activity').insert(chunk.map((id) => ({
-        student_id: id, actor_id: principal.id, activity_type: 'assigned',
-        provenance: 'system_generated', status: 'reassigned',
-        note: `Enrolled into book of ${a.repId}`,
-      })));
+
+      // The rows the database actually created, never the rows we asked it to.
+      // With DO NOTHING these differ exactly when somebody else got there
+      // first, and that difference is the thing worth reporting honestly.
+      const landedIds = ((inserted ?? []) as any[]).map((r) => r.student_id as string);
+      landed += landedIds.length;
+      if (landedIds.length > 0) {
+        await admin.from('sales_activity').insert(landedIds.map((id) => ({
+          student_id: id, actor_id: principal.id, activity_type: 'assigned',
+          provenance: 'system_generated', status: 'reassigned',
+          note: `Enrolled into book of ${a.repId}`,
+        })));
+      }
     }
-    enrolled.push({ repId: a.repId, count: slice.length });
+    enrolled.push({ repId: a.repId, count: landed });
   }
 
   await auditSales(principal.id, 'sales_book_enrolled', { type: 'system', id: null },
@@ -185,8 +216,18 @@ export async function POST(request: NextRequest) {
     // Named honestly: the founder asked for `total`, the pool had what it had.
     requested: total,
     assigned: moved,
+    // Three numbers that can legitimately disagree, so all three are reported
+    // rather than collapsed into one reassuring "done":
+    //   requested  what the founder asked for
+    //   poolSize   how many unenrolled students actually existed
+    //   assigned   how many rows the database actually created
+    // assigned < poolSize means somebody else claimed those students between
+    // this route's read and its write — which is exactly the case DO NOTHING
+    // exists to survive, and exactly the case a silent success would hide.
+    poolSize: pool.length,
     note: moved < total
-      ? `Only ${moved} students were left unenrolled, so that is what moved.`
+      ? `${moved} of the ${total} requested were enrolled — ${pool.length} unenrolled students were available` +
+        (moved < pool.length ? `, and ${pool.length - moved} were claimed by another enrolment while this one ran.` : '.')
       : undefined,
   });
 }
