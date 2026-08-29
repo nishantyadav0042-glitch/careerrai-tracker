@@ -40,8 +40,15 @@ import {
 // conversation) — buddy intent, tracking quality, mock analysis, onboarding
 // goals — never a canned message.
 
+/** "today" / "yesterday" / "N days ago" — how a counsellor says it out loud. */
+function daysAgoLabel(n: number): string {
+  return n <= 0 ? 'today' : n === 1 ? 'yesterday' : `${n} days ago`;
+}
+
 export type DueReason =
   | 'callback' | 'retry' | 'followup'
+  /** Created an order and never paid — the strongest commercial evidence. */
+  | 'checkout_abandoned'
   | 'going_cold' | 'broken_streak' | 'new_never_logged'
   | 'conversion' | 'fresh';
 
@@ -295,7 +302,7 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
   const ids = free.map((r) => r.id);
   if (ids.length === 0) return { queue: [], connectedToday: 0, dueNow: 0, totalOpen: 0 };
 
-  const [{ data: profs }, { data: eng }, { data: reports }, outreach, { data: paidRows }, { data: lastActs }] = await Promise.all([
+  const [{ data: profs }, { data: eng }, { data: reports }, outreach, { data: paidRows }, { data: unpaidRows }, { data: lastActs }] = await Promise.all([
     db.from('profiles').select('id, created_at, target_percentile, cat_percentile, starting_percentile, pain_points, dream_colleges, is_repeater').in('id', ids),
     db.from('student_engagement').select('student_id, buddy_cta_clicks, mock_opened, intent_door_at').in('student_id', ids),
     db.from('daily_reports').select('student_id, report_date').in('student_id', ids).gte('report_date', since30),
@@ -307,6 +314,29 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
     // itself. Read here so the queue closes a student on the ledger rather
     // than on a status somebody typed.
     db.from('student_payments').select('student_id').eq('status', 'paid').in('student_id', ids),
+    // ── THE STRONGEST COMMERCIAL SIGNAL WE HAVE ───────────────────────────
+    //
+    // A student who created an order and never paid told us, in the most
+    // concrete way available, that they wanted to buy. 16 students in
+    // production are in this state and not one of them has ever been called.
+    // Until now the queue could not see it at all: it read engagement taps and
+    // the intent door, but never the payment table's unpaid rows.
+    //
+    // Deliberately NOT time-limited here. An abandoned checkout from three
+    // weeks ago is staler than one from yesterday and the ranking says so, but
+    // it is never nothing — nobody has spoken to any of them yet.
+    //
+    // EXPLICIT STATUSES, never `.neq('paid')`. The column has four values and
+    // 'refunded' is one of them: a refunded student COMPLETED a purchase and
+    // then reversed it, which is the opposite of an abandoned checkout. Pitching
+    // them as "you started paying and stopped" would be both wrong and
+    // insulting. `created` (an order exists, no money moved) and `failed` (the
+    // attempt did not complete) are the two that mean what this lane means.
+    db.from('student_payments')
+      .select('student_id, created_at, plan, status')
+      .in('status', ['created', 'failed'])
+      .in('student_id', ids)
+      .order('created_at', { ascending: false }),
     // WHAT WAS SAID LAST TIME. Bounded and cheap: newest-first across the
     // whole book, reduced to one row per student below. A counsellor who has
     // to open another screen to remember the previous conversation will stop
@@ -318,6 +348,25 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
       .order('created_at', { ascending: false })
       .limit(2000),
   ]);
+  // ── Who is finished with the sales queue (Incident #52) ─────────────────
+  //
+  // This used to be `CLOSED = {'converted','not_interested','dnd'}`, which let a
+  // MISTAKEN TAP delete a student from every future queue with no payment
+  // anywhere. isClosedForSales() replaces it: money closes a student, and the
+  // two things the student actually said close a student. A typed 'converted'
+  // closes nothing on its own. See lib/sales-conversion-truth.ts.
+  const paidIds = new Set(
+    ((paidRows ?? []) as any[]).map((r) => r.student_id as string),
+  );
+
+  // Newest abandoned order per student. Students who later paid are excluded —
+  // their old abandoned attempt is history, not intent.
+  const abandonedBy = new Map<string, { atIso: string; plan: string | null }>();
+  for (const r of ((unpaidRows ?? []) as any[])) {
+    if (paidIds.has(r.student_id) || abandonedBy.has(r.student_id)) continue;
+    abandonedBy.set(r.student_id, { atIso: r.created_at as string, plan: (r.plan as string | null) ?? null });
+  }
+
   const lastBy = new Map<string, { atIso: string; outcome: string | null; note: string | null }>();
   for (const a of ((lastActs ?? []) as any[])) {
     // Ordered newest-first, so the FIRST row seen for a student is their most
@@ -345,16 +394,6 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
     if (o.last_attempt_at && istDateStr(o.last_attempt_at) === todayIst && o.status && o.status !== 'no_answer') connectedToday++;
   }
 
-  // ── Who is finished with the sales queue (Incident #52) ─────────────────
-  //
-  // This used to be `CLOSED = {'converted','not_interested','dnd'}`, which let a
-  // MISTAKEN TAP delete a student from every future queue with no payment
-  // anywhere. isClosedForSales() replaces it: money closes a student, and the
-  // two things the student actually said close a student. A typed 'converted'
-  // closes nothing on its own. See lib/sales-conversion-truth.ts.
-  const paidIds = new Set(
-    ((paidRows ?? []) as any[]).map((r) => r.student_id as string),
-  );
   const cands: (CallLead & { _sort: number })[] = [];
   let totalOpen = 0;
 
@@ -454,6 +493,25 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
       why = ['Said interested on the last call — the scheduled nudge is due'];
       action = 'Follow up and close the next concrete step';
       sort = 5_000_000 + minutesOverdue();
+    } else if (abandonedBy.has(r.id)) {
+      // ── ABANDONED CHECKOUT ────────────────────────────────────────────────
+      //
+      // Below the three promise lanes deliberately: a commitment the student
+      // made to US outranks intent we merely observed. Above everything else,
+      // because this is the nearest thing to revenue in the whole dataset and
+      // nobody has ever called one of these students.
+      const ab = abandonedBy.get(r.id)!;
+      const daysAgoAb = Math.floor((Date.now() - Date.parse(ab.atIso)) / 86_400_000);
+      dueReason = 'checkout_abandoned';
+      dueLabel = 'Started paying, stopped';
+      why = [
+        `Created a ${ab.plan ?? 'plan'} order ${daysAgoLabel(daysAgoAb)} and never completed payment`,
+        'They decided to buy and something stopped them — find out what',
+      ];
+      action = 'Ask what got in the way: price, trust, or not sure it fits';
+      // Fresher intent first. Stays above every non-promise lane even when old,
+      // because a three-week-old abandoned order still beats a cold student.
+      sort = 4_500_000 + Math.max(0, 400 - daysAgoAb);
     } else {
       // No promise pending — the lane classifier decides why today's call
       // exists at all: retention first, conversion second, fresh last.
@@ -487,6 +545,7 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
       }
     }
 
+
     // WHICH GOAL IS THIS CALL FOR (§4). A live commercial signal is
     // perishable and takes the primary slot; the retention need still travels
     // with the card as secondary context so one call covers both.
@@ -497,7 +556,7 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
       // abandoned-checkout signal is the strongest one we have and is NOT wired
       // in yet — it is the next piece of work, and until it lands those 16
       // students classify on their other signals rather than on the money.
-      hasCommercialSignal: buddyTaps >= 1 || intentDoor,
+      hasCommercialSignal: abandonedBy.has(r.id) || buddyTaps >= 1 || intentDoor,
       // Never logged at all counts as retention need — it is activation, which
       // is the most valuable form of retention we have and applies to roughly
       // three-quarters of the base.
