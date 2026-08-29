@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { WORKSPACES } from './admin-workspaces';
-import { planDisposition } from './sales-disposition';
+import { planDisposition, MAX_CONSECUTIVE_NO_ANSWER } from './sales-disposition';
 
 // ── The sales loop, driven end to end ───────────────────────────────────────
 //
@@ -369,5 +369,58 @@ describe('Scenario F — the student who tried to pay and stopped', () => {
     }], { abandonedIds: ['fresh-1'] }), asAdmin);
     const lead = queue.find((l) => l.studentId === 'fresh-1')!;
     expect(lead.dueReason, 'a callback they asked for beats a checkout we observed').toBe('callback');
+  });
+});
+
+// ── Scenario H — we stop calling a student who never picks up ───────────────
+//
+// Measured before the ceiling existed: a hot lead who NEVER answered received
+// 31 calls in 30 days, because the cadence engine's `hot` branch rolled to
+// tomorrow morning every time and ignored the miss count entirely.
+//
+// The engine now stops SCHEDULING at the ceiling (null clock). The queue must
+// also stop DEALING, and the two are not redundant. The abandoned-checkout
+// lane is dealt BEFORE the lane classifier and — unlike the classifier's
+// fallback — never consults `last_attempt_at`, so a null clock does not
+// suppress it. Without the ceiling check in the queue, the students most
+// likely to be scored `hot` are exactly the ones who would have been re-dealt
+// every single day, forever.
+describe('Scenario H — the contact ceiling', () => {
+  const silent = (n: number) => ([{
+    student_id: 'fresh-1', status: 'no_answer', next_action_at: null,
+    last_attempt_at: new Date(Date.now() - 30 * HOUR).toISOString(),
+    no_answer_count: n, callback_at: null, owner: null,
+  }]);
+  const abandoned = { abandonedIds: ['fresh-1'] };
+
+  it('an abandoned-checkout student who never answers is eventually left alone', async () => {
+    const { queue } = await buildCallQueue(db(silent(MAX_CONSECUTIVE_NO_ANSWER), abandoned), asAdmin);
+    expect(
+      queue.find((l) => l.studentId === 'fresh-1'),
+      'six unanswered calls means stop — not "deal them again tomorrow"',
+    ).toBeFalsy();
+  });
+
+  it('stays suppressed however far past the ceiling the count runs', async () => {
+    const { queue } = await buildCallQueue(db(silent(MAX_CONSECUTIVE_NO_ANSWER + 20), abandoned), asAdmin);
+    expect(queue.find((l) => l.studentId === 'fresh-1')).toBeFalsy();
+  });
+
+  // NON-VACUITY. Identical row, identical null clock, one call below the
+  // ceiling — and the student IS dealt. So the cases above are detecting the
+  // ceiling itself, not some other suppression that would have applied anyway.
+  it('one call below the ceiling the student is still worked', async () => {
+    const { queue } = await buildCallQueue(db(silent(MAX_CONSECUTIVE_NO_ANSWER - 1), abandoned), asAdmin);
+    expect(
+      queue.find((l) => l.studentId === 'fresh-1'),
+      'the ceiling must be what suppresses this lead, not the null clock',
+    ).toBeTruthy();
+  });
+
+  it('the student keeps their owner and history — we stopped calling, not caring', async () => {
+    const at = await buildCallQueue(db(silent(MAX_CONSECUTIVE_NO_ANSWER), abandoned), asAdmin);
+    const below = await buildCallQueue(db(silent(MAX_CONSECUTIVE_NO_ANSWER - 1), abandoned), asAdmin);
+    expect(at.totalOpen, 'an exhausted lead is still an open lead someone owns')
+      .toBe(below.totalOpen);
   });
 });

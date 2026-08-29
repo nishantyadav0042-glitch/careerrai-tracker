@@ -2762,3 +2762,113 @@ measured, because the thing that decides was not the thing that remembers. When
 a component is deliberately stateless, ask separately who writes down what it
 decided — otherwise the audit trail is missing precisely where the system is
 most confident.
+
+---
+
+## Incident #54
+
+**2026-08-29 · Trust / student experience (P0) · caught by simulation, hours before the first counsellor shift**
+
+**What was wrong.** The disposition cadence engine had no upper bound on
+contact. Every branch of `planDisposition` returned a next-action time; none of
+them could return "stop". Worse, the `hot` branch was evaluated FIRST and
+ignored the miss count entirely:
+
+```ts
+if (hot) nextActionAt = istFutureIso(nowMs, 1, 10, 0);  // tomorrow, 10:00 IST
+```
+
+so a hot lead who never answered was rescheduled for tomorrow morning, every
+morning, indefinitely.
+
+**Measured, not estimated.** Walking the real engine forward for 30 days
+against a student who reports `no_answer` every time:
+
+| lead | calls in 30 days |
+|---|---|
+| hot | **31** |
+| ordinary | 13 |
+| answers "interested" every time | 15 |
+
+Thirty-one calls to somebody who has never once picked up. And it selects for
+the worst possible victim: `hot` comes from `conversionTier`, so the students
+who abandoned a checkout — the 16 most commercially valuable people in the
+first batch — are exactly the ones who would have been called daily forever.
+
+**Why nothing caught it.** Every existing cadence test asserted the NEXT step
+from one disposition. Not one of them iterated. A rule that is correct at every
+single step and catastrophic in aggregate is invisible to step-wise testing,
+and this is the second time that shape of defect has appeared in the queue (see
+#39's inverted ranking, also correct per-line).
+
+**The fix.** Two constants in `sales-disposition.ts`, deliberately not scattered
+judgement calls: `MAX_CONSECUTIVE_NO_ANSWER = 6` returns a null clock (stop
+scheduling), and `HOT_DAILY_RETRY_LIMIT = 3` makes hot urgency expire into
+normal spacing rather than lasting forever.
+
+`call-queue.ts` refuses to DEAL a lead at the ceiling, which is not redundant
+with the null clock and the test proves it: the abandoned-checkout lane is
+evaluated before the lane classifier and, unlike the classifier's fallback,
+never consults `last_attempt_at`. Without the queue check a null clock would
+have fallen straight through and the ceiling would have made the over-calling
+WORSE — the exhausted lead returning as a fresh card every day.
+
+**The line that decides where a cap belongs.** The ceiling counts CONSECUTIVE
+silence, and any connected outcome resets it. `interested` is left uncapped on
+purpose: a student who picks up and talks every two days is choosing to engage,
+and inventing a limit on real conversations would be a rule with no evidence
+behind it. Silence is the case where we are the only participant — so we are
+the ones who have to stop.
+
+**Lesson.** *A cadence rule that is correct at each step can still be abusive in
+aggregate. Any engine that schedules the next contact must be simulated over a
+horizon, not just asserted one step at a time — and the first question of any
+retry policy is "what makes this stop?", not "when does this run again?".*
+
+---
+
+## Incident #55
+
+**2026-08-29 · Analytics / experiment integrity (P0) · would have silently voided the two-counsellor experiment**
+
+**What was wrong.** `/api/cron/outcome-sweep` was added to `vercel.json` on
+24 Aug with schedule `45 1 * * *`. Five days later `cron_runs` contained **zero
+rows for it — it had never executed once**, while 36 other cron paths were
+firing normally (1,327 runs in three days, all `trigger_source = 'vercel'`).
+`purge-session-handoffs`, added 27 Aug, was in exactly the same state. Those two
+are the two most recently added jobs, and the only two in the file that have
+never run.
+
+**Why it mattered more than a missed job.** The sweep is the observation half of
+the learning loop. The rep records what they did and what the student said; the
+sweep records what the student then actually DID — `logged_d1`, `logged_d3`,
+`logged_d7`, `sustained_7d`, `streak_resumed`, `session_booked`. That split is
+the only reason those columns are worth anything as evidence, because a rep
+cannot mark their own intervention successful.
+
+With the sweep dead, every outcome column in `intervention_ledger` stays NULL
+forever. The founder's central question — "did two counsellors actually move
+retention and conversion?" — would have had no data behind it at all, and the
+failure is invisible: a ledger that stopped being measured looks identical to
+one whose windows have not matured yet. The route's own comment anticipated
+exactly this ("a ledger that silently stops being measured still LOOKS
+complete") and the monitoring it describes was for the sweep's internal errors,
+not for the sweep never being invoked.
+
+**Diagnosis honesty.** CONFIRMED: it never ran. NOT CONFIRMED: why. The
+strongest hypothesis is a registration ceiling on Vercel's side — 41 cron
+entries are declared and the two that fail are the two most recently added —
+but that was not proven, and a POST-vs-GET theory was tested and refuted
+(`sales-ready`, `daily-reminder` and others are POST-only and run fine).
+
+**The fix.** Route it through `.github/workflows/cron-fallback.yml`, which
+exists precisely because Vercel's scheduler has failed silently before. This
+does not depend on the hypothesis being right. Scheduled 30 minutes after
+Vercel's attempt; the sweep only fills matured NULL windows, so a double run is
+a no-op rather than a double count.
+
+**Lesson.** *A scheduled job is not running because it is scheduled. Every cron
+that carries evidence needs a "has this ever actually fired?" check against
+`cron_runs`, because the failure mode is silence — and a job that has never run
+once looks exactly like a job whose work has not come due. Deploying a
+scheduler entry is not the same as observing an execution (L2).*

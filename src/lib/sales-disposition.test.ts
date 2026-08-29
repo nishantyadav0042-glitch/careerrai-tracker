@@ -7,6 +7,8 @@ import {
   isCallOutcome,
   isConnectedOutcome,
   planDisposition,
+  MAX_CONSECUTIVE_NO_ANSWER,
+  HOT_DAILY_RETRY_LIMIT,
 } from './sales-disposition';
 
 // A fixed "now": 20 Aug 2026 06:00 UTC = 11:30 IST (before the 17:00 IST
@@ -126,5 +128,90 @@ describe('disposition clients advance only on a confirmed write', () => {
     const s = readFileSync('src/components/sales-log.tsx', 'utf8');
     expect(s).toMatch(/outcome:/); // body key the API actually reads
     expect(s).not.toMatch(/key: 'follow_up'/); // stored status is not a disposition
+  });
+});
+
+// ── The contact ceiling (29 Aug 2026) ───────────────────────────────────────
+//
+// The regression these pin was measured, not imagined: before the ceiling, a
+// 30-day simulation of a student who NEVER answered produced 31 calls for a
+// hot lead and 13 for an ordinary one, because the `hot` branch rolled to
+// tomorrow morning regardless of how many times it had already done so.
+
+/** Walk the cadence engine for `days`, always reporting no_answer. */
+function simulateSilence(days: number, hot: boolean): number {
+  let misses = 0;
+  let t = Date.UTC(2026, 7, 30, 5, 0); // 10:30 IST
+  const end = t + days * 86_400_000;
+  let calls = 0;
+  while (t < end && calls < 200) {
+    const p = planDisposition('no_answer', { prevMisses: misses, hot, nowMs: t });
+    misses = p.noAnswerCount;
+    calls++;
+    if (!p.nextActionAt) break;              // the ceiling stopped it
+    const next = Date.parse(p.nextActionAt);
+    if (next <= t) break;
+    t = next;
+  }
+  return calls;
+}
+
+describe('a student who never answers is eventually left alone', () => {
+  it('a HOT lead is no longer called every single day forever', () => {
+    // The exact defect: 31 calls in 30 days. If this number ever climbs back
+    // above the ceiling, the daily-roll bug has returned.
+    expect(simulateSilence(30, true)).toBe(MAX_CONSECUTIVE_NO_ANSWER);
+  });
+
+  it('an ordinary lead is capped too', () => {
+    expect(simulateSilence(30, false)).toBe(MAX_CONSECUTIVE_NO_ANSWER);
+  });
+
+  it('the cap still holds over a much longer horizon', () => {
+    expect(simulateSilence(365, true)).toBe(MAX_CONSECUTIVE_NO_ANSWER);
+    expect(simulateSilence(365, false)).toBe(MAX_CONSECUTIVE_NO_ANSWER);
+  });
+
+  it('at the ceiling the clock is cleared, so nothing can reschedule it', () => {
+    const p = planDisposition('no_answer', {
+      prevMisses: MAX_CONSECUTIVE_NO_ANSWER - 1, hot: true, nowMs: NOW,
+    });
+    expect(p.noAnswerCount).toBe(MAX_CONSECUTIVE_NO_ANSWER);
+    expect(p.nextActionAt).toBeNull();
+    // Still 'no_answer' — we record what happened, we do not invent a refusal
+    // the student never made.
+    expect(p.status).toBe('no_answer');
+  });
+
+  it('below the ceiling a hot lead is still chased hard', () => {
+    const p = planDisposition('no_answer', { prevMisses: 0, hot: true, nowMs: NOW });
+    expect(p.nextActionAt).not.toBeNull();
+    expect(Date.parse(p.nextActionAt!)).toBeGreaterThan(NOW);
+  });
+
+  it('hot urgency expires into normal spacing rather than lasting forever', () => {
+    const early = planDisposition('no_answer', { prevMisses: 0, hot: true, nowMs: NOW });
+    const late = planDisposition('no_answer', {
+      prevMisses: HOT_DAILY_RETRY_LIMIT, hot: true, nowMs: NOW,
+    });
+    // Once the daily allowance is spent, the next attempt is further out than
+    // the "tomorrow morning" a fresh hot lead gets.
+    expect(Date.parse(late.nextActionAt!)).toBeGreaterThan(Date.parse(early.nextActionAt!));
+  });
+
+  // The cap is on SILENCE, not on conversation. A student who picks up and
+  // talks has not been silenced by us, and capping real dialogue would be a
+  // rule invented without evidence.
+  it('answering resets the count — the ceiling counts CONSECUTIVE misses', () => {
+    const answered = planDisposition('interested', {
+      prevMisses: MAX_CONSECUTIVE_NO_ANSWER - 1, hot: false, nowMs: NOW,
+    });
+    expect(answered.noAnswerCount).toBe(0);
+    expect(answered.nextActionAt).not.toBeNull();
+  });
+
+  it('a connected outcome is never capped by the no-answer ceiling', () => {
+    const p = planDisposition('interested', { prevMisses: 99, hot: false, nowMs: NOW });
+    expect(p.nextActionAt, 'a conversation is not silence').not.toBeNull();
   });
 });
