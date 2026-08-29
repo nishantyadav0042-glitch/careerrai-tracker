@@ -60,6 +60,8 @@
 | 43 | 2026-08-29 | Google signup looped back into onboarding — the stash endpoint inverted its throttle and rejected every request ever made, and the claim sat in a branch a DB trigger made unreachable | Growth / Learning (P0) | every student who chose Continue with Google; 0 drafts stored in the feature's lifetime |
 | 44 | 2026-08-29 | An invisible U+FEFF in `NEXT_PUBLIC_SUPABASE_URL` made `new URL()` reject it — 9 of 10 Google callbacks died on "PKCE code verifier not found", a message that never mentions a URL | Growth (P0) | every Google sign-in for a day; 3 accounts left with 0 coverage rows |
 | 45 | 2026-08-29 | The OAuth `state` was encoded twice, so the callback's `indexOf(':')` found no colon and read the nonce as empty — every mentor Google Calendar connection ever attempted was refused as `state_mismatch` | Trust (P0) | all mentors; 0 rows in google_oauth_tokens across the project's life |
+| 46 | 2026-08-29 | `GOOGLE_CLIENT_SECRET` was a well-formed secret belonging to a DIFFERENT OAuth client — Google checks the secret last, so it stayed invisible behind three other bugs | Trust (P0) | all mentors; token exchange failed after the mentor had completed the whole consent journey |
+| 47 | 2026-08-29 | The Google health check searched followed HTML for `invalid_client`, so it scored `redirect_uri_mismatch` as healthy and reported all callback URIs registered while one was missing | Trust (P1) | mentors starting on the legacy PWA origin: Error 400 every time, with the diagnostic saying everything was fine |
 
 > Entries 12 and 13 were never written. The gap is left visible rather than
 > renumbered — the numbers are referenced from commit messages and code
