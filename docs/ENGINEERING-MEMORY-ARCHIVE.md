@@ -2427,3 +2427,53 @@ stricter one has to run somewhere a human looks.
 archive keeps recording.** Reading the code found the call; only asking what
 happens with a hostile input found that the call takes whatever length it is
 given. Same lesson as #46's well-formed-but-wrong secret, in a different layer.
+
+---
+
+## CLOSURE — Connect Google worked, 2026-08-29 13:15:17 UTC
+
+Incidents #43, #44, #45, #46 and #47 all sat on one flow that had **never once
+completed** in the product's life. It completed. The evidence, from production:
+
+**The audit log, in order, on one buddy account:**
+
+| time (UTC) | action | detail |
+|---|---|---|
+| 12:10:56 | `google.connect_failed` | `stage: state, reason: state_mismatch` (#45) |
+| 12:25:33 | `google.connect_failed` | `stage: token_exchange, reason: "The provided client secret is invalid."` (#46) |
+| **13:15:17** | **`google.connected` ok=true** | `role: buddy` |
+| **13:15:18** | **`room.created` ok=true** | a real Google Calendar event id |
+
+**What each success proves, rather than suggests:**
+
+- `google.connected` cannot be reached without a **refresh token**:
+  `exchangeCodeAndStore` refuses to store a token that lacks one, because a
+  connection without it dies in an hour.
+- It also cannot be reached without the **calendar.events grant**: the same
+  function reads the token response's `scope` field — what was GRANTED, not
+  what was asked — and refuses when calendar is missing. So the granular-consent
+  checkbox was ticked.
+- `room.created` means Google Calendar accepted a real write and returned a
+  Meet link. `google_oauth_tokens` went from 0 rows, ever, to 1 real row, and
+  `profiles.buddy_meet_url` holds a `https://meet.google.com/…` address.
+
+**Every fix in the chain is therefore load-bearing and confirmed live:** the
+un-inverted throttle (#43), the cleaned Supabase URL (#44), the single-encoded
+state (#45), the correct client secret (#46), and PKCE — which was added the
+same day and had never been exercised, and which Google accepted with the
+challenge echoed back unchanged.
+
+**Still open, and not fixed by this.** `https://careerrai-daily.vercel.app/api/google/callback`
+is still absent from the OAuth client (#47's finding, confirmed by the shipped
+probe and its control). The connection above ran on `careerrai.in`, which IS
+registered. A mentor who starts from the INSTALLED PWA — which lives on the
+other origin — still gets Access blocked, Error 400. One flow works; the other
+does not, and only the per-URI check can tell them apart.
+
+**The lesson worth keeping.** Six incidents, four of them in our own code, one
+in configuration, one in the check that was supposed to see the configuration.
+Not one was Google's fault, and every error message named the layer that
+noticed rather than the layer that broke. The thing that finally closed it was
+not a better guess: it was building probes that make the system state a fact
+about itself, and shipping a control alongside each one so the probe can say
+UNKNOWN when it has stopped working.
