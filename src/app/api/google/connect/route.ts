@@ -55,9 +55,19 @@ export async function GET(request: Request) {
     return NextResponse.redirect(new URL(`${from}?google=unavailable`, request.url));
   }
 
+  // ── START AND FINISH ON THE SAME ORIGIN (29 Aug, production incident) ────
+  //
+  // CareerRai serves from careerrai.in AND careerrai-daily.vercel.app, and
+  // cookies are host-scoped. Sending a mentor signed in on one origin back to
+  // the other stranded them: no session, no state nonce, straight to /login
+  // wearing the face of an unexplained logout. The redirect_uri is now built
+  // from the origin this request actually arrived on, so the session and the
+  // nonce set below are both present when Google returns.
+  const origin = new URL(request.url).origin;
+
   const nonce = newStateNonce();
   const res = NextResponse.redirect(
-    googleConsentUrl(encodeURIComponent(encodeOAuthState(nonce, from))),
+    googleConsentUrl(encodeURIComponent(encodeOAuthState(nonce, from)), origin),
   );
   res.cookies.set(OAUTH_STATE_COOKIE, nonce, {
     httpOnly: true,

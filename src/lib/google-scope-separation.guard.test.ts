@@ -3,6 +3,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { codeOnly } from './test-support/code-only';
 import { GOOGLE_SCOPES, googleRedirectUri } from './google-oauth';
+import { SITE_URL, APP_ORIGINS } from './site';
 
 // ── TWO GOOGLE FEATURES, TWO OAUTH SURFACES, ONE RULE EACH ─────────────────
 //
@@ -114,16 +115,40 @@ describe('GUARD: the Calendar scope has exactly one authority', () => {
 // ─── GUARD 5: the redirect URI is ours, never the caller's ─────────────────
 
 describe('GUARD: no client-supplied redirect URI', () => {
-  it('googleRedirectUri takes no argument and is built from SITE_URL', () => {
-    expect(googleRedirectUri.length, 'it now accepts a parameter — that is a redirect the caller controls').toBe(0);
+  // ── MECHANISM CHANGED 29 AUG, PROPERTY DID NOT ────────────────────────────
+  //
+  // This used to assert googleRedirectUri took NO argument — "a parameter would
+  // be a redirect the caller controls". That was the right property enforced by
+  // the bluntest possible means, and it was also the bug: CareerRai serves from
+  // two live origins, and always returning to the canonical one stranded every
+  // mentor signed in on the other (see google-oauth-origin.guard.test.ts).
+  //
+  // It now takes an origin, and the property is enforced where it belongs — an
+  // ALLOWLIST. What is asserted here is the thing that actually matters: no
+  // caller-supplied value can become the redirect URI unless it is one of the
+  // two origins we ship.
+  it('an arbitrary origin can never become the redirect URI', () => {
+    for (const evil of ['https://evil.example', 'http://careerrai.in', '//evil.example', 'javascript:alert(1)']) {
+      expect(googleRedirectUri(evil), `${evil} was echoed into the redirect`)
+        .toBe(`${SITE_URL}/api/google/callback`);
+    }
     expect(googleRedirectUri()).toMatch(/^https:\/\/[^/]+\/api\/google\/callback$/);
   });
 
-  it('the authorization URL builder never reads a request-supplied redirect', () => {
+  it('only the shipped allowlist is honoured, and it is a closed set', () => {
+    for (const origin of APP_ORIGINS) {
+      expect(googleRedirectUri(origin)).toBe(`${origin}/api/google/callback`);
+    }
+    expect(APP_ORIGINS).toHaveLength(2);
+  });
+
+  it('the authorization URL builder resolves through the allowlist, not the raw input', () => {
     const code = read(CALENDAR_AUTHORITY);
     const at = code.indexOf('redirect_uri:');
     expect(at).toBeGreaterThan(-1);
-    expect(code.slice(at, at + 120)).toMatch(/redirect_uri:\s*googleRedirectUri\(\)/);
+    expect(code.slice(at, at + 120)).toMatch(/redirect_uri:\s*googleRedirectUri\(origin\)/);
+    // The resolver is the only thing that may turn an origin into a URL.
+    expect(code).toMatch(/resolveAppOrigin\(/);
   });
 });
 

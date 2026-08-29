@@ -31,6 +31,7 @@ function LoginForm() {
   const hasError = errorParam === '1';
   const isLocked = errorParam === 'locked';
   const seatInactive = errorParam === 'seat_inactive';
+  const sessionLost = errorParam === 'session_lost';
 
   function setError(m: string) { setMsg(m); setMsgIsError(true); }
   function setInfo(m: string) { setMsg(m); setMsgIsError(false); }
@@ -182,6 +183,12 @@ function LoginForm() {
             {isLocked && (
               <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs font-medium text-amber-800">
                 Too many attempts. Please wait a few minutes and try again — or use mobile OTP to sign in.
+              </div>
+            )}
+            {sessionLost && (
+              <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs font-medium text-amber-800">
+                Your session had expired by the time Google sent you back, so the connection
+                couldn&apos;t be completed. Sign in again and retry — nothing was changed.
               </div>
             )}
             {seatInactive && (

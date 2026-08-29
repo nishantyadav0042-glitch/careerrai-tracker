@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { googleConfigured, googleRedirectUri, googleConsentUrl, GOOGLE_SCOPES } from '@/lib/google-oauth';
+import { APP_ORIGINS } from '@/lib/site';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,6 +15,11 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   const configured = googleConfigured();
   const redirectUri = googleRedirectUri();
+  // CareerRai serves from two origins and an OAuth round trip must finish on
+  // the one it started on, so BOTH callback URIs must be registered on the
+  // Google client. Listing them here answers "what exactly do I paste into
+  // Authorized redirect URIs?" without a redeploy or a code read.
+  const allRedirectUris = APP_ORIGINS.map((o) => `${o}/api/google/callback`);
 
   // THE decisive check, run by the server against Google itself: fetch our own
   // consent URL and read Google's verdict. 'invalid_client' in the reply means
@@ -32,6 +38,7 @@ export async function GET() {
   return NextResponse.json({
     configured,
     redirectUri,
+    allRedirectUris,
     scopes: GOOGLE_SCOPES.split(' '),
     // The NUMERIC PREFIX identifies which client is deployed. It is the
     // public half of a public identifier (every web page using Google
