@@ -596,13 +596,38 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
   // within a lane already decided who makes the cut.
   const laneCount = new Map<DueReason, number>();
   const capped: typeof cands = [];
+  const overflow: typeof cands = [];
   for (const c of cands) {
     const cap = LANE_CAPS[c.dueReason];
     const n = laneCount.get(c.dueReason) ?? 0;
-    if (cap != null && n >= cap) continue;
+    // Over its lane ceiling — held back, NOT discarded. See the backfill below.
+    if (cap != null && n >= cap) { overflow.push(c); continue; }
     laneCount.set(c.dueReason, n + 1);
     capped.push(c);
     if (capped.length >= CAP) break;
+  }
+  // ── BACKFILL: a lane ceiling protects other lanes, it does not ration work ─
+  //
+  // Founder, 30 Aug 2026: "if there are 23 genuinely important opportunities
+  // today, the counsellor should get 23."
+  //
+  // The ceilings exist because ~340 signups a week could let one lane drown
+  // every due callback. That reasoning only holds while there IS other work to
+  // protect. With 23 never-contacted students and nothing else due, the `fresh`
+  // ceiling of 15 was not balancing the day — it was withholding eight real
+  // opportunities and leaving the deck short for no one's benefit. On day one
+  // of a new book, when every lead is `not_contacted` and no callback exists
+  // yet, that is the ONLY thing the ceiling does.
+  //
+  // So the held-back candidates come back once every lane has had its
+  // protected share and the deck still has room. This can only ever add
+  // students who already passed every eligibility filter — it never
+  // manufactures filler, which is the separate failure the tests above pin.
+  // `cands` is priority-ordered and `overflow` preserves that order, so the
+  // backfill enters exactly where it would have ranked anyway.
+  for (const c of overflow) {
+    if (capped.length >= CAP) break;
+    capped.push(c);
   }
   const queue = capped.map(({ _sort, ...c }) => { void _sort; return c; });
   return { queue, connectedToday, dueNow, totalOpen };
