@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import {
-  googleConfigured, googleRedirectUri, googleConsentUrl, GOOGLE_SCOPES, googleSecretShape,
+  googleConfigured, googleRedirectUri, googleConsentUrl, GOOGLE_SCOPES, googleSecretShape, probeClientSecret,
 } from '@/lib/google-oauth';
 import { APP_ORIGINS, SITE_URL } from '@/lib/site';
 import { supabaseUrl } from '@/lib/supabase/env';
@@ -58,6 +58,9 @@ export async function GET() {
   // nothing and read the header: no browser, no login, no secrets, and the
   // answer is Supabase's own rather than our inference about it.
   const studentFlow = await probeStudentFlow();
+  // Asks Google whether the deployed secret belongs to the deployed client.
+  // Nothing earlier in the flow can answer that — see probeClientSecret.
+  const secretCheck = await probeClientSecret();
 
   return NextResponse.json({
     configured,
@@ -80,6 +83,7 @@ export async function GET() {
     // characters; anything else is not the string the dashboard shows, and
     // Google reports that as "The provided client secret is invalid."
     secretShape: googleSecretShape(),
+    secretCheck,
     message: !configured
       ? 'GOOGLE_CLIENT_ID and/or GOOGLE_CLIENT_SECRET are missing from this deployment.'
       : googleRecognizesClient === false

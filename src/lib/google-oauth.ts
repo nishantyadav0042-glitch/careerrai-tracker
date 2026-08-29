@@ -92,6 +92,59 @@ export function googleSecretShape() {
   };
 }
 
+/**
+ * Does the deployed secret actually belong to the deployed client?
+ *
+ * Nothing before the token exchange can tell you. A wrong secret still gets a
+ * consent screen: Google validates client_id and redirect_uri there and never
+ * looks at the secret until the code is redeemed — the last step of the flow,
+ * which is why "The provided client secret is invalid." only ever appeared
+ * after everything else had already been fixed (Incident #46).
+ *
+ * So ask the token endpoint directly, with a code that is deliberately not a
+ * real one. Google answers the CLIENT question before the CODE question:
+ *
+ *   invalid_client → the client_id/secret pair is wrong. This is the bug.
+ *   invalid_grant  → the pair authenticated fine; only the fake code failed.
+ *                    That is the PASS, and it is what a healthy config returns.
+ *
+ * Side-effect free: an invalid code cannot mint a token, consume a grant, or
+ * touch a mentor's account. One request to Google, no state anywhere.
+ */
+export async function probeClientSecret(): Promise<{
+  probed: boolean; secretMatchesClient?: boolean;
+  googleError?: string; googleErrorDescription?: string; reason?: string;
+}> {
+  if (!googleConfigured()) return { probed: false, reason: 'Google credentials are not configured.' };
+  try {
+    const res = await fetch(OAUTH_TOKEN, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code: 'careerrai-config-probe-not-a-real-authorization-code',
+        client_id: googleClientId(),
+        client_secret: googleClientSecret(),
+        redirect_uri: googleRedirectUri(),
+        grant_type: 'authorization_code',
+      }).toString(),
+      cache: 'no-store',
+    });
+    const body = await res.json().catch(() => ({}));
+    const err = typeof body?.error === 'string' ? body.error : undefined;
+    return {
+      probed: true,
+      // invalid_grant means the CLIENT authenticated and only the code was
+      // rejected — exactly what a correct secret looks like here.
+      secretMatchesClient: err === 'invalid_grant',
+      googleError: err,
+      googleErrorDescription: typeof body?.error_description === 'string'
+        ? body.error_description : undefined,
+    };
+  } catch (e) {
+    return { probed: false, reason: String(e) };
+  }
+}
+
 export function googleRedirectUri(origin?: string | null): string {
   return `${resolveAppOrigin(origin ?? SITE_URL)}/api/google/callback`;
 }
