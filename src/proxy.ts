@@ -172,6 +172,47 @@ export async function proxy(request: NextRequest) {
   // regex keeps working.
   const userAgent = request.headers.get('user-agent');
   const source = normalizeStoreSource(searchParams.get('source'));
+
+  // ── AN INSTALLED APP IS NEVER A FIRST-TIME VISITOR (29 Aug) ──────────────
+  //
+  // A paying student of three weeks opened his home-screen app and was shown
+  // "Build Your FREE Personal CAT Study Plan" — the nine-screen signup funnel
+  // he finished weeks ago — and only then found his way to a login. His own
+  // words: "Shows this page again. Then i log in."
+  //
+  // The branch below already tries to prevent exactly this, using `user_role`
+  // as the returning-student signal. That cookie is httpOnly and lives 30
+  // days, so its absence normally means a genuinely new person. For him it
+  // meant something else: his browser had lost EVERY cookie for the origin at
+  // once — the auth cookies and the httpOnly one together — which no script
+  // and no code of ours can do. With the jar empty, a three-week student is
+  // indistinguishable from a stranger, and he got the stranger's door.
+  //
+  // The manifest's start_url is /app?source=pwa, so this parameter is present
+  // on, and only on, a launch from the home screen. It is proof of a prior
+  // install that survives losing every cookie, because it is carried by the
+  // launch URL itself rather than stored. Stamping it here means the very next
+  // request in that navigation — /app hands off to /student/tracker — is
+  // already recognised as a returning student.
+  //
+  // NOT a redirect on /app itself, deliberately: that page exchanges the
+  // one-time hand-off token that makes a fresh install land logged in, and
+  // sending it to /login would break the install flow to fix the funnel.
+  //
+  // normalizeStoreSource deliberately does not accept 'pwa' — it answers a
+  // different question (which STORE wrapper is this, for Razorpay and review
+  // posture). This is the web install, and conflating them would mark PWA
+  // users as store builds.
+  const pwaLaunch = searchParams.get('source') === 'pwa';
+  if (pwaLaunch) {
+    response.cookies.set('cr_pwa', '1', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 24 * 365,
+    });
+  }
   if (source && shouldStampStoreCookie(source, userAgent)) {
     response.cookies.set('cr_store', source, {
       // DELIBERATELY LONG-LIVED. On iOS this cookie is the ONLY evidence that
@@ -314,7 +355,12 @@ export async function proxy(request: NextRequest) {
     // arrive on /student/tracker, so the holdback path is untouched.
     const isStudentPath = pathname.startsWith('/student');
 
-    const returning = request.cookies.get('user_role') != null;
+    // Either signal is enough, and they fail independently: `user_role` is a
+    // cookie that can be evicted with the rest of the jar, while `cr_pwa` is
+    // re-stamped by the launch URL on the very request that lost it.
+    const returning = request.cookies.get('user_role') != null
+      || request.cookies.get('cr_pwa') != null
+      || pwaLaunch;
     const dest = request.nextUrl.clone();
     dest.pathname = (returning || holdBack || !isStudentPath) ? '/login' : '/start';
     return redirectWithSession(dest);
