@@ -1,0 +1,20 @@
+# ── PINNED ACTIONS GO STALE UNLESS SOMETHING BUMPS THEM ─────────────────────
+#
+# 29 Aug 2026. Every action in .github/workflows is pinned to a 40-character
+# commit SHA, because a tag can be silently repointed by its owner and that is
+# how the trivy-action and kics-github-action compromises reached the people
+# who used them.
+#
+# A pin without an updater only trades one risk for another: the SHA stops
+# moving, and so do the security fixes published after it. Dependabot reads
+# the `# v4` comment beside each pin, and raises a PR that moves the SHA and
+# the comment together when that tag advances.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: ci
