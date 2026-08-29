@@ -1,0 +1,34 @@
+# ── PINNED ACTIONS GO STALE UNLESS SOMETHING BUMPS THEM ─────────────────────
+#
+# 29 Aug 2026. Every action in .github/workflows is pinned to a 40-character
+# commit SHA, because a tag can be silently repointed by its owner and that is
+# how the trivy-action and kics-github-action compromises reached the people
+# who used them.
+#
+# A pin without an updater only trades one risk for another: the SHA stops
+# moving, and so do the security fixes published after it. Dependabot reads
+# the `# v4` comment beside each pin, and raises a PR that moves the SHA and
+# the comment together when that tag advances.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    # ── DO NOT ADOPT A RELEASE THE DAY IT SHIPS ──────────────────────────────
+    #
+    # Semgrep flagged the first version of this file for having no cooldown,
+    # and it was right: pinning to a SHA buys protection against a tag being
+    # repointed, and an updater that takes every release the moment it appears
+    # hands part of that back. A compromised or simply broken release is most
+    # often caught in its first days, and this repo does not need any action's
+    # newest commit — it needs one that has survived contact with everyone
+    # else.
+    #
+    # Seven days is short enough that a real security fix still arrives within
+    # a week, and long enough that a yanked release is gone before we take it.
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: ci
