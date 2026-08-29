@@ -66,8 +66,20 @@ export async function GET(request: Request) {
   const origin = new URL(request.url).origin;
 
   const nonce = newStateNonce();
+  // NOT encodeURIComponent'd. googleConsentUrl builds its query with
+  // URLSearchParams, which percent-encodes every value itself — so encoding
+  // here encoded it TWICE, and that broke every mentor connection there has
+  // ever been (Incident #45, 0 tokens in google_oauth_tokens, ever).
+  //
+  // The state is `<nonce>:<returnPath>`. Double-encoded, Google received
+  // `nonce%253A%252Fbuddy%252Fhome`; the callback's one decode left
+  // `nonce%3A%2Fbuddy%2Fhome`, so verifyOAuthState's `raw.indexOf(':')` found
+  // no colon, read the nonce as the empty string, and refused the callback as
+  // `state_mismatch` — a message that points at CSRF and says nothing about
+  // encoding. The audit row said `stage: state, reason: state_mismatch` on a
+  // flow where nothing was tampered with at all.
   const res = NextResponse.redirect(
-    googleConsentUrl(encodeURIComponent(encodeOAuthState(nonce, from)), origin),
+    googleConsentUrl(encodeOAuthState(nonce, from), origin),
   );
   res.cookies.set(OAUTH_STATE_COOKIE, nonce, {
     httpOnly: true,
