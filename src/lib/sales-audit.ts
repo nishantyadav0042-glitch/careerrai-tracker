@@ -34,6 +34,16 @@ export const SALES_AUDIT_ACTIONS = [
   // create — it mints a login. The record names the account and its
   // employment terms; the credential is never part of it.
   'sales_rep_provisioned',
+  // Turning students into an owned book. Distinct from lead_bulk_assigned,
+  // which redistributes leads that already exist: this one CREATES the
+  // relationship, and on 29 Aug 2026 it was the difference between a counsellor
+  // having a job to do on their first morning and logging in to an empty queue.
+  'sales_book_enrolled',
+  // Succession. The one action that moves an entire book between people, so it
+  // is also the one whose absence from the audit log would be least noticeable
+  // and most costly — after owner_id is overwritten, nothing else remembers who
+  // held these students yesterday.
+  'sales_book_transferred',
 ] as const;
 export type SalesAuditAction = (typeof SALES_AUDIT_ACTIONS)[number];
 

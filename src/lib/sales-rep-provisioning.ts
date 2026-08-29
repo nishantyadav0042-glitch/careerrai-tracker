@@ -116,7 +116,6 @@ export type SeatCapCheck =
  * already active (re-saving their own config is not a new seat). Fails closed
  * on a read error: a cap we cannot verify is not a cap.
  */
-/* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 export async function checkSeatCap(admin: any, repId: string): Promise<SeatCapCheck> {
   const { data, error } = await admin
     .from('sales_rep_config').select('rep_id').eq('active', true).neq('rep_id', repId);
@@ -183,6 +182,95 @@ export function repAllocationLimit(cap: RepCapacity, nowMs: number = Date.now())
 
   const max = Math.min(cap.available, cfg.maxNewPerDay);
   return { ok: true, max, boundBy: max === cfg.maxNewPerDay && cfg.maxNewPerDay < cap.available ? 'daily_fuse' : 'capacity' };
+}
+
+// ── OWNING A STUDENT IS NOT WORKING A STUDENT ───────────────────────────────
+//
+// repAllocationLimit above answers "how many leads may this rep be handed right
+// now", and it answers it in CAPACITY UNITS — active work items. That is the
+// correct gate for handing someone live work, and it was silently the wrong
+// gate for something else that happened to use the same route: building a
+// rep's BOOK.
+//
+// The conflation, verified 29 Aug 2026:
+//
+//   · 'never_contacted' is an ActiveReason (lib/sales-capacity.ts), so every
+//     freshly assigned student consumes a unit until somebody calls them.
+//   · max_capacity_units is CHECKed between 1 and 200.
+//   · /api/admin/distribute-leads gates assignment on repAllocationLimit.
+//
+// Therefore a rep could never be given more than ~200 students, ever — and the
+// founder's operating model is ~1,000 students per seat. The ceiling that was
+// written to stop a part-timer being buried in live work was also, invisibly,
+// a ceiling on how many people they could be responsible for.
+//
+// The column comment on max_capacity_units already said the right thing —
+// "Ceiling on ACTIVE work items ... A rep who successfully retains 200 students
+// holds 200 relationships and may still have 50 free units" — but nothing
+// enforced the distinction at the one place it mattered.
+//
+// Founder, 29 Aug 2026: "The salesman shouldn't manage 1,000 students. The
+// salesman manages today's opportunities. The system manages the 1,000-student
+// portfolio. That's a massive distinction."
+//
+// So the two questions get two functions:
+//
+//   repAllocationLimit   → may this rep take more LIVE WORK now?  (unchanged)
+//   portfolioIntakeLimit → may this seat be responsible for more PEOPLE?
+//
+// Work capacity keeps gating the daily queue, which is where a part-timer's
+// five hours actually bind. It no longer gates who exists in their book.
+
+/**
+ * Sanity ceiling on one seat's book. NOT a target and not a capacity model —
+ * a fuse against a typo that hands one rep the entire student base.
+ *
+ * Set well above the founder's stated ~1,000 per seat so it never shapes an
+ * operating decision, and finite because an unbounded fuse is not a fuse (the
+ * same reasoning as max_new_per_day, 24 Aug). Raising it is a founder decision
+ * and a one-line change here.
+ */
+export const MAX_PORTFOLIO_PER_SEAT = 2500;
+
+/** Bounds one enrolment request, so a single call cannot be unboundedly large. */
+export const MAX_INTAKE_PER_CALL = 500;
+
+export type IntakeRefusal = 'NOT_CONFIGURED' | 'INACTIVE' | 'PORTFOLIO_FULL' | 'CALL_TOO_LARGE';
+
+export type IntakeLimit =
+  | { ok: true; max: number }
+  | { ok: false; max: 0; reason: IntakeRefusal; error: string };
+
+/**
+ * How many more students this seat may become responsible for.
+ *
+ * Deliberately NOT gated on capacity units, working hours or the daily fuse —
+ * see the note above. It IS gated on the seat being configured and active,
+ * because a book handed to a seat nobody holds is the unowned-book exception
+ * with extra steps.
+ *
+ * `currentBook` is passed in rather than counted here so the function stays
+ * pure and the caller's count and the writer's count come from one read.
+ */
+export function portfolioIntakeLimit(
+  cfg: { active: boolean } | null,
+  currentBook: number,
+  requested: number,
+): IntakeLimit {
+  if (!cfg) {
+    return { ok: false, max: 0, reason: 'NOT_CONFIGURED', error: 'no capacity row exists, so this is not a configured seat' };
+  }
+  if (!cfg.active) {
+    return { ok: false, max: 0, reason: 'INACTIVE', error: 'the seat is switched off — activate it before giving it students' };
+  }
+  if (requested > MAX_INTAKE_PER_CALL) {
+    return { ok: false, max: 0, reason: 'CALL_TOO_LARGE', error: `at most ${MAX_INTAKE_PER_CALL} students may be enrolled in one request` };
+  }
+  const headroom = MAX_PORTFOLIO_PER_SEAT - currentBook;
+  if (headroom <= 0) {
+    return { ok: false, max: 0, reason: 'PORTFOLIO_FULL', error: `this seat already holds ${currentBook} students, at the ${MAX_PORTFOLIO_PER_SEAT} ceiling` };
+  }
+  return { ok: true, max: Math.min(headroom, MAX_INTAKE_PER_CALL) };
 }
 
 /** Display label. Never a sort key — see the note in sales-control-tower.ts. */
