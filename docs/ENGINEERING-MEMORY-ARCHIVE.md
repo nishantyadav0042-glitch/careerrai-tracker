@@ -2696,3 +2696,69 @@ implementation start on an unverified contract. It found a P0 that had survived
 every test suite, because the suite encoded the same assumption the code did.
 A contract that describes intended behaviour and a test that asserts current
 behaviour can agree with each other and both be wrong.
+
+---
+
+## Incident #53 — coverage had no denominator (2026-08-29)
+
+**Area.** Sales operations — measurement.
+
+**Symptom.** Not a failure, an absence, and it would have become visible on the
+counsellors' first working day. `sales_activity` records outreach that happened.
+Nothing recorded the **offer**. So two questions had no answer at all:
+
+* *Did they work the students that mattered?* — no denominator.
+* *How much of today is left?* — no list to subtract from.
+
+**Why the live queue could not answer it.** `call-queue.ts` is computed on every
+request and stores nothing, which is the right design for "who matters NOW" and
+exactly wrong at 9pm: by then the morning's list has been recomputed away, and a
+student who was skipped is indistinguishable from one who was never chosen. The
+statelessness that makes the queue always fresh is what makes it unable to
+remember.
+
+**The design constraint that shaped the fix.** The founder was explicit: the
+counsellor must never report this. They do not tell the system "today I was
+given 72" — the system decided it, so the system records it. Every number on the
+checkpoint is derived from rows the platform wrote, which is both why it can be
+trusted and why it costs the counsellor nothing.
+
+**Fix.** `sales_opportunity`: one row per rep per student per IST day, written
+when the queue is built. Two database constraints carry the weight:
+
+* `unique (rep_id, student_id, ist_day)` — the founder's "the same student must
+  not surface twice in a day" as a database fact rather than a frontend hope.
+  It is also what makes recording idempotent: the queue is rebuilt on every page
+  load, and every rebuild after the first is a no-op.
+* `check ((worked_at is null) = (outcome is null))` — a half-written record
+  would silently corrupt every coverage number computed from it.
+
+**The rule that keeps it from becoming a performance score.** `worked_at` is set
+in exactly one place: the disposition path in `/api/sales/log`. Opening a card,
+pressing call, tapping WhatsApp — none of them reach it. A counter any tap could
+advance is a counter that will be advanced by tapping. SALES-OS.md §0 puts
+telemetry at P5 and forbids it becoming P0, and a guard test asserts no
+telemetry field reaches `computePayslip`.
+
+**An empty day has no coverage percentage.** `coveragePercent` returns null
+rather than 100 when nothing was surfaced. A day with no opportunities is not a
+perfectly covered day, and rendering it as 100% would be a precise lie about an
+empty set (L1). The counsellor sees "Nothing needs attention right now" — a
+quiet day is information about the base, not evidence about the person.
+
+**What was removed in the same change.** The old headline was "12 connected
+today — keep going": a call-VOLUME number in the counsellor's face every
+morning, which is the exact metric the contract says must never frame a day. It
+is gone, replaced by what is left and how much of it is high priority.
+
+**Rehearsed before shipping.** Five page rebuilds created five rows, not
+twenty-five, and did not overwrite the stored reason with the rebuilt one. A
+second disposition on the same student did not overwrite the first outcome. All
+four invalid writes — outcome without a time, time without an outcome, a
+duplicate surfacing, an empty reason — were refused by the database.
+
+**Wider lesson.** Every part of the sales system worked and none of it could be
+measured, because the thing that decides was not the thing that remembers. When
+a component is deliberately stateless, ask separately who writes down what it
+decided — otherwise the audit trail is missing precisely where the system is
+most confident.
