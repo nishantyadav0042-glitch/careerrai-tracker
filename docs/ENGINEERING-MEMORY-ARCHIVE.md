@@ -3026,6 +3026,36 @@ That pass exposed a trap. The route began `if (!stuck?.length) return ...` — a
 
 **Second lesson.** *A backfill is part of the fix, not a follow-up. A change that only records new data leaves the incident that motivated it permanently unexplained — the failures you already have are the ones you most need explained, and they are exactly the ones outside the new code path.*
 
+**CORRECTION, same day, after a forensic re-audit the founder demanded.**
+
+The device numbers that open this entry were wrong. They came from a join keyed on
+`distinct on (user_id, date_trunc('minute', created_at))` — one arbitrary event per
+user-minute — which silently dropped every order whose surface emits no matching event
+(nine of them landed in "unattributed") and merged in-app sessions with the browser
+sessions the app itself handed students to.
+
+Re-derived from the SESSION that initiated each order:
+
+| claimed | actual |
+|---|---|
+| installed iOS: 0 paid of 8 | **0 paid of 11** (App Store 5, home-screen PWA 6) |
+| iOS Safari: 1 paid of 1 | **2 paid of 3** |
+| installed Android: 2 paid of 13 | **3 paid of 16** |
+
+The one paid order that looked like it came from the App Store build did not: the
+student escaped to Safari 18 seconds earlier and paid there. Session id is the only key
+that separates "inside the app" from "the browser the app handed them to", and a
+±5-minute window merges the two.
+
+The instrumentation defect this entry is about is real and unchanged. What it motivated
+was right; the numbers used to motivate it were a proxy presented as a measurement.
+
+**And the answer, once the explain pass ran (5 minutes after deploy):** not iOS at all.
+Two of the five failures were `source=internal`, "Payment blocked as website does not
+match registered website(s)" — Razorpay refusing an origin. See Incident #59. The other
+three were UPI collect-request timeouts, one of them on an ANDROID home-screen PWA,
+which is what finally killed the iOS-specific hypothesis.
+
 **Still open, deliberately.** *Why* installed iOS fails is UNKNOWN until the explain pass reports. No iOS behaviour was changed in this commit, because nothing yet justifies one. Separately noted: the session checkout mints orders through `/api/sessions/book` rather than `/api/payments/create-order`, so it emits no `payment_order_created` event and does not share the 30-minute duplicate-order reuse guard — two `session` orders were minted 2.5 minutes apart for the same student on 25 Aug. Not fixed here; not money-losing (an unpaid order costs nothing), but it is a real divergence between two order-minting paths.
 
 ## Incident #59
