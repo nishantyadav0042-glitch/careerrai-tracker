@@ -1990,3 +1990,104 @@ still mints, a stuck row 500s) and in the migration's own assertions.
 **Related:** #40, #41. The three together are one story: a wrong value that
 everything read was load-bearing, fixing it broke the things leaning on it, and
 the fix had to go one layer deeper than the first attempt.
+
+---
+
+## Incident #43 — three defects, one loop: the Google signup that could not be escaped (2026-08-29)
+
+**Symptom (founder, in his own words).** "जब I logged in, मतलब onboarding में
+मैंने सारे जो भी अपना basic steps वगैरह थे, coverage metrics को मैंने tick कर
+दिया. उसके बाद जो अपना login वाला option आता है Google का, तो उसको जैसे ही मैंने
+Google के through login किया तो वो वापस मेरे को onboarding करने को दे रहा है…
+it's a loop." He answered all 53 topic questions, chose Continue with Google,
+and was returned to the start of onboarding. Answering again reached the same
+screen. There was no exit. Phone OTP was unaffected throughout.
+
+**Blast radius.** Every student who chose Google since the feature shipped.
+`select count(*) from onboarding_drafts` returned **0** — not zero unconsumed,
+zero rows *ever written*. The feature had never once done its job.
+
+### The three defects
+
+**1. The throttle was read inverted, so the endpoint refused everything.**
+`registerAttemptAndCheck` returns TRUE when the caller is over the limit; every
+other caller reads `if (await registerAttemptAndCheck(...)) return 429`.
+`/api/auth/stash-onboarding` named the result `ok` and wrote `if (!ok) return
+429`. It therefore answered 429 from request number one, with an empty table and
+the limit nowhere in sight, forever. Vercel showed exactly one line for the
+route: `POST /api/auth/stash-onboarding 429`.
+
+The name is the whole defect. `ok` describes the outcome the author wanted, not
+the value the callee returns, and once a variable is named for a hope the
+condition around it reads correctly to everyone including its author.
+
+**2. The claim sat in a branch a database trigger made unreachable.**
+`/auth/callback` claimed the parked draft only inside `if (isNewUser)`, where
+`isNewUser = !existing`. But `on_auth_user_created` on `auth.users` inserts the
+profile inside the same transaction that creates the auth user, and that happens
+in GoTrue before our route is ever reached. Production, both of the founder's
+Google accounts:
+
+```
+profiles.created_at    2026-08-29 06:10:39.92984+00
+auth.users.created_at  2026-08-29 06:10:39.951019+00
+```
+
+The profile is stamped **21 ms earlier than the auth user it belongs to**. So
+`existing` is never null here, `isNewUser` is never true for a Google signup,
+and the branch had never executed. Two independent confirmations: `full_name`
+held Google's "Nishant Kumar", not the route's own `'Student'` fallback.
+
+**3. Because of (2), the state was unrecoverable, and that is what made it a
+loop rather than a lost questionnaire.** Once a profile exists with
+`onboarding_completed = false`, the old rule could never repair it — the only
+branch that could apply a draft required the profile not to exist. The student
+layout gates every `/student/*` page on that flag, so it sent him back to
+/start, where finishing the questions reached the same dead end. Each defect
+alone loses answers; together they close the exit.
+
+### The fix
+
+- The stash endpoint tests the throttle for what it means (`if (throttled)`),
+  and the callee's contract now says **RETURNS TRUE WHEN BLOCKED** in the line a
+  caller reads before wiring it up.
+- `login_attempts` gained a `scope` column. The per-key and per-IP counts are
+  taken within one scope, so a funnel completion no longer spends the login
+  lockout budget. This was not cosmetic: fixing (1) meant the stash finally
+  started writing rows, and on CGNAT — one exit IP for an entire campus or
+  carrier — enough honest /start traffic would have pushed that address past the
+  30/IP login lockout and locked strangers out of their own accounts. The three
+  credential surfaces keep sharing one pool on purpose, so spraying across them
+  still cannot multiply an attacker's allowance. Per-IP for the funnel is 300 /
+  15 min, sized for a shared address rather than for one human.
+- The draft claim is gated on `onboarding_completed !== true` and on the stored
+  role, not on newness. A trigger-created stub qualifies. An abandoned signup
+  qualifies, which is what gives the loop an exit. A student who has finished
+  onboarding never does, so the property the old check was protecting — a
+  replayed cookie cannot overwrite a real profile — survives intact.
+
+### Lessons
+
+**A structural guard can demand the bug.** `onboarding-authority.guard.test.ts`
+asserted that the claim sat *inside the `isNewUser` branch*. It passed for the
+life of the defect, protecting the position of code that could not run. That is
+L2 stated as sharply as it gets: **a test that a call is in a place is not a
+test that the call happens.** It is now asserted on the data condition, and the
+behaviour is driven end to end in `google-onboarding-loop.behaviour.test.ts` —
+the stash endpoint and the callback executed against a filtering fake, with the
+real cookie from the real endpoint carried into the real callback.
+
+**Application code cannot reason about its own newness while a trigger writes
+the same row.** `!existing` looks like "brand new" and means "nothing wrote this
+row before me" — a claim about a race the application does not win. Where a
+trigger owns creation, ask about the *state* you actually need (`has this
+student finished onboarding`), not about who got there first.
+
+**Gate on the same fact the reader gates on.** The student layout redirects on
+`onboarding_completed`. The claim now permits on `onboarding_completed`. When
+the condition to write and the condition to redirect are one column instead of
+two proxies for it, they cannot drift into a loop.
+
+**Zero is a finding.** `total_drafts_ever: 0` was the moment this stopped being
+a hypothesis. A feature whose table has never held a row has never run — no
+amount of reading the code establishes that, and no amount of code review had.

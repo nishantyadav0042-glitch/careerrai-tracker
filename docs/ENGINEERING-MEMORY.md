@@ -57,6 +57,7 @@
 | 42 | 2026-08-28 | #41's fix was in the caller; the same defect sat in `activate_payment` SQL, and the profiles update had no guard at all | Trust (money) (P0) | any refunded student; reproduced before it shipped |
 | 40 | 2026-08-27 | The rules were real, and attached to the wrong verb — availability was `before insert` only | Trust (P1) | any student whose session was moved |
 | 41 | 2026-08-27 | A paid entitlement could be bypassed by the path the booking came through | Trust (P0, money) | every mentor-booked session for a paying student |
+| 43 | 2026-08-29 | Google signup looped back into onboarding — the stash endpoint inverted its throttle and rejected every request ever made, and the claim sat in a branch a DB trigger made unreachable | Growth / Learning (P0) | every student who chose Continue with Google; 0 drafts stored in the feature's lifetime |
 
 > Entries 12 and 13 were never written. The gap is left visible rather than
 > renumbered — the numbers are referenced from commit messages and code

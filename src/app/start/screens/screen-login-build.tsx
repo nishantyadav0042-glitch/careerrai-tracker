@@ -173,91 +173,97 @@ export default function ScreenLoginBuild({ isLoading, onboarding }: Props) {
         <h1 className="text-xl font-bold text-stone-900 leading-snug" style={{ fontFamily: 'Georgia, serif' }}>
           We&apos;ve got everything. Log in while we build.
         </h1>
-        <p className="mt-1.5 text-sm text-stone-500">Your plan gets built the moment your number is verified.</p>
+        <p className="mt-1.5 text-sm text-stone-500">Your plan gets built the moment you sign in.</p>
       </div>
 
       {step === 'phone' ? (
-        <form onSubmit={requestOtp} className="space-y-4">
+        <div className="space-y-5">
+          {/* ── GOOGLE IS THE RECOMMENDED DOOR (founder, 29 Aug) ────────────
+              Still AFTER the questionnaire and never before it: a student who
+              signs in before answering anything is an account with no plan.
+              By this screen the questions are complete and the only decision
+              left is which door — and the fastest door should be the obvious
+              one. Google is one tap with no SMS to wait for, no carrier to
+              drop the message, and no 10-digit Indian number required.
+
+              The draft is parked server-side before the redirect, because the
+              browser is about to leave for accounts.google.com and come back
+              to /auth/callback, which cannot see localStorage. That is the
+              whole reason this is not simply the same button as /login. */}
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-stone-800">Your name</label>
-            <input
-              type="text"
-              autoComplete="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Your name"
-              required
-              autoFocus
-              className="w-full rounded-xl border border-stone-300 px-3 py-2.5 text-sm focus:border-stone-900 focus:outline-none focus:ring-2 focus:ring-stone-900/10"
-            />
+            <ContinueWithGoogle variant="primary" beforeRedirect={stashOnboarding} />
+            <p className="mt-2 text-center text-[11px] text-stone-400">
+              One tap. No OTP to wait for.
+            </p>
           </div>
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-stone-800">Mobile number</label>
-            <div className="relative flex items-center">
-              <span className="absolute left-3 select-none text-sm font-medium text-stone-500">+91</span>
+
+          {/* THE ESCAPE FROM A GOOGLE-ONLY DEAD END, kept for exactly the
+              reason the SMS-only one was removed: a student with no Google
+              account on the device, or one who simply does not want to use it,
+              must still have a plain way through. Demoted, never dropped —
+              Incident #10 was a login screen with a single door, and it cost
+              us a Guideline 2.1 rejection. */}
+          <div className="flex items-center gap-3">
+            <div className="h-px flex-1 bg-stone-200" />
+            <span className="text-[11px] font-medium text-stone-400">or use your mobile number</span>
+            <div className="h-px flex-1 bg-stone-200" />
+          </div>
+
+          <form onSubmit={requestOtp} className="space-y-4">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-stone-800">Your name</label>
               <input
-                type="tel"
-                inputMode="numeric"
-                autoComplete="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                placeholder="9876543210"
+                type="text"
+                autoComplete="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Your name"
                 required
-                maxLength={10}
-                className="w-full rounded-xl border border-stone-300 py-2.5 pl-12 pr-3 text-sm focus:border-stone-900 focus:outline-none focus:ring-2 focus:ring-stone-900/10"
+                className="w-full rounded-xl border border-stone-300 px-3 py-2.5 text-sm focus:border-stone-900 focus:outline-none focus:ring-2 focus:ring-stone-900/10"
               />
             </div>
-          </div>
-          {error && <p className="text-xs text-rose-600">{error}</p>}
-          <div className="sticky bottom-0 z-20 bg-white/95 pt-1 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm">
-            <button
-              type="submit"
-              disabled={busy || isLoading || phone.length < 10 || name.trim().length < 2}
-              className="w-full rounded-2xl bg-stone-900 py-4 text-sm font-semibold text-white transition-all hover:bg-stone-800 active:scale-[0.98] disabled:opacity-50"
-            >
-              {busy ? 'Sending…' : 'Send OTP →'}
-            </button>
-          </div>
-
-          {/* THE ESCAPE FROM AN SMS-ONLY DEAD END.
-              Everything above this line requires a 10-digit INDIAN mobile and
-              an SMS that only that number can receive. Anyone who cannot —
-              a store reviewer with demo credentials, a student on a new phone,
-              anyone abroad — had no way past this screen at all. That is the
-              Guideline 2.1 rejection we already took once (Incident #10):
-              "our login sends an SMS OTP to an Indian number a reviewer cannot
-              receive. They had no way in."
-              Deliberately a plain, readable control rather than fine print. */}
-          <div className="pt-1">
-            <div className="mb-3 flex items-center gap-3">
-              <div className="h-px flex-1 bg-stone-200" />
-              <span className="text-[11px] font-medium text-stone-400">or</span>
-              <div className="h-px flex-1 bg-stone-200" />
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-stone-800">Mobile number</label>
+              <div className="relative flex items-center">
+                <span className="absolute left-3 select-none text-sm font-medium text-stone-500">+91</span>
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  autoComplete="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  placeholder="9876543210"
+                  required
+                  maxLength={10}
+                  className="w-full rounded-xl border border-stone-300 py-2.5 pl-12 pr-3 text-sm focus:border-stone-900 focus:outline-none focus:ring-2 focus:ring-stone-900/10"
+                />
+              </div>
             </div>
+            {error && <p className="text-xs text-rose-600">{error}</p>}
+            {/* Sticky, still: on a 667px phone this is the control furthest down
+                the screen, and a forward action below the fold is an ad click
+                spent on a dead end (funnel-cta.guard). Bordered rather than
+                filled — the filled CTA is Google's now, and two filled buttons
+                would leave the student with no recommendation at all. */}
+            <div className="sticky bottom-0 z-20 bg-white/95 pt-1 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm">
+              <button
+                type="submit"
+                disabled={busy || isLoading || phone.length < 10 || name.trim().length < 2}
+                className="w-full rounded-2xl border border-stone-300 bg-white py-4 text-sm font-semibold text-stone-800 transition-all hover:border-stone-900 active:scale-[0.98] disabled:opacity-50"
+              >
+                {busy ? 'Sending…' : 'Send OTP →'}
+              </button>
+            </div>
+          </form>
 
-            {/* GOOGLE BELONGS HERE, AND NOWHERE EARLIER (founder, 29 Aug).
-                Not on the first screen of /start: a student who signs in before
-                answering anything is an account with no plan, and the funnel's
-                whole value is that the questions come first. By this screen the
-                questionnaire is COMPLETE and the only remaining decision is
-                which door to walk through — so Google is an alternative to the
-                OTP above it, never a replacement for the questions before it.
-
-                The draft is parked server-side before the redirect, because the
-                browser is about to leave for accounts.google.com and come back
-                to /auth/callback, which cannot see localStorage. That is the
-                whole reason this is not simply the same button as /login. */}
-            <ContinueWithGoogle beforeRedirect={stashOnboarding} />
-
-            <button
-              type="button"
-              onClick={() => { setStep('password'); setError(null); }}
-              className="mt-3 w-full rounded-xl border border-stone-300 bg-white py-3 text-[13px] font-semibold text-stone-700 transition-colors hover:border-stone-900 hover:text-stone-900"
-            >
-              Already have an account? Log in with password
-            </button>
-          </div>
-        </form>
+          <button
+            type="button"
+            onClick={() => { setStep('password'); setError(null); }}
+            className="w-full text-center text-xs font-medium text-stone-500 hover:text-stone-700"
+          >
+            Already have an account? Log in with password
+          </button>
+        </div>
       ) : step === 'password' ? (
         // Native form POST to the SAME endpoint /login uses. Not a fetch: the
         // route answers with a 302 and sets the session cookies on it, so the

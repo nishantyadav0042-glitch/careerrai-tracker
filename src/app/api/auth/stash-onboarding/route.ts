@@ -22,6 +22,21 @@ export const COOKIE = 'cr_onb_draft';
 const MAX_BYTES = 64 * 1024;
 const TTL_SECONDS = 30 * 60;
 
+// ── THE THROTTLE, AND WHY IT IS NOT THE LOGIN THROTTLE ──────────────────────
+//
+// Its own scope, so these rows neither spend nor are spent by the credential
+// budget. Parking a draft is not a guess at a secret; counting it as one made
+// /start traffic eat the login lockout, and on CGNAT — one exit IP for a whole
+// campus or carrier — that is students locked out of their own accounts by
+// strangers finishing a questionnaire.
+//
+// 300 per IP per 15 minutes is sized for that same reality from the other
+// side: a shared address is MANY honest students, so a limit tuned for one
+// human is a limit that blocks a college. It still bounds an anonymous writer
+// to 300 bounded rows a quarter-hour, which the hourly reaper clears.
+const THROTTLE_SCOPE = 'onboarding-draft';
+const MAX_PER_IP = 300;
+
 export async function POST(request: NextRequest) {
   try {
     // Unauthenticated by necessity — there is no account yet — so it is rate
@@ -29,11 +44,16 @@ export async function POST(request: NextRequest) {
     // our database, and 30 minutes of TTL is no defence against a loop.
     const ip = clientIp(request);
     const admin = createAdminClient();
-    const ok = await registerAttemptAndCheck(
+    // TRUE MEANS BLOCKED. This read `if (!ok)` until 29 Aug and therefore
+    // answered 429 to every request from the very first one — the endpoint
+    // stored zero drafts in its entire life, and every student who chose
+    // Google lost the answers they had just given. Read the callee's contract,
+    // do not name the result after the outcome you were hoping for.
+    const throttled = await registerAttemptAndCheck(
       admin, `stash-onboarding:${ip ?? 'unknown'}`, ip,
-      { maxPerKey: 20, maxPerIp: 40 },
+      { maxPerKey: MAX_PER_IP, maxPerIp: MAX_PER_IP, scope: THROTTLE_SCOPE },
     );
-    if (!ok) {
+    if (throttled) {
       return NextResponse.json({ error: 'Too many attempts.' }, { status: 429 });
     }
 
