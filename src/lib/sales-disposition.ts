@@ -88,10 +88,42 @@ export function nextActionAtFromDate(date: string): string {
   return `${date}T05:30:00.000Z`;
 }
 
+// ── THE CONTACT CEILING (29 Aug 2026) ───────────────────────────────────────
+//
+// Until this existed the cadence engine had no upper bound. Simulated over 30
+// days against a student who never once picked up:
+//
+//   hot lead      → 31 calls   (the `hot` branch rolled to tomorrow morning
+//                               EVERY time, ignoring the miss count entirely)
+//   ordinary lead → 13 calls
+//
+// Thirty-one calls to someone who has never answered is not persistence, it is
+// the thing that turns CareerRai from a study app into a call centre — and it
+// would have landed hardest on the abandoned-checkout students, who score
+// `hot` precisely because they matter most.
+//
+// THE PRINCIPLE, and why the cap is only on silence: a ceiling belongs where
+// the student has given us NO signal at all. `interested` is deliberately left
+// uncapped — someone who picks up and talks every two days is choosing to
+// engage, and inventing a limit on real conversations would be a rule without
+// evidence. Silence is different: it is the one case where we are the only
+// participant, so we are the ones who have to stop.
+//
+// Both numbers are constants rather than judgement calls scattered through the
+// engine, so the founder can change the policy in one place once real answer
+// rates exist. Consecutive-only: any connected outcome resets noAnswerCount,
+// so a student who answers once starts fresh.
+
+/** Consecutive unanswered attempts after which we stop calling entirely. */
+export const MAX_CONSECUTIVE_NO_ANSWER = 6;
+/** How many daily retries a hot lead gets before it joins normal escalation. */
+export const HOT_DAILY_RETRY_LIMIT = 3;
+
 export interface DispositionPlan {
   /** Stored lead_outreach.status — always a legal LEAD_STATUSES value. */
   status: LeadStatus;
-  /** When the lead re-enters the queue. null = closed (won or lost). */
+  /** When the lead re-enters the queue. null = closed (won, lost, or — for
+   *  no_answer — the contact ceiling reached). */
   nextActionAt: string | null;
   /** The exact time the student asked to be called back, when outcome=callback. */
   callbackAt: string | null;
@@ -126,8 +158,17 @@ export function planDisposition(
   }
   if (outcome === 'no_answer') {
     const misses = prevMisses + 1;
+    // The ceiling. Six consecutive unanswered attempts spans roughly eight
+    // days across morning and evening windows; a student who has not picked up
+    // once in that time is telling us something, and continuing to dial is our
+    // problem rather than theirs. Returning a null clock is what actually stops
+    // it — the queue additionally refuses to deal these (see call-queue), so a
+    // null cannot be misread downstream as "never scheduled, treat as fresh".
+    if (misses >= MAX_CONSECUTIVE_NO_ANSWER) {
+      return { status: 'no_answer', nextActionAt: null, callbackAt: null, noAnswerCount: misses };
+    }
     let nextActionAt: string;
-    if (hot) {
+    if (hot && misses < HOT_DAILY_RETRY_LIMIT) {
       nextActionAt = istFutureIso(nowMs, 1, 10, 0); // never lose a hot lead — tomorrow morning
     } else if (misses < 2 && istHourOf(nowMs) < 17) {
       nextActionAt = istFutureIso(nowMs, 0, 18, 30); // evening retry today

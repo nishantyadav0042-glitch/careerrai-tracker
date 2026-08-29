@@ -3,6 +3,7 @@ import { getRosterMomentum, bandMeta } from '@/lib/momentum';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { scoreConversion, conversionTier } from '@/lib/sales-score';
 import { isClosedForSales } from '@/lib/sales-conversion-truth';
+import { MAX_CONSECUTIVE_NO_ANSWER } from '@/lib/sales-disposition';
 import { classifyObjective, type SalesObjective } from '@/lib/sales-objective';
 import {
   GOING_COLD_SILENT_DAYS, GOING_COLD_MIN_PRIOR_DAYS,
@@ -418,6 +419,20 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
       : resolveOwnerToken((o?.owner as string | null) ?? null, staff);
     if (!canAccessLead(ownership, viewer ?? null)) continue;
     totalOpen++;
+
+    // ── THE CONTACT CEILING ───────────────────────────────────────────────
+    //
+    // Belt to the cadence engine's braces, and NOT redundant with it. The
+    // engine stops SCHEDULING at the ceiling by returning a null clock; this
+    // stops DEALING. Without it a null `next_action_at` would fall straight
+    // through the two guards below into the ordinary lane classifier, and an
+    // exhausted lead would come back as a fresh cold card — the cap would have
+    // made the over-calling worse instead of ending it.
+    //
+    // The lead is not deleted or closed: it keeps its owner and its history,
+    // and surfaces to the founder as a data-quality exception. We stopped
+    // calling; we did not stop caring who they are.
+    if (((o?.no_answer_count as number | null) ?? 0) >= MAX_CONSECUTIVE_NO_ANSWER) continue;
 
     const nextAction = o?.next_action_at ? new Date(o.next_action_at).getTime() : null;
     const dueNow = nextAction != null && nextAction <= now;

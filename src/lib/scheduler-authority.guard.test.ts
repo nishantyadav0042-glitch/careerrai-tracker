@@ -121,6 +121,7 @@ describe('every dual-fired route can survive being run twice', () => {
     'expire-subscriptions': 'the expiry UPDATE is status-guarded, so the second run changes no rows and sends nothing.',
     'renewal-reminders': 'reads existing renewal_reminder rows and fails closed on a read error.',
     'sales-ready': 'writes no notifications — it moves CRM lane state, which is idempotent by status guard.',
+    'outcome-sweep': 'writes no notifications; sweep_intervention_outcomes() selects only rows whose window column IS NULL and whose window has elapsed, so the second run of a day matches nothing.',
   };
 
   it('every dual-fired route has a declared defence', () => {

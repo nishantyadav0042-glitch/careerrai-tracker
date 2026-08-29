@@ -11,6 +11,21 @@ name: Cron fallback
 #
 # GitHub Actions schedules are best-effort and can slip by several minutes
 # under platform load; that's an acceptable tradeoff for a fallback path.
+#
+# outcome-sweep (added 29 Aug 2026) is not a fallback here — it is the ONLY
+# trigger that has ever worked. Vercel has had it registered since 24 Aug on
+# `45 1 * * *` and cron_runs shows it has never once fired, while 36 other
+# paths fire normally; the same was true of purge-session-handoffs, added 27
+# Aug. Both are the two most recently added jobs, which points at a
+# registration ceiling on Vercel's side, but that is a hypothesis and the
+# fallback does not depend on it being right.
+#
+# It matters more than a missed notification would: the sweep is the half of
+# the learning loop that observes what students did AFTER an intervention.
+# Without it every outcome column in intervention_ledger stays NULL forever,
+# and "did the counsellors change anything?" has no data behind it at all.
+# Scheduled 30 minutes after Vercel's attempt; the sweep only fills matured
+# NULL windows, so running twice is a no-op rather than a double count.
 
 on:
   schedule:
@@ -25,6 +40,7 @@ on:
     - cron: '25 3 * * *'    # expire-subscriptions
     - cron: '25 4 * * *'    # renewal-reminders
     - cron: '55 9 * * *'   # sales-ready
+    - cron: '15 2 * * *'   # outcome-sweep
   workflow_dispatch:
     inputs:
       endpoint:
@@ -87,6 +103,8 @@ jobs:
                 call "/api/cron/renewal-reminders" ;;
               "55 9 * * *")
                 call "/api/cron/sales-ready" ;;
+              "15 2 * * *")
+                call "/api/cron/outcome-sweep" ;;
               *)
                 echo "::error::Unrecognized schedule string: $SCHEDULE"
                 FAILED=1 ;;
@@ -105,7 +123,8 @@ jobs:
               /api/cron/check-red-flags \
               /api/cron/expire-subscriptions \
               /api/cron/renewal-reminders \
-              /api/cron/sales-ready
+              /api/cron/sales-ready \
+              /api/cron/outcome-sweep
             do
               call "$p"
             done
