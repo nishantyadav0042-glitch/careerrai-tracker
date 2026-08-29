@@ -1,9 +1,15 @@
 # Sales OS — Final Product Contract
 
-> **Status: DRAFT — awaiting founder ratification (29 Aug 2026).**
-> Until ratified this document is a proposal, not a Constitution. It does not
-> yet bind. On ratification, remove this block and it joins the other
-> Constitutions in `docs/OS/` under the authority described in `AGENTS.md`.
+> **RATIFIED 29 Aug 2026.** This is a binding Constitution under the authority
+> described in `AGENTS.md`. Read it before changing anything in the sales
+> domain. Amendments carry a dated note saying what changed and why.
+>
+> **Amendment 1 (29 Aug 2026), after the Contract × Repo audit.** Four
+> corrections, all recorded inline below: §3 rule 1 now describes the enforced
+> mechanism rather than asserting a behaviour that did not exist (Incident #52);
+> §4 distinguishes lane order from primary objective; §5 gains the catch-all
+> rule that makes "42 means 42" true; §12 defers to `student-success-mis.ts`
+> instead of proposing work already done.
 
 ---
 
@@ -104,7 +110,16 @@ the primary key of that table, so this is enforced by the schema, not by code.
 **Rules that bind:**
 
 1. **Only the payment ledger may produce `converted`.** A counsellor cannot
-   type their way to a won deal. This is already true in code and must stay true.
+   type their way to a won deal.
+   *Amended 29 Aug 2026:* the original text said this was "already true in
+   code". **It was not** — the audit found the opposite (Incident #52): a typed
+   `converted` was terminal in `call-queue.ts` and deleted the student from
+   every future queue with no payment anywhere. It is true now, and enforced by
+   `isClosedForSales()` in `sales-conversion-truth.ts`, which closes a student
+   on the payment ledger and on the two things the student themselves said —
+   never on a typed status. A claim without money is recorded as history with
+   `self_reported` provenance and raises a founder exception; the student stays
+   in the book.
 2. **The four terminal states never resurface.** `not_interested`, `dnd` and
    `unqualified` are closed forever; `converted` leaves the sales queue and
    becomes a retention relationship.
@@ -157,7 +172,18 @@ SECONDARY CONTEXT:   Retention — 3 days without a log
 ```
 
 **Conversion is primary when a live commercial signal exists; retention is
-primary otherwise.** The counsellor covers both naturally in one conversation —
+primary otherwise.**
+
+*Amended 29 Aug 2026.* This is about the CARD, not the QUEUE, and the audit
+found the two being confused. The build order of 24 Aug puts retention lanes
+above conversion lanes; that decides **who gets surfaced at all**. Primary
+objective decides **what a given call is about**. A student surfaced by a
+retention lane who also has an abandoned checkout still gets
+`PRIMARY = CONVERSION` on their card. And because §5 fills the two lanes
+independently, "which lane ranks higher" rarely decides anything. Both
+statements stand; they were never in conflict once separated.
+
+The counsellor covers both naturally in one conversation —
 *"your preparation looks a bit irregular and you'd also looked at strategy
 support — is something specific getting in the way?"* — instead of making two
 robotic calls to the same person.
@@ -177,6 +203,13 @@ of pay or performance.
 
 A short queue on a Tuesday is information about the base, not evidence about the
 counsellor. The founder dashboard must present it that way.
+
+**No catch-all lane.** *Added 29 Aug 2026.* The audit found that "42 means 42"
+was unenforceable: `call-queue.ts` had a `fresh` lane documented as "everyone
+else", so once a book exists the queue can never be short — it always fills to
+the cap. **Every lane must require an actual signal.** A student with no current
+signal is backlog, reachable through the ranked pool, never auto-dealt to pad a
+day. Without this rule the no-padding promise is decoration.
 
 ### The retention floor
 
@@ -373,11 +406,19 @@ and attribution snapshotted at payment. This already works.
 the queue judged reachable and worth calling — so "68% of contacted students came
 back" may measure the selection, not the call.
 
-**The honest fix costs nothing and requires no student to be deprived.** Capacity
-already creates a natural comparison group: on any day, more students are at risk
-than the two counsellors can reach, and which ones get missed is driven by queue
-position rather than by anything about the student. Comparing reached against
-not-yet-reached *within the same lane on the same day* is a fair estimate of lift.
+**The honest fix already exists and must not be rebuilt.** *Amended 29 Aug 2026:*
+the original text proposed the same-lane reached-vs-unreached comparison as new
+work. `compareByLane()` in `src/lib/student-success-mis.ts` already implements
+it, with D1/D3/D7 outcome windows and a minimum-per-arm threshold that returns
+`UNAVAILABLE` rather than a thin percentage. Its own comment is stricter than
+this contract was: *"reps work the students most likely to respond, so a raw
+'contacted students log more' comparison measures the rep's TARGETING, not their
+effect… and it is still not causal — the rep picks whom to call inside the lane
+too."*
+
+**`student-success-mis.ts` is the retention-measurement authority.** Building a
+second one violates non-negotiable #14. The real work is narrower than this
+contract first claimed: feed its intervention ledger from the new queue.
 
 **We will not run a deliberate holdout** — withholding a helpful call from a
 student to improve a measurement is not compatible with `docs/MISSION.md`. The

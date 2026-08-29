@@ -45,7 +45,7 @@ const asRep = (id: string) => ({ id, role: 'sales' as const });
 const asAdmin = { id: BOSS, role: 'admin' as const };
 
 /** Fake DB: `outreach` rows drive lead state; everything else is empty but OK. */
-function db(outreach: Record<string, unknown>[], opts: { outreachFails?: boolean } = {}) {
+function db(outreach: Record<string, unknown>[], opts: { outreachFails?: boolean; paidIds?: string[] } = {}) {
   const chain = (table: string) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const c: any = {};
@@ -56,6 +56,12 @@ function db(outreach: Record<string, unknown>[], opts: { outreachFails?: boolean
         return Promise.resolve(
           opts.outreachFails ? { data: null, error: { message: 'connection reset' } } : { data: outreach, error: null },
         ).then(ok);
+      }
+      // The payment ledger — the only thing that converts a student (#52).
+      if (table === 'student_payments') {
+        return Promise.resolve({
+          data: (opts.paidIds ?? []).map((id) => ({ student_id: id })), error: null,
+        }).then(ok);
       }
       return Promise.resolve({ data: [], error: null }).then(ok);
     };
@@ -156,14 +162,46 @@ describe('Scenario C — a promised follow-up never disappears', () => {
   });
 });
 
-describe('Scenario D — a closed lead stays closed', () => {
-  it('converted and not_interested never re-enter the queue', async () => {
-    for (const status of ['converted', 'not_interested']) {
-      const { queue, totalOpen } = await buildCallQueue(db([
-        { student_id: 'fresh-1', status, next_action_at: null, last_attempt_at: null, no_answer_count: 0, callback_at: null, owner: null },
-      ]), asAdmin);
+describe('Scenario D — what actually closes a student (Incident #52)', () => {
+  const row = (status: string) => ([{
+    student_id: 'fresh-1', status, next_action_at: null, last_attempt_at: null,
+    no_answer_count: 0, callback_at: null, owner: null,
+  }]);
+
+  // The student's own words close the relationship. These are unchanged.
+  it("the student's own refusal closes them for good", async () => {
+    for (const status of ['not_interested', 'dnd', 'unqualified']) {
+      const { queue, totalOpen } = await buildCallQueue(db(row(status)), asAdmin);
       expect(queue.find((l) => l.studentId === 'fresh-1'), `${status} must never be called again`).toBeFalsy();
       expect(totalOpen).toBe(1);
+    }
+  });
+
+  it('a paid student leaves the sales queue', async () => {
+    const { queue } = await buildCallQueue(db(row('converted'), { paidIds: ['fresh-1'] }), asAdmin);
+    expect(queue.find((l) => l.studentId === 'fresh-1')).toBeFalsy();
+  });
+
+  // THIS ASSERTION USED TO SAY THE OPPOSITE, and the opposite was the bug.
+  //
+  // Until 29 Aug 2026 this scenario asserted that a typed `converted` never
+  // re-enters the queue. That is precisely how one mistaken tap deleted a
+  // student from every future queue with no payment anywhere — the counsellor
+  // whose job is to convert them would never see them again. The payment
+  // ledger is the only conversion truth (SALES-OS.md §3 rule 1), so a claim
+  // without money keeps the student in the book.
+  it('a claimed conversion with NO payment keeps the student in the queue', async () => {
+    const { queue } = await buildCallQueue(db(row('converted')), asAdmin);
+    expect(
+      queue.find((l) => l.studentId === 'fresh-1'),
+      'a mistaken tap must not delete a student from the sales system',
+    ).toBeTruthy();
+  });
+
+  it('payment closes a student whatever their typed status says', async () => {
+    for (const status of ['interested', 'no_answer', 'called', 'follow_up']) {
+      const { queue } = await buildCallQueue(db(row(status), { paidIds: ['fresh-1'] }), asAdmin);
+      expect(queue.find((l) => l.studentId === 'fresh-1'), `${status} + paid must leave the queue`).toBeFalsy();
     }
   });
 });

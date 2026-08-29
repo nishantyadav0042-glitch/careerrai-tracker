@@ -1,11 +1,12 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { isCallOutcome, isConnectedOutcome, planDisposition } from '@/lib/sales-disposition';
+import { isCallOutcome, isConnectedOutcome, planDisposition, type CallOutcome } from '@/lib/sales-disposition';
 import {
   canAccessLead, checkSalesTarget, loadStaffDirectory, resolveLeadOwner, salesPrincipal,
 } from '@/lib/sales-authz';
 import { completeDueFollowups, scheduleFollowup } from '@/lib/sales-followup';
+import { resolveConvertedClaim } from '@/lib/sales-conversion-truth';
 import { captureStateSnapshot, recordIntervention, interventionTypeForLane } from '@/lib/intervention-ledger';
 import { isReasonCategory, reasonNeedsVerbatim } from '@/lib/intervention-taxonomy';
 
@@ -134,7 +135,32 @@ export async function POST(request: NextRequest) {
     .select('no_answer_count, first_contact_at').eq('student_id', studentId).maybeSingle();
   const prevMisses = (cur?.no_answer_count as number | null) ?? 0;
 
-  const plan = planDisposition(outcome, {
+  // ── A CLAIMED CONVERSION IS NOT A CONVERSION (Incident #52) ──────────────
+  //
+  // Before this, outcome='converted' wrote status='converted', and the queue
+  // treated that as "gone forever" — so one mistaken tap deleted a student from
+  // every future queue with no payment anywhere. The payment ledger is the only
+  // thing that may convert a student (SALES-OS.md §3 rule 1).
+  //
+  // The claim is NOT discarded: it is recorded in sales_activity below with the
+  // rep's own outcome and self_reported provenance, so what they believed is
+  // preserved as history. Only the STATE is corrected, and only downward — a
+  // real payment still converts.
+  //
+  // A read failure is NOT "they have not paid". `null` flows through
+  // resolveConvertedClaim() as unverified, which keeps the student actionable
+  // rather than closing them on a claim we could not check.
+  let paidKnown: boolean | null = null;
+  if (outcome === 'converted') {
+    const { data: paidRow, error: paidErr } = await admin
+      .from('student_payments').select('id').eq('student_id', studentId).eq('status', 'paid').limit(1);
+    paidKnown = paidErr ? null : (paidRow ?? []).length > 0;
+  }
+  const convertedClaim = outcome === 'converted' ? resolveConvertedClaim(paidKnown) : null;
+  const effectiveOutcome: CallOutcome =
+    convertedClaim && convertedClaim.status === 'interested' ? 'interested' : outcome;
+
+  const plan = planDisposition(effectiveOutcome, {
     prevMisses,
     hot: hot === true,
     callbackAtLocal: typeof callbackAt === 'string' ? callbackAt : null,

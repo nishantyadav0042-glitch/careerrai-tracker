@@ -2629,3 +2629,70 @@ and fully tested, and the system as a whole could not have been used, because
 nothing tested the step that produces its input. "All the parts work" and "a
 person can do their job with this" are different claims, and only the second one
 matters on the first morning.
+
+---
+
+## Incident #52 — a mistaken tap deleted a student from the sales system (2026-08-29)
+
+**Area.** Sales operations — conversion truth.
+
+**Symptom.** None yet. Found by the Contract × Repo audit the founder ordered
+before implementation, while `lead_outreach` still had zero rows.
+
+**Root cause.** Two independently reasonable pieces of code:
+
+* `call-queue.ts` held `CLOSED = {'converted','not_interested','dnd'}` and
+  skipped those students with the comment *"gone forever"*.
+* `/api/sales/log` accepted `converted` as an ordinary call outcome — it is in
+  `CALL_OUTCOMES` — and nothing consulted the payment ledger before writing it.
+
+Together: a counsellor who tapped "Converted" by mistake, or optimistically
+after a promising call, **permanently removed that student from every future
+queue**. No payment required, no exception raised, no way back. The two people
+whose entire job is retention and conversion would never see that student again.
+
+**The detail that would have made it hard to find.** `/sales/leads` filters
+Active as `!paid && status in (…,'converted')`, so the same student still
+appeared under "Active" in the portfolio while being invisible in the queue.
+Two surfaces, opposite answers — and the one a counsellor actually works from
+was the one that hid them. A founder checking "is this student still in the
+book?" on the portfolio screen would have been told yes.
+
+**Why it had never fired.** `lead_outreach` has never held a row. The bug was
+written against an empty table and would have gone live on the same day 965
+students were enrolled.
+
+**A test was asserting the bug.** `crm-end-to-end.test.ts` Scenario D asserted
+*"converted and not_interested never re-enter the queue"* — the old rule, stated
+as a guarantee. It passed for the whole life of the defect. The test was
+rewritten rather than deleted, and now asserts the four cases that actually
+matter, including the one that used to be inverted.
+
+**Fix.** `src/lib/sales-conversion-truth.ts`. `isClosedForSales()` closes a
+student on the payment ledger and on the two things the student themselves said
+(`not_interested`, `dnd`, plus `unqualified`) — never on a typed status. The
+queue now reads `student_payments` directly rather than trusting the
+`is_premium` profile flag, which a failed webhook can leave stale.
+`resolveConvertedClaim()` downgrades an unbacked claim to `interested` while
+keeping the rep's own outcome in `sales_activity` with `self_reported`
+provenance, so what they believed survives as history and only the state is
+corrected. The mismatch becomes a founder exception, because a claimed
+conversion with no money is either a failed payment or a misused button and both
+need a look.
+
+**An unreadable ledger is not "unpaid".** `resolveConvertedClaim(null)` keeps
+the student actionable and says the payment could not be verified. Treating a
+transient database error as "they did not pay" would downgrade a real conversion
+— the same class of lie in the opposite direction (L1).
+
+**Prevention.** Eight mutations killed with zero survivors on the new module. A
+guard test reintroduces the literal `CLOSED` set and fails, verified by
+injection. Contract §3 rule 1 amended: it used to claim this was "already true
+in code", which was the most dangerous sentence in the document — a Constitution
+asserting a property nothing enforced.
+
+**Wider lesson.** The audit was ordered because the founder refused to let
+implementation start on an unverified contract. It found a P0 that had survived
+every test suite, because the suite encoded the same assumption the code did.
+A contract that describes intended behaviour and a test that asserts current
+behaviour can agree with each other and both be wrong.

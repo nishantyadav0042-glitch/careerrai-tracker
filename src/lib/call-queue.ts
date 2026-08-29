@@ -2,6 +2,7 @@ import { canAccessLead, loadStaffDirectory, resolveOwnerToken, type SalesPrincip
 import { getRosterMomentum, bandMeta } from '@/lib/momentum';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { scoreConversion, conversionTier } from '@/lib/sales-score';
+import { isClosedForSales } from '@/lib/sales-conversion-truth';
 import {
   GOING_COLD_SILENT_DAYS, GOING_COLD_MIN_PRIOR_DAYS,
   BROKEN_STREAK_MIN_RUN, BROKEN_STREAK_MAX_DAYS_SINCE,
@@ -263,12 +264,18 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
   const ids = free.map((r) => r.id);
   if (ids.length === 0) return { queue: [], connectedToday: 0, dueNow: 0, totalOpen: 0 };
 
-  const [{ data: profs }, { data: eng }, { data: reports }, outreach] = await Promise.all([
+  const [{ data: profs }, { data: eng }, { data: reports }, outreach, { data: paidRows }] = await Promise.all([
     db.from('profiles').select('id, created_at, target_percentile, cat_percentile, starting_percentile, pain_points, dream_colleges, is_repeater').in('id', ids),
     db.from('student_engagement').select('student_id, buddy_cta_clicks, mock_opened, intent_door_at').in('student_id', ids),
     db.from('daily_reports').select('student_id, report_date').in('student_id', ids).gte('report_date', since30),
     // The only read here that decides a business state — checked, retried, or thrown.
     readLeadOutreach(db, ids),
+    // THE PAYMENT LEDGER IS THE CONVERSION TRUTH (Incident #52). The roster
+    // already drops `is_premium`, but that is a profile FLAG which a failed
+    // webhook can leave stale; a paid row in student_payments is the money
+    // itself. Read here so the queue closes a student on the ledger rather
+    // than on a status somebody typed.
+    db.from('student_payments').select('student_id').eq('status', 'paid').in('student_id', ids),
   ]);
   const profById = new Map((profs ?? []).map((p: any) => [p.id, p]));
   const engById = new Map((eng ?? []).map((e: any) => [e.student_id, e]));
@@ -286,14 +293,28 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
     if (o.last_attempt_at && istDateStr(o.last_attempt_at) === todayIst && o.status && o.status !== 'no_answer') connectedToday++;
   }
 
-  const CLOSED = new Set(['converted', 'not_interested', 'dnd']);
+  // ── Who is finished with the sales queue (Incident #52) ─────────────────
+  //
+  // This used to be `CLOSED = {'converted','not_interested','dnd'}`, which let a
+  // MISTAKEN TAP delete a student from every future queue with no payment
+  // anywhere. isClosedForSales() replaces it: money closes a student, and the
+  // two things the student actually said close a student. A typed 'converted'
+  // closes nothing on its own. See lib/sales-conversion-truth.ts.
+  const paidIds = new Set(
+    ((paidRows ?? []) as any[]).map((r) => r.student_id as string),
+  );
   const cands: (CallLead & { _sort: number })[] = [];
   let totalOpen = 0;
 
   for (const r of free) {
     const o = outById.get(r.id) as any;
     const status = (o?.status as string | null) ?? null;
-    if (status && CLOSED.has(status)) continue; // gone forever
+    if (isClosedForSales(status, paidIds.has(r.id))) continue;
+    // A student with no phone cannot be called. They keep their owner and
+    // their state — dropping them would make them nobody's problem forever —
+    // but they are never dealt as a card. They surface as a data-quality
+    // exception instead (SALES-OS.md §3 rule 4).
+    if (!r.phone || r.phone.trim() === '') continue;
     // Another rep's claimed lead is not this rep's work (SA-1D). Resolved
     // through profiles.id: an owner token we cannot attribute is withheld, not
     // treated as unclaimed — an unattributable owner is an unanswered question,
