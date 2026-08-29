@@ -2360,3 +2360,70 @@ was blind, because nothing tested what it claimed to measure against what
 Google actually returns. The regression test now uses REAL captured Location
 headers from both outcomes; invented fixtures would only have proved the code
 agrees with the same wrong idea of Google that wrote it.
+
+---
+
+## Incident #48 — the security gate had been red long enough to stop being read (2026-08-29)
+
+**Area.** Engineering Playbook — CI security scanning.
+
+**Symptom.** The `security` workflow failed on EVERY commit to main. Not
+intermittently: five consecutive merges on 29 Aug alone, and the failure was
+not new to that day. Semgrep reported 16 blocking findings on every run, and
+every run was ignored, because a check that is always red carries no
+information — which is the same failure as Incident #47 one level up, and was
+found within the hour of logging it.
+
+**Why the PRs were green.** `semgrep ci` scans DIFF-AWARE on a pull request and
+FULL on a push to a branch. So every PR that touched none of the offending
+files passed, and main went red the moment it merged. Nobody was ignoring a
+warning on their own work; the warning was never shown on their own work.
+
+**The 16 findings, and what each one actually was:**
+
+| Rule | Where | Verdict |
+|---|---|---|
+| `gcm-no-tag-length` | `src/lib/session-handoff-crypto.ts` | **Real.** Fixed. |
+| `bypass-tls-verification` | `scripts/run-db-sql.mjs` | **Real.** Fixed. |
+| `detected-google-oauth-access-token` | `src/lib/integration-audit.test.ts` | False positive. Fixed without suppressing the rule. |
+| `github-actions-mutable-action-tag` | 13 steps across 4 workflows | Real; open. Needs SHA pinning. |
+
+**The GCM finding was not noise.** `decryptHandoff` called `setAuthTag` — so it
+looked authenticated, and was. Against whatever strength the caller chose:
+without `authTagLength`, Node accepts a SHORT tag, and GCM's forgery resistance
+is exactly the length of the tag actually verified. A 4-byte tag is 2^-32 per
+attempt instead of 2^-128, and the tag travels inside the payload. This module
+wraps a student's access AND refresh token for the PWA hand-off, and it had
+**no test file at all**, which is how it stayed that way for its whole life.
+It now has eleven tests, and reverting the fix turns exactly one of them red.
+
+**The TLS finding was not noise either.** `scripts/run-db-sql.mjs` opens the
+PRODUCTION database as the postgres superuser and passed
+`rejectUnauthorized: false` — accepting any certificate from any host that
+answers. The most privileged credential the company holds, plus every row it
+returns, one hostile network away from being read.
+
+**The false positive was the most dangerous of the three to fix badly.** The
+scanner matched `ya29.…` in a test fixture. The obvious fix is `nosemgrep` on
+that line — in the one file that exists to prove credentials never reach the
+audit log, which is precisely the line a real token gets pasted next to one
+day and scanned straight past. The fixture stopped being a literal instead, so
+the rule stays fully armed on that file.
+
+**Lessons.**
+
+**A check that is always red is a check that has been turned off.** It costs
+nothing to leave failing and it removes the signal permanently. Either the
+findings get fixed or the rule gets removed with a reason written down; leaving
+16 blocking findings on main is choosing the third option, which is to keep the
+appearance of a gate without the gate.
+
+**Diff-aware on the PR and full on the branch means the branch accumulates
+what no PR ever showed anyone.** Nobody made a bad call here — the information
+never reached the person who could act on it. Where the two modes differ, the
+stricter one has to run somewhere a human looks.
+
+**"It calls setAuthTag, so it's authenticated" is the shape of the mistake this
+archive keeps recording.** Reading the code found the call; only asking what
+happens with a hostile input found that the call takes whatever length it is
+given. Same lesson as #46's well-formed-but-wrong secret, in a different layer.

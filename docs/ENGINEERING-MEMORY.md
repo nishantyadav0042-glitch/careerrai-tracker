@@ -62,6 +62,7 @@
 | 45 | 2026-08-29 | The OAuth `state` was encoded twice, so the callback's `indexOf(':')` found no colon and read the nonce as empty — every mentor Google Calendar connection ever attempted was refused as `state_mismatch` | Trust (P0) | all mentors; 0 rows in google_oauth_tokens across the project's life |
 | 46 | 2026-08-29 | `GOOGLE_CLIENT_SECRET` was a well-formed secret belonging to a DIFFERENT OAuth client — Google checks the secret last, so it stayed invisible behind three other bugs | Trust (P0) | all mentors; token exchange failed after the mentor had completed the whole consent journey |
 | 47 | 2026-08-29 | The Google health check searched followed HTML for `invalid_client`, so it scored `redirect_uri_mismatch` as healthy and reported all callback URIs registered while one was missing | Trust (P1) | mentors starting on the legacy PWA origin: Error 400 every time, with the diagnostic saying everything was fine |
+| 48 | 2026-08-29 | The `security` workflow had failed on every commit to main — Semgrep runs diff-aware on a PR and full on a push, so no PR ever showed the 16 findings, and an always-red gate stopped being read | Playbook / Trust (P1) | no student directly; a weakened GCM tag check on session-handoff tokens and TLS verification disabled on the production DB script |
 
 > Entries 12 and 13 were never written. The gap is left visible rather than
 > renumbered — the numbers are referenced from commit messages and code
