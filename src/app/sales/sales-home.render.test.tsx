@@ -78,7 +78,13 @@ describe('/sales on day one', () => {
     // would throw.
     const html = await render(SalesCallsPage() as any);
     expect(html).toContain('No one to call right now');
-    expect(html).toContain('Let’s get some conversions');
+    // CHANGED 29 Aug 2026: the headline is now the checkpoint, computed from
+    // what the system recorded giving them rather than a motivational line. A
+    // day with nothing worth doing reads as quiet — which is information about
+    // the base, not evidence about the counsellor (SALES-OS.md §5).
+    expect(html).toContain('Nothing needs attention right now');
+    expect(html, 'a quiet day must never be framed as failure or a missed target')
+      .not.toMatch(/target|quota|behind|only \d+/i);
   });
 
   it('renders once a capacity row exists', async () => {

@@ -7,6 +7,7 @@ import {
 } from '@/lib/sales-authz';
 import { completeDueFollowups, scheduleFollowup } from '@/lib/sales-followup';
 import { resolveConvertedClaim } from '@/lib/sales-conversion-truth';
+import { markWorked } from '@/lib/sales-opportunity-record';
 import { captureStateSnapshot, recordIntervention, interventionTypeForLane } from '@/lib/intervention-ledger';
 import { isReasonCategory, reasonNeedsVerbatim } from '@/lib/intervention-taxonomy';
 
@@ -211,6 +212,17 @@ export async function POST(request: NextRequest) {
     console.error('[sales/log] sales_activity insert failed:', historyError.message);
     return NextResponse.json({ error: 'Call state saved but history write failed — retry to record it.' }, { status: 500 });
   }
+
+  // ── Today's coverage ──────────────────────────────────────────────────────
+  // WORKED MEANS DISPOSITIONED, and this is the only place that says so. No
+  // tap, card-open or dial reaches sales_opportunity.worked_at — a counter any
+  // tap could advance is a counter that will be advanced by tapping
+  // (SALES-OS.md §0, telemetry is P5 and may not become a performance measure).
+  //
+  // The rep's own outcome is recorded here, not the payment-corrected one: this
+  // row is what THEY did, and conversion truth lives in the payment ledger.
+  // Never allowed to fail the request — the call is already saved.
+  await markWorked(admin, principal.id, studentId, outcome);
 
   // ── Follow-up history ─────────────────────────────────────────────────────
   // next_action_at drives the queue and is OVERWRITTEN on every disposition, so

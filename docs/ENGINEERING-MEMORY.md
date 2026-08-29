@@ -67,6 +67,7 @@
 | 50 | 2026-08-29 | One ceiling answered two different questions: portfolio assignment was gated on live-work capacity, so a seat could never hold more than ~200 students against an operating model of ~1,000 | Trust / sales ops (P1) | none yet — no book had been built |
 | 51 | 2026-08-29 | The sales system had never held a lead: 974 students, `lead_outreach` = 0 rows, and no route could turn a student into one — both counsellors would have logged in to an empty queue on their first morning | Growth / sales ops (P0) | 2 counsellors, day one |
 | 52 | 2026-08-29 | A counsellor tapping "Converted" deleted a student from every future queue with no payment anywhere — `call-queue.ts` treated the typed status as terminal while `/sales/leads` still showed them Active, so the surface they work from was the one that hid them | Trust / revenue (P0) | none yet — caught by audit while `lead_outreach` was empty |
+| 53 | 2026-08-29 | The sales system could say what a counsellor LOGGED but never what they were GIVEN, so "did they work the right students?" and "how much of today is left?" had no answer — coverage had no denominator | Analytics / sales ops (P1) | none directly; the founder could not see leakage |
 
 > Entries 12 and 13 were never written. The gap is left visible rather than
 > renumbered — the numbers are referenced from commit messages and code
