@@ -8,6 +8,7 @@ import { InstallButton } from '@/components/install/install-button';
 import { ContinueWithGoogle } from '@/components/auth/continue-with-google';
 import { cn } from '@/lib/utils';
 import { track } from '@/lib/journey';
+import { StoragePersistenceProbe } from '@/components/storage-persistence-probe';
 
 type LoginMode = 'otp-phone' | 'otp-phone-verify' | 'password';
 type UserType = 'student' | 'buddy' | null;
@@ -524,6 +525,13 @@ function LoginForm() {
 export default function LoginPage() {
   return (
     <Suspense>
+      {/* THE MEASUREMENT, and this is the page it has to happen on. A student
+          who was evicted rather than logged out arrives HERE, so this is the
+          only screen that can report what their storage state was at the
+          moment the session went missing. It also asks for persistence, so a
+          browser that lands here once should not land here for that reason
+          twice. */}
+      <StoragePersistenceProbe />
       <LoginForm />
     </Suspense>
   );

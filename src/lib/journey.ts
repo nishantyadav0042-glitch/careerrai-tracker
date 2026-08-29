@@ -225,6 +225,12 @@ export type EventName =
   | 'auth_account_linked'        // a second identity joined an existing account
   | 'auth_link_refused'          // ...or was refused (duplicate-account defence)
   | 'auth_session_lost'          // a live session vanished without a logout
+  // Was this browser's storage evictable when the app opened? An installed
+  // PWA whose storage is 'best-effort' can have its ENTIRE origin wiped —
+  // cookies included — when the device is short of space, which is the only
+  // hypothesis still standing for the repeat-logout report (29 Aug).
+  // persistedBefore is the measurement; it is what refutes or confirms it.
+  | 'storage_persistence'
   | 'auth_logout'                // a deliberate logout (scope in props)
   | 'sample_insight_shown'
   | 'log_open' | 'log_blocked' | 'log_error' | 'log_dismissed' | 'daily_log'
