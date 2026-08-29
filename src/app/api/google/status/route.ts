@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
-import { googleConfigured, googleRedirectUri, googleConsentUrl, GOOGLE_SCOPES } from '@/lib/google-oauth';
+import {
+  googleConfigured, googleRedirectUri, googleConsentUrl, GOOGLE_SCOPES, googleSecretShape,
+} from '@/lib/google-oauth';
 import { APP_ORIGINS, SITE_URL } from '@/lib/site';
 import { supabaseUrl } from '@/lib/supabase/env';
 
@@ -74,6 +76,10 @@ export async function GET() {
       : null,
     googleRecognizesClient,
     hasSecret: !!process.env.GOOGLE_CLIENT_SECRET,
+    // Shape only, never the value. A Google client secret is `GOCSPX-` + 28
+    // characters; anything else is not the string the dashboard shows, and
+    // Google reports that as "The provided client secret is invalid."
+    secretShape: googleSecretShape(),
     message: !configured
       ? 'GOOGLE_CLIENT_ID and/or GOOGLE_CLIENT_SECRET are missing from this deployment.'
       : googleRecognizesClient === false

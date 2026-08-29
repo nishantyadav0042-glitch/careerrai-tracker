@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getAuthUser } from '@/lib/auth';
-import { exchangeCodeAndStore, verifyOAuthState, OAUTH_STATE_COOKIE } from '@/lib/google-oauth';
+import {
+  exchangeCodeAndStore, verifyOAuthState, OAUTH_STATE_COOKIE, OAUTH_PKCE_COOKIE,
+} from '@/lib/google-oauth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { ensureBuddyRoom } from '@/lib/buddy-room';
 import { audit } from '@/lib/integration-audit';
@@ -74,7 +76,10 @@ export async function GET(request: Request) {
   /** Every exit clears the one-shot nonce, so a state can never be replayed. */
   const leave = (url: URL) => {
     const res = NextResponse.redirect(url);
+    // BOTH one-shot cookies, on every exit. Leaving the PKCE verifier behind
+    // would let a later flow redeem a code it did not begin.
     res.cookies.set(OAUTH_STATE_COOKIE, '', { path: '/', maxAge: 0 });
+    res.cookies.set(OAUTH_PKCE_COOKIE, '', { path: '/', maxAge: 0 });
     return res;
   };
 
@@ -107,7 +112,9 @@ export async function GET(request: Request) {
     return leave(new URL(`${back}?google=denied`, request.url));
   }
 
-  const result = await exchangeCodeAndStore(code, user.id, origin);
+  const result = await exchangeCodeAndStore(
+    code, user.id, origin, jar.get(OAUTH_PKCE_COOKIE)?.value ?? null,
+  );
   if (!result.ok) {
     console.error('[google] connect failed:', result.error);
     await audit({
