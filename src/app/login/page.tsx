@@ -9,6 +9,7 @@ import { ContinueWithGoogle } from '@/components/auth/continue-with-google';
 import { cn } from '@/lib/utils';
 import { track } from '@/lib/journey';
 import { StoragePersistenceProbe } from '@/components/storage-persistence-probe';
+import { SessionForensicsProbe } from '@/components/session-forensics-probe';
 
 type LoginMode = 'otp-phone' | 'otp-phone-verify' | 'password';
 type UserType = 'student' | 'buddy' | null;
@@ -532,6 +533,9 @@ export default function LoginPage() {
           browser that lands here once should not land here for that reason
           twice. */}
       <StoragePersistenceProbe />
+      {/* The tracker: which store survived since the last open. This screen is
+          where a forgotten student lands, so it is where the answer lives. */}
+      <SessionForensicsProbe />
       <LoginForm />
     </Suspense>
   );

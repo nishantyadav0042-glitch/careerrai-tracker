@@ -22,6 +22,7 @@ import { TimetablePrompt } from '@/components/timetable-prompt';
 import { CrashReporter } from '@/components/crash-reporter';
 import { SessionLossNotice } from '@/components/session-loss-notice';
 import { StoragePersistenceProbe } from '@/components/storage-persistence-probe';
+import { SessionForensicsProbe } from '@/components/session-forensics-probe';
 import { BuddyDemoTour } from '@/components/buddy-demo-tour';
 import { CoverageReviewGate } from '@/components/coverage-review-gate';
 import { isReviewDue } from '@/lib/coverage-review';
@@ -186,6 +187,9 @@ export default async function StudentLayout({ children }: { children: React.Reac
           repeat-logout report. It also records whether storage was ALREADY
           persistent, which is what will refute the theory if it is wrong. */}
       <StoragePersistenceProbe />
+      {/* Same tracker on the signed-in side, so a healthy open is recorded too
+          — a verdict with no baseline is a number nobody can read. */}
+      <SessionForensicsProbe />
       {/* Buddy demo overlay: banner + guided tour, keyed off the cr_demo
           cookie set at login for buddydemo@careerrai.in. Renders null for
           everyone else. */}

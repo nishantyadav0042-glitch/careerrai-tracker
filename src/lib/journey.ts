@@ -231,6 +231,13 @@ export type EventName =
   // hypothesis still standing for the repeat-logout report (29 Aug).
   // persistedBefore is the measurement; it is what refutes or confirms it.
   | 'storage_persistence'
+  // The tracker for the repeat-logout report (29 Aug). Writes one marker
+  // into a cookie AND into localStorage, and reports which survived. They
+  // fail for different reasons, so the pair separates 'the origin was
+  // evicted' from 'the cookies specifically were removed' — a distinction
+  // no server-side observation can make, because the server only ever sees
+  // the empty jar that is left behind.
+  | 'session_forensics'
   | 'auth_logout'                // a deliberate logout (scope in props)
   | 'sample_insight_shown'
   | 'log_open' | 'log_blocked' | 'log_error' | 'log_dismissed' | 'daily_log'
