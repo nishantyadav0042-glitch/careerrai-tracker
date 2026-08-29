@@ -1,3 +1,4 @@
+import { supabaseUrl } from '@/lib/supabase/env';
 // Server-side Gemini (Flash-Lite) client. The API key is read here and NEVER
 // leaves the server — sent via header, never a query string, never logged.
 //
@@ -34,7 +35,7 @@ async function resolveKey(): Promise<string | null> {
   try {
     const { createClient } = await import('@supabase/supabase-js');
     const admin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      supabaseUrl(),
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
       { auth: { autoRefreshToken: false, persistSession: false } }
     );
@@ -109,7 +110,7 @@ async function recordUsage(
   if (!usage) return;
   try {
     const { createClient } = await import('@supabase/supabase-js');
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const url = supabaseUrl();
     const svc = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!url || !svc) return;
     const admin = createClient(url, svc, { auth: { autoRefreshToken: false, persistSession: false } });

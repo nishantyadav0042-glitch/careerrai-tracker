@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { supabaseUrl, supabaseAnonKey } from '@/lib/supabase/env';
 
 const NOT_REGISTERED = "This email isn't registered yet. Your founder will add you after onboarding.";
 
@@ -51,8 +52,8 @@ export async function POST(request: NextRequest) {
     // can complete the /auth/callback exchange after clicking the email link.
     const pendingCookies: Array<{ name: string; value: string; options: Record<string, unknown> }> = [];
     const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      supabaseUrl(),
+      supabaseAnonKey(),
       {
         cookies: {
           getAll: () => request.cookies.getAll(),

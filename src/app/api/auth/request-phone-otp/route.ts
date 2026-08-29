@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { normalizeIndianPhone } from '@/lib/phone';
 import { isAdminPhoneE164 } from '@/lib/admin-config';
 import { clientIp } from '@/lib/request-ip';
+import { supabaseUrl, supabaseAnonKey } from '@/lib/supabase/env';
 
 export async function POST(request: NextRequest) {
   try {
@@ -88,8 +89,8 @@ export async function POST(request: NextRequest) {
     // Trigger Supabase phone OTP — Supabase generates the code and calls our SMS hook
     const pending: Array<{ name: string; value: string; options: Record<string, unknown> }> = [];
     const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      supabaseUrl(),
+      supabaseAnonKey(),
       {
         cookies: {
           getAll: () => request.cookies.getAll(),

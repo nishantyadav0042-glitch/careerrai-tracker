@@ -5,6 +5,7 @@ import { normalizeIndianPhone } from '@/lib/phone';
 import { clientIp } from '@/lib/request-ip';
 import { registerAttemptAndCheck, clearAttempts } from '@/lib/attempt-throttle';
 import { logSecurityEvent } from '@/lib/security-log';
+import { supabaseUrl, supabaseAnonKey } from '@/lib/supabase/env';
 
 // Brute-force / credential-stuffing guard. This same route authenticates
 // student, buddy AND admin accounts, so an unthrottled password endpoint is an
@@ -57,8 +58,8 @@ export async function POST(request: NextRequest) {
 
   const pending: Array<{ name: string; value: string; options: Record<string, unknown> }> = [];
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl(),
+    supabaseAnonKey(),
     {
       cookies: {
         getAll: () => request.cookies.getAll(),

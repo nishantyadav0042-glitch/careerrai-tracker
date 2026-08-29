@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from 'react';
 import { validateDeclaredFile, humanSize, type AttachmentKind } from '@/lib/chat-attachments';
+import { supabaseUrl } from '@/lib/supabase/env';
 
 // Uploading a file from the chat composer.
 //
@@ -94,7 +95,7 @@ export function useAttachmentUpload(studentId?: string) {
     // Supabase returns a path or a full URL depending on version; accept both.
     const url = signed.uploadUrl.startsWith('http')
       ? signed.uploadUrl
-      : `${process.env.NEXT_PUBLIC_SUPABASE_URL}${signed.uploadUrl}`;
+      : `${supabaseUrl()}${signed.uploadUrl}`;
 
     await new Promise<void>((resolve) => {
       const xhr = new XMLHttpRequest();

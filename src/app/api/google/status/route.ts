@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { googleConfigured, googleRedirectUri, googleConsentUrl, GOOGLE_SCOPES } from '@/lib/google-oauth';
 import { APP_ORIGINS, SITE_URL } from '@/lib/site';
+import { supabaseUrl } from '@/lib/supabase/env';
 
 export const dynamic = 'force-dynamic';
 
@@ -92,7 +93,7 @@ export async function GET() {
  * question is only "which client, and which callback".
  */
 async function probeStudentFlow() {
-  const base = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').replace(/\/+$/, '');
+  const base = supabaseUrl();  // already cleaned and de-slashed by the env authority
   if (!base) return { probed: false, reason: 'NEXT_PUBLIC_SUPABASE_URL is not set' };
 
   // What Supabase's Google client MUST have registered. This string is fixed by
