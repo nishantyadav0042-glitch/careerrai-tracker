@@ -89,7 +89,16 @@ describe('state still binds the callback to the browser that started it', () => 
     const nonce = newStateNonce();
     const state = encodeOAuthState(nonce, '/buddy/home');
     expect(verifyOAuthState(state, nonce).ok).toBe(true);
-    expect(verifyOAuthState(state.replace(nonce, nonce.replace(/.$/, '0')), nonce).ok).toBe(false);
+
+    // A TAMPER THAT ALWAYS TAMPERS. This read `nonce.replace(/.$/, '0')` and
+    // went red in CI on 29 Aug: the nonce is 32 hex characters, so one run in
+    // sixteen already ended in '0', the "tampered" state was byte-identical to
+    // the original, and verifyOAuthState correctly accepted it. The test was
+    // right and the fixture was wrong — a 6% flake that looks exactly like a
+    // security regression on the morning it fires.
+    const flipLast = (n: string) => n.slice(0, -1) + (n.endsWith('0') ? '1' : '0');
+    expect(flipLast(nonce), 'the fixture did not actually change the nonce').not.toBe(nonce);
+    expect(verifyOAuthState(state.replace(nonce, flipLast(nonce)), nonce).ok).toBe(false);
     expect(verifyOAuthState(`${nonce}x:/buddy/home`, nonce).ok).toBe(false);
   });
 
