@@ -20,7 +20,7 @@ import { audit } from '@/lib/integration-audit';
 // a dead session.
 
 const OAUTH_AUTH = 'https://accounts.google.com/o/oauth2/v2/auth';
-const OAUTH_TOKEN = 'https://oauth2.googleapis.com/token';
+export const OAUTH_TOKEN = 'https://oauth2.googleapis.com/token';
 const USERINFO = 'https://www.googleapis.com/oauth2/v2/userinfo';
 
 /** Calendar write is the minimum that can mint a Meet link. */
