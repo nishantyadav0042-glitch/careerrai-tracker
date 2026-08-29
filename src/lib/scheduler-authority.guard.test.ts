@@ -50,6 +50,27 @@ const minutes = (cron: string): number | null => {
   return /^\d+$/.test(m) && /^\d+$/.test(h) ? Number(m) + 60 * Number(h) : null;
 };
 
+/**
+ * Minute-of-hour for an EVERY-HOUR schedule ('20 * * * *'), else null.
+ *
+ * Added 29 Aug 2026. `minutes()` above only models a fixed daily time, so an
+ * hourly job could not be expressed here at all: the gap assertion failed with
+ * "primary schedule is not a fixed time", which reads like a malformed cron
+ * rather than an unsupported shape. The practical effect was that an hourly
+ * job could never be given a fallback — which is how purge-session-handoffs
+ * sat with a dead Vercel entry and no backup while it held 595 credentials.
+ *
+ * Hourly-vs-hourly needs a wrap-around comparison, and it has to clear the gap
+ * in BOTH directions: a backup at :50 trails a :20 primary by 30 minutes, but
+ * it also runs 30 minutes BEFORE the next hour's primary, and a backup that
+ * crowds the next run races it just as badly as one that crowds the last.
+ */
+const hourlyMinute = (cron: string): number | null => {
+  const [m, h, dom, mon, dow] = cron.split(/\s+/);
+  return /^\d+$/.test(m) && h === '*' && dom === '*' && mon === '*' && dow === '*'
+    ? Number(m) : null;
+};
+
 describe('the fallback list and the dispatcher cannot drift apart', () => {
   // The workflow routes by matching the cron STRING. Change a schedule without
   // changing its case label and the fallback silently stops backing anything
@@ -79,7 +100,26 @@ describe('a fallback runs AFTER the thing it backs up', () => {
   it.each(fallbackEntries.filter((e) => vercelByRoute.has(e.route)))(
     '$route trails its primary by a real margin',
     ({ route, schedule }) => {
-      const primary = minutes(vercelByRoute.get(route)!);
+      const primarySchedule = vercelByRoute.get(route)!;
+
+      // Both hourly: compare minute-of-hour, and require the gap to hold going
+      // forwards to the NEXT primary as well as backwards from the last one.
+      const pHourly = hourlyMinute(primarySchedule);
+      const bHourly = hourlyMinute(schedule);
+      if (pHourly !== null && bHourly !== null) {
+        const gap = (bHourly - pHourly + 60) % 60;
+        expect(
+          gap,
+          `${route} fires on BOTH schedulers ${gap === 0 ? 'at the SAME MINUTE' : `only ${gap} min apart`}.`,
+        ).toBeGreaterThanOrEqual(MIN_GAP_MINUTES);
+        expect(
+          60 - gap,
+          `${route}'s fallback runs only ${60 - gap} min before the NEXT hour's primary — it races the run ahead of it.`,
+        ).toBeGreaterThanOrEqual(MIN_GAP_MINUTES);
+        return;
+      }
+
+      const primary = minutes(primarySchedule);
       const backup = minutes(schedule);
       expect(primary, `${route}: primary schedule is not a fixed time`).not.toBeNull();
       expect(backup, `${route}: fallback schedule is not a fixed time`).not.toBeNull();
@@ -121,6 +161,7 @@ describe('every dual-fired route can survive being run twice', () => {
     'expire-subscriptions': 'the expiry UPDATE is status-guarded, so the second run changes no rows and sends nothing.',
     'renewal-reminders': 'reads existing renewal_reminder rows and fails closed on a read error.',
     'sales-ready': 'writes no notifications — it moves CRM lane state, which is idempotent by status guard.',
+    'purge-session-handoffs': 'writes no notifications; both stages are predicate-driven — the scrub matches only rows that STILL have a payload, the delete only rows past the row TTL, so a second run matches nothing.',
     'outcome-sweep': 'writes no notifications; sweep_intervention_outcomes() selects only rows whose window column IS NULL and whose window has elapsed, so the second run of a day matches nothing.',
   };
 

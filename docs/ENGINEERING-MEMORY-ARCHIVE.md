@@ -2872,3 +2872,67 @@ that carries evidence needs a "has this ever actually fired?" check against
 `cron_runs`, because the failure mode is silence — and a job that has never run
 once looks exactly like a job whose work has not come due. Deploying a
 scheduler entry is not the same as observing an execution (L2).*
+
+---
+
+## Incident #56
+
+**2026-08-29 · Security / data retention (P0) · a purge that purged nothing for two days**
+
+**What was wrong.** `/api/cron/purge-session-handoffs` shipped on 27 Aug with
+schedule `20 * * * *`. Two days later `cron_runs` held zero rows for it — the
+same silent non-execution as Incident #55, found by the same query.
+
+The consequence is worse than a missed cleanup. The job exists to stop
+`pwa_session_handoff` storing Supabase **access + refresh token pairs**
+indefinitely. Production at the time of this entry:
+
+| | |
+|---|---|
+| rows | 595 |
+| still holding a credential payload | **595** |
+| of those, dead (used or expired) | **595** |
+| legitimately live | 0 |
+| past the 7-day row TTL | 441 |
+| oldest row | 12 July |
+
+Every credential the purge was written to remove was still there, and the
+population had grown from the 502 the original audit found to 595. The purge
+existed, was correct, was deployed — and had removed nothing, ever.
+
+**Why the obvious fix was blocked.** Routing it through the GitHub Actions
+fallback, as #55 did for `outcome-sweep`, failed `scheduler-authority.guard`.
+That guard exists because on 27 Aug twelve routes were fired by both schedulers
+at the identical minute and `weekly-digest` double-sent to every mentor. Its gap
+assertion required both schedules to be a fixed daily time, and this primary is
+hourly — so the guard rejected the fallback with "primary schedule is not a
+fixed time", which reads like a malformed cron rather than an unsupported
+shape.
+
+Two wrong ways out were available and both were rejected: dropping the Vercel
+entry to make it fallback-only (a different rule in the same guard forbids a
+route whose only firer is its own backup), and degrading the cadence to daily
+(the mint rate has run as high as 58 hand-offs/day, and with encryption that
+only defends a database-only leak, the retention window IS the control).
+
+**The fix.** Teach the guard the shape it could not express. Two hourly
+schedules are compared on minute-of-hour with a wrap-around, and the gap must
+clear `MIN_GAP_MINUTES` in BOTH directions — a backup at :50 trails a :20
+primary by 30 minutes, but it also runs 30 minutes before the *next* hour's
+primary, and crowding the run ahead races it exactly as badly as crowding the
+one behind. Both directions are pinned by mutation: :30 fails as "only 10 min
+apart", :10 fails as "only 10 min before the NEXT hour's primary".
+
+**Lesson.** *When a guard blocks a correct change, read what it cannot express
+before deciding what to degrade. This one had a coverage hole shaped exactly
+like the job that needed it, and the tempting workarounds — weaken the cadence,
+or drop the primary and keep only the backup — would each have traded a real
+property away to satisfy a check that was simply incomplete. Extending a guard
+to cover a case it silently could not model is strengthening it, not bending
+it.*
+
+**Second lesson, and the one that keeps recurring.** This is the third time in
+two days that "declared" was mistaken for "running" (#55, this, and the earlier
+`sales_ready` assumption). A scheduled job is not running because it is
+scheduled, and the check is one query — `cron_runs` grouped by path, looking for
+zero.
