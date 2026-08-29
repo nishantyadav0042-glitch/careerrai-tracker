@@ -3,6 +3,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { authorizedCron } from '@/lib/cron-auth';
 import { withCronTracking } from '@/lib/cron-run-tracker';
 import { sendSecurityAlert } from '@/lib/alerting';
+import { findSilentCrons, describeSilentCrons, type CronRunSummary } from '@/lib/cron-liveness';
+import vercelConfig from '../../../../../vercel.json';
 
 export const maxDuration = 60;
 
@@ -52,6 +54,45 @@ async function integrity_checkRun(): Promise<NextResponse> {
   const failing = rows.filter((r) => r.violations > 0);
   const tier0 = failing.filter((r) => r.tier === 0);
 
+  // ── Is the schedule itself alive? ────────────────────────────────────────
+  //
+  // The invariants above check that the DATA is right. This checks that the
+  // jobs which produce and maintain it are running at all — a different
+  // failure, and the one that actually happened: outcome-sweep (#55) and
+  // purge-session-handoffs (#56) were both declared and had never executed
+  // once, for days, in silence. Neither would have shown up as a bad row.
+  //
+  // Best-effort: a liveness check that cannot read cron_runs must not take
+  // down the integrity check that can still read the invariants.
+  let silentDetail = '';
+  let silentCount = 0;
+  try {
+    const { data: runRows, error: runErr } = await admin
+      .from('cron_runs')
+      .select('cron_path, started_at')
+      .gt('started_at', new Date(Date.now() - 30 * 86_400_000).toISOString());
+    if (runErr) throw new Error(runErr.message);
+
+    const latest = new Map<string, string>();
+    for (const r of ((runRows ?? []) as { cron_path: string; started_at: string }[])) {
+      const prev = latest.get(r.cron_path);
+      if (!prev || r.started_at > prev) latest.set(r.cron_path, r.started_at);
+    }
+    const summaries: CronRunSummary[] = [...latest].map(([path, lastRunIso]) => ({ path, lastRunIso }));
+    const declared = (vercelConfig as { crons?: { path: string; schedule: string }[] }).crons ?? [];
+    const silent = findSilentCrons(declared, summaries, Date.now());
+    silentCount = silent.length;
+    if (silent.length > 0) {
+      silentDetail = describeSilentCrons(silent);
+      await sendSecurityAlert(
+        `Scheduled jobs not running (${silent.length})`,
+        `${silentDetail}\n\nA declared cron that is silent is invisible by nature: it looks identical to one whose work has not come due. Check the Vercel cron registration and the GitHub Actions fallback.`,
+      ).catch((e) => console.error('[integrity] cron-liveness alert failed', e));
+    }
+  } catch (e) {
+    console.error('[integrity] cron liveness check failed:', e instanceof Error ? e.message : String(e));
+  }
+
   if (tier0.length > 0) {
     const detail = tier0
       .map((r) => `[${r.severity}] ${r.capability}: ${r.invariant} — ${r.violations} row(s)`)
@@ -63,11 +104,12 @@ async function integrity_checkRun(): Promise<NextResponse> {
   }
 
   const result = {
-    ok: tier0.length === 0,
+    ok: tier0.length === 0 && silentCount === 0,
     checkedAt: new Date().toISOString(),
     invariantsChecked: rows.length,
     failing: failing.length,
     tier0Failing: tier0.length,
+    silentCrons: silentCount,
     violations: failing,
   };
   console.log('[integrity-check]', JSON.stringify({ ...result, violations: failing.length }));

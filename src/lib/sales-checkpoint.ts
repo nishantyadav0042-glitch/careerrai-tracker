@@ -1,4 +1,5 @@
 import type { SalesObjective } from '@/lib/sales-objective';
+import { isConnectedOutcome } from '@/lib/sales-disposition';
 
 // ── THE DAY, AS THE SYSTEM SEES IT ──────────────────────────────────────────
 //
@@ -36,13 +37,32 @@ export interface OpportunityRow {
 
 export interface ObjectiveTally {
   surfaced: number;
+  /** Opportunities actioned — INCLUDING dials nobody answered. */
   worked: number;
+  /**
+   * Opportunities where a human actually spoke to the student.
+   *
+   * Founder, 29 Aug 2026, on how this experiment could produce a false
+   * positive: "the founder sees 500 'worked' and assumes 500 meaningful
+   * conversations." That is a real hazard here, because `worked` is set by ANY
+   * disposition and `no_answer` is a disposition — a counsellor can work a
+   * whole day of unanswered dials and be at 100% coverage, honestly.
+   *
+   * Coverage answers "did we act on the right students". Only this answers
+   * "did anyone actually talk". Reporting the first without the second invites
+   * exactly the wrong conclusion, so the two travel together.
+   */
+  reached: number;
   remaining: number;
 }
 
 export interface DayCheckpoint {
   surfaced: number;
+  /** Actioned, including unanswered dials. NOT a count of conversations. */
   worked: number;
+  /** Actually spoke to a human. The honest denominator for anything about
+   *  intervention quality — see ObjectiveTally.reached. */
+  reached: number;
   remaining: number;
   retention: ObjectiveTally;
   conversion: ObjectiveTally;
@@ -77,7 +97,7 @@ export interface DayCheckpoint {
  */
 export const HIGH_PRIORITY_SLICE = 20;
 
-const emptyTally = (): ObjectiveTally => ({ surfaced: 0, worked: 0, remaining: 0 });
+const emptyTally = (): ObjectiveTally => ({ surfaced: 0, worked: 0, reached: 0, remaining: 0 });
 
 /**
  * Compute one counsellor's day from the rows the platform wrote.
@@ -90,13 +110,21 @@ export function computeCheckpoint(rows: readonly OpportunityRow[]): DayCheckpoin
   const retention = emptyTally();
   const conversion = emptyTally();
   let worked = 0;
+  let reached = 0;
 
   for (const r of rows) {
     const t = r.objective === 'retention' ? retention : conversion;
     t.surfaced++;
     // A disposition is the only thing that counts. `workedAt` is written by the
     // log route and by nothing else — no tap, open or dial reaches it.
-    if (r.workedAt) { t.worked++; worked++; } else { t.remaining++; }
+    if (r.workedAt) {
+      t.worked++; worked++;
+      // ...but a disposition of `no_answer` is a dial, not a conversation.
+      // The disposition vocabulary already draws this line; we read it rather
+      // than re-deciding it here, so the two can never disagree about what
+      // counts as having spoken to somebody.
+      if (isConnectedOutcome(r.outcome)) { t.reached++; reached++; }
+    } else { t.remaining++; }
   }
 
   // Rank order decides the top slice, not the order rows came back from the
@@ -111,6 +139,7 @@ export function computeCheckpoint(rows: readonly OpportunityRow[]): DayCheckpoin
   return {
     surfaced: rows.length,
     worked,
+    reached,
     remaining: rows.length - worked,
     retention,
     conversion,

@@ -29,8 +29,8 @@ describe('computeCheckpoint', () => {
       row({ studentId: 'b', rank: 1, objective: 'conversion' }),
       worked('c', 2, 'retention'), worked('d', 3, 'retention'),
     ]);
-    expect(c.conversion).toEqual({ surfaced: 2, worked: 1, remaining: 1 });
-    expect(c.retention).toEqual({ surfaced: 2, worked: 2, remaining: 0 });
+    expect(c.conversion).toEqual({ surfaced: 2, worked: 1, reached: 1, remaining: 1 });
+    expect(c.retention).toEqual({ surfaced: 2, worked: 2, reached: 2, remaining: 0 });
     // Never summed into one number that could hide either.
     expect(c.retention.surfaced + c.conversion.surfaced).toBe(c.surfaced);
   });
@@ -134,5 +134,67 @@ describe('the checkpoint cannot become a performance score', () => {
     for (const banned of ['sales_opportunity', 'worked_at', 'surfaced', 'profile_opens', 'call_count']) {
       expect(pay, `${banned} must never be an input to pay`).not.toContain(banned);
     }
+  });
+});
+
+// ── Worked is not reached ───────────────────────────────────────────────────
+//
+// Founder, 29 Aug 2026, listing the ways this experiment could produce a false
+// positive: "the founder sees 500 'worked' and assumes 500 meaningful
+// conversations." `worked` is set by ANY disposition, and `no_answer` is a
+// disposition, so that reading is available on day one unless the two numbers
+// are reported together.
+
+const dialled = (id: string, rank = 0, objective: OpportunityRow['objective'] = 'retention') =>
+  row({ studentId: id, rank, objective, workedAt: '2026-08-29T10:00:00Z', outcome: 'no_answer' });
+
+describe('a dial nobody answered is worked, but not reached', () => {
+  it('a full day of unanswered dials is 100% coverage and ZERO conversations', () => {
+    const c = computeCheckpoint([dialled('a', 0), dialled('b', 1), dialled('c', 2)]);
+    expect(c.worked).toBe(3);
+    expect(c.coveragePercent, 'the students WERE actioned — coverage is honest').toBe(100);
+    expect(c.reached, 'but nobody was spoken to, and that must be visible').toBe(0);
+  });
+
+  it('separates the two on a mixed day', () => {
+    const c = computeCheckpoint([
+      worked('spoke1', 0), dialled('missed1', 1), worked('spoke2', 2), row({ studentId: 'todo', rank: 3 }),
+    ]);
+    expect(c.surfaced).toBe(4);
+    expect(c.worked).toBe(3);
+    expect(c.reached).toBe(2);
+    expect(c.remaining).toBe(1);
+  });
+
+  it('reached is never greater than worked, on any mix', () => {
+    const c = computeCheckpoint([
+      worked('a', 0), dialled('b', 1), worked('c', 2), dialled('d', 3), row({ studentId: 'e', rank: 4 }),
+    ]);
+    expect(c.reached).toBeLessThanOrEqual(c.worked);
+    expect(c.worked).toBeLessThanOrEqual(c.surfaced);
+  });
+
+  it('splits reached by objective too, so neither goal can hide behind the other', () => {
+    const c = computeCheckpoint([
+      worked('r1', 0, 'retention'), dialled('r2', 1, 'retention'),
+      dialled('c1', 2, 'conversion'), dialled('c2', 3, 'conversion'),
+    ]);
+    expect(c.retention.reached).toBe(1);
+    expect(c.conversion.reached, 'a whole objective can be worked and never reached').toBe(0);
+    expect(c.conversion.worked).toBe(2);
+  });
+
+  // The vocabulary is owned by sales-disposition, not re-decided here.
+  it('every connected outcome counts as reached', () => {
+    for (const o of ['interested', 'callback', 'converted', 'not_interested', 'dnd']) {
+      const c = computeCheckpoint([row({ studentId: 'x', rank: 0, workedAt: '2026-08-29T10:00:00Z', outcome: o })]);
+      expect(c.reached, `${o} means a human answered`).toBe(1);
+    }
+  });
+
+  it('an unworked row is neither worked nor reached', () => {
+    const c = computeCheckpoint([row({ studentId: 'a', rank: 0 })]);
+    expect(c.worked).toBe(0);
+    expect(c.reached).toBe(0);
   });
 });
