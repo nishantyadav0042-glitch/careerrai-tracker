@@ -1,5 +1,7 @@
 'use client';
 import { useState } from 'react';
+import { REASON_CATEGORIES, REASON_LABEL, reasonNeedsVerbatim,
+  type ReasonCategory } from '@/lib/intervention-taxonomy';
 import { MessageCircle, PhoneCall, PhoneOff, ChevronDown } from 'lucide-react';
 import type { CallLead } from '@/lib/call-queue';
 
@@ -42,13 +44,20 @@ export function CallDeck({ queue }: { queue: CallLead[] }) {
   // after the server confirms the write. The old version removed the card
   // regardless — a rejected disposition looked identical to a saved one, and
   // the lead was gone from the rep's day with nothing recorded.
-  const dispose = async (lead: CallLead, outcome: string, note: string, callbackAt?: string): Promise<boolean> => {
+  const dispose = async (
+    lead: CallLead, outcome: string, note: string, callbackAt?: string,
+    reasonCategory?: string | null, reasonVerbatim?: string | null,
+  ): Promise<boolean> => {
     setErrorById((e) => ({ ...e, [lead.studentId]: '' }));
     let failure = 'Could not save the call — check your connection and try again.';
     try {
       const res = await fetch('/api/sales/log', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId: lead.studentId, outcome, note, callbackAt, hot: lead.hot }),
+        body: JSON.stringify({
+          studentId: lead.studentId, outcome, note, callbackAt, hot: lead.hot,
+          reasonCategory: reasonCategory ?? null,
+          reasonVerbatim: reasonVerbatim ?? null,
+        }),
       });
       const json = await res.json().catch(() => null);
       if (res.ok && json?.ok === true) {
@@ -159,12 +168,46 @@ export function CallDeck({ queue }: { queue: CallLead[] }) {
   );
 }
 
-function Disposition({ lead, onDispose }: { lead: CallLead; onDispose: (l: CallLead, o: string, n: string, cb?: string) => Promise<boolean> }) {
+function Disposition({ lead, onDispose }: {
+  lead: CallLead;
+  onDispose: (
+    l: CallLead, o: string, n: string, cb?: string,
+    reason?: string | null, verbatim?: string | null,
+  ) => Promise<boolean>;
+}) {
   const [outcome, setOutcome] = useState('interested');
   const [note, setNote] = useState('');
   const [callbackAt, setCallbackAt] = useState('');
   const [saving, setSaving] = useState(false);
   const needsCallback = outcome === 'callback';
+
+  // ── WHAT THE STUDENT SAID (29 Aug 2026) ─────────────────────────────────
+  //
+  // This existed on the single-student page and NOT here, which meant it did
+  // not exist: /sales is where a counsellor spends the day, and nobody opens
+  // sixty student pages to record a category. Every call worked from the queue
+  // wrote reason_category = NULL, so the taxonomy, the ledger column and the
+  // founder's product-intelligence view were all being fed nothing by the one
+  // workflow that actually runs.
+  //
+  // Founder, 30 Aug: the founder should be able to learn what students are
+  // saying without personally talking to every student. One student saying
+  // "the timetable does not fit my coaching" is an anecdote; thirty saying it
+  // is a product requirement — but only if it was recorded as a CATEGORY,
+  // because free text cannot aggregate.
+  //
+  // OPTIONAL, DELIBERATELY. Feedback is a by-product of the work, not the job.
+  // Forcing it on sixty calls a day produces whatever option sits at the top of
+  // the list, which is worse than nothing because it looks like data. The one
+  // exception is `other`, where the free text IS the record and the taxonomy
+  // already demands it.
+  //
+  // Connected outcomes only: nobody spoke to a student who did not answer, so
+  // asking why they are not studying would be inviting the rep to guess.
+  const [reason, setReason] = useState<ReasonCategory | ''>('');
+  const [reasonVerbatim, setReasonVerbatim] = useState('');
+  const asksReason = outcome !== 'no_answer';
+  const needsVerbatim = asksReason && reasonNeedsVerbatim(reason || null);
   // ── A NOTE IS REQUIRED ONLY WHERE IT CARRIES SOMETHING A FIELD CANNOT ────
   //
   // This used to be `note.trim().length > 0` for EVERY connected outcome, so
@@ -179,7 +222,11 @@ function Disposition({ lead, onDispose }: { lead: CallLead; onDispose: (l: CallL
   // structured fields already carry the meaning, and a short remark is welcome
   // but never extorted. SALES-OS.md §8.
   const NOTE_REQUIRED = new Set(['not_interested', 'dnd']);
-  const canSave = !NOTE_REQUIRED.has(outcome) || note.trim().length > 0;
+  // The API rejects `other` without at least 3 characters of verbatim, so the
+  // button has to know that too — otherwise the rep taps Save, the request
+  // fails, and the card stays put with no explanation.
+  const canSave = (!NOTE_REQUIRED.has(outcome) || note.trim().length > 0)
+    && (!needsVerbatim || reasonVerbatim.trim().length >= 3);
 
   return (
     <div className="space-y-2.5 border-t border-stone-100 bg-stone-50 px-4 py-3">
@@ -198,13 +245,41 @@ function Disposition({ lead, onDispose }: { lead: CallLead; onDispose: (l: CallL
             className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm" />
         </div>
       )}
+      {asksReason && (
+        <div className="rounded-lg border border-teal-200 bg-teal-50/60 p-2.5">
+          <label className="text-[11px] font-bold uppercase tracking-wide text-teal-800">
+            Why aren&apos;t they studying / buying? (their reason, not yours)
+          </label>
+          <select
+            value={reason}
+            onChange={(e) => { setReason(e.target.value as ReasonCategory | ''); setReasonVerbatim(''); }}
+            className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm">
+            <option value="">— optional: what they actually said —</option>
+            {REASON_CATEGORIES.map((r) => (
+              <option key={r} value={r}>{REASON_LABEL[r]}</option>
+            ))}
+          </select>
+          {needsVerbatim && (
+            <input
+              value={reasonVerbatim}
+              onChange={(e) => setReasonVerbatim(e.target.value)}
+              placeholder="In their words — this is how a new category gets found"
+              className="mt-1.5 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm" />
+          )}
+        </div>
+      )}
       <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Feedback (required): what did they say?"
         className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm" />
       <button
         disabled={!canSave || saving}
         onClick={async () => {
           setSaving(true);
-          const ok = await onDispose(lead, outcome, note.trim(), needsCallback ? (callbackAt || defaultCallback()) : undefined);
+          const ok = await onDispose(
+            lead, outcome, note.trim(),
+            needsCallback ? (callbackAt || defaultCallback()) : undefined,
+            asksReason ? (reason || null) : null,
+            asksReason && reasonVerbatim.trim() ? reasonVerbatim.trim() : null,
+          );
           if (!ok) setSaving(false); // failed — keep the form so she can retry
         }}
         className="w-full rounded-xl bg-stone-900 py-2.5 text-sm font-bold text-white active:scale-[0.98] disabled:opacity-40">
