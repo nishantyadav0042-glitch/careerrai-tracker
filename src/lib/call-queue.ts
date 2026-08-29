@@ -269,14 +269,57 @@ export function classifyLane(s: LaneSignals): LaneVerdict | null {
  * Retry once so a blip stays invisible, then throw. An unreadable queue must
  * surface as an error the rep can retry, never as a confident wrong list.
  */
+// ── THE URL LIMIT (Incident #57, 30 Aug 2026) ───────────────────────────────
+//
+// PostgREST puts `.in()` lists in the QUERY STRING. With 975 students that is
+// a ~38,000 character URL, and the request comes back 400 Bad Request — every
+// time, for everybody. /sales rendered "This page didn't load" and both
+// counsellors were locked out of the product on the morning they were meant to
+// start.
+//
+// It broke silently and then loudly. lead_outreach is the one read that
+// inspects its error, so it threw and took the page down. The other six reads
+// here pass the same list and swallow the failure — including the PAID
+// PAYMENTS read, which means `paidIds` came back empty and a paying student
+// could have been dealt as a cold lead. That is Incident #52's failure mode
+// arriving through a different door, and the loud crash is the only reason
+// anyone noticed.
+//
+// This is a scale wall, not a bug in the query: it appeared the week the base
+// crossed roughly 850 students and it would have arrived on its own schedule
+// whatever we built on top. 150 ids is ~5,900 characters of URL, comfortably
+// inside every limit in the path.
+const IN_CHUNK = 150;
+
+/**
+ * Run an `.in()` query in URL-safe batches and concatenate the rows.
+ *
+ * `make` is called once per chunk and must build the whole query for that
+ * chunk. The first error stops the walk and is returned with whatever was
+ * already read, so a caller that wants to fail closed still can — and
+ * readLeadOutreach below does exactly that.
+ */
+async function selectInChunks(
+  make: (chunk: string[]) => PromiseLike<{ data: any[] | null; error: { message: string } | null }>,
+  ids: string[],
+): Promise<{ data: any[]; error: { message: string } | null }> {
+  const out: any[] = [];
+  for (let i = 0; i < ids.length; i += IN_CHUNK) {
+    const { data, error } = await make(ids.slice(i, i + IN_CHUNK));
+    if (error) return { data: out, error };
+    if (data) out.push(...data);
+  }
+  return { data: out, error: null };
+}
+
 async function readLeadOutreach(db: any, ids: string[]): Promise<any[]> {
   let lastMessage = 'unknown';
   for (let attempt = 0; attempt < 2; attempt++) {
-    const { data, error } = await db
+    const { data, error } = await selectInChunks((chunk) => db
       .from('lead_outreach')
       .select('student_id, status, callback_at, next_action_at, last_attempt_at, no_answer_count, owner_id, owner')
-      .in('student_id', ids);
-    if (!error) return data ?? [];
+      .in('student_id', chunk), ids);
+    if (!error) return data;
     lastMessage = error.message;
   }
   throw new Error(`Could not read the sales queue state: ${lastMessage}`);
@@ -304,9 +347,9 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
   if (ids.length === 0) return { queue: [], connectedToday: 0, dueNow: 0, totalOpen: 0 };
 
   const [{ data: profs }, { data: eng }, { data: reports }, outreach, { data: paidRows }, { data: unpaidRows }, { data: lastActs }] = await Promise.all([
-    db.from('profiles').select('id, created_at, target_percentile, cat_percentile, starting_percentile, pain_points, dream_colleges, is_repeater').in('id', ids),
-    db.from('student_engagement').select('student_id, buddy_cta_clicks, mock_opened, intent_door_at').in('student_id', ids),
-    db.from('daily_reports').select('student_id, report_date').in('student_id', ids).gte('report_date', since30),
+    selectInChunks((chunk) => db.from('profiles').select('id, created_at, target_percentile, cat_percentile, starting_percentile, pain_points, dream_colleges, is_repeater').in('id', chunk), ids),
+    selectInChunks((chunk) => db.from('student_engagement').select('student_id, buddy_cta_clicks, mock_opened, intent_door_at').in('student_id', chunk), ids),
+    selectInChunks((chunk) => db.from('daily_reports').select('student_id, report_date').in('student_id', chunk).gte('report_date', since30), ids),
     // The only read here that decides a business state — checked, retried, or thrown.
     readLeadOutreach(db, ids),
     // THE PAYMENT LEDGER IS THE CONVERSION TRUTH (Incident #52). The roster
@@ -314,7 +357,7 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
     // webhook can leave stale; a paid row in student_payments is the money
     // itself. Read here so the queue closes a student on the ledger rather
     // than on a status somebody typed.
-    db.from('student_payments').select('student_id').eq('status', 'paid').in('student_id', ids),
+    selectInChunks((chunk) => db.from('student_payments').select('student_id').eq('status', 'paid').in('student_id', chunk), ids),
     // ── THE STRONGEST COMMERCIAL SIGNAL WE HAVE ───────────────────────────
     //
     // A student who created an order and never paid told us, in the most
@@ -333,21 +376,21 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
     // them as "you started paying and stopped" would be both wrong and
     // insulting. `created` (an order exists, no money moved) and `failed` (the
     // attempt did not complete) are the two that mean what this lane means.
-    db.from('student_payments')
+    selectInChunks((chunk) => db.from('student_payments')
       .select('student_id, created_at, plan, status')
       .in('status', ['created', 'failed'])
-      .in('student_id', ids)
-      .order('created_at', { ascending: false }),
+      .in('student_id', chunk)
+      .order('created_at', { ascending: false }), ids),
     // WHAT WAS SAID LAST TIME. Bounded and cheap: newest-first across the
     // whole book, reduced to one row per student below. A counsellor who has
     // to open another screen to remember the previous conversation will stop
     // doing it by the second week, and the student ends up repeating
     // themselves to the same company twice.
-    db.from('sales_activity')
+    selectInChunks((chunk) => db.from('sales_activity')
       .select('student_id, created_at, status, note')
-      .in('student_id', ids)
+      .in('student_id', chunk)
       .order('created_at', { ascending: false })
-      .limit(2000),
+      .limit(2000), ids),
   ]);
   // ── Who is finished with the sales queue (Incident #52) ─────────────────
   //
