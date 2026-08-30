@@ -39,6 +39,23 @@ export function CallDeck({ queue }: { queue: CallLead[] }) {
   const [done, setDone] = useState(0);
   const [openId, setOpenId] = useState<string | null>(null);
   const [errorById, setErrorById] = useState<Record<string, string>>({});
+  // ── ONE TAP IS ONE ATTEMPT ────────────────────────────────────────────────
+  //
+  // The "No answer" quick action had no in-flight guard, and the only real
+  // counsellor interaction in production proves what that costs: Neelam's
+  // single tap on 29 Aug wrote TWO identical no_answer rows 2.8s apart and left
+  // no_answer_count at 2. The detailed Save button next to it was already
+  // guarded by `saving`; this path never was.
+  //
+  // It is not a cosmetic double-record. no_answer_count drives the contact
+  // ceiling that suppresses a lead, so a student who is counted twice per dial
+  // drops out of the queue after HALF the attempts we intended to make — and
+  // every "attempts" number we report is inflated by the same factor.
+  //
+  // Guarded inside dispose() rather than on the button, so it covers the
+  // Disposition panel and any future caller too: one authority, not one
+  // patched call site.
+  const [inFlight, setInFlight] = useState<Record<string, boolean>>({});
 
   // NOT optimistic (20 Aug, Sales Phase 1): the lead leaves the deck only
   // after the server confirms the write. The old version removed the card
@@ -48,6 +65,8 @@ export function CallDeck({ queue }: { queue: CallLead[] }) {
     lead: CallLead, outcome: string, note: string, callbackAt?: string,
     reasonCategory?: string | null, reasonVerbatim?: string | null,
   ): Promise<boolean> => {
+    if (inFlight[lead.studentId]) return false;
+    setInFlight((f) => ({ ...f, [lead.studentId]: true }));
     setErrorById((e) => ({ ...e, [lead.studentId]: '' }));
     let failure = 'Could not save the call — check your connection and try again.';
     try {
@@ -64,10 +83,15 @@ export function CallDeck({ queue }: { queue: CallLead[] }) {
         setDone((d) => d + 1);
         setList((l) => l.filter((x) => x.studentId !== lead.studentId));
         setOpenId(null);
+        setInFlight((f) => ({ ...f, [lead.studentId]: false }));
         return true;
       }
       if (json?.error) failure = json.error;
     } catch { /* network failure — fall through to the shared message */ }
+    // Released on failure too. The guard must never outlive the request: a
+    // save that is rejected has to be retryable, or the guard becomes a worse
+    // bug than the double-write it prevents.
+    setInFlight((f) => ({ ...f, [lead.studentId]: false }));
     setErrorById((e) => ({ ...e, [lead.studentId]: failure }));
     return false;
   };
@@ -151,7 +175,7 @@ export function CallDeck({ queue }: { queue: CallLead[] }) {
                 <MessageCircle className="h-4 w-4" /> WA
               </a>
             )}
-            <button onClick={() => void dispose(lead, 'no_answer', '')} className="flex items-center justify-center gap-1 bg-white px-3 py-3 text-[12px] font-semibold text-orange-600 active:bg-orange-50" title="Didn't pick up">
+            <button onClick={() => void dispose(lead, 'no_answer', '')} disabled={inFlight[lead.studentId]} className="flex items-center justify-center gap-1 bg-white px-3 py-3 text-[12px] font-semibold text-orange-600 active:bg-orange-50 disabled:opacity-40" title="Didn't pick up">
               <PhoneOff className="h-4 w-4" /> No answer
             </button>
             <button onClick={() => setOpenId(openId === lead.studentId ? null : lead.studentId)} className="flex items-center justify-center gap-1 bg-white px-3 py-3 text-[12px] font-bold text-teal-700 active:bg-teal-50">
