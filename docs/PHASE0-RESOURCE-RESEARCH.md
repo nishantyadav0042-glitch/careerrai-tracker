@@ -274,6 +274,57 @@ Phase-0 record is: **"external linking does not sufficiently solve DILR
 practice"** — which is exactly the evidence Phase 5 (own DILR bank) needs.
 Do not lower the bar to force a Phase-0 link.
 
+## Video content review (Gemini, 30 Aug) — the two shortlisted concept videos
+
+Gemini watched both finalist concept videos in full (native video
+understanding — a capability neither Claude nor vidIQ has; vidIQ gives
+metadata only, never content). Findings:
+
+**Percentages** (`x-k8iSNr85g`, 26m19s): first ~9:30 is fraction↔percentage
+conversion theory; then 7 worked calculation drills (e.g. "37.5% of 640",
+"840 decreased by 87.5%"). No self-attempt prompts — the instructor solves
+immediately on writing the problem. **No full CAT word-problem is
+included** — this is foundational speed-math, not CAT-level practice.
+Estimated genuine consumption: 45–55 min. No upselling, fully standalone.
+
+**Arrangements** (`4tI-h-GKWVk`, 20m11s): first 7 min is basic
+circular/linear direction fundamentals (school-level); the remaining 13
+min covers two specific deduction techniques (neighbour-swap case
+analysis; left/right-position pairing) in isolation. **Zero complete DILR
+sets are solved** — the video teaches two reusable techniques, not how a
+full arrangement set is worked end to end. Estimated genuine consumption:
+35–45 min. No upselling, fully standalone.
+
+**What this changes:**
+- **Confirms the target-resource contract is load-bearing, not
+  theoretical:** neither video can satisfy a practice target on its own —
+  exactly the failure mode R1/§2 of the plan doc was written to prevent.
+  Good news: this was designed for, not missed.
+- **Arrangements pairing is strengthened by this finding, not weakened.**
+  Video teaches technique in isolation; Bodhee's `lrdi-practice-set-1` and
+  `lrdi-questions-difficult-set-20` (confirmed above) are full, complete
+  sets. Concept + practice from two different sources is exactly the
+  intended task-intent split (`ADAPTIVE-EFFORT-MODEL.md` §3.2) — not a
+  gap, a working example of it.
+- **Percentages has a genuine, previously-missed difficulty cliff for the
+  FOUNDATION task specifically.** The video's own difficulty (basic
+  conversions/drills) sits well below 2IIM's bank (algebraic, multi-
+  variable, Standard-CAT/CAT-hard — confirmed earlier). For the
+  Foundation task ("Learn + solve 8–12 questions"), there is currently no
+  confirmed EASY practice tier — only the video's own 7 embedded drills,
+  which the student would have to treat as their practice by pausing and
+  solving before the explanation. This is a real, open Phase-0 finding:
+  flag it rather than paper over it; the Percentages PRACTISING task
+  (12–22 questions, harder register expected) is well served by 2IIM as-is.
+- **No self-attempt structure in either video is a named risk, not a
+  detail.** Without a built-in pause-and-try prompt, a passive watch
+  records a "click" with no real learning — precisely SWOT threat #2
+  ("retention theater"). This is exactly why R10 (click ≠ completion) and
+  the post-return practice step are mandatory design elements here, not
+  optional polish — Gemini's own recommendation ("add 4–5 practice
+  questions right under the video") independently arrives at the same
+  concept+practice split already in the card design.
+
 ---
 
 ## Curator hand-check sheet (the founder's 30-minute job, per candidate)

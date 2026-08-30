@@ -76,6 +76,20 @@ The multiplier is a function of **example density × learner stage**, not a
 constant: **[HEURISTIC] 1.0–2.5×, choose within the band by counting the
 worked examples in the video**.
 
+**First real calibration point (Gemini video-content review, 30 Aug —
+N=2, single reviewer, directional only, not a statistical calibration):**
+two Rodha concept videos were watched in full and their actual
+note-taking/derivation burden assessed. Percentages, 26m19s stated →
+45–55 min estimated genuine consumption (**≈1.7–2.1×**); Arrangements,
+20m11s stated → 35–45 min (**≈1.75–2.25×**). Both land in the upper half
+of the assumed 1.0–2.5× band, consistent with the theory: neither video is
+passive-watchable — both require the student to derive/copy a table or
+diagram to actually learn from them, which is exactly the "example-dense,
+active" end of the range, not the "passive exposition" end. This is one
+data point per topic, not a calibration — but it is the first time the
+band's upper-half placement has been checked against a specific real
+resource rather than assumed from the general video-pacing literature.
+
 ### 2.3 Novice vs practitioner — [EVIDENCE], direction; magnitude ours
 The worked-example effect (Sweller; replicated widely): novices learn more,
 faster, from studying worked examples than from solving equivalent problems
