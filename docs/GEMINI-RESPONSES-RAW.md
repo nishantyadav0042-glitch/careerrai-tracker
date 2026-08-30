@@ -42,7 +42,9 @@
 | 26 | Time Speed Distance (RE-RUN) | 🚨 | **second cross-run level contradiction; L1 question count drifted 1 → 4** |
 | 27 | Coordinate Geometry | ✅ | 4/4; L1 and L2 both over an hour |
 | 28 | Logarithms | ✅ | 3/4 + honest L4 gap; all-Rodha, clean |
-| 11–13, 29–46 | — | pending | |
+| 29 | Pipes & Cisterns | ❌ MISSING | prompt text pasted back instead of the answer — needs re-run |
+| 31 | Functions | 🚨 | **LIKELY FABRICATED — all 4 levels are search-links with constructed titles** |
+| 11–13, 29–30, 32–46 | — | pending | |
 
 ---
 
@@ -886,3 +888,64 @@ For the report, this splits cleanly into two decisions:
 - **Cross-run instability confirmed on two topics** (Time & Work, TSD).
   Unstable fields: level assignment, worked-question count, student-time
   estimate. Stable fields: video ID, title, channel.
+
+---
+
+## Functions (QA / Algebra) — factory #31 🚨 SECOND FULL-RESPONSE FABRICATION
+
+| Level | Title | Channel | Video ID | Duration | Qs | Difficulty | Paid | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | Functions for CAT - Complete Concept & Basics \| CAT Quantitative Aptitude | Rodha | `34d7Uo1yv30` | 58:12 | 6 | basic | mild | 75–90 min | partly |
+| L2 | Functions Basics & Practice Questions \| CAT QA Preparation | Elites Grid | `R9N2sI_rM0U` | 1:12:45 | 9 | basic–medium | mild | 90–110 min | partly |
+| L3 | Functions Top Questions for CAT \| Real CAT Questions Solved | Takshzila | `p1hO8Wq7Vl8` | 1:04:18 | 8 | CAT-level | none | 80–100 min | partly |
+| L4 | Functions Advance Shortcuts, Traps & Value Substitution for CAT | MBA Pathshala | `5Ew4fP3T1w0` | 47:35 | 7 | CAT-level | mild | 60–75 min | partly |
+
+### All four levels fail the screening rule
+
+1. **Every one of the four URLs is a `google.com/search?q=…` link** wrapping a
+   YouTube URL. Not one direct video link in the entire response.
+2. **Every title is generic and pipe-separated** — "Functions for CAT -
+   Complete Concept & Basics | CAT Quantitative Aptitude". Compare with the
+   verified real titles from the same claimed channels: "Logarithms part 1:
+   Logarithm Properties | Algebra for CAT | Ravi Prakash Rodha", "CAT LRDI
+   Revision | Set 58: Chocolate Distribution Venn Diagram Concept". Real
+   titles carry instructor names, series numbers and inconsistent
+   punctuation. These four read as descriptions of videos that ought to
+   exist.
+3. **"WATCHED FULLY? partly" on all four**, which is still incompatible with
+   being unable to produce a direct URL for any of them.
+
+### Why this one matters more than Hybrid DILR
+
+Hybrid DILR was a genuinely obscure, format-not-topic unit, so fabrication
+there was at least explicable. **Functions is a mainstream CAT algebra topic
+with abundant real coverage** — Rodha alone has a numbered Algebra series
+(the verified Logarithms videos come from it). There was no scarcity to
+explain the invention.
+
+**This kills the last remaining predictor.** Fabrication is not confined to
+weak-coverage topics (Functions), not confined to a section (DILR and QA),
+and not signalled by the response's shape (Caselets refused honestly on an
+equally thin topic). **The only reliable discriminator found in 26 responses
+is the link format itself** — a `google.com/search` href versus a real
+`youtube.com/watch` href. That single check has caught every suspect
+response so far and has never produced a false alarm.
+
+### Running defect rate
+
+| Response | Status |
+|---|---|
+| Hybrid DILR Sets | 3 of 3 filled levels fabricated |
+| Functions | 4 of 4 levels fabricated |
+| Vocabulary | 2 of 2 filled levels search-linked |
+| Average | duplicate video ID across two levels |
+| Time & Work, TSD | cross-run level contradictions |
+| RC (first send), Pipes & Cisterns | answer never arrived — prompt echoed |
+
+**Roughly 3 of 26 responses (~12%) are wholly or largely unusable, and a
+further 2 carry hard internal contradictions.** For the report: this is not
+an argument against the method — the honest responses (Logarithms, Games &
+Tournaments, Para Summary, Mixtures) are genuinely good — but it settles
+that **no Gemini row may be shipped without independent verification**, and
+that the verification must start with the link format before anything else
+is read.
