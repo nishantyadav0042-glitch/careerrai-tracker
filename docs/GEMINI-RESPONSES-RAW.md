@@ -23,7 +23,9 @@
 | 7 | Para Jumbles | ✅ | 3/4 + L4 gap |
 | 8 | Charts | ✅ | **4/4 — first DILR topic to fill L4** |
 | 9 | Average | ⚠️ | 3/4 + L4 gap, but **L1 and L2 cite the same video ID** — needs re-run |
-| 10–46 | — | pending | |
+| 10 | Odd One Out | ✅ | **4/4 — L4 filled** |
+| 25 | Time & Work | ✅ | **4/4 — L4 filled** (arrived labelled "11"; see numbering note) |
+| 11–24, 26–46 | — | pending | |
 
 ---
 
@@ -311,3 +313,88 @@ classify every unit as ladder-shaped (4 levels apply) or habit-shaped
    1:15 (Average L3). Six candidates exceed an hour, all claiming 90–150 min
    of student time — several times any single daily task slot. The report
    needs one explicit policy decision on hour-plus videos, not six ad-hoc ones.
+
+---
+
+## Prompt 10 — Odd One Out (VARC)
+
+| Level | Title | Channel | Video ID | Duration | Qs claimed | Difficulty | Paid push | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | CAT Verbal Ability Lecture 02 — Odd One Out Basic Concepts | Bodhee Prep CAT Preparation | `32bjj88vkk4` | 42:15 | 5 | basic | mild | 50–60 min | yes |
+| L2 | CAT Odd One Out Strategy: Stop Guessing (Brijesh Sir) | Rodha | `_R-zi-iIg_A` | 45:10 | 4 | medium | mild | 55–65 min | yes |
+| L3 | CAT 2025 Slot 2 VARC Marathon — VA Video Solutions | 2IIM | `-wsuOBoEn5k` | 54:40 | 8 | CAT-level | mild | 65–75 min | yes |
+| L4 | Why You're Getting Odd Sentence Out Wrong — And How to Fix It | Career Launcher MBA | `In0aLW6hKiU` | 34:20 | 4 | CAT-level | mild | 45–55 min | yes |
+
+- **Small provenance oddity to check:** L2 is credited to "Brijesh Sir" on the
+  **Rodha** channel, while prompt 7's L1 credited "Brijesh Pandey" on the
+  **Bodhee Prep** channel. Instructors do move between platforms, but the
+  same name appearing on two competing channels is exactly the kind of thing
+  that can indicate a re-upload. Verify channel ownership on both before
+  either ships.
+- L3 is another "CAT 2025 Slot N VARC Marathon" from 2IIM — the same series
+  as prompt 1's L3 (Slot 3). Whole-slot marathons are being used to cover
+  individual VARC sub-topics, which means one long video may be the L3 answer
+  for several VARC topics at once. Worth deciding centrally: is a shared
+  whole-slot video an acceptable per-topic L3, or does it fail topic purity?
+
+---
+
+## Prompt "11" as sent — Time & Work (QA / Arithmetic)
+
+> **Numbering note:** the factory's prompt 11 is `Venn / Sets` (DILR); this
+> answer is for `Time & Work`, which is prompt 25. Logged under its real
+> topic. `Venn / Sets` remains pending.
+
+| Level | Title | Channel | Video ID | Duration | Qs claimed | Difficulty | Paid push | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | Time and Work 1: LCM Method Introduction | Rodha | `oApzHGJNx38` | 21:58 | 4 | basic | mild | 35–45 min | yes |
+| L2 | Time and Work 2: Alternate Days and Workers Leaving | Rodha | `6IbA-nSj28g` | 24:25 | 3 | medium | mild | 40–50 min | yes |
+| L3 | All CAT Questions from Time and Work, 2017–2021 (Blitzkrieg) | 2IIM | `CgNjuFqom7s` | **1:37:56** | 10 | CAT-level | mild | 100–120 min | yes |
+| L4 | Time and Work 3: Efficiency and Time Ratios | Rodha | `MJIlrpc2oKc` | 26:05 | 5 | medium | mild | 40–50 min | yes |
+
+- Cleanest topic so far on provenance: all four from Rodha + 2IIM only, both
+  already familiar. No new channels introduced.
+- L3 at 1:37:56 is the **seventh** hour-plus candidate.
+
+---
+
+## REVISED READ on the L4 hypothesis (supersedes the provisional note after prompt 9)
+
+The earlier provisional read — "L4 is structurally thin across the syllabus"
+— **does not survive these two prompts** and should not go into the report as
+stated. Current tally:
+
+| L4 FILLED | L4 REFUSED |
+|---|---|
+| Reading Comprehension (option-elimination traps) | Arrangements |
+| Percentages (speed maths) | Tables |
+| Charts (niche chart type — weak fill) | Ratio & Proportion |
+| Odd One Out (error analysis + traps) | Para Jumbles |
+| Time & Work (efficiency/time ratios) | Average |
+| | Editorial Reading (structural — habit unit) |
+
+Roughly half and half, and the split is **not** by section (both VARC and QA
+and DILR appear on both sides). A better hypothesis, to be tested against the
+remaining prompts:
+
+> **L4 fills when the topic has a genuine reusable technique layer** —
+> efficiency/time ratios, speed-calculation methods, option-elimination trap
+> taxonomies. **L4 refuses when the topic's exam speed comes from practice
+> discipline rather than technique** — arrangements, ratio framing, para
+> jumble sequencing, averages. In the refusal cases Gemini's stated reason is
+> consistently that "shortcut" videos are SSC/banking hacks or paid funnels.
+
+If that holds, an empty L4 is a **property of the topic**, not a coverage
+failure — and the report should say which topics legitimately have three
+levels rather than treating those as holes to fill.
+
+## Two further batch signals
+
+- **Watch depth recovered:** prompts 10 and this one both report "yes" after
+  the "partly" runs at 6, 7 and 9. Reliability is uneven run to run, not
+  monotonically degrading — grade per row, never per batch.
+- **"PAID-COURSE PUSH: mild" on all 8 videos in these two prompts**, where
+  earlier runs frequently said "none". Either Gemini has become stricter or
+  these channels genuinely push harder. Since "mild" is now the common case,
+  it cannot by itself be a rejection criterion — the report needs a concrete
+  threshold for what level of promotion actually disqualifies a link.
