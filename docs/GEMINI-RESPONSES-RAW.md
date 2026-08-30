@@ -44,7 +44,10 @@
 | 28 | Logarithms | ✅ | 3/4 + honest L4 gap; all-Rodha, clean |
 | 29 | Pipes & Cisterns | ❌ MISSING | prompt text pasted back instead of the answer — needs re-run |
 | 31 | Functions | 🚨 | **LIKELY FABRICATED — all 4 levels are search-links with constructed titles** |
-| 11–13, 29–30, 32–46 | — | pending | |
+| 30 | Quadratic Equations | ✅ | 4/4; L1 starts at part 2 of the series |
+| 32 | Inequalities | ✅ | 3/4 + honest L4 gap; **best duration profile in the batch** |
+| 33 | Logarithms (RE-RUN) | 🚨 | **same video ID reported with TWO DIFFERENT DURATIONS — the batch's most serious defect** |
+| 11–13, 29, 34–46 | — | pending | |
 
 ---
 
@@ -949,3 +952,51 @@ Tournaments, Para Summary, Mixtures) are genuinely good — but it settles
 that **no Gemini row may be shipped without independent verification**, and
 that the verification must start with the link format before anything else
 is read.
+
+---
+
+## Quadratic Equations · Inequalities · Logarithms re-run — logged 31 Aug
+
+Full per-link detail for these three is in
+`docs/phase0/PHASE0-LINK-ANALYSIS.md`; the corpus row for each is in
+`docs/phase0/resource-corpus.json`. Only the findings are repeated here.
+
+### Logarithms re-run — THE MOST SERIOUS DEFECT IN THE ENTIRE BATCH
+
+The same two video IDs were returned in both runs, with **different durations
+each time**:
+
+| Video ID | Run 1 (prompt 28) | Run 2 (prompt 33) | Conflict |
+|---|---|---|---|
+| `K6Jk3uEkIMA` | 26:15, 5 questions | **28:04**, 4 questions | **1m49s** |
+| `SzseQAYENMc` | 24:06, 6 questions | **26:17**, 5 questions | **2m11s** |
+
+A video's duration is an objective, immutable fact. Two different durations
+for one video ID is proof that **the metadata is being generated, not read**.
+This is categorically worse than the level and question-count drift recorded
+earlier, because those are judgments and this is not.
+
+**The counter-evidence that saves the corpus:** for the seven videos verified
+against real vidIQ metadata earlier in this session, **every duration Gemini
+reported was exact to the second**. So the model is accurate on videos it has
+genuinely seen; fabrication is a separate failure mode, not general
+unreliability. The corpus is therefore salvageable by verification rather
+than worthless — but no duration may be treated as fact until checked.
+
+One field held perfectly across both runs: the **L4 refusal**, with
+consistent reasoning both times.
+
+### Quadratic Equations
+4/4 filled, all direct URLs, familiar channels. Two notes: L1 is
+"Quadratic Equation **2**: Nature Of Roots" — the series' actual first video
+was never offered, so the concept ladder may start mid-series; and the L4 is
+a 74-minute "Algebra Marathon", which is a practice marathon rather than an
+exam-ready technique video and is a questionable fit for that level.
+
+### Inequalities — best duration profile found
+L1 is 18:24 and L2 is 16:11. **These are the only two consecutive levels in
+the entire batch that both fit a daily task slot without splitting.** Worth
+studying as the shape a good ladder should have. Two flags: L2 jumps from
+part 1 to part **9** of the series (parts 2–8 unexamined), and the 2IIM L3's
+stated duration (1:04:12) is identical to the Ratio & Proportion L3's stated
+duration — coincidence or copy, flag for verification.
