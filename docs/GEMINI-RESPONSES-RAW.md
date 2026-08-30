@@ -36,7 +36,13 @@
 | 21 | Caselets | ✅ | 1/4 + **3 honest refusals — refutes the refusal-fatigue hypothesis** |
 | 22 | Games & Tournaments | ✅ | 3/4 + L4 gap; clean response |
 | 25 | Time & Work (RE-RUN) | 🚨 | **contradicts its own earlier run — same video placed at L4 and at L2** |
-| 11–14, 23–24, 28–46 | — | pending | |
+| 14 | Mixtures | ✅ | 3/4 + honest L4 gap |
+| 23 | Grammar | ✅ | 2/4 + **structural gap — Grammar phased out of CAT post-2014** |
+| 24 | Reading Speed Practice | ✅ | 2/4 + structural gap (L2 empty, L3 filled — gap mid-ladder) |
+| 26 | Time Speed Distance (RE-RUN) | 🚨 | **second cross-run level contradiction; L1 question count drifted 1 → 4** |
+| 27 | Coordinate Geometry | ✅ | 4/4; L1 and L2 both over an hour |
+| 28 | Logarithms | ✅ | 3/4 + honest L4 gap; all-Rodha, clean |
+| 11–13, 29–46 | — | pending | |
 
 ---
 
@@ -731,3 +737,152 @@ conclusion rather than just a row:
 4. `TBhanaOLNvc` — Average, one ID given for two different levels
 5. `Iht9lGW7ntY` — Anastasis Academy, to establish whether the channel is real
 6. `5t6OdAz2zzw` — Profit & Loss L3, "R4 BATCH" paid-funnel title
+
+---
+
+## Mixtures (QA) — factory #14
+
+| Level | Title | Channel | Video ID | Duration | Qs | Difficulty | Paid | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | Alligation and Mixture 1: Weighted Average Seesaw | Rodha | `3LmRyBpIhgQ` | 31:47 | 4 | basic | none | 45–55 min | yes |
+| L2 | Alligation and Mixture 3: Alligation in Mixtures | Rodha | `qQcGkxuf4ws` | 23:35 | 2 | medium | none | 35–45 min | yes |
+| L3 | Mixtures & Alligations — Arvind Shankar's Guess Questions | Anastasis Academy | `rM8zFErtUPE` | 52:54 | **16** | CAT-level | none | 75–90 min | yes |
+| L4 | — | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+
+- **`Anastasis Academy` is now corroborated.** A second video from the same
+  named series ("Arvind Shankar's Guess Questions"), supplied with a direct
+  URL, matching the Time & Work L4 pattern. The channel is very likely real;
+  the Hybrid DILR entry that used its name with a search-link remains the
+  suspect item, not the channel itself.
+- Honest L4 refusal with a specific argument (alligation "tricks" videos are
+  SSC/banking rote-formula content).
+
+---
+
+## Grammar (VARC) — factory #23 · FOURTH STRUCTURAL SKILL-UNIT FINDING
+
+| Level | Title | Channel | Video ID | Duration | Qs | Difficulty | Paid | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | Grammar (Sentence Correction & Error Spotting) — Subject Verb Agreement | **MBA Wallah** | `PlsBlgzhsXU` | 52:04 | 10 | basic | mild | 65–80 min | partly |
+| L2 | Grammar for CAT: Part 1 | **Takshzila** | `Vjd55QTv3nA` | 15:48 | 8 | basic | none | 25–35 min | partly |
+| L3 | — | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+| L4 | — | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+
+Reasoning: direct grammar questions (sentence correction, error spotting,
+fill-in-the-blanks) were **phased out of CAT after 2014**. Modern CAT VARC
+tests only RC, Para Jumbles, Para Summary, Odd One Out and Sentence
+Placement. Grammar survives only as a reading aid, or for OMETs (SNAP, NMAT,
+XAT, CMAT, MICAT). Two more new channels: `MBA Wallah` (16th), `Takshzila` (17th).
+
+---
+
+## Reading Speed Practice (VARC) — factory #24
+
+| Level | Title | Channel | Video ID | Duration | Qs | Difficulty | Paid | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | How to read a passage effectively (CAT-RC-Series) | Gejo Speaks | `0U5n10P3x_c` | 18:45 | 0 | basic | none | 25–35 min | yes |
+| L2 | — | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+| L3 | Reading Comprehension Strategy — CAT 2019 passage | Gejo Speaks | `ozhEHygD3YY` | **1:02:18** | 4 | CAT-level | none | 75–90 min | yes |
+| L4 | — | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+
+- Unusual shape: **the gap is in the middle of the ladder** (L2 empty, L3
+  filled), where every other topic gaps at the top. Reasoning given: reading
+  speed has no isolated basic-level practice; it only exists inside real RC
+  passages — so the "L3" here is really an RC video demonstrating pacing.
+- Note this makes the L3 pick **topically identical to the RC topic's own
+  material** — a duplicate resource serving two different units. Same issue
+  as the 2IIM whole-slot marathons. Needs a central de-duplication decision.
+
+---
+
+## Time Speed Distance — RE-RUN as factory #26 🚨 SECOND CROSS-RUN CONTRADICTION
+
+| Level | Earlier run (sent as "12") | This run (sent as "26") | Same? |
+|---|---|---|---|
+| L1 | `CKiP208avbc`, 22:17, **1 question** | `CKiP208avbc`, "~23 min", **4 questions** | same video, **count 1 → 4** |
+| L2 | `PQvBSkJDF_E` — TSD 2 | `tLsP7smddvQ` — TSD 3 | ❌ different |
+| L3 | **`RHflaojKVlI` — TSD 8: Escalator** | `VYn1dJ0Acdo` — 2IIM CAT 2018 Slot 2, ~6 min, 1 Q | ❌ different |
+| L4 | `Kblu48aZ7bA` — ELITES GRID | **`RHflaojKVlI` — TSD 8: Escalator** | ❌ different |
+
+**This confirms the Time & Work finding as a pattern, not a one-off.** Again
+a video moved between levels across runs (`RHflaojKVlI`: L3 → L4), and this
+time the **worked-question count on an unchanged video quadrupled (1 → 4)**.
+Two of the three "fact" fields — level and question count — are now
+demonstrably unstable across runs on the same video. Only title, channel and
+video ID have held.
+
+Also note the new L3 is a **~6-minute, single-question** clip presented as
+CAT-LEVEL PRACTICE — far too thin to satisfy a practice target.
+
+---
+
+## Coordinate Geometry (QA / Geometry) — factory #27
+
+| Level | Title | Channel | Video ID | Duration | Qs | Difficulty | Paid | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | Coordinate Geometry 1 (Quant Geometry L10) | MBA Wallah | `9t7cKr-KZ8U` | **1:07:42** | 7 | basic | mild | 85–105 min | yes |
+| L2 | Coordinate Geometry 2: Equations of line | MBA Wallah | `0GNr5I019-I` | **1:15:51** | 8 | medium | mild | 90–110 min | yes |
+| L3 | Geometry Practice 3: Coordinate Geometry & Medians | Rodha | `NXlFmkHm0N0` | 15:07 | 2 | CAT-level | mild | 25–35 min | yes |
+| L4 | CAT Quant Concept 6: Area of Modulus | ELITES GRID | `NTxJBUAnAq0` | 22:00 | 4 | CAT-level | none | 35–45 min | yes |
+
+- **Inverted difficulty-duration curve:** the two "basic/medium" levels are
+  67 and 76 minutes, while the two CAT-level ones are 15 and 22 minutes. A
+  beginner is asked for ~3 hours across L1+L2 before reaching 40 minutes of
+  actual CAT-level work. Whatever the videos' merits, that ladder is unusable
+  as a daily-task sequence without splitting.
+
+---
+
+## Logarithms (QA / Algebra) — factory #28
+
+| Level | Title | Channel | Video ID | Duration | Qs | Difficulty | Paid | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | Logarithms part 1: Logarithm Properties | Rodha | `K6Jk3uEkIMA` | 26:15 | 5 | basic | none | 45–55 min | yes |
+| L2 | Logarithms 2: Equations with Quadratic Forms | Rodha | `SzseQAYENMc` | 24:06 | 6 | medium | none | 45–60 min | yes |
+| L3 | Logarithms Practice: Logarithms & Product of Roots | Rodha | `s28TG0ERFr4` | 18:42 | 4 | CAT-level | mild | 35–45 min | yes |
+| L4 | — | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+
+- Cleanest QA response of the batch: one channel, one numbered series,
+  rising difficulty, sensible durations (26 → 24 → 19 min), direct URLs,
+  honest L4 gap. This is the shape a good topic ladder should have.
+
+---
+
+# MAJOR FINDING — nearly half of our VARC taxonomy is not a CAT question type
+
+Four VARC units have now returned the same structural verdict, each with an
+independent argument, and each **matching distinctions our own codebase
+already draws**:
+
+| VARC unit | Verdict | Reason given |
+|---|---|---|
+| Editorial Reading | skill/habit, not a question unit | CAT tests standardised RC, never "editorial questions" |
+| Vocabulary | skill, not a question unit | no standalone vocab questions since ~2015; tested only in RC context |
+| Grammar | **removed from the exam** | direct grammar questions phased out post-2014 |
+| Reading Speed Practice | skill, not a question unit | exists only inside RC passages |
+
+That is **four of VARC's nine units** (RC, Para Jumbles, Para Summary, Odd
+One Out are ladder-shaped; Sentence Completion still pending). This is no
+longer a finding about resource availability — **it is a finding about our
+own topic graph**: it contains units that modern CAT does not test as
+question types, and the 4-level resource ladder cannot apply to them by
+construction.
+
+For the report, this splits cleanly into two decisions:
+1. **Resource decision (in scope now):** these units get an L1 pointer only,
+   and empty L2–L4 are recorded as correct results, never as coverage gaps.
+2. **Product decision (out of scope, but must be surfaced):** whether the
+   plan engine should still be scheduling daily *tasks* against units that
+   are not exam question types — and if so, what a task on them should even
+   ask a student to do. That is a founder call, not a research output.
+
+## Running tallies
+
+- **~15 candidates now exceed one hour**, several claiming 90–150 minutes of
+  student time. Still needs one policy decision, not fifteen.
+- **17 distinct channels** have appeared; only Rodha and 2IIM have any prior
+  verification, and Anastasis Academy is now corroborated by a second
+  direct-URL video.
+- **Cross-run instability confirmed on two topics** (Time & Work, TSD).
+  Unstable fields: level assignment, worked-question count, student-time
+  estimate. Stable fields: video ID, title, channel.
