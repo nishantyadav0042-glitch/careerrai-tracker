@@ -95,7 +95,18 @@
      "student_time_claimed": "35-45 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "25:55",
+      "real_minutes": 26,
+      "real_channel": "2IIM CAT Preparation",
+      "real_views": 3294,
+      "real_title": "Cracking RC 101┃ The Ultimate Guide to Acing Reading Comprehension ┃Ex",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L2",
@@ -109,7 +120,18 @@
      "student_time_claimed": "75-90 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "72:14",
+      "real_minutes": 72,
+      "real_channel": "Rodha",
+      "real_views": 41493,
+      "real_title": "RODHA VARC I Reading Comprehension Practice Session I CAT 2023 I Episo",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L3",
@@ -123,7 +145,18 @@
      "student_time_claimed": "130-150 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "118:09",
+      "real_minutes": 118,
+      "real_channel": "2IIM CAT Preparation",
+      "real_views": 880,
+      "real_title": "CAT 2025 Slot 3 VARC Marathon | RC Video Solutions | CAT Previous Year",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L4",
@@ -137,7 +170,18 @@
      "student_time_claimed": "45-60 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "27:20",
+      "real_minutes": 27,
+      "real_channel": "Career Launcher MBA",
+      "real_views": 11680,
+      "real_title": "CAT RC: Traps in Answer Choices | Smart Option Elimination Strategy | ",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     }
    ],
    "flags": [
@@ -165,7 +209,18 @@
      "student_time_claimed": "45-60 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "26:19",
+      "real_minutes": 26,
+      "real_channel": "Rodha",
+      "real_views": 1179679,
+      "real_title": "Percentages 1: Fractions to Percentages | Arithmetic for CAT 2026",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L2",
@@ -179,7 +234,18 @@
      "student_time_claimed": "40-50 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "22:46",
+      "real_minutes": 23,
+      "real_channel": "Rodha",
+      "real_views": 680316,
+      "real_title": "Percentages 2: Successive Percentage Change | Arithmetic for CAT 2026 ",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L3",
@@ -193,7 +259,18 @@
      "student_time_claimed": "90-120 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "69:09",
+      "real_minutes": 69,
+      "real_channel": "2IIM CAT Preparation",
+      "real_views": 18761,
+      "real_title": "All CAT Questions from Percentages | CAT 2017 to 2021 | CAT Blitzkrieg",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L4",
@@ -207,7 +284,18 @@
      "student_time_claimed": "50-60 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "31:22",
+      "real_minutes": 31,
+      "real_channel": "Rodha",
+      "real_views": 1828745,
+      "real_title": "Speed Maths 1: Percentage of a Number | Arithmetic for CAT 2026",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     }
    ],
    "flags": [
@@ -235,7 +323,18 @@
      "student_time_claimed": "35-45 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "20:11",
+      "real_minutes": 20,
+      "real_channel": "Rodha",
+      "real_views": 845389,
+      "real_title": "Linear and Circular Arrangement - I for CAT I Logical Reasoning",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L2",
@@ -249,7 +348,18 @@
      "student_time_claimed": "20-30 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "10:57",
+      "real_minutes": 11,
+      "real_channel": "Rodha",
+      "real_views": 529748,
+      "real_title": "Linear Arrangement I Set - 1 I Logical Reasoning Preparation",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L3",
@@ -263,7 +373,18 @@
      "student_time_claimed": "50-65 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "34:36",
+      "real_minutes": 35,
+      "real_channel": "ELITES GRID - CAT PREP",
+      "real_views": 47565,
+      "real_title": "High LEVEL DILR puzzle & Detailed way to solve these puzzles | Must ch",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L4",
@@ -297,7 +418,18 @@
      "student_time_claimed": "10-15 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "3:02",
+      "real_minutes": 3,
+      "real_channel": "Patrick100",
+      "real_views": 2084,
+      "real_title": "From where should we read editorials? | AskPatrick | Patrick Dsouza | ",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L2",
@@ -343,7 +475,18 @@
      "student_time_claimed": "35-45 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "21:38",
+      "real_minutes": 22,
+      "real_channel": "Rodha",
+      "real_views": 134690,
+      "real_title": "Tabular Set || LR & DI Preparation for CAT || CAT exam Preparation",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L2",
@@ -357,7 +500,18 @@
      "student_time_claimed": "20-30 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "9:24",
+      "real_minutes": 9,
+      "real_channel": "Aptitude Jab",
+      "real_views": 3541,
+      "real_title": "CAT Infinite DILR - Set 303 | Organizing the scholarship test | Data T",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L3",
@@ -371,7 +525,18 @@
      "student_time_claimed": "25-35 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "7:51",
+      "real_minutes": 8,
+      "real_channel": "Aptitude Jab",
+      "real_views": 10306,
+      "real_title": "CAT Infinite DILR - Set 410 | Lehra Do | Table Mapping",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L4",
@@ -404,7 +569,18 @@
      "student_time_claimed": "90-110 min",
      "watched_claimed": "partly",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "74:56",
+      "real_minutes": 75,
+      "real_channel": "MBA Pathshala",
+      "real_views": 1030332,
+      "real_title": "Ratio Session-I || Basic to Advanced || CAT & OMETs Preparation || CAT",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L2",
@@ -418,7 +594,18 @@
      "student_time_claimed": "50-65 min",
      "watched_claimed": "partly",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "38:35",
+      "real_minutes": 39,
+      "real_channel": "Rodha",
+      "real_views": 296568,
+      "real_title": "Ratio 3: Comparing Actual and Error Ratios | Arithmetic for CAT 2026 |",
+      "duration_error_sec": 85,
+      "duration_verdict": "WRONG by +1 min",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L3",
@@ -432,7 +619,18 @@
      "student_time_claimed": "90-110 min",
      "watched_claimed": "partly",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "72:41",
+      "real_minutes": 73,
+      "real_channel": "2IIM CAT Preparation",
+      "real_views": 7582,
+      "real_title": "All CAT Questions from Ratio & Proportion | CAT 2017 - 2021 | CAT Blit",
+      "duration_error_sec": 509,
+      "duration_verdict": "WRONG by +8 min",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L4",
@@ -466,7 +664,18 @@
      "student_time_claimed": "65-75 min",
      "watched_claimed": "partly",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "64:41",
+      "real_minutes": 65,
+      "real_channel": "Bodhee Prep CAT Preparation",
+      "real_views": 66401,
+      "real_title": "CAT Verbal Ability Lecture 01 | CAT Parajumbles - Basic Concepts (Live",
+      "duration_error_sec": 791,
+      "duration_verdict": "WRONG by +13 min",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L2",
@@ -480,7 +689,18 @@
      "student_time_claimed": "55-65 min",
      "watched_claimed": "partly",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "41:47",
+      "real_minutes": 42,
+      "real_channel": "Rodha",
+      "real_views": 23521,
+      "real_title": "RODHA VARC I Master PARAJUMBLES I Episode 1",
+      "duration_error_sec": -28,
+      "duration_verdict": "CLOSE",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L3",
@@ -494,7 +714,18 @@
      "student_time_claimed": "35-45 min",
      "watched_claimed": "partly",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "45:58",
+      "real_minutes": 46,
+      "real_channel": "Gejo Speaks",
+      "real_views": 157571,
+      "real_title": "Learn the ultimate mantra to solve Para Jumbles questions | GejoSpeaks",
+      "duration_error_sec": 1612,
+      "duration_verdict": "WRONG by +26 min",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L4",
@@ -528,7 +759,18 @@
      "student_time_claimed": "40-50 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "30:10",
+      "real_minutes": 30,
+      "real_channel": "Rodha",
+      "real_views": 201732,
+      "real_title": "Pie Chart 1 || LR & DI Preparation || CAT Exam Preparation",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L2",
@@ -542,7 +784,18 @@
      "student_time_claimed": "25-35 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "17:17",
+      "real_minutes": 17,
+      "real_channel": "Rodha",
+      "real_views": 114140,
+      "real_title": "Pie Chart 2 || LR & DI Preparation || CAT Exam Preparation",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L3",
@@ -556,7 +809,18 @@
      "student_time_claimed": "45-60 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "25:40",
+      "real_minutes": 26,
+      "real_channel": "ELITES GRID - CAT PREP",
+      "real_views": 37016,
+      "real_title": "Pie Charts for CAT 2026 | How to Solve Any DI Set Step-by-Step | Part ",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L4",
@@ -570,7 +834,18 @@
      "student_time_claimed": "15-20 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "7:49",
+      "real_minutes": 8,
+      "real_channel": "MBA Litmus | 1-on-1 CAT & MBA Coaching",
+      "real_views": 8536,
+      "real_title": "Triangular Graph (DI)  -  How to interpret it ? (Important DI for CAT ",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     }
    ],
    "flags": [
@@ -598,7 +873,18 @@
      "student_time_claimed": "40-50 min",
      "watched_claimed": "partly",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "23:10",
+      "real_minutes": 23,
+      "real_channel": "Rodha",
+      "real_views": 760971,
+      "real_title": "Averages 1: Middle Term of an AP Series | Arithmetic for CAT 2026 | Ra",
+      "duration_error_sec": -230,
+      "duration_verdict": "WRONG by -4 min",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L2",
@@ -612,7 +898,18 @@
      "student_time_claimed": "45-60 min",
      "watched_claimed": "partly",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "23:10",
+      "real_minutes": 23,
+      "real_channel": "Rodha",
+      "real_views": 760971,
+      "real_title": "Averages 1: Middle Term of an AP Series | Arithmetic for CAT 2026 | Ra",
+      "duration_error_sec": -170,
+      "duration_verdict": "WRONG by -3 min",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L3",
@@ -626,7 +923,18 @@
      "student_time_claimed": "90-110 min",
      "watched_claimed": "partly",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "74:20",
+      "real_minutes": 74,
+      "real_channel": "Learn4Exam",
+      "real_views": 1015,
+      "real_title": "CAT Averages : All PYQs with Timer | 1000 QA Questions for CAT Prep",
+      "duration_error_sec": 4385,
+      "duration_verdict": "WRONG by +73 min",
+      "channel_verdict": "MISATTRIBUTED (really Learn4Exam)"
+     }
     },
     {
      "level": "L4",
@@ -660,7 +968,18 @@
      "student_time_claimed": "50-60 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "72:03",
+      "real_minutes": 72,
+      "real_channel": "Bodhee Prep CAT Preparation",
+      "real_views": 7658,
+      "real_title": "CAT Verbal Ability Lecture 02 | CAT Odd One Out- Basic Concepts (Live ",
+      "duration_error_sec": 1788,
+      "duration_verdict": "WRONG by +29 min",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L2",
@@ -674,7 +993,18 @@
      "student_time_claimed": "55-65 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "63:08",
+      "real_minutes": 63,
+      "real_channel": "Rodha",
+      "real_views": 978,
+      "real_title": "CAT Odd One Out Strategy: Stop Guessing the Right Answer | Brijesh Sir",
+      "duration_error_sec": 1078,
+      "duration_verdict": "WRONG by +17 min",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L3",
@@ -688,7 +1018,18 @@
      "student_time_claimed": "65-75 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "54:45",
+      "real_minutes": 55,
+      "real_channel": "2IIM CAT Preparation",
+      "real_views": 980,
+      "real_title": "CAT 2025 Slot 2 VARC Marathon | VA Video Solutions | CAT Previous Year",
+      "duration_error_sec": 5,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L4",
@@ -702,7 +1043,18 @@
      "student_time_claimed": "45-55 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "53:07",
+      "real_minutes": 53,
+      "real_channel": "Career Launcher MBA",
+      "real_views": 44942,
+      "real_title": "Why You're Getting Odd Sentence Out Wrong in CAT VARC — And How to Fix",
+      "duration_error_sec": 1127,
+      "duration_verdict": "WRONG by +18 min",
+      "channel_verdict": "OK"
+     }
     }
    ],
    "flags": [
@@ -730,7 +1082,18 @@
      "student_time_claimed": "45-55 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "31:47",
+      "real_minutes": 32,
+      "real_channel": "Rodha",
+      "real_views": 560742,
+      "real_title": "Alligation and Mixture 1: Weighted Average Seesaw Method | Arithmetic ",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L2",
@@ -744,7 +1107,18 @@
      "student_time_claimed": "35-45 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "23:35",
+      "real_minutes": 24,
+      "real_channel": "Rodha",
+      "real_views": 332784,
+      "real_title": "Alligation and Mixture 3: Alligation in Mixtures | Arithmetic for CAT ",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L3",
@@ -758,7 +1132,18 @@
      "student_time_claimed": "75-90 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "52:54",
+      "real_minutes": 53,
+      "real_channel": "Anastasis Academy",
+      "real_views": 1015,
+      "real_title": "Mixtures & Alligations|100%iler Arvind Shankar’s Guess Questions|High-",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L4",
@@ -791,7 +1176,18 @@
      "student_time_claimed": "75-90 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "55:06",
+      "real_minutes": 55,
+      "real_channel": "Cracku - MBA CAT Preparation",
+      "real_views": 78112,
+      "real_title": "CAT 2026 Progressions & Series: Master AP, GP & HP Concepts | Key Conc",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L2",
@@ -805,7 +1201,18 @@
      "student_time_claimed": "35-45 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "22:25",
+      "real_minutes": 22,
+      "real_channel": "Rodha",
+      "real_views": 178347,
+      "real_title": "Arithmetic Progression 1: AP Average Funda | Algebra for CAT 2026 | Ra",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L3",
@@ -819,7 +1226,18 @@
      "student_time_claimed": "100-120 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "79:41",
+      "real_minutes": 80,
+      "real_channel": "2IIM CAT Preparation",
+      "real_views": 5424,
+      "real_title": "All CAT Questions from Progressions | CAT 2017 to 2021 | CAT Blitzkrie",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L4",
@@ -833,7 +1251,18 @@
      "student_time_claimed": "20-25 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "14:23",
+      "real_minutes": 14,
+      "real_channel": "ELITES GRID - CAT PREP",
+      "real_views": 17434,
+      "real_title": "Advance Level Quant Concept 9  || SEQUENCE & SERIES  || HUNNY MALHOTRA",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     }
    ],
    "flags": [
@@ -859,7 +1288,18 @@
      "student_time_claimed": "70-85 min",
      "watched_claimed": "yes",
      "link_format": "SEARCH-LINK",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "58:16",
+      "real_minutes": 58,
+      "real_channel": "Rodha",
+      "real_views": 1207,
+      "real_title": "CAT 2026 VARC: Vocabulary Masterclass  | Sharwari Mam Rodha",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L2",
@@ -873,7 +1313,18 @@
      "student_time_claimed": "40-50 min",
      "watched_claimed": "yes",
      "link_format": "SEARCH-LINK",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "33:37",
+      "real_minutes": 34,
+      "real_channel": "BYJU'S Exam Prep: CAT & MBA",
+      "real_views": 1474,
+      "real_title": "Vocabulary Booster For XAT, CAT, MAHCET & All MBA Exam  2021 | Part-1 ",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L3",
@@ -913,7 +1364,18 @@
      "student_time_claimed": "40-50 min",
      "watched_claimed": "partly",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "31:45",
+      "real_minutes": 32,
+      "real_channel": "TestPrep By InsideIIM",
+      "real_views": 487,
+      "real_title": "Selection and Distribution Based DILR For CAT Preparation ft.Dr.Shasha",
+      "duration_error_sec": 330,
+      "duration_verdict": "WRONG by +5 min",
+      "channel_verdict": "MISATTRIBUTED (really TestPrep By InsideIIM)"
+     }
     },
     {
      "level": "L2",
@@ -927,7 +1389,11 @@
      "student_time_claimed": "35-45 min",
      "watched_claimed": "partly",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": false,
+      "verdict": "FABRICATED — video does not exist"
+     }
     },
     {
      "level": "L3",
@@ -941,7 +1407,18 @@
      "student_time_claimed": "35-45 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "12:42",
+      "real_minutes": 13,
+      "real_channel": "CAT Preparation - Prepzone",
+      "real_views": 2530,
+      "real_title": "CAT LRDI Revision| Set 58:Chocolate Distribution Venn Diagram Concept ",
+      "duration_error_sec": -516,
+      "duration_verdict": "WRONG by -9 min",
+      "channel_verdict": "MISATTRIBUTED (really CAT Preparation - Prepzone)"
+     }
     },
     {
      "level": "L4",
@@ -974,7 +1451,18 @@
      "student_time_claimed": "40-50 min",
      "watched_claimed": "partly",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "26:05",
+      "real_minutes": 26,
+      "real_channel": "Rodha",
+      "real_views": 636219,
+      "real_title": "Profit and Loss 1: Profit, Loss, Discount, Markup | Arithmetic for CAT",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L2",
@@ -988,7 +1476,18 @@
      "student_time_claimed": "60-70 min",
      "watched_claimed": "partly",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "38:32",
+      "real_minutes": 39,
+      "real_channel": "Rodha",
+      "real_views": 473787,
+      "real_title": "Profit and Loss 3: Faulty Weights and Cheating | Arithmetic for CAT 20",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L3",
@@ -1002,7 +1501,18 @@
      "student_time_claimed": "90-110 min",
      "watched_claimed": "partly",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "80:41",
+      "real_minutes": 81,
+      "real_channel": "Rodha",
+      "real_views": 5143,
+      "real_title": "CAT 2025 I Arithmetic Practice Session -1 I Percentages, Profit & Loss",
+      "duration_error_sec": 498,
+      "duration_verdict": "WRONG by +8 min",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L4",
@@ -1016,7 +1526,18 @@
      "student_time_claimed": "30-40 min",
      "watched_claimed": "partly",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "9:14",
+      "real_minutes": 9,
+      "real_channel": "ELITES GRID - CAT PREP",
+      "real_views": 7260,
+      "real_title": "Dishonest Seller CAT 2023 Question| 3 Methods to Tackle Dishonest Sell",
+      "duration_error_sec": -568,
+      "duration_verdict": "WRONG by -10 min",
+      "channel_verdict": "OK"
+     }
     }
    ],
    "flags": [
@@ -1042,7 +1563,18 @@
      "student_time_claimed": "15-20 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "8:45",
+      "real_minutes": 9,
+      "real_channel": "Rodha",
+      "real_views": 19094,
+      "real_title": "Summary Concepts || Verbal Preparation || CAT Preparation 2019",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L2",
@@ -1056,7 +1588,18 @@
      "student_time_claimed": "45-55 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "34:04",
+      "real_minutes": 34,
+      "real_channel": "Unacademy CAT",
+      "real_views": 30396,
+      "real_title": "Ace Para Summary for CAT 2025 - ‘GIST’ Method",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L3",
@@ -1070,7 +1613,18 @@
      "student_time_claimed": "60-75 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "63:52",
+      "real_minutes": 64,
+      "real_channel": "Rodha",
+      "real_views": 1192,
+      "real_title": "CAT Para Summary Questions: Learn The Method To Improve VARC Scores | ",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L4",
@@ -1084,7 +1638,18 @@
      "student_time_claimed": "45-55 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "30:55",
+      "real_minutes": 31,
+      "real_channel": "Rodha",
+      "real_views": 664,
+      "real_title": "3 CAT Para Summary Rules That Break Every  Trap | VARC PYQs | Brijesh ",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     }
    ],
    "flags": [
@@ -1117,7 +1682,11 @@
      "student_time_claimed": "60-75 min",
      "watched_claimed": "yes",
      "link_format": "SEARCH-LINK",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": false,
+      "verdict": "FABRICATED — video does not exist"
+     }
     },
     {
      "level": "L3",
@@ -1131,7 +1700,11 @@
      "student_time_claimed": "50-65 min",
      "watched_claimed": "yes",
      "link_format": "SEARCH-LINK",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": false,
+      "verdict": "FABRICATED — video does not exist"
+     }
     },
     {
      "level": "L4",
@@ -1145,7 +1718,11 @@
      "student_time_claimed": "45-60 min",
      "watched_claimed": "yes",
      "link_format": "SEARCH-LINK",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": false,
+      "verdict": "FABRICATED — video does not exist"
+     }
     }
    ],
    "flags": [
@@ -1172,7 +1749,18 @@
      "student_time_claimed": "55-65 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "46:40",
+      "real_minutes": 47,
+      "real_channel": "BYJU'S Exam Prep: CAT & MBA",
+      "real_views": 5380,
+      "real_title": "Caselet Based Data Interpretation for CAT 2022 | CAT DILR | Jatin",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L2",
@@ -1217,7 +1805,18 @@
      "student_time_claimed": "40-50 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "26:14",
+      "real_minutes": 26,
+      "real_channel": "Rodha",
+      "real_views": 319239,
+      "real_title": "Games and Tournaments 1 || LR & DI Preparation for CAT || CAT Exa",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L2",
@@ -1231,7 +1830,18 @@
      "student_time_claimed": "25-35 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "14:59",
+      "real_minutes": 15,
+      "real_channel": "ELITES GRID - CAT PREP",
+      "real_views": 138298,
+      "real_title": "Games & Tournament for CAT 2025 by Gaurav Kapoor",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L3",
@@ -1245,7 +1855,18 @@
      "student_time_claimed": "55-70 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "37:20",
+      "real_minutes": 37,
+      "real_channel": "Rodha",
+      "real_views": 105603,
+      "real_title": "Games & Tournaments - Difficult Set I LR & DI Preparation for CAT",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L4",
@@ -1278,7 +1899,18 @@
      "student_time_claimed": "65-80 min",
      "watched_claimed": "partly",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "34:34",
+      "real_minutes": 35,
+      "real_channel": "MBA Wallah",
+      "real_views": 28113,
+      "real_title": "Grammar (Sentence Correction & Error Spotting) for CAT & OMETs - ",
+      "duration_error_sec": -1050,
+      "duration_verdict": "WRONG by -18 min",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L2",
@@ -1292,7 +1924,18 @@
      "student_time_claimed": "25-35 min",
      "watched_claimed": "partly",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "3:47",
+      "real_minutes": 4,
+      "real_channel": "Takshzila",
+      "real_views": 15412,
+      "real_title": "Grammar for CAT: Part 1 (Introduction to Basic Concepts)",
+      "duration_error_sec": -721,
+      "duration_verdict": "WRONG by -13 min",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L3",
@@ -1331,7 +1974,11 @@
      "student_time_claimed": "25-35 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": false,
+      "verdict": "FABRICATED — video does not exist"
+     }
     },
     {
      "level": "L2",
@@ -1351,7 +1998,18 @@
      "student_time_claimed": "75-90 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "62:18",
+      "real_minutes": 62,
+      "real_channel": "Gejo Speaks",
+      "real_views": 166779,
+      "real_title": "Reading Comprehension Strategy [Solved Example - CAT 2019 passage",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L4",
@@ -1385,7 +2043,18 @@
      "student_time_claimed": "35-45 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "21:58",
+      "real_minutes": 22,
+      "real_channel": "Rodha",
+      "real_views": 423047,
+      "real_title": "Time and Work 1: LCM Method Introduction | Arithmetic for CAT 202",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L2",
@@ -1399,7 +2068,18 @@
      "student_time_claimed": "40-50 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "24:25",
+      "real_minutes": 24,
+      "real_channel": "Rodha",
+      "real_views": 319926,
+      "real_title": "Time and Work 2: Alternate Days and Workers Leaving | Arithmetic ",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L3",
@@ -1413,7 +2093,18 @@
      "student_time_claimed": "100-120 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "97:56",
+      "real_minutes": 98,
+      "real_channel": "2IIM CAT Preparation",
+      "real_views": 10101,
+      "real_title": "All CAT Questions from Time and Work | CAT 2017 - 2021 | CAT Blit",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L4",
@@ -1427,7 +2118,18 @@
      "student_time_claimed": "40-50 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "26:05",
+      "real_minutes": 26,
+      "real_channel": "Rodha",
+      "real_views": 296365,
+      "real_title": "Time and Work 3: Efficiency and Time Ratios | Arithmetic for CAT ",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L1",
@@ -1441,7 +2143,18 @@
      "student_time_claimed": "35-45 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 2
+     "run": 2,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "21:58",
+      "real_minutes": 22,
+      "real_channel": "Rodha",
+      "real_views": 423047,
+      "real_title": "Time and Work 1: LCM Method Introduction | Arithmetic for CAT 202",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L2",
@@ -1455,7 +2168,18 @@
      "student_time_claimed": "40-50 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 2
+     "run": 2,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "26:05",
+      "real_minutes": 26,
+      "real_channel": "Rodha",
+      "real_views": 296365,
+      "real_title": "Time and Work 3: Efficiency and Time Ratios | Arithmetic for CAT ",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L3",
@@ -1469,7 +2193,18 @@
      "student_time_claimed": "120-150 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 2
+     "run": 2,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "97:56",
+      "real_minutes": 98,
+      "real_channel": "2IIM CAT Preparation",
+      "real_views": 10101,
+      "real_title": "All CAT Questions from Time and Work | CAT 2017 - 2021 | CAT Blit",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L4",
@@ -1483,7 +2218,18 @@
      "student_time_claimed": "90-120 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 2
+     "run": 2,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "57:32",
+      "real_minutes": 58,
+      "real_channel": "Anastasis Academy",
+      "real_views": 942,
+      "real_title": "Time & Work | 100%iler Arvind Shankar’s Guess Questions | High-Pr",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     }
    ],
    "flags": [
@@ -1511,7 +2257,18 @@
      "student_time_claimed": "35-45 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "22:17",
+      "real_minutes": 22,
+      "real_channel": "Rodha",
+      "real_views": 500528,
+      "real_title": "Time Speed and Distance 1: Constant Distance Problems | Arithmeti",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L2",
@@ -1525,7 +2282,18 @@
      "student_time_claimed": "35-45 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "23:38",
+      "real_minutes": 24,
+      "real_channel": "Rodha",
+      "real_views": 308241,
+      "real_title": "Time Speed and Distance 2: Speed Time Inverse Proportion | Arithm",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L3",
@@ -1539,7 +2307,18 @@
      "student_time_claimed": "45-60 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "24:13",
+      "real_minutes": 24,
+      "real_channel": "Rodha",
+      "real_views": 178116,
+      "real_title": "Time Speed and Distance 8: Solving Escalator Problems | Arithmeti",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L4",
@@ -1553,7 +2332,18 @@
      "student_time_claimed": "15-20 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "8:08",
+      "real_minutes": 8,
+      "real_channel": "ELITES GRID - CAT PREP",
+      "real_views": 19279,
+      "real_title": "Advance Level Quant Concept 19| Time, Speed & Distance | Importan",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L1",
@@ -1567,7 +2357,18 @@
      "student_time_claimed": "40-50 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 2
+     "run": 2,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "22:17",
+      "real_minutes": 22,
+      "real_channel": "Rodha",
+      "real_views": 500528,
+      "real_title": "Time Speed and Distance 1: Constant Distance Problems | Arithmeti",
+      "duration_error_sec": -43,
+      "duration_verdict": "CLOSE",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L2",
@@ -1581,7 +2382,18 @@
      "student_time_claimed": "45-55 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 2
+     "run": 2,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "26:49",
+      "real_minutes": 27,
+      "real_channel": "Rodha",
+      "real_views": 306969,
+      "real_title": "Time Speed and Distance 3: Multiple Solution Approaches | Arithme",
+      "duration_error_sec": -11,
+      "duration_verdict": "CLOSE",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L3",
@@ -1595,7 +2407,18 @@
      "student_time_claimed": "15-20 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 2
+     "run": 2,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "4:22",
+      "real_minutes": 4,
+      "real_channel": "2IIM CAT Preparation",
+      "real_views": 8101,
+      "real_title": "CAT 2018 Question Paper Slot 2 solution | Speed, Time and Distanc",
+      "duration_error_sec": -98,
+      "duration_verdict": "WRONG by -2 min",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L4",
@@ -1609,7 +2432,18 @@
      "student_time_claimed": "50-60 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 2
+     "run": 2,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "24:13",
+      "real_minutes": 24,
+      "real_channel": "Rodha",
+      "real_views": 178116,
+      "real_title": "Time Speed and Distance 8: Solving Escalator Problems | Arithmeti",
+      "duration_error_sec": -107,
+      "duration_verdict": "WRONG by -2 min",
+      "channel_verdict": "OK"
+     }
     }
    ],
    "flags": [
@@ -1639,7 +2473,18 @@
      "student_time_claimed": "35-45 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "21:37",
+      "real_minutes": 22,
+      "real_channel": "Rodha",
+      "real_views": 398424,
+      "real_title": "Simple and Compound Interest 1: SI and CI Basic Concepts | Arithm",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L2",
@@ -1653,7 +2498,18 @@
      "student_time_claimed": "45-55 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "26:14",
+      "real_minutes": 26,
+      "real_channel": "Rodha",
+      "real_views": 288757,
+      "real_title": "Simple and Compound Interest 2: SI and CI Difference Formula | Ar",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L3",
@@ -1667,7 +2523,18 @@
      "student_time_claimed": "130-150 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "105:11",
+      "real_minutes": 105,
+      "real_channel": "AzuCATion : CAT Prep By Amiya Sir",
+      "real_views": 17483,
+      "real_title": "All Questions From Simple and Compound Interest - CAT 2018 to CAT",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L4",
@@ -1681,7 +2548,18 @@
      "student_time_claimed": "25-35 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "14:35",
+      "real_minutes": 15,
+      "real_channel": "Rodha",
+      "real_views": 10167,
+      "real_title": "Arithmetic Practice 44: Installment Ratio Method | Arithmetic for",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     }
    ],
    "flags": [
@@ -1709,7 +2587,18 @@
      "student_time_claimed": "85-105 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "67:42",
+      "real_minutes": 68,
+      "real_channel": "MBA Wallah",
+      "real_views": 84760,
+      "real_title": "Coordinate Geometry 1 | Quant Geometry L10 | CAT 2024 | MBA Walla",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L2",
@@ -1723,7 +2612,18 @@
      "student_time_claimed": "90-110 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "75:51",
+      "real_minutes": 76,
+      "real_channel": "MBA Wallah",
+      "real_views": 64462,
+      "real_title": "Coordinate Geometry- 2 | Equations of line | Quant Geometry 11 | ",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L3",
@@ -1737,7 +2637,18 @@
      "student_time_claimed": "25-35 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "15:07",
+      "real_minutes": 15,
+      "real_channel": "Rodha",
+      "real_views": 22200,
+      "real_title": "Geometry Practice 3: Coordinate Geometry & Medians | Geometry for",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L4",
@@ -1751,7 +2662,18 @@
      "student_time_claimed": "35-45 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "22:00",
+      "real_minutes": 22,
+      "real_channel": "ELITES GRID - CAT PREP",
+      "real_views": 22605,
+      "real_title": "CAT QUANT CONCEPT 6| Area of Modulus | Important Concept for CAT ",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     }
    ],
    "flags": [
@@ -1777,7 +2699,18 @@
      "student_time_claimed": "45-55 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "30:43",
+      "real_minutes": 31,
+      "real_channel": "Rodha",
+      "real_views": 186226,
+      "real_title": "Logarithms part 1: Logarithm Properties | Algebra for CAT 2026 | ",
+      "duration_error_sec": 268,
+      "duration_verdict": "WRONG by +4 min",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L2",
@@ -1791,7 +2724,18 @@
      "student_time_claimed": "45-60 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "24:06",
+      "real_minutes": 24,
+      "real_channel": "Rodha",
+      "real_views": 100363,
+      "real_title": "Logarithms 2: Logarithmic Equations with Quadratic Forms | Algebr",
+      "duration_error_sec": 0,
+      "duration_verdict": "EXACT",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L3",
@@ -1805,7 +2749,18 @@
      "student_time_claimed": "35-45 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "7:54",
+      "real_minutes": 8,
+      "real_channel": "Rodha",
+      "real_views": 9325,
+      "real_title": "Logarithms Practice: Logarithms & Product of Roots | Algebra for ",
+      "duration_error_sec": -648,
+      "duration_verdict": "WRONG by -11 min",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L4",
@@ -1825,7 +2780,18 @@
      "student_time_claimed": "45-55 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 2
+     "run": 2,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "30:43",
+      "real_minutes": 31,
+      "real_channel": "Rodha",
+      "real_views": 186226,
+      "real_title": "Logarithms part 1: Logarithm Properties | Algebra for CAT 2026 | ",
+      "duration_error_sec": 159,
+      "duration_verdict": "WRONG by +2 min",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L2",
@@ -1839,7 +2805,18 @@
      "student_time_claimed": "45-60 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 2
+     "run": 2,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "24:06",
+      "real_minutes": 24,
+      "real_channel": "Rodha",
+      "real_views": 100363,
+      "real_title": "Logarithms 2: Logarithmic Equations with Quadratic Forms | Algebr",
+      "duration_error_sec": -131,
+      "duration_verdict": "WRONG by -3 min",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L3",
@@ -1853,7 +2830,18 @@
      "student_time_claimed": "90-110 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 2
+     "run": 2,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "77:56",
+      "real_minutes": 78,
+      "real_channel": "2IIM CAT Preparation",
+      "real_views": 10572,
+      "real_title": "All CAT Questions from Logarithms | CAT 2017 to 2021 | CAT Blitzk",
+      "duration_error_sec": 621,
+      "duration_verdict": "WRONG by +10 min",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L4",
@@ -1890,7 +2878,18 @@
      "student_time_claimed": "35-45 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "20:53",
+      "real_minutes": 21,
+      "real_channel": "Rodha",
+      "real_views": 148934,
+      "real_title": "Quadratic Equation 2: Nature Of Roots | Algebra for CAT 2026 | Ra",
+      "duration_error_sec": -47,
+      "duration_verdict": "CLOSE",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L2",
@@ -1904,7 +2903,18 @@
      "student_time_claimed": "30-40 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "20:19",
+      "real_minutes": 20,
+      "real_channel": "Rodha",
+      "real_views": 147713,
+      "real_title": "Quadratic Equation 3: Imaginary and Common Roots | Algebra for CA",
+      "duration_error_sec": 34,
+      "duration_verdict": "CLOSE",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L3",
@@ -1918,7 +2928,18 @@
      "student_time_claimed": "75-90 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "55:52",
+      "real_minutes": 56,
+      "real_channel": "2IIM CAT Preparation",
+      "real_views": 11063,
+      "real_title": "CAT Linear and Quadratic Equations - #17",
+      "duration_error_sec": 32,
+      "duration_verdict": "CLOSE",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L4",
@@ -1932,7 +2953,18 @@
      "student_time_claimed": "90-110 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "119:51",
+      "real_minutes": 120,
+      "real_channel": "ELITES GRID - CAT PREP",
+      "real_views": 4443,
+      "real_title": "CAT Algebra Marathon - Session - 1 (Quadratic Equations Practice)",
+      "duration_error_sec": 2721,
+      "duration_verdict": "WRONG by +45 min",
+      "channel_verdict": "OK"
+     }
     }
    ],
    "flags": [
@@ -1959,7 +2991,18 @@
      "student_time_claimed": "30-40 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "18:52",
+      "real_minutes": 19,
+      "real_channel": "Rodha",
+      "real_views": 233003,
+      "real_title": "Inequalities 1: Rules and Applications | Algebra for CAT 2026 | R",
+      "duration_error_sec": 28,
+      "duration_verdict": "CLOSE",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L2",
@@ -1973,7 +3016,18 @@
      "student_time_claimed": "35-45 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "15:12",
+      "real_minutes": 15,
+      "real_channel": "Rodha",
+      "real_views": 62467,
+      "real_title": "INEQUALITIES - 9: Rational Inequality and Quadratic Range | Algeb",
+      "duration_error_sec": -59,
+      "duration_verdict": "CLOSE",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L3",
@@ -1987,7 +3041,18 @@
      "student_time_claimed": "80-95 min",
      "watched_claimed": "yes",
      "link_format": "direct",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": true,
+      "real_duration": "63:40",
+      "real_minutes": 64,
+      "real_channel": "2IIM CAT Preparation",
+      "real_views": 15152,
+      "real_title": "CAT Inequalities - #19",
+      "duration_error_sec": -32,
+      "duration_verdict": "CLOSE",
+      "channel_verdict": "OK"
+     }
     },
     {
      "level": "L4",
@@ -2021,7 +3086,11 @@
      "student_time_claimed": "75-90 min",
      "watched_claimed": "partly",
      "link_format": "SEARCH-LINK",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": false,
+      "verdict": "FABRICATED — video does not exist"
+     }
     },
     {
      "level": "L2",
@@ -2035,7 +3104,11 @@
      "student_time_claimed": "90-110 min",
      "watched_claimed": "partly",
      "link_format": "SEARCH-LINK",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": false,
+      "verdict": "FABRICATED — video does not exist"
+     }
     },
     {
      "level": "L3",
@@ -2049,7 +3122,11 @@
      "student_time_claimed": "80-100 min",
      "watched_claimed": "partly",
      "link_format": "SEARCH-LINK",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": false,
+      "verdict": "FABRICATED — video does not exist"
+     }
     },
     {
      "level": "L4",
@@ -2063,7 +3140,11 @@
      "student_time_claimed": "60-75 min",
      "watched_claimed": "partly",
      "link_format": "SEARCH-LINK",
-     "run": 1
+     "run": 1,
+     "VERIFIED": {
+      "exists": false,
+      "verdict": "FABRICATED — video does not exist"
+     }
     }
    ],
    "flags": [
@@ -2074,5 +3155,10 @@
    ],
    "verdict": "REJECT ALL FOUR"
   }
- ]
+ ],
+ "verification": {
+  "performed": "2026-08-31 via vidIQ get_videos_by_ids (96 unique IDs, 2 batches)",
+  "videos_confirmed_real": 90,
+  "videos_confirmed_nonexistent": 9
+ }
 }
