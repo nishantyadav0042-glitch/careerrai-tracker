@@ -101,15 +101,48 @@ describe('scope containment', () => {
     expect(modal, 'onboarding writes profiles.phone again').not.toMatch(/\bay\.phone\s*=/);
   });
 
-  it('only a completed OTP round-trip may stamp the anchor', () => {
+  // ── THIS GUARD HAD THE HOLE THE BUG WALKED THROUGH ──────────────────────
+  //
+  // It required phone_verified_at on link-phone/verify ONLY, and said nothing
+  // about verify-phone-otp — the PRIMARY signup verifier. So the anchor column
+  // shipped with the gate reading it and the main door never writing it, and
+  // every phone-OTP signup after deploy was created unanchored and bounced
+  // straight into /auth/link-phone. A real student (14:15, 30 Aug) hit it
+  // before the founder did.
+  //
+  // Both writers are now asserted, and the list is the assertion: adding a
+  // third verifier without stamping the anchor fails here.
+  it('EVERY completed OTP round-trip stamps the anchor', () => {
     const writers = [
       'src/app/api/auth/verify-phone-otp/route.ts',
       'src/app/api/auth/link-phone/verify/route.ts',
     ];
-    for (const w of writers) expect(read(w)).toMatch(/verifyOtp\(/);
-    // link-phone/verify is the new writer and must stamp the column the gate
-    // reads, or a student loops through the gate forever having verified.
-    expect(read('src/app/api/auth/link-phone/verify/route.ts')).toMatch(/phone_verified_at:/);
+    for (const w of writers) {
+      const code = read(w);
+      expect(code, `${w} does not verify an OTP`).toMatch(/verifyOtp\(/);
+      expect(code, `${w} verifies an OTP but never stamps phone_verified_at — a student who passes it stays gated`)
+        .toMatch(/phone_verified_at:/);
+    }
+  });
+
+  // The signup route writes the profile on three different branches (fresh
+  // upsert, trigger-stub update, returning user). The bug was not "the column
+  // was forgotten" but "it was forgotten on the paths that matter", so pin the
+  // count: every branch that writes `phone:` must write the anchor too.
+  it('the signup route stamps the anchor on every branch that writes a phone', () => {
+    const code = read('src/app/api/auth/verify-phone-otp/route.ts');
+    // Scoped to the PROFILE writes only. A blunt count over the whole file is
+    // wrong and was: `phone: e164` also appears in the verifyOtp() call and in
+    // the Meta CAPI payload, neither of which is a profile row.
+    const blocks = code.split(/\.from\(\s*['"]profiles['"]\s*\)/).slice(1);
+    const phoneBlocks = blocks.filter((b) => /phone: e164,/.test(b.slice(0, 1200)));
+    expect(phoneBlocks.length, 'no profiles write sets the phone — has the route changed shape?')
+      .toBeGreaterThanOrEqual(3);
+    for (const [n, b] of phoneBlocks.entries()) {
+      expect(/phone_verified_at:/.test(b.slice(0, 1200)),
+        `profiles write #${n + 1} sets phone but not phone_verified_at — a student verified through it stays gated`)
+        .toBe(true);
+    }
   });
 
   it('bulk-import already assigned by id and is untouched', () => {
