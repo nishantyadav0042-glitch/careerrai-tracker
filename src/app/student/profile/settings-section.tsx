@@ -4,6 +4,7 @@ import { Video } from 'lucide-react';
 import { LogoutButton } from '@/components/logout-button';
 import { DeleteAccountButton } from '@/components/delete-account-button';
 import { TimetableCard } from '@/components/timetable-card';
+import { UpdateCoverageButton } from '@/components/update-coverage-button';
 
 // Formerly its own page (/student/settings) — now the "Settings" tab
 // inside the merged Profile panel. Sign-out lived on both the old Settings
@@ -29,6 +30,16 @@ export function SettingsSection() {
           always here, including for students who join a batch months later. */}
       <TimetableCard />
 
+      {/* The missing door (30 Aug). A student who wanted to correct her syllabus
+          status had no way to open the coverage review on demand — it only
+          appeared on its weekly schedule — so she used Delete Account and signed
+          up again to re-answer it. Placed ABOVE the Account and Danger sections
+          precisely because that is the order she searched in. */}
+      <div>
+        <h2 className="text-lg font-semibold text-stone-900 mb-3">Your plan</h2>
+        <UpdateCoverageButton />
+      </div>
+
       <div>
         <h2 className="text-lg font-semibold text-stone-900 mb-3">Account</h2>
         <LogoutButton />
@@ -49,6 +60,14 @@ export function SettingsSection() {
       {/* Store-required account deletion (Google Play + Apple 5.1.1(v)). */}
       <div className="border-t border-stone-200 pt-5">
         <h2 className="text-lg font-semibold text-stone-900 mb-2">Danger zone</h2>
+        {/* Said HERE, not only above: this is the screen a student is on at the
+            moment they are about to delete, and the reason is often "I want to
+            redo my setup" rather than "I want to leave". */}
+        <p className="mb-3 text-xs leading-relaxed text-stone-500">
+          Want to change your syllabus status or fix an answer? Use{' '}
+          <span className="font-semibold text-stone-700">Update where you stand</span> above — deleting
+          your account erases your streak, logs and plan, and cannot be undone.
+        </p>
         <DeleteAccountButton />
       </div>
     </div>
