@@ -33,7 +33,12 @@ export async function POST(request: NextRequest) {
       console.error('[expire-subscriptions]', error);
       return NextResponse.json({ error: 'query failed' }, { status: 500 });
     }
-    if (!lapsed?.length) return NextResponse.json({ expired: 0 });
+    // NO early return here: sweep 2 below must run on every tick, and the common
+    // case is that nothing lapsed today. Bailing would mean the unbacked-premium
+    // net only ever ran on the rare day a subscription happened to end.
+    if (!lapsed?.length) {
+      return NextResponse.json({ expired: 0, revoked: await revokeUnbackedPremium(admin) });
+    }
 
     const ids = lapsed.map((p) => p.id);
 
@@ -71,8 +76,68 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    return NextResponse.json({ expired: ids.length });
+    return NextResponse.json({ expired: ids.length, revoked: await revokeUnbackedPremium(admin) });
   });
+}
+
+/**
+ * SWEEP 2 — premium that no paid window backs, which sweep 1 can never reach.
+ *
+ * grantPremiumAndQueueBuddy sets is_premium and premium_since; it does NOT set
+ * subscription_status or subscription_renews_at — its callers do, in the same
+ * breath. A grant that ran without its caller's subscription write therefore
+ * leaves is_premium=true with status 'free' and renews_at NULL, and the sweep
+ * above cannot see it: that one only looks at rows already marked 'active' with
+ * a date in the past. The result is access with no end date and no way to end it.
+ *
+ * Production held three such rows. What they were entitled to was not what they
+ * had: two were single-SESSION buyers (one session plus three mentor messages) and one had
+ * never paid at all — while resolveChatEntitlement grants UNLIMITED mentor chat
+ * on is_premium alone. A session was quietly buying the subscription.
+ *
+ * All three code paths that grant premium are correctly plan-gated today
+ * (activatePaidOrder returns early for a session, retry-unlock refuses a
+ * non-plan payment, create-order writes the window), so this is not a leak still
+ * open. It is the repair for records that predate those gates, and the net that
+ * stops the shape persisting unnoticed if it ever recurs.
+ *
+ * NO NOTIFICATION, on purpose. "Your mentorship has ended" is true for a lapsed
+ * subscriber and false for someone who never had a subscription — sending it
+ * would tell a session buyer they lost something they never bought. The ids are
+ * returned and logged instead, so the change is auditable and the founder
+ * decides what, if anything, to say.
+ */
+async function revokeUnbackedPremium(admin: ReturnType<typeof createAdminClient>): Promise<number> {
+  const { data: rows, error } = await admin
+    .from('profiles')
+    .select('id, subscription_status, is_test_account, is_demo')
+    .eq('is_premium', true);
+  if (error) {
+    console.error('[expire-subscriptions] unbacked-premium query failed:', error.message);
+    return 0;
+  }
+
+  // Filtered HERE rather than in the query: `.eq(col, false)` drops rows where
+  // the flag is NULL — which is most of them — so pushing this into PostgREST
+  // would have swept the App Store reviewer and the demo login along with the
+  // real anomalies, and failed the next iOS review on a login that lost access.
+  const unbacked = (rows ?? []).filter(
+    (r) => r.subscription_status !== 'active' && r.is_test_account !== true && r.is_demo !== true,
+  );
+  if (!unbacked.length) return 0;
+
+  const ids = unbacked.map((r) => r.id as string);
+  const { error: revokeErr } = await admin
+    .from('profiles').update({ is_premium: false }).in('id', ids);
+  if (revokeErr) {
+    console.error('[expire-subscriptions] unbacked-premium revoke failed:', revokeErr.message);
+    return 0;
+  }
+
+  console.error(
+    `[expire-subscriptions] revoked premium with no paid window from ${ids.length}: ${ids.join(', ')}`,
+  );
+  return ids.length;
 }
 
 export { POST as GET };
