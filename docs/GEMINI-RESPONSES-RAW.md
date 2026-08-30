@@ -14,10 +14,11 @@
 
 | # | Topic | Received | Notes |
 |---|---|---|---|
-| 1 | Reading Comprehension | ❌ MISSING | prompt text was pasted back instead of Gemini's answer — needs re-run |
+| 1 | Reading Comprehension | ✅ | 4/4 levels filled |
 | 2 | Percentages | ✅ | 4/4 levels filled |
 | 3 | Arrangements | ✅ | 3/4 levels + 1 honest "NO GOOD VIDEO FOUND" (L4) |
-| 4–46 | — | pending | |
+| 4 | Editorial Reading | ✅ | 1/4 levels + 3 structural "NO GOOD VIDEO FOUND" — see the habit-track finding below |
+| 5–46 | — | pending | |
 
 ---
 
@@ -81,3 +82,84 @@
   Arrangements speed comes from case-elimination discipline built through
   solved sets. This is the honest-gap behaviour the prompt was written to
   elicit; it should be treated as a finding, not a hole to be filled.
+
+---
+
+## Prompt 1 — Reading Comprehension (VARC)
+
+| Level | Title | Channel | Video ID | Stated duration | Passages claimed | Difficulty claimed | Paid push | Student time claimed |
+|---|---|---|---|---|---|---|---|---|
+| L1 CONCEPT | Cracking RC 101 — The Ultimate Guide to Acing Reading Comprehension | 2IIM CAT Preparation | `Qt_FK9fWlMg` | 25:55 | 0 | basic | none | 35–45 min |
+| L2 EASY PRACTICE | RODHA VARC — RC Practice Session, CAT 2023, Episode 1 | Rodha | `iYr1qM9D69M` | **1:12:14** | 1 | medium | mild | 75–90 min |
+| L3 CAT-LEVEL | CAT 2025 Slot 3 VARC Marathon — RC Video Solutions | 2IIM CAT Preparation | `Ky8gB3a26nw` | **1:58:09** | 4 | CAT-level | none | 130–150 min |
+| L4 EXAM-READY | CAT RC: Traps in Answer Choices — Smart Option Elimination | Career Launcher MBA | `ak5_O5CbrJE` | 27:20 | 1 | CAT-level | none | 45–60 min |
+
+**Open items for the verification pass:**
+- **This closes the RC video gap.** Earlier passes found only text resources
+  for RC (Bodhee article, 2IIM passage bank) and flagged the absence of any
+  RC video as a real hole. All four levels now have candidates.
+- **Duration problem, and it is serious.** L2 is 72 min and L3 is 118 min
+  stated; claimed student time is 75–90 and 130–150 min. Our RC task shapes
+  are "Read + solve 2–3 passages" (foundation) and "3–5 passages, timed"
+  (practising). A 118-minute video cannot sit under a single day's task —
+  it is 2–3 days of a student's entire study slot. This is the same
+  overshoot pattern that got the 57-minute Percentages live-class rejected
+  earlier, and it needs an explicit decision: reject, or split across days
+  with timestamped entry points (which the "no playlist-position / no
+  timestamp dependence" stability gate currently discourages).
+- **Two new channels to vet:** `Career Launcher MBA` (L4) is the third
+  non-Rodha/2IIM source to appear. Provenance and tier assignment unverified.
+- `Ky8gB3a26nw` is a **CAT 2025 Slot 3** solution video — genuine past-paper
+  content, high value in principle. Worth checking whether shorter
+  single-passage cuts of the same material exist on the same channel.
+
+---
+
+## Prompt 4 — Editorial Reading (VARC)
+
+| Level | Title | Channel | Video ID | Stated duration | Qs claimed | Difficulty claimed | Paid push | Student time claimed |
+|---|---|---|---|---|---|---|---|---|
+| L1 CONCEPT | From where should we read editorials? (AskPatrick) | Patrick100 | `G8IXAwpurqc` | **3:02** | 0 | basic | none | 10–15 min |
+| L2 EASY PRACTICE | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+| L3 CAT-LEVEL | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+| L4 EXAM-READY | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+
+### STRUCTURAL FINDING — this one is about the research design, not the topic
+
+Gemini's stated reason for three empty levels: Editorial Reading is a
+**reading habit, not an exam question-unit**. CAT never asks "editorial
+questions" — it asks standardised RC. Anything that solves exam-style
+questions is therefore filed under Reading Comprehension, and channels
+that label editorial videos as "practice questions" are almost always
+Banking/SSC current-affairs or translation classes, i.e. wrong pedagogy.
+
+**Our own codebase already agrees with this, and that matters.**
+`src/lib/topics-constants.ts` separates `READING_HABIT_UNITS` (Daily
+Editorials, Business & Economy Reading, Long-form Reading) from the exam
+topics, with the comment: *"habit tracks — declared in the Blueprint like
+everything else, but not exam topics: no weightage/prerequisite metadata,
+engines skip them."* The file even notes that `Daily Editorials` (habit)
+is deliberately named differently from VARC's `Editorial Reading` (skill
+unit) because unit names must be globally unique.
+
+So there is a real tension worth deciding in the report: `Editorial
+Reading` currently sits inside `VERBAL_TOPICS` (an exam section) but
+behaves like a habit unit — and Gemini, with no knowledge of our schema,
+independently arrived at the same read.
+
+**Consequence for the remaining 42 prompts:** the uniform 4-level template
+does not fit every unit. Habit-shaped and skill-shaped units
+(Editorial Reading, Reading Speed Practice, Vocabulary, Grammar, and the
+Mock/Reading habit tracks if they are ever run) will legitimately return
+L1-only with three honest "NO GOOD VIDEO FOUND"s. **That is a correct
+result, not a failed prompt — do not re-run those.** The report should
+classify every unit as ladder-shaped (4 levels apply) or habit-shaped
+(L1 only), rather than treating empty levels as coverage failures.
+
+**Other open items:**
+- `Patrick100` is the fourth new channel; provenance unverified.
+- `G8IXAwpurqc` is only **3:02** long, with 10–15 min claimed student time
+  (a ~4× multiplier, plausible for "go and read these sources" advice but
+  well outside the 1.0–2.5× band the effort model assumes for instructional
+  video). A 3-minute video is also an odd fit for a daily task slot — more
+  a one-time setup pointer than a recurring resource. Flag for the report.
