@@ -149,9 +149,22 @@ later for registered students only, with `requires_login` disclosed.
 
 ### Candidate RC-2 — Bodhee Prep "How to read CAT RC passages" · CONCEPT
 - URL: `https://bodheeprep.com/how-read-cat-rc-passages`
-- Free article, own material. Concept for RC is approach, not theory — an
-  article beats a long video here (student time). Not verified: length,
-  gating. Verdict: **CONDITIONAL.**
+- **Verified via direct fetch, 30 Aug:** genuinely free, no login wall,
+  short strategy article (reading-skill-before-speed approach), real
+  reader comments dated as recently as Dec 2024. Concept for RC is approach,
+  not theory — an article beats a long video here (student time).
+  Verdict: **PASS.**
+
+### Candidate RC-3 — 2IIM Reading Comprehension question bank · PRACTICE
+- URL: `https://iim-cat-questions-answers.2iim.com/verbal/reading-comprehension/`
+- **Verified via direct fetch, 30 Aug:** full passage text appears inline
+  on the page (no click-through needed) — confirmed with "Passage 1: Power
+  in language" (a dense, abstract, CAT-appropriate passage on runic
+  alphabets — good register match). Page states RC is "absolutely free" as
+  a quiz. No login wall observed. This is now the strongest RC PRACTICE
+  candidate — same access pattern (2IIM, no-signup) already confirmed for
+  Percentages. Verdict: **PASS**, pending only the page-length/passage-count
+  scroll-through a human curator does in 30 seconds.
 
 ### Candidate RC-3 — Aeon essays · READING (adjacent: Editorial/Long-form habit)
 - URL: `https://aeon.co/essays`
