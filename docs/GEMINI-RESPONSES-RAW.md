@@ -19,7 +19,11 @@
 | 3 | Arrangements | ✅ | 3/4 levels + 1 honest "NO GOOD VIDEO FOUND" (L4) |
 | 4 | Editorial Reading | ✅ | 1/4 levels + 3 structural "NO GOOD VIDEO FOUND" — see the habit-track finding below |
 | 5 | Tables | ✅ | 3/4 levels + 1 "NO GOOD VIDEO FOUND" (L4) |
-| 6–46 | — | pending | |
+| 6 | Ratio & Proportion | ✅ | 3/4 + L4 gap |
+| 7 | Para Jumbles | ✅ | 3/4 + L4 gap |
+| 8 | Charts | ✅ | **4/4 — first DILR topic to fill L4** |
+| 9 | Average | ⚠️ | 3/4 + L4 gap, but **L1 and L2 cite the same video ID** — needs re-run |
+| 10–46 | — | pending | |
 
 ---
 
@@ -203,3 +207,107 @@ classify every unit as ladder-shaped (4 levels apply) or habit-shaped
   about the model, not a gap in coverage.
 - Unverified as always: durations, channel ownership, whether these open
   logged-out from India, and the set counts.
+
+---
+
+## Prompt 6 — Ratio & Proportion (QA / Arithmetic)
+
+| Level | Title | Channel | Video ID | Duration | Qs claimed | Difficulty | Paid push | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | Ratio Session-I, Basic to Advanced (Udit Sir) | **MBA Pathshala** | `xxorf_cKYsM` | **1:14:56** | 10 | basic | none | 90–110 min | partly |
+| L2 | Ratio 3: Comparing Actual and Error Ratios | Rodha | `eruwLy2vGV4` | 37:10 | 5 | basic–medium | none | 50–65 min | partly |
+| L3 | All CAT Questions from Ratio & Proportion, 2017–2021 (Blitzkrieg) | 2IIM | `X0E_S5awePs` | 1:04:12 | 11 | CAT-level | mild | 90–110 min | partly |
+| L4 | — | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+
+- L4 refusal reasoning matches prompts 3 and 5: "Ratio Shortcuts/Tricks" videos
+  teach SSC/bank hacks that break on modern CAT, or are paid funnels. Third
+  independent L4 refusal with the same shape of argument.
+- `MBA Pathshala` = 6th new channel. L1 at 75 min is another slot-overshoot.
+
+---
+
+## Prompt 7 — Para Jumbles (VARC)
+
+| Level | Title | Channel | Video ID | Duration | Qs claimed | Difficulty | Paid push | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | CAT Verbal Ability Lecture 01 — Parajumbles Basic Concepts | **Bodhee Prep CAT Preparation** | `jmvKymtP06Y` | 51:30 | 5 | basic–medium | mild | 65–75 min | partly |
+| L2 | RODHA VARC — Master PARAJUMBLES, Episode 1 | Rodha | `7AKFH60Jiik` | 42:15 | 6 | medium | mild | 55–65 min | partly |
+| L3 | Learn the ultimate mantra to solve Para Jumbles | **Gejo Speaks** | `PgNBT_Zp_Us` | 19:06 | 4 | CAT-level | none | 35–45 min | partly |
+| L4 | — | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+
+- Fourth L4 refusal, same reasoning — and this one is VARC, not DILR, which
+  weakens the earlier "DILR is a 3-level shape" hypothesis and points instead
+  at **L4 being structurally thin across sections**.
+- Two more new channels: `Bodhee Prep CAT Preparation` (their YouTube arm —
+  note we have already verified their *website* independently) and
+  `Gejo Speaks`. Provenance unverified for both.
+
+---
+
+## Prompt 8 — Charts (DILR)
+
+| Level | Title | Channel | Video ID | Duration | Sets claimed | Difficulty | Paid push | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | Pie Chart 1 — LR & DI Preparation | Rodha | `Kn17_JoFmjU` | 30:10 | 0 | basic | none | 40–50 min | yes |
+| L2 | Pie Chart 2 — LR & DI Preparation | Rodha | `A6K2pPl0BLA` | 17:17 | 1 | basic | none | 25–35 min | yes |
+| L3 | Pie Charts for CAT 2026 — How to Solve Any DI Set, Part 1 | ELITES GRID | `7_t3CWThCQM` | 25:40 | 1 | CAT-level | mild | 45–60 min | yes |
+| L4 | Triangular Graph (DI) — How to interpret it, Part 42 | **MBA Litmus** | `LlM00yczPBQ` | 7:49 | 1 | medium | none | 15–20 min | yes |
+
+- **First DILR topic to fill all four levels — this breaks the hypothesis
+  formed after prompts 3 and 5 that DILR is structurally a 3-level shape.**
+  Exactly why the batch is consumed before conclusions are drawn.
+- But read the L4 critically: "Triangular Graph" is a *niche chart type*, and
+  its self-reported difficulty is "medium", not exam-pace mastery of Charts.
+  It may be a specialised L3 filed under L4 rather than a genuine exam-ready
+  resource. Flag for the report — do not count it as a clean L4 fill.
+- `MBA Litmus` = 9th new channel.
+
+---
+
+## Prompt 9 — Average (QA / Arithmetic) ⚠️ CONTAINS AN ERROR
+
+| Level | Title | Channel | Video ID | Duration | Qs claimed | Difficulty | Paid push | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | Averages 1: Middle Term of an AP Series | Rodha | `TBhanaOLNvc` | ~27 min | 4 | basic | mild | 40–50 min | partly |
+| L2 | Averages 4: Average Weight Problems | Rodha | **`TBhanaOLNvc`** | ~26 min | 5 | basic–medium | mild | 45–60 min | partly |
+| L3 | CAT Averages: All PYQs with Timer | ELITES GRID | `F6za_fKICsU` | ~1:15 | 12 | CAT-level | mild | 90–110 min | partly |
+| L4 | — | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+
+- **HARD ERROR: L1 and L2 give the SAME video ID (`TBhanaOLNvc`) for two
+  differently-titled videos with different durations and question counts.**
+  At most one is correct. This is the first outright factual error in the
+  batch and it would have shipped two identical links under two different
+  levels. Needs a re-run of prompt 9.
+- Durations here are approximate ("~27 min", "~1 hr 15 min") rather than
+  exact — a further reliability drop.
+
+---
+
+## Batch-level quality signals (prompts 1–9) — for the final report
+
+1. **Self-reported watch depth collapsed at prompt 6.** Prompts 1–5 and 8
+   claim "WATCHED FULLY: yes". Prompts 6, 7 and 9 say **"partly"**. This is
+   welcome honesty, but it means question counts, difficulty grades and
+   paid-push assessments from those runs are materially weaker evidence.
+   The report must grade candidates by claimed watch depth, not treat all
+   rows as equal.
+2. **First hard error appeared at prompt 9** (duplicate video ID). Error rate
+   so far: 1 clear factual error and 1 missing answer in 9 prompts.
+3. **L4 is structurally thin, and it is not a DILR-only problem.** Four L4
+   refusals so far (Arrangements, Tables, Ratio & Proportion, Para Jumbles)
+   across both DILR and VARC and QA, all with the same argument: "shortcut"
+   videos are SSC/banking-style tricks that fail on CAT, or paid funnels.
+   Charts filled L4, but weakly (a niche chart type at "medium" difficulty).
+   **Provisional read: the 4-level ladder may really be a 3-level ladder plus
+   a mostly-empty L4 across the whole syllabus** — a finding about our
+   research design, to be confirmed or refuted over the remaining prompts.
+4. **Channel sprawl is now the top provenance risk.** Nine distinct channels
+   have appeared (Rodha, 2IIM, Career Launcher MBA, Patrick100, ELITES GRID,
+   Aptitude Jab, MBA Pathshala, Bodhee Prep CAT Preparation, MBA Litmus).
+   None of the newer ones has had provenance verified. The verification pass
+   must tier every channel once, centrally, rather than per link.
+5. **Long-video overshoot is now systemic, not incidental.** 1:58 (RC L3),
+   1:14 (Ratio L1), 1:12 (RC L2), 1:09 (Percentages L3), 1:04 (Ratio L3),
+   1:15 (Average L3). Six candidates exceed an hour, all claiming 90–150 min
+   of student time — several times any single daily task slot. The report
+   needs one explicit policy decision on hour-plus videos, not six ad-hoc ones.
