@@ -6,13 +6,64 @@
 > phone, logged out. This document gets each candidate as far as it can go
 > from here and marks exactly what remains unverified.
 >
-> **Environment limitation, stated up front:** this research session's
-> network proxy blocks direct fetches of the candidate sites (2iim.com,
-> bodheeprep.com, aeon.co, youtube.com all egress-blocked). Everything below
-> is therefore search-index evidence — titles, counts, and access claims as
-> indexed — NOT a live page-open. Every "Not verified" is a hand-check the
-> curator must do. India-accessibility and mobile rendering could not be
-> verified for ANY candidate from here.
+> **Environment limitation, updated 30 Aug (tools added):** the local
+> network proxy still blocks direct WebFetch to these sites, but **Exa**
+> (`web_fetch_exa`, server-side page fetch) and **vidIQ**
+> (`vidiq_get_videos_by_ids`, YouTube metadata — duration, stats, channel,
+> confirmed to include `duration` in ISO-8601 form, a working substitute for
+> the YouTube Data API `videos.list` call originally planned) were added and
+> used below to verify several candidates directly. What Exa/vidIQ still
+> CANNOT do: confirm India IP accessibility, render a real mobile viewport,
+> or catch a JS-injected signup/payment popup that a live browser would hit.
+> Those three remain founder hand-check items (checklist below) even after
+> this pass — every "Not verified" tag that survives below is one of these.
+
+## Live verification pass (Exa + vidIQ, 30 Aug)
+
+**YouTube candidates — exact durations now confirmed, two of four candidates corrected:**
+
+| Video ID | Title | Channel | Duration | Views | Verdict |
+|---|---|---|---|---|---|
+| `x-k8iSNr85g` | Percentages 1: Fractions to Percentages | Rodha | **26m19s** | 1,179,679 | **PASS** — Foundation concept, "Part 7 of 65" of an organized free playlist |
+| `R2NDKFK3K3U` | Percentage, Profit and Loss 3 | Rodha | 57m29s | 1,520 | **FAIL** — raw live-class recording, ~2× the video-effort band, thin engagement (posted 2026, essentially unvetted by other viewers) |
+| `4tI-h-GKWVk` | Linear and Circular Arrangement - I | Rodha | **20m11s** | 845,389 | **PASS** — concise, high engagement, general channel (not tied to a course pitch) |
+| `YWVPmlYnUWE` | Master Linear Arrangements-1 (LRDI Live Class) | Rodha | 48m37s | 1,234 | **FAIL** — live-class recording AND its own description links straight to a ₹35,499 paid-batch checkout page. This is the "competitor funnel" risk (SWOT §7 threat #4) caught in an actual candidate, not a hypothetical. |
+
+Both FAILs share a pattern: recent (2026) live-class recordings, 45+ minutes,
+thin independent engagement — the opposite of the PASS pair, which are
+older, concise, standalone concept uploads from an organized playlist. This
+is now a standing selection rule for future video candidates: **prefer an
+established playlist upload over a live-class recording**, and treat any
+video whose own description promotes a paid checkout as Tier-3-but-flagged,
+not a clean pick, even from an otherwise legitimate creator channel.
+
+**Page structure — confirmed via direct fetch, not search-index claims:**
+
+- **Bodhee RC bank** (`/free-cat-rc-practice-problems`): confirmed real
+  structure — 30 numbered "RC with Video Solution" sets, plus separate
+  CAT-2021 (12 passages), 2020, 2019, 2018 sections. No login wall visible
+  in the fetched index page. The page's own text says CAT RC difficulty has
+  been "on the higher side" since CAT 2019 — i.e. this bank skews toward
+  Standard-CAT/CAT-hard, not Foundation; better fit for the practising-task
+  row than the foundation-task row.
+- **2IIM Percentages cluster**: confirmed genuinely free — full question
+  text appears inline on the page, no click-through needed. But the visible
+  sample questions are algebraic/multi-variable ("P is x% more than Q...")
+  — Standard-CAT/CAT-hard register, not Foundation. Reframes this
+  candidate: strong for the PRACTISING Percentages task, weaker fit for the
+  FOUNDATION task than previously assumed.
+- **Bodhee LRDI page** (`/cat-logical-reasoning`): confirmed real counts —
+  **6 video-solution sets, 20 "CAT Level [Tough]" sets, 13+ "Basic (Easy
+  Level)" sets** (list continued past the fetch cutoff). No login wall
+  visible on the index. This upgrades the earlier "near-FAIL" read —
+  supply is more concrete than the original "101+" marketing figure
+  suggested, and an actual Easy tier exists. Remaining gap: these are
+  general LRDI sets (seating + tabular + coding-decoding + Venn + matrix
+  mixed together per the page's own syllabus list) — which specific sets
+  are Arrangements-type (linear/circular/matrix) rather than other LRDI
+  types still needs opening individual set pages. Arrangements verdict
+  moves from "near-FAIL" to **"CONDITIONAL, more promising than first
+  read"** pending that per-set check.
 
 The same assignment is being run independently through external research AIs
 using `docs/RESOURCE-RESEARCH-MASTER-PROMPT.md`; cross-check their outputs
