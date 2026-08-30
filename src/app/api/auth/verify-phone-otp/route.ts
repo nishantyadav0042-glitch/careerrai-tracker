@@ -140,6 +140,10 @@ export async function POST(request: NextRequest) {
     // and that branch is the one that already cost 32 students their name and
     // number by writing fewer fields than the insert did. Attribution must not
     // become the next field that only lands when the timing is lucky.
+    // One timestamp for this verification, shared by every write below so a
+    // student's anchor and their profile row cannot disagree by milliseconds.
+    const now = new Date().toISOString();
+
     const attr = attributionFromCookie(request.cookies.get('cr_attr')?.value ?? null);
     const attrColumns = {
       attr_channel: attr.channel,
@@ -176,6 +180,11 @@ export async function POST(request: NextRequest) {
         full_name: entry?.full_name ?? selfName ?? (role === 'buddy' ? 'Buddy' : 'Student'),
         email: entry?.email ?? null,
         phone: e164,
+        // The anchor. THIS ROUTE IS THE PRIMARY VERIFIER — verifyOtp() above
+        // just proved the student holds this number, so the column that records
+        // that proof must be written here or a brand-new signup is created
+        // unanchored and walks straight into the /auth/link-phone gate.
+        phone_verified_at: now,
         buddy_id: role === 'student' ? (entry?.assigned_buddy_id ?? null) : null,
         subscription_status: role === 'student' ? 'free' : null,
         is_premium: false,
@@ -213,6 +222,7 @@ export async function POST(request: NextRequest) {
           full_name: entry?.full_name ?? selfName ?? existing.full_name ?? (role === 'buddy' ? 'Buddy' : 'Student'),
           email: entry?.email ?? existing.email ?? null,
           phone: e164,
+          phone_verified_at: now,
           buddy_id: role === 'student' ? (entry?.assigned_buddy_id ?? null) : null,
           signup_device: signupDevice.device,
           signup_browser: signupDevice.browser,
@@ -235,6 +245,7 @@ export async function POST(request: NextRequest) {
         .from('profiles')
         .update({
           phone: e164,
+          phone_verified_at: now,
           ...(role === 'student' && entry?.assigned_buddy_id ? { buddy_id: entry.assigned_buddy_id } : {}),
         })
         .eq('id', data.user.id);
