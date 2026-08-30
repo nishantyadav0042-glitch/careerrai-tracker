@@ -1,0 +1,2078 @@
+{
+ "generated": "2026-08-31",
+ "status": "SAFE CUSTODY - collection in progress",
+ "topics_received": 29,
+ "topics_total": 46,
+ "missing": [
+  "Pipes & Cisterns (prompt 29 - prompt text pasted back instead of answer)"
+ ],
+ "not_yet_run": [
+  "Venn / Sets",
+  "Linear Equations",
+  "Sentence Completion",
+  "Binary Logic",
+  "Divisibility",
+  "HCF & LCM",
+  "Remainders",
+  "Base System",
+  "Set Theory",
+  "Permutation & Combination",
+  "Probability",
+  "Lines & Angles",
+  "Triangles",
+  "Quadrilaterals",
+  "Circles",
+  "Mensuration"
+ ],
+ "ground_truth_verified_via_vidiq": {
+  "x-k8iSNr85g": {
+   "title": "Percentages 1: Fractions to Percentages | Arithmetic for CAT 2026 | Ravi Prakash Rodha",
+   "channel": "Rodha",
+   "duration": "26:19",
+   "views": 1179679,
+   "note": "Part 7 of 65, organized playlist"
+  },
+  "R2NDKFK3K3U": {
+   "title": "Percentage, Profit and Loss 3 | Arithmetic | CAT 2026 Starts Here",
+   "channel": "Rodha",
+   "duration": "57:29",
+   "views": 1520,
+   "note": "REJECTED: live-class recording, thin engagement"
+  },
+  "4tI-h-GKWVk": {
+   "title": "Linear and Circular Arrangement - I for CAT",
+   "channel": "Rodha",
+   "duration": "20:11",
+   "views": 845389,
+   "note": "verified concept video"
+  },
+  "YWVPmlYnUWE": {
+   "title": "Master Linear Arrangements-1 | LRDI Live Class for CAT 2026",
+   "channel": "Rodha",
+   "duration": "48:37",
+   "views": 1234,
+   "note": "REJECTED: description links to Rs.35,499 paid batch checkout"
+  },
+  "3ox1DwbOOx0": {
+   "title": "Percentages 3: Percentage Increase Decrease | Arithmetic for CAT 2026",
+   "channel": "Rodha",
+   "duration": "20:16",
+   "views": 602691,
+   "note": "Part 9 of 65, same playlist as x-k8iSNr85g"
+  },
+  "VT9-jeEmlJ8": {
+   "title": "Speed Maths 1: Percentage of a Number | Arithmetic for CAT 2026",
+   "channel": "Rodha",
+   "duration": "31:22",
+   "views": 1828745,
+   "note": "Part 1 of 65; highest-engagement candidate found"
+  },
+  "spET6FqiBZ8": {
+   "title": "Linear Arrangement I Set - 1 I Logical Reasoning Preparation for CAT",
+   "channel": "Rodha",
+   "duration": "10:57",
+   "views": 529748,
+   "note": "one complete worked DILR set"
+  }
+ },
+ "verification_status": "NO LIVE VERIFICATION AVAILABLE at time of writing - youtube.com is policy-denied at the gateway (403 on CONNECT) and the vidIQ, Exa and Firecrawl MCP servers are disconnected. All non-ground-truth rows below are UNVERIFIED CLAIMS.",
+ "corpus": [
+  {
+   "topic": "Reading Comprehension",
+   "section": "VARC",
+   "factory_prompt": 1,
+   "unit_shape": "ladder",
+   "candidates": [
+    {
+     "level": "L1",
+     "title": "Cracking RC 101 - The Ultimate Guide to Acing Reading Comprehension",
+     "channel": "2IIM CAT Preparation",
+     "video_id": "Qt_FK9fWlMg",
+     "duration_claimed": "25:55",
+     "questions_claimed": 0,
+     "difficulty_claimed": "basic",
+     "paid_push": "none",
+     "student_time_claimed": "35-45 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L2",
+     "title": "RODHA VARC I Reading Comprehension Practice Session I CAT 2023 I Episode 1",
+     "channel": "Rodha",
+     "video_id": "iYr1qM9D69M",
+     "duration_claimed": "1:12:14",
+     "questions_claimed": 1,
+     "difficulty_claimed": "medium",
+     "paid_push": "mild",
+     "student_time_claimed": "75-90 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L3",
+     "title": "CAT 2025 Slot 3 VARC Marathon | RC Video Solutions | Jatin 2IIM",
+     "channel": "2IIM CAT Preparation",
+     "video_id": "Ky8gB3a26nw",
+     "duration_claimed": "1:58:09",
+     "questions_claimed": 4,
+     "difficulty_claimed": "CAT-level",
+     "paid_push": "none",
+     "student_time_claimed": "130-150 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L4",
+     "title": "CAT RC: Traps in Answer Choices | Smart Option Elimination Strategy",
+     "channel": "Career Launcher MBA",
+     "video_id": "ak5_O5CbrJE",
+     "duration_claimed": "27:20",
+     "questions_claimed": 1,
+     "difficulty_claimed": "CAT-level",
+     "paid_push": "none",
+     "student_time_claimed": "45-60 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    }
+   ],
+   "flags": [
+    "L2 72min and L3 118min massively overshoot any daily task slot",
+    "closes the RC video gap flagged in pre-Gemini research",
+    "new channel: Career Launcher MBA"
+   ],
+   "verdict": "USABLE with duration policy decision"
+  },
+  {
+   "topic": "Percentages",
+   "section": "QA/Arithmetic",
+   "factory_prompt": 2,
+   "unit_shape": "ladder",
+   "candidates": [
+    {
+     "level": "L1",
+     "title": "Percentages 1: Fractions to Percentages",
+     "channel": "Rodha",
+     "video_id": "x-k8iSNr85g",
+     "duration_claimed": "26:19",
+     "questions_claimed": 9,
+     "difficulty_claimed": "basic",
+     "paid_push": "none",
+     "student_time_claimed": "45-60 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L2",
+     "title": "Percentages 2: Successive Percentage Change",
+     "channel": "Rodha",
+     "video_id": "lzI_bpPpezE",
+     "duration_claimed": "22:46",
+     "questions_claimed": 5,
+     "difficulty_claimed": "basic-medium",
+     "paid_push": "none",
+     "student_time_claimed": "40-50 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L3",
+     "title": "All CAT Questions from Percentages | CAT 2017 to 2021 | Blitzkrieg",
+     "channel": "2IIM CAT Preparation",
+     "video_id": "BaBpzV3DwEE",
+     "duration_claimed": "1:09:09",
+     "questions_claimed": 8,
+     "difficulty_claimed": "CAT-level",
+     "paid_push": "mild",
+     "student_time_claimed": "90-120 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L4",
+     "title": "Speed Maths 1: Percentage of a Number",
+     "channel": "Rodha",
+     "video_id": "VT9-jeEmlJ8",
+     "duration_claimed": "31:22",
+     "questions_claimed": 6,
+     "difficulty_claimed": "medium",
+     "paid_push": "none",
+     "student_time_claimed": "50-60 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    }
+   ],
+   "flags": [
+    "L1 and L4 HARD-VERIFIED via vidIQ; durations exact match",
+    "cross-run: earlier session recommended 3ox1DwbOOx0 for L2 slot, this run says lzI_bpPpezE",
+    "question count drift on x-k8iSNr85g: 7 (earlier) vs 9 (this run)"
+   ],
+   "verdict": "STRONGEST topic in the batch"
+  },
+  {
+   "topic": "Arrangements",
+   "section": "DILR",
+   "factory_prompt": 3,
+   "unit_shape": "ladder",
+   "candidates": [
+    {
+     "level": "L1",
+     "title": "Linear and Circular Arrangement - I",
+     "channel": "Rodha",
+     "video_id": "4tI-h-GKWVk",
+     "duration_claimed": "20:11",
+     "questions_claimed": 0,
+     "difficulty_claimed": "basic",
+     "paid_push": "none",
+     "student_time_claimed": "35-45 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L2",
+     "title": "Linear Arrangement I Set - 1",
+     "channel": "Rodha",
+     "video_id": "spET6FqiBZ8",
+     "duration_claimed": "10:57",
+     "questions_claimed": 1,
+     "difficulty_claimed": "basic",
+     "paid_push": "none",
+     "student_time_claimed": "20-30 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L3",
+     "title": "High LEVEL DILR puzzle & Detailed way to solve these puzzles",
+     "channel": "ELITES GRID - CAT PREP",
+     "video_id": "lF5YGHFysBA",
+     "duration_claimed": "34:36",
+     "questions_claimed": 1,
+     "difficulty_claimed": "CAT-level",
+     "paid_push": "mild",
+     "student_time_claimed": "50-65 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L4",
+     "video_id": null,
+     "gap": true,
+     "reason": "CAT Arrangements has no genuine formulaic shortcuts; shortcut videos teach Banking/SSC tricks that fail on CAT reasoning sets"
+    }
+   ],
+   "flags": [
+    "L1 and L2 HARD-VERIFIED via vidIQ",
+    "L1/L2 independently reproduced across two separate Gemini sessions with identical structural read (0 sets, 1 set)",
+    "L4 gap is a substantive domain judgment, not a coverage failure"
+   ],
+   "verdict": "STRONGEST DILR topic; ladder complete without L4"
+  },
+  {
+   "topic": "Editorial Reading",
+   "section": "VARC",
+   "factory_prompt": 4,
+   "unit_shape": "skill-unit",
+   "candidates": [
+    {
+     "level": "L1",
+     "title": "From where should we read editorials? | AskPatrick | Patrick Dsouza",
+     "channel": "Patrick100",
+     "video_id": "G8IXAwpurqc",
+     "duration_claimed": "3:02",
+     "questions_claimed": 0,
+     "difficulty_claimed": "basic",
+     "paid_push": "none",
+     "student_time_claimed": "10-15 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L2",
+     "video_id": null,
+     "gap": true,
+     "reason": "Editorial reading has no standalone basic questions - it is a habit, not a question type"
+    },
+    {
+     "level": "L3",
+     "video_id": null,
+     "gap": true,
+     "reason": "At CAT difficulty this becomes RC; standalone editorial-question videos are mislabelled RC or current-affairs streams"
+    },
+    {
+     "level": "L4",
+     "video_id": null,
+     "gap": true,
+     "reason": "Exam-pace strategy lives under CAT RC strategy, not editorial reading"
+    }
+   ],
+   "flags": [
+    "STRUCTURAL: not a CAT question unit - matches our own READING_HABIT_UNITS distinction in topics-constants.ts",
+    "3:02 video with 10-15 min claimed student time = ~4x multiplier, outside the effort model band",
+    "a 3-minute video is a one-time setup pointer, not a recurring daily-task resource"
+   ],
+   "verdict": "L1-ONLY BY DESIGN - empty levels are correct results"
+  },
+  {
+   "topic": "Tables",
+   "section": "DILR",
+   "factory_prompt": 5,
+   "unit_shape": "ladder",
+   "candidates": [
+    {
+     "level": "L1",
+     "title": "Tabular Set || LR & DI Preparation for CAT",
+     "channel": "Rodha",
+     "video_id": "gqYVcVjqW0k",
+     "duration_claimed": "21:38",
+     "questions_claimed": 1,
+     "difficulty_claimed": "basic",
+     "paid_push": "none",
+     "student_time_claimed": "35-45 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L2",
+     "title": "CAT Infinite DILR - Set 303 | Organizing the scholarship test | Data Table",
+     "channel": "Aptitude Jab",
+     "video_id": "L6lxPe9gx68",
+     "duration_claimed": "9:24",
+     "questions_claimed": 1,
+     "difficulty_claimed": "medium",
+     "paid_push": "none",
+     "student_time_claimed": "20-30 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L3",
+     "title": "CAT Infinite DILR - Set 410 | Lehra Do | Table Mapping",
+     "channel": "Aptitude Jab",
+     "video_id": "AfQf--BGAeo",
+     "duration_claimed": "7:51",
+     "questions_claimed": 1,
+     "difficulty_claimed": "CAT-level",
+     "paid_push": "none",
+     "student_time_claimed": "25-35 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L4",
+     "video_id": null,
+     "gap": true,
+     "reason": "calculation-heavy tabular DI largely phased out of CAT in favour of logical/constraint table sets; shortcut videos are clickbait funnels"
+    }
+   ],
+   "flags": [
+    "Aptitude Jab supplies 2 of 3 filled levels - concentration risk on an unverified channel",
+    "9:24 and 7:51 with 20-35 min claimed = 2.7-4.5x multipliers, above the 1.0-2.5x effort band; worked-set videos may need their own higher band"
+   ],
+   "verdict": "USABLE pending channel provenance check"
+  },
+  {
+   "topic": "Ratio & Proportion",
+   "section": "QA/Arithmetic",
+   "factory_prompt": 6,
+   "unit_shape": "ladder",
+   "candidates": [
+    {
+     "level": "L1",
+     "title": "Ratio Session-I || Basic to Advanced || By Udit Sir",
+     "channel": "MBA Pathshala",
+     "video_id": "xxorf_cKYsM",
+     "duration_claimed": "1:14:56",
+     "questions_claimed": 10,
+     "difficulty_claimed": "basic",
+     "paid_push": "none",
+     "student_time_claimed": "90-110 min",
+     "watched_claimed": "partly",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L2",
+     "title": "Ratio 3: Comparing Actual and Error Ratios",
+     "channel": "Rodha",
+     "video_id": "eruwLy2vGV4",
+     "duration_claimed": "37:10",
+     "questions_claimed": 5,
+     "difficulty_claimed": "basic-medium",
+     "paid_push": "none",
+     "student_time_claimed": "50-65 min",
+     "watched_claimed": "partly",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L3",
+     "title": "All CAT Questions from Ratio & Proportion | 2017-2021 | Blitzkrieg",
+     "channel": "2IIM CAT Preparation",
+     "video_id": "X0E_S5awePs",
+     "duration_claimed": "1:04:12",
+     "questions_claimed": 11,
+     "difficulty_claimed": "CAT-level",
+     "paid_push": "mild",
+     "student_time_claimed": "90-110 min",
+     "watched_claimed": "partly",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L4",
+     "video_id": null,
+     "gap": true,
+     "reason": "Ratio Shortcuts/Tricks videos teach SSC/bank hacks that break on modern CAT, or are paid funnels"
+    }
+   ],
+   "flags": [
+    "watch depth dropped to 'partly' on all three - weaker evidence",
+    "L1 at 75 min is a slot overshoot",
+    "new channel: MBA Pathshala"
+   ],
+   "verdict": "USABLE but L1 needs a shorter replacement"
+  },
+  {
+   "topic": "Para Jumbles",
+   "section": "VARC",
+   "factory_prompt": 7,
+   "unit_shape": "ladder",
+   "candidates": [
+    {
+     "level": "L1",
+     "title": "CAT Verbal Ability Lecture 01 | CAT Parajumbles - Basic Concepts",
+     "channel": "Bodhee Prep CAT Preparation",
+     "video_id": "jmvKymtP06Y",
+     "duration_claimed": "51:30",
+     "questions_claimed": 5,
+     "difficulty_claimed": "basic-medium",
+     "paid_push": "mild",
+     "student_time_claimed": "65-75 min",
+     "watched_claimed": "partly",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L2",
+     "title": "RODHA VARC I Master PARAJUMBLES I Episode 1",
+     "channel": "Rodha",
+     "video_id": "7AKFH60Jiik",
+     "duration_claimed": "42:15",
+     "questions_claimed": 6,
+     "difficulty_claimed": "medium",
+     "paid_push": "mild",
+     "student_time_claimed": "55-65 min",
+     "watched_claimed": "partly",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L3",
+     "title": "Learn the ultimate mantra to solve Para Jumbles questions | GejoSpeaks",
+     "channel": "Gejo Speaks",
+     "video_id": "PgNBT_Zp_Us",
+     "duration_claimed": "19:06",
+     "questions_claimed": 4,
+     "difficulty_claimed": "CAT-level",
+     "paid_push": "none",
+     "student_time_claimed": "35-45 min",
+     "watched_claimed": "partly",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L4",
+     "video_id": null,
+     "gap": true,
+     "reason": "free advanced para-jumble speed content is universally poor; tricks fail on real CAT TITA questions"
+    }
+   ],
+   "flags": [
+    "all three 'partly' watched",
+    "new channels: Bodhee Prep CAT Preparation (their YouTube arm; website separately verified earlier), Gejo Speaks",
+    "L3 at 19:06 is the most task-slot-friendly VARC practice video found"
+   ],
+   "verdict": "USABLE"
+  },
+  {
+   "topic": "Charts",
+   "section": "DILR",
+   "factory_prompt": 8,
+   "unit_shape": "ladder",
+   "candidates": [
+    {
+     "level": "L1",
+     "title": "Pie Chart 1 || LR & DI Preparation || CAT Exam Preparation",
+     "channel": "Rodha",
+     "video_id": "Kn17_JoFmjU",
+     "duration_claimed": "30:10",
+     "questions_claimed": 0,
+     "difficulty_claimed": "basic",
+     "paid_push": "none",
+     "student_time_claimed": "40-50 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L2",
+     "title": "Pie Chart 2 || LR & DI Preparation || CAT Exam Preparation",
+     "channel": "Rodha",
+     "video_id": "A6K2pPl0BLA",
+     "duration_claimed": "17:17",
+     "questions_claimed": 1,
+     "difficulty_claimed": "basic",
+     "paid_push": "none",
+     "student_time_claimed": "25-35 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L3",
+     "title": "Pie Charts for CAT 2026 | How to Solve Any DI Set Step-by-Step | Part 1",
+     "channel": "ELITES GRID - CAT PREP",
+     "video_id": "7_t3CWThCQM",
+     "duration_claimed": "25:40",
+     "questions_claimed": 1,
+     "difficulty_claimed": "CAT-level",
+     "paid_push": "mild",
+     "student_time_claimed": "45-60 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L4",
+     "title": "Triangular Graph (DI) - How to interpret it? - Part 42",
+     "channel": "MBA Litmus",
+     "video_id": "LlM00yczPBQ",
+     "duration_claimed": "07:49",
+     "questions_claimed": 1,
+     "difficulty_claimed": "medium",
+     "paid_push": "none",
+     "student_time_claimed": "15-20 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    }
+   ],
+   "flags": [
+    "first DILR topic to fill L4 - broke the '3-level DILR' hypothesis",
+    "L4 is a NICHE chart type at self-reported 'medium' difficulty - likely a specialised L3 misfiled as L4, do not count as a clean fill",
+    "new channel: MBA Litmus"
+   ],
+   "verdict": "USABLE; L4 needs reclassification"
+  },
+  {
+   "topic": "Average",
+   "section": "QA/Arithmetic",
+   "factory_prompt": 9,
+   "unit_shape": "ladder",
+   "candidates": [
+    {
+     "level": "L1",
+     "title": "Averages 1: Middle Term of an AP Series",
+     "channel": "Rodha",
+     "video_id": "TBhanaOLNvc",
+     "duration_claimed": "~27 min",
+     "questions_claimed": 4,
+     "difficulty_claimed": "basic",
+     "paid_push": "mild",
+     "student_time_claimed": "40-50 min",
+     "watched_claimed": "partly",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L2",
+     "title": "Averages 4: Average Weight Problems",
+     "channel": "Rodha",
+     "video_id": "TBhanaOLNvc",
+     "duration_claimed": "~26 min",
+     "questions_claimed": 5,
+     "difficulty_claimed": "basic-medium",
+     "paid_push": "mild",
+     "student_time_claimed": "45-60 min",
+     "watched_claimed": "partly",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L3",
+     "title": "CAT Averages : All PYQs with Timer | 1000 QA Questions",
+     "channel": "ELITES GRID - CAT PREP",
+     "video_id": "F6za_fKICsU",
+     "duration_claimed": "~1:15",
+     "questions_claimed": 12,
+     "difficulty_claimed": "CAT-level",
+     "paid_push": "mild",
+     "student_time_claimed": "90-110 min",
+     "watched_claimed": "partly",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L4",
+     "video_id": null,
+     "gap": true,
+     "reason": "standalone Averages speed videos are paywalled or buried inside multi-hour marathons"
+    }
+   ],
+   "flags": [
+    "HARD ERROR: L1 and L2 give the SAME video ID for two differently-titled videos with different durations and counts - at most one is correct",
+    "durations approximate ('~27 min') not exact - reliability drop",
+    "NEEDS RE-RUN"
+   ],
+   "verdict": "DEFECTIVE - re-run required"
+  },
+  {
+   "topic": "Odd One Out",
+   "section": "VARC",
+   "factory_prompt": 10,
+   "unit_shape": "ladder",
+   "candidates": [
+    {
+     "level": "L1",
+     "title": "CAT Verbal Ability Lecture 02 | CAT Odd One Out- Basic Concepts",
+     "channel": "Bodhee Prep CAT Preparation",
+     "video_id": "32bjj88vkk4",
+     "duration_claimed": "42:15",
+     "questions_claimed": 5,
+     "difficulty_claimed": "basic",
+     "paid_push": "mild",
+     "student_time_claimed": "50-60 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L2",
+     "title": "CAT Odd One Out Strategy: Stop Guessing the Right Answer | Brijesh Sir Rodha",
+     "channel": "Rodha",
+     "video_id": "_R-zi-iIg_A",
+     "duration_claimed": "45:10",
+     "questions_claimed": 4,
+     "difficulty_claimed": "medium",
+     "paid_push": "mild",
+     "student_time_claimed": "55-65 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L3",
+     "title": "CAT 2025 Slot 2 VARC Marathon | VA Video Solutions | Jatin 2IIM",
+     "channel": "2IIM CAT Preparation",
+     "video_id": "-wsuOBoEn5k",
+     "duration_claimed": "54:40",
+     "questions_claimed": 8,
+     "difficulty_claimed": "CAT-level",
+     "paid_push": "mild",
+     "student_time_claimed": "65-75 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L4",
+     "title": "Why You're Getting Odd Sentence Out Wrong in CAT VARC | #PrepWithCL",
+     "channel": "Career Launcher MBA",
+     "video_id": "In0aLW6hKiU",
+     "duration_claimed": "34:20",
+     "questions_claimed": 4,
+     "difficulty_claimed": "CAT-level",
+     "paid_push": "mild",
+     "student_time_claimed": "45-55 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    }
+   ],
+   "flags": [
+    "PROVENANCE ODDITY: 'Brijesh Sir' credited on Rodha here, 'Brijesh Pandey' credited on Bodhee Prep in Para Jumbles - same instructor name on two competing channels is a re-upload signature; verify both",
+    "L3 is a whole-slot VARC marathon reused across VARC sub-topics - needs a central topic-purity decision",
+    "Career Launcher MBA appears to be the L4/traps specialist for VARC"
+   ],
+   "verdict": "USABLE"
+  },
+  {
+   "topic": "Mixtures",
+   "section": "QA/Arithmetic",
+   "factory_prompt": 14,
+   "unit_shape": "ladder",
+   "candidates": [
+    {
+     "level": "L1",
+     "title": "Alligation and Mixture 1: Weighted Average Seesaw Method",
+     "channel": "Rodha",
+     "video_id": "3LmRyBpIhgQ",
+     "duration_claimed": "31:47",
+     "questions_claimed": 4,
+     "difficulty_claimed": "basic",
+     "paid_push": "none",
+     "student_time_claimed": "45-55 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L2",
+     "title": "Alligation and Mixture 3: Alligation in Mixtures",
+     "channel": "Rodha",
+     "video_id": "qQcGkxuf4ws",
+     "duration_claimed": "23:35",
+     "questions_claimed": 2,
+     "difficulty_claimed": "medium",
+     "paid_push": "none",
+     "student_time_claimed": "35-45 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L3",
+     "title": "Mixtures & Alligations | 100%iler Arvind Shankar's Guess Questions",
+     "channel": "Anastasis Academy",
+     "video_id": "rM8zFErtUPE",
+     "duration_claimed": "52:54",
+     "questions_claimed": 16,
+     "difficulty_claimed": "CAT-level",
+     "paid_push": "none",
+     "student_time_claimed": "75-90 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L4",
+     "video_id": null,
+     "gap": true,
+     "reason": "alligation 'tricks' videos are SSC/banking rote-formula content"
+    }
+   ],
+   "flags": [
+    "Anastasis Academy CORROBORATED - second direct-URL video from the same named series (see Time & Work L4)",
+    "L3 has 16 worked questions, the highest count in the batch"
+   ],
+   "verdict": "USABLE - clean"
+  },
+  {
+   "topic": "Progressions",
+   "section": "QA/Algebra",
+   "factory_prompt": 15,
+   "unit_shape": "ladder",
+   "candidates": [
+    {
+     "level": "L1",
+     "title": "CAT 2026 Progressions & Series: Master AP, GP & HP Concepts",
+     "channel": "Cracku - MBA CAT Preparation",
+     "video_id": "VFhQKdcZml8",
+     "duration_claimed": "55:06",
+     "questions_claimed": 5,
+     "difficulty_claimed": "basic",
+     "paid_push": "mild",
+     "student_time_claimed": "75-90 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L2",
+     "title": "Arithmetic Progression 1: AP Average Funda",
+     "channel": "Rodha",
+     "video_id": "wSbjXsULtrI",
+     "duration_claimed": "22:25",
+     "questions_claimed": 2,
+     "difficulty_claimed": "medium",
+     "paid_push": "none",
+     "student_time_claimed": "35-45 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L3",
+     "title": "All CAT Questions from Progressions | 2017 to 2021 | Blitzkrieg",
+     "channel": "2IIM CAT Preparation",
+     "video_id": "XP098K63oAI",
+     "duration_claimed": "1:19:41",
+     "questions_claimed": 10,
+     "difficulty_claimed": "CAT-level",
+     "paid_push": "mild",
+     "student_time_claimed": "100-120 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L4",
+     "title": "Advance Level Quant Concept 9 || SEQUENCE & SERIES || HUNNY MALHOTRA",
+     "channel": "ELITES GRID - CAT PREP",
+     "video_id": "8TygSoo-4Ig",
+     "duration_claimed": "14:23",
+     "questions_claimed": 1,
+     "difficulty_claimed": "CAT-level",
+     "paid_push": "mild",
+     "student_time_claimed": "20-25 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    }
+   ],
+   "flags": [
+    "DECISION NEEDED: Cracku's YouTube channel appears here, but we rejected Cracku's WEBSITE on the logged-out-access gate. Channel and website are separate surfaces - the report must not let a blanket 'Cracku rejected' carry over silently, nor let it in silently"
+   ],
+   "verdict": "USABLE pending Cracku channel decision"
+  },
+  {
+   "topic": "Vocabulary",
+   "section": "VARC",
+   "factory_prompt": 16,
+   "unit_shape": "skill-unit",
+   "candidates": [
+    {
+     "level": "L1",
+     "title": "CAT 2026 VARC: Vocabulary Masterclass | Sharwari Mam Rodha",
+     "channel": "Rodha",
+     "video_id": "4jnQpFaS57g",
+     "duration_claimed": "58:16",
+     "questions_claimed": 0,
+     "difficulty_claimed": "basic-medium",
+     "paid_push": "mild",
+     "student_time_claimed": "70-85 min",
+     "watched_claimed": "yes",
+     "link_format": "SEARCH-LINK",
+     "run": 1
+    },
+    {
+     "level": "L2",
+     "title": "Vocabulary Booster For XAT, CAT, MAHCET & All MBA Exam 2021 Part-1",
+     "channel": "BYJU'S Exam Prep: CAT & MBA",
+     "video_id": "ouybCha6v9E",
+     "duration_claimed": "33:37",
+     "questions_claimed": 10,
+     "difficulty_claimed": "basic",
+     "paid_push": "mild",
+     "student_time_claimed": "40-50 min",
+     "watched_claimed": "yes",
+     "link_format": "SEARCH-LINK",
+     "run": 1
+    },
+    {
+     "level": "L3",
+     "video_id": null,
+     "gap": true,
+     "reason": "CAT does not test isolated vocabulary; such videos are OMET or pre-2014 archives"
+    },
+    {
+     "level": "L4",
+     "video_id": null,
+     "gap": true,
+     "reason": "no legitimate exam-pace shortcuts exist for isolated vocab in CAT"
+    }
+   ],
+   "flags": [
+    "DEFECT: both URLs supplied as google.com/search links wrapping a YouTube URL - the classic signature of a model that could not confirm the video exists",
+    "SELF-CONTRADICTION: refuses L3/L4 because CAT has no standalone vocab questions, then recommends an L2 that is exactly standalone multi-exam vocab drills - fails CAT-relevance on its own argument",
+    "STRUCTURAL: not a CAT question unit"
+   ],
+   "verdict": "L1-ONLY BY DESIGN, and both links are LOW CONFIDENCE"
+  },
+  {
+   "topic": "Selection & Distribution",
+   "section": "DILR",
+   "factory_prompt": 17,
+   "unit_shape": "ladder",
+   "candidates": [
+    {
+     "level": "L1",
+     "title": "Selection and Distribution Based DILR For CAT ft. Dr. Shashank",
+     "channel": "Learn4Exam",
+     "video_id": "TAHxPmmojNQ",
+     "duration_claimed": "26:15",
+     "questions_claimed": 2,
+     "difficulty_claimed": "basic",
+     "paid_push": "mild",
+     "student_time_claimed": "40-50 min",
+     "watched_claimed": "partly",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L2",
+     "title": "DILR - Team Formation / Selection Basics & Practice Sets",
+     "channel": "2IIM CAT Preparation",
+     "video_id": "kYc5hN7yV9I",
+     "duration_claimed": "18:42",
+     "questions_claimed": 2,
+     "difficulty_claimed": "medium",
+     "paid_push": "none",
+     "student_time_claimed": "35-45 min",
+     "watched_claimed": "partly",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L3",
+     "title": "CAT LRDI Revision | Set 58: Chocolate Distribution Venn Diagram Concept",
+     "channel": "ELITES GRID - CAT PREP",
+     "video_id": "hSgFjmWV9o4",
+     "duration_claimed": "21:18",
+     "questions_claimed": 1,
+     "difficulty_claimed": "CAT-level",
+     "paid_push": "none",
+     "student_time_claimed": "35-45 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L4",
+     "video_id": null,
+     "gap": true,
+     "reason": "no dedicated standalone speed-heuristics video for pure Selection & Distribution"
+    }
+   ],
+   "flags": [
+    "SUSPECT: L2's title 'DILR - Team Formation / Selection Basics & Practice Sets' does not match 2IIM's actual heavy-branding title conventions - generic clean titles are a fabrication signature; verify before use",
+    "new channel: Learn4Exam"
+   ],
+   "verdict": "L3 USABLE; L2 SUSPECT"
+  },
+  {
+   "topic": "Profit & Loss",
+   "section": "QA/Arithmetic",
+   "factory_prompt": 18,
+   "unit_shape": "ladder",
+   "candidates": [
+    {
+     "level": "L1",
+     "title": "Profit and Loss 1: Profit, Loss, Discount, Markup",
+     "channel": "Rodha",
+     "video_id": "bigCbKeUPO4",
+     "duration_claimed": "26:05",
+     "questions_claimed": 4,
+     "difficulty_claimed": "basic",
+     "paid_push": "none",
+     "student_time_claimed": "40-50 min",
+     "watched_claimed": "partly",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L2",
+     "title": "Profit and Loss 3: Faulty Weights and Cheating",
+     "channel": "Rodha",
+     "video_id": "3Q6V7qVGReo",
+     "duration_claimed": "38:32",
+     "questions_claimed": 6,
+     "difficulty_claimed": "medium",
+     "paid_push": "none",
+     "student_time_claimed": "60-70 min",
+     "watched_claimed": "partly",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L3",
+     "title": "CAT 2025 I Arithmetic Practice Session -1 I Percentages, Profit & Loss I R4 BATCH",
+     "channel": "Rodha",
+     "video_id": "5t6OdAz2zzw",
+     "duration_claimed": "1:12:23",
+     "questions_claimed": 7,
+     "difficulty_claimed": "CAT-level",
+     "paid_push": "mild",
+     "student_time_claimed": "90-110 min",
+     "watched_claimed": "partly",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L4",
+     "title": "Dishonest Seller CAT 2023 Question | 3 Methods",
+     "channel": "ELITES GRID - CAT PREP",
+     "video_id": "OyGkBz2DxAQ",
+     "duration_claimed": "18:42",
+     "questions_claimed": 2,
+     "difficulty_claimed": "CAT-level",
+     "paid_push": "mild",
+     "student_time_claimed": "30-40 min",
+     "watched_claimed": "partly",
+     "link_format": "direct",
+     "run": 1
+    }
+   ],
+   "flags": [
+    "REJECT L3: title contains 'R4 BATCH' - the exact Rs.35,499 paid batch whose checkout link caused an earlier rejection. The funnel is in the TITLE, not buried in a description. Self-reported as only 'mild' push, which is wrong."
+   ],
+   "verdict": "L1/L2/L4 USABLE; L3 REJECTED on funnel grounds"
+  },
+  {
+   "topic": "Para Summary",
+   "section": "VARC",
+   "factory_prompt": 19,
+   "unit_shape": "ladder",
+   "candidates": [
+    {
+     "level": "L1",
+     "title": "Summary Concepts || Verbal Preparation || CAT Preparation 2019",
+     "channel": "Rodha",
+     "video_id": "8YK-4sOQyUU",
+     "duration_claimed": "8:45",
+     "questions_claimed": 0,
+     "difficulty_claimed": "basic",
+     "paid_push": "none",
+     "student_time_claimed": "15-20 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L2",
+     "title": "Ace Para Summary for CAT 2025 - 'GIST' Method",
+     "channel": "Unacademy CAT (Amit Rohra)",
+     "video_id": "K77dQAOf_Vg",
+     "duration_claimed": "34:04",
+     "questions_claimed": 4,
+     "difficulty_claimed": "medium",
+     "paid_push": "mild",
+     "student_time_claimed": "45-55 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L3",
+     "title": "CAT Para Summary Questions: Learn The Method | Brijesh Sir Rodha",
+     "channel": "Rodha",
+     "video_id": "GFMXohhRw4o",
+     "duration_claimed": "1:03:52",
+     "questions_claimed": 4,
+     "difficulty_claimed": "CAT-level",
+     "paid_push": "mild",
+     "student_time_claimed": "60-75 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L4",
+     "title": "3 CAT Para Summary Rules That Break Every Trap | Brijesh Sir Rodha",
+     "channel": "Rodha",
+     "video_id": "mvLAgP10om4",
+     "duration_claimed": "30:55",
+     "questions_claimed": 5,
+     "difficulty_claimed": "CAT-level",
+     "paid_push": "mild",
+     "student_time_claimed": "45-55 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    }
+   ],
+   "flags": [
+    "STRUCTURALLY THE CLEANEST VARC RESPONSE: 4/4 filled, real branded titles, watch depth 'yes' throughout, a genuinely short L1 (8:45), and an L4 that is a real trap-taxonomy video rather than a repurposed practice clip",
+    "new channel: Unacademy CAT (Amit Rohra)"
+   ],
+   "verdict": "BEST VARC LADDER IN THE BATCH"
+  },
+  {
+   "topic": "Hybrid DILR Sets",
+   "section": "DILR",
+   "factory_prompt": 20,
+   "unit_shape": "format-not-topic",
+   "candidates": [
+    {
+     "level": "L1",
+     "video_id": null,
+     "gap": true,
+     "reason": "no standalone concept video teaches 'Hybrid Sets' from scratch; foundations come via Tables/DI and Matrix Arrangements"
+    },
+    {
+     "level": "L2",
+     "title": "DILR Foundation | Caselets & Mixed Data Reasoning | Class 01",
+     "channel": "Rodha",
+     "video_id": "F3GZ6iLGB04",
+     "duration_claimed": "48:15",
+     "questions_claimed": 2,
+     "difficulty_claimed": "basic-medium",
+     "paid_push": "none",
+     "student_time_claimed": "60-75 min",
+     "watched_claimed": "yes",
+     "link_format": "SEARCH-LINK",
+     "run": 1
+    },
+    {
+     "level": "L3",
+     "title": "CAT DILR Practice | Reasoning Based DI (Missing Values & Constraints)",
+     "channel": "Elites Grid",
+     "video_id": "2Tz8v_v7Qx4",
+     "duration_claimed": "36:42",
+     "questions_claimed": 1,
+     "difficulty_claimed": "CAT-level",
+     "paid_push": "mild",
+     "student_time_claimed": "50-65 min",
+     "watched_claimed": "yes",
+     "link_format": "SEARCH-LINK",
+     "run": 1
+    },
+    {
+     "level": "L4",
+     "title": "CAT DILR Advanced Sets | High-Density Hybrid Reasoning",
+     "channel": "Anastasis Academy",
+     "video_id": "Xw8U4wQ2f9A",
+     "duration_claimed": "29:18",
+     "questions_claimed": 1,
+     "difficulty_claimed": "above-CAT",
+     "paid_push": "none",
+     "student_time_claimed": "45-60 min",
+     "watched_claimed": "yes",
+     "link_format": "SEARCH-LINK",
+     "run": 1
+    }
+   ],
+   "flags": [
+    "LIKELY FABRICATED - three signatures at once: (1) all three URLs are google.com/search links, (2) all three titles are clean generic pipe-separated descriptions unlike real branded channel titles, (3) all three claim 'WATCHED FULLY: yes' while supplying only a search link - an internal contradiction",
+    "uses the REAL channel name 'Anastasis Academy' with a fabricated video - more dangerous than inventing a fake channel because the name checks out"
+   ],
+   "verdict": "REJECT ALL THREE - treat as fabricated until proven otherwise"
+  },
+  {
+   "topic": "Caselets",
+   "section": "DILR",
+   "factory_prompt": 21,
+   "unit_shape": "format-not-topic",
+   "candidates": [
+    {
+     "level": "L1",
+     "title": "Caselet Based Data Interpretation for CAT 2022 | Jatin Agrawal",
+     "channel": "BYJU'S Exam Prep: CAT & MBA",
+     "video_id": "14UUSu_XxjQ",
+     "duration_claimed": "46:40",
+     "questions_claimed": 2,
+     "difficulty_claimed": "basic",
+     "paid_push": "mild",
+     "student_time_claimed": "55-65 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L2",
+     "video_id": null,
+     "gap": true,
+     "reason": "L2 caselet videos veer into Banking/SBI PO calculation-heavy paragraphs or duplicate L1"
+    },
+    {
+     "level": "L3",
+     "video_id": null,
+     "gap": true,
+     "reason": "at CAT difficulty, educators file text caselets under their underlying mechanism (quant puzzles, matrix, Venn, tournaments)"
+    },
+    {
+     "level": "L4",
+     "video_id": null,
+     "gap": true,
+     "reason": "pure caselet speed videos are almost exclusively banking-exam material"
+    }
+   ],
+   "flags": [
+    "MODEL BEHAVIOUR NOTE: refused 3 of 4 levels honestly on an equally weak-coverage DILR topic - this REFUTES the 'refusal fatigue' hypothesis formed at Hybrid DILR",
+    "corrected finding: fabrication behaviour is INCONSISTENT, not predictable from response shape"
+   ],
+   "verdict": "L1 USABLE; gaps are correct results"
+  },
+  {
+   "topic": "Games & Tournaments",
+   "section": "DILR",
+   "factory_prompt": 22,
+   "unit_shape": "ladder",
+   "candidates": [
+    {
+     "level": "L1",
+     "title": "Games and Tournaments 1 || LR & DI Preparation for CAT",
+     "channel": "Rodha",
+     "video_id": "bC3Wlg6DIRg",
+     "duration_claimed": "26:14",
+     "questions_claimed": 1,
+     "difficulty_claimed": "basic",
+     "paid_push": "none",
+     "student_time_claimed": "40-50 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L2",
+     "title": "Games & Tournament for CAT 2025 by Gaurav Kapoor",
+     "channel": "ELITES GRID - CAT PREP",
+     "video_id": "zsyDbQwC1Vg",
+     "duration_claimed": "14:59",
+     "questions_claimed": 1,
+     "difficulty_claimed": "medium",
+     "paid_push": "none",
+     "student_time_claimed": "25-35 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L3",
+     "title": "Games & Tournaments - Difficult Set I LR & DI Preparation for CAT",
+     "channel": "Rodha",
+     "video_id": "Oy9ERJEboWY",
+     "duration_claimed": "37:20",
+     "questions_claimed": 1,
+     "difficulty_claimed": "CAT-level",
+     "paid_push": "mild",
+     "student_time_claimed": "55-70 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L4",
+     "video_id": null,
+     "gap": true,
+     "reason": "shortcut videos re-hash basic arithmetic or clip unedited paid-batch excerpts; better served by timed past CAT sets"
+    }
+   ],
+   "flags": [
+    "passes all three screening checks: direct URLs, messy real-looking branded titles, familiar channels",
+    "specific L4 refusal with an actionable alternative (CAT 2021 Javelin/Tennis sets under a 12-15 min timer)"
+   ],
+   "verdict": "USABLE - clean"
+  },
+  {
+   "topic": "Grammar",
+   "section": "VARC",
+   "factory_prompt": 23,
+   "unit_shape": "removed-from-exam",
+   "candidates": [
+    {
+     "level": "L1",
+     "title": "Grammar (Sentence Correction & Error Spotting) for CAT & OMETs - Subject Verb Agreement",
+     "channel": "MBA Wallah",
+     "video_id": "PlsBlgzhsXU",
+     "duration_claimed": "52:04",
+     "questions_claimed": 10,
+     "difficulty_claimed": "basic",
+     "paid_push": "mild",
+     "student_time_claimed": "65-80 min",
+     "watched_claimed": "partly",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L2",
+     "title": "Grammar for CAT: Part 1 (Introduction to Basic Concepts)",
+     "channel": "Takshzila",
+     "video_id": "Vjd55QTv3nA",
+     "duration_claimed": "15:48",
+     "questions_claimed": 8,
+     "difficulty_claimed": "basic",
+     "paid_push": "none",
+     "student_time_claimed": "25-35 min",
+     "watched_claimed": "partly",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L3",
+     "video_id": null,
+     "gap": true,
+     "reason": "direct grammar questions were ELIMINATED from CAT after 2014; 'CAT-level grammar' videos use obsolete pre-2015 questions or are mislabelled SNAP/NMAT/XAT sets"
+    },
+    {
+     "level": "L4",
+     "video_id": null,
+     "gap": true,
+     "reason": "CAT has zero direct grammar questions, so CAT exam-pace grammar techniques do not exist"
+    }
+   ],
+   "flags": [
+    "STRUCTURAL AND STRONGEST OF ITS KIND: Grammar was phased out of CAT post-2014. Modern CAT VARC tests only RC, Para Jumbles, Para Summary, Odd One Out, Sentence Placement",
+    "new channels: MBA Wallah, Takshzila"
+   ],
+   "verdict": "NOT A CAT QUESTION TYPE - product decision needed, not a resource decision"
+  },
+  {
+   "topic": "Reading Speed Practice",
+   "section": "VARC",
+   "factory_prompt": 24,
+   "unit_shape": "skill-unit",
+   "candidates": [
+    {
+     "level": "L1",
+     "title": "How to read a passage effectively | CAT-RC-Series | GejoSpeaks",
+     "channel": "Gejo Speaks",
+     "video_id": "0U5n10P3x_c",
+     "duration_claimed": "18:45",
+     "questions_claimed": 0,
+     "difficulty_claimed": "basic",
+     "paid_push": "none",
+     "student_time_claimed": "25-35 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L2",
+     "video_id": null,
+     "gap": true,
+     "reason": "reading speed has no isolated basic-level practice; standalone 'speed exercises' are clickbait productivity videos disconnected from CAT passages"
+    },
+    {
+     "level": "L3",
+     "title": "Reading Comprehension Strategy [Solved Example - CAT 2019 passage]",
+     "channel": "Gejo Speaks",
+     "video_id": "ozhEHygD3YY",
+     "duration_claimed": "1:02:18",
+     "questions_claimed": 4,
+     "difficulty_claimed": "CAT-level",
+     "paid_push": "none",
+     "student_time_claimed": "75-90 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L4",
+     "video_id": null,
+     "gap": true,
+     "reason": "exam pace comes from sectional mocks and passage selection, not speed drills; 'speed trick' videos are pedagogically flawed and lead to negative marking"
+    }
+   ],
+   "flags": [
+    "UNUSUAL SHAPE: the gap is in the MIDDLE of the ladder (L2 empty, L3 filled) - every other topic gaps at the top",
+    "the L3 pick is topically identical to RC material - a duplicate resource serving two different units; needs central de-duplication",
+    "STRUCTURAL: not a CAT question unit"
+   ],
+   "verdict": "L1-ONLY BY DESIGN; L3 is really an RC resource"
+  },
+  {
+   "topic": "Time & Work",
+   "section": "QA/Arithmetic",
+   "factory_prompt": 25,
+   "unit_shape": "ladder",
+   "candidates": [
+    {
+     "level": "L1",
+     "title": "Time and Work 1: LCM Method Introduction",
+     "channel": "Rodha",
+     "video_id": "oApzHGJNx38",
+     "duration_claimed": "21:58",
+     "questions_claimed": 4,
+     "difficulty_claimed": "basic",
+     "paid_push": "mild",
+     "student_time_claimed": "35-45 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L2",
+     "title": "Time and Work 2: Alternate Days and Workers Leaving",
+     "channel": "Rodha",
+     "video_id": "6IbA-nSj28g",
+     "duration_claimed": "24:25",
+     "questions_claimed": 3,
+     "difficulty_claimed": "medium",
+     "paid_push": "mild",
+     "student_time_claimed": "40-50 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L3",
+     "title": "All CAT Questions from Time and Work | 2017-2021 | Blitzkrieg",
+     "channel": "2IIM CAT Preparation",
+     "video_id": "CgNjuFqom7s",
+     "duration_claimed": "1:37:56",
+     "questions_claimed": 10,
+     "difficulty_claimed": "CAT-level",
+     "paid_push": "mild",
+     "student_time_claimed": "100-120 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L4",
+     "title": "Time and Work 3: Efficiency and Time Ratios",
+     "channel": "Rodha",
+     "video_id": "MJIlrpc2oKc",
+     "duration_claimed": "26:05",
+     "questions_claimed": 5,
+     "difficulty_claimed": "medium",
+     "paid_push": "mild",
+     "student_time_claimed": "40-50 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L1",
+     "title": "Time and Work 1: LCM Method Introduction",
+     "channel": "Rodha",
+     "video_id": "oApzHGJNx38",
+     "duration_claimed": "21:58",
+     "questions_claimed": 4,
+     "difficulty_claimed": "basic",
+     "paid_push": "none",
+     "student_time_claimed": "35-45 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 2
+    },
+    {
+     "level": "L2",
+     "title": "Time and Work 3: Efficiency and Time Ratios",
+     "channel": "Rodha",
+     "video_id": "MJIlrpc2oKc",
+     "duration_claimed": "26:05",
+     "questions_claimed": 4,
+     "difficulty_claimed": "medium",
+     "paid_push": "none",
+     "student_time_claimed": "40-50 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 2
+    },
+    {
+     "level": "L3",
+     "title": "All CAT Questions from Time and Work | 2017-2021 | Blitzkrieg",
+     "channel": "2IIM CAT Preparation",
+     "video_id": "CgNjuFqom7s",
+     "duration_claimed": "1:37:56",
+     "questions_claimed": 10,
+     "difficulty_claimed": "CAT-level",
+     "paid_push": "mild",
+     "student_time_claimed": "120-150 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 2
+    },
+    {
+     "level": "L4",
+     "title": "Time & Work | 100%iler Arvind Shankar's Guess Questions",
+     "channel": "Anastasis Academy",
+     "video_id": "Iht9lGW7ntY",
+     "duration_claimed": "57:32",
+     "questions_claimed": 15,
+     "difficulty_claimed": "CAT-level",
+     "paid_push": "none",
+     "student_time_claimed": "90-120 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 2
+    }
+   ],
+   "flags": [
+    "CROSS-RUN CONTRADICTION: MJIlrpc2oKc graded L4 (EXAM-READY) in run 1 and L2 (EASY PRACTICE) in run 2 - two levels apart on the same video",
+    "question count on MJIlrpc2oKc drifted 5 -> 4; student time on CgNjuFqom7s drifted 100-120 -> 120-150 min with no change to the video",
+    "CONSEQUENCE: level assignment is the least reliable field in the dataset"
+   ],
+   "verdict": "USABLE but LEVELS MUST BE ASSIGNED BY US, not inherited"
+  },
+  {
+   "topic": "Time Speed Distance",
+   "section": "QA/Arithmetic",
+   "factory_prompt": 26,
+   "unit_shape": "ladder",
+   "candidates": [
+    {
+     "level": "L1",
+     "title": "Time Speed and Distance 1: Constant Distance Problems",
+     "channel": "Rodha",
+     "video_id": "CKiP208avbc",
+     "duration_claimed": "22:17",
+     "questions_claimed": 1,
+     "difficulty_claimed": "basic",
+     "paid_push": "mild",
+     "student_time_claimed": "35-45 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L2",
+     "title": "Time Speed and Distance 2: Speed Time Inverse Proportion",
+     "channel": "Rodha",
+     "video_id": "PQvBSkJDF_E",
+     "duration_claimed": "23:38",
+     "questions_claimed": 2,
+     "difficulty_claimed": "medium",
+     "paid_push": "none",
+     "student_time_claimed": "35-45 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L3",
+     "title": "Time Speed and Distance 8: Solving Escalator Problems",
+     "channel": "Rodha",
+     "video_id": "RHflaojKVlI",
+     "duration_claimed": "24:13",
+     "questions_claimed": 4,
+     "difficulty_claimed": "CAT-level",
+     "paid_push": "mild",
+     "student_time_claimed": "45-60 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L4",
+     "title": "Advance Level Quant Concept 19 | TSD | MEETING POINT",
+     "channel": "ELITES GRID - CAT PREP",
+     "video_id": "Kblu48aZ7bA",
+     "duration_claimed": "08:08",
+     "questions_claimed": 2,
+     "difficulty_claimed": "CAT-level",
+     "paid_push": "none",
+     "student_time_claimed": "15-20 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L1",
+     "title": "Time Speed and Distance 1: Constant Distance Problems",
+     "channel": "Rodha",
+     "video_id": "CKiP208avbc",
+     "duration_claimed": "~23 min",
+     "questions_claimed": 4,
+     "difficulty_claimed": "basic",
+     "paid_push": "mild",
+     "student_time_claimed": "40-50 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 2
+    },
+    {
+     "level": "L2",
+     "title": "Time Speed and Distance 3: Multiple Solution Approaches",
+     "channel": "Rodha",
+     "video_id": "tLsP7smddvQ",
+     "duration_claimed": "~27 min",
+     "questions_claimed": 3,
+     "difficulty_claimed": "medium",
+     "paid_push": "mild",
+     "student_time_claimed": "45-55 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 2
+    },
+    {
+     "level": "L3",
+     "title": "CAT 2018 Question Paper Slot 2 solution | Speed, Time and Distance",
+     "channel": "2IIM CAT Preparation",
+     "video_id": "VYn1dJ0Acdo",
+     "duration_claimed": "~6 min",
+     "questions_claimed": 1,
+     "difficulty_claimed": "CAT-level",
+     "paid_push": "none",
+     "student_time_claimed": "15-20 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 2
+    },
+    {
+     "level": "L4",
+     "title": "Time Speed and Distance 8: Solving Escalator Problems",
+     "channel": "Rodha",
+     "video_id": "RHflaojKVlI",
+     "duration_claimed": "~26 min",
+     "questions_claimed": 3,
+     "difficulty_claimed": "CAT-level",
+     "paid_push": "mild",
+     "student_time_claimed": "50-60 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 2
+    }
+   ],
+   "flags": [
+    "SECOND CROSS-RUN CONTRADICTION: RHflaojKVlI graded L3 in run 1 and L4 in run 2",
+    "QUESTION COUNT QUADRUPLED on the unchanged CKiP208avbc: 1 -> 4",
+    "DURATION DRIFT on RHflaojKVlI: 24:13 -> '~26 min'",
+    "TOPIC PURITY: 'Escalator Problems' is a narrow TSD sub-type presented as general CAT-level TSD",
+    "run-2 L3 is a ~6-minute single-question clip presented as CAT-LEVEL PRACTICE - far too thin"
+   ],
+   "verdict": "USABLE but LEVELS UNRELIABLE; escalator video is a sub-topic"
+  },
+  {
+   "topic": "SI & CI",
+   "section": "QA/Arithmetic",
+   "factory_prompt": 27,
+   "unit_shape": "ladder",
+   "candidates": [
+    {
+     "level": "L1",
+     "title": "Simple and Compound Interest 1: SI and CI Basic Concepts",
+     "channel": "Rodha",
+     "video_id": "hvikOiSu_D4",
+     "duration_claimed": "21:37",
+     "questions_claimed": 4,
+     "difficulty_claimed": "basic",
+     "paid_push": "none",
+     "student_time_claimed": "35-45 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L2",
+     "title": "Simple and Compound Interest 2: SI and CI Difference Formula",
+     "channel": "Rodha",
+     "video_id": "TG3M3QFyY0k",
+     "duration_claimed": "26:14",
+     "questions_claimed": 3,
+     "difficulty_claimed": "medium",
+     "paid_push": "none",
+     "student_time_claimed": "45-55 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L3",
+     "title": "All Questions From SI and CI - CAT 2018 to CAT 2023 | AMIYA Sir",
+     "channel": "AzuCATion : CAT Prep By Amiya Sir",
+     "video_id": "-lbU6SgPPH8",
+     "duration_claimed": "1:45:11",
+     "questions_claimed": 14,
+     "difficulty_claimed": "CAT-level",
+     "paid_push": "mild",
+     "student_time_claimed": "130-150 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L4",
+     "title": "Arithmetic Practice 44: Installment Ratio Method",
+     "channel": "Rodha",
+     "video_id": "MTdAQnGCUtM",
+     "duration_claimed": "14:35",
+     "questions_claimed": 1,
+     "difficulty_claimed": "CAT-level",
+     "paid_push": "mild",
+     "student_time_claimed": "25-35 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    }
+   ],
+   "flags": [
+    "new channel: AzuCATion : CAT Prep By Amiya Sir",
+    "L3 at 1:45:11 with 130-150 min claimed is the longest single commitment in the batch",
+    "L4 comes from a different series ('Arithmetic Practice 44') with a single worked question - a one-off clip repurposed as exam-ready; weak fill"
+   ],
+   "verdict": "USABLE; L3 needs a splitting decision"
+  },
+  {
+   "topic": "Coordinate Geometry",
+   "section": "QA/Geometry",
+   "factory_prompt": 39,
+   "unit_shape": "ladder",
+   "candidates": [
+    {
+     "level": "L1",
+     "title": "Coordinate Geometry 1 | Quant Geometry L10 | CAT 2024 | MBA Wallah",
+     "channel": "MBA Wallah",
+     "video_id": "9t7cKr-KZ8U",
+     "duration_claimed": "1:07:42",
+     "questions_claimed": 7,
+     "difficulty_claimed": "basic",
+     "paid_push": "mild",
+     "student_time_claimed": "85-105 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L2",
+     "title": "Coordinate Geometry- 2 | Equations of line | Quant Geometry 11",
+     "channel": "MBA Wallah",
+     "video_id": "0GNr5I019-I",
+     "duration_claimed": "1:15:51",
+     "questions_claimed": 8,
+     "difficulty_claimed": "medium",
+     "paid_push": "mild",
+     "student_time_claimed": "90-110 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L3",
+     "title": "Geometry Practice 3: Coordinate Geometry & Medians",
+     "channel": "Rodha",
+     "video_id": "NXlFmkHm0N0",
+     "duration_claimed": "15:07",
+     "questions_claimed": 2,
+     "difficulty_claimed": "CAT-level",
+     "paid_push": "mild",
+     "student_time_claimed": "25-35 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L4",
+     "title": "CAT QUANT CONCEPT 6 | Area of Modulus | ElitesGrid | Hunny",
+     "channel": "ELITES GRID - CAT PREP",
+     "video_id": "NTxJBUAnAq0",
+     "duration_claimed": "22:00",
+     "questions_claimed": 4,
+     "difficulty_claimed": "CAT-level",
+     "paid_push": "none",
+     "student_time_claimed": "35-45 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    }
+   ],
+   "flags": [
+    "INVERTED DIFFICULTY-DURATION CURVE: the two basic/medium levels are 67 and 76 minutes while the two CAT-level ones are 15 and 22 minutes. A beginner faces ~3 hours across L1+L2 before reaching 40 minutes of actual CAT-level work - unusable as a daily sequence without splitting"
+   ],
+   "verdict": "USABLE only if L1/L2 are split or replaced"
+  },
+  {
+   "topic": "Logarithms",
+   "section": "QA/Algebra",
+   "factory_prompt": 28,
+   "unit_shape": "ladder",
+   "candidates": [
+    {
+     "level": "L1",
+     "title": "Logarithms part 1: Logarithm Properties",
+     "channel": "Rodha",
+     "video_id": "K6Jk3uEkIMA",
+     "duration_claimed": "26:15",
+     "questions_claimed": 5,
+     "difficulty_claimed": "basic",
+     "paid_push": "none",
+     "student_time_claimed": "45-55 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L2",
+     "title": "Logarithms 2: Logarithmic Equations with Quadratic Forms",
+     "channel": "Rodha",
+     "video_id": "SzseQAYENMc",
+     "duration_claimed": "24:06",
+     "questions_claimed": 6,
+     "difficulty_claimed": "medium",
+     "paid_push": "none",
+     "student_time_claimed": "45-60 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L3",
+     "title": "Logarithms Practice: Logarithms & Product of Roots",
+     "channel": "Rodha",
+     "video_id": "s28TG0ERFr4",
+     "duration_claimed": "18:42",
+     "questions_claimed": 4,
+     "difficulty_claimed": "CAT-level",
+     "paid_push": "mild",
+     "student_time_claimed": "35-45 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L4",
+     "video_id": null,
+     "gap": true,
+     "reason": "no standalone non-promotional speed-technique video purely on Logarithm traps"
+    },
+    {
+     "level": "L1",
+     "title": "Logarithm Properties | Algebra for CAT",
+     "channel": "Rodha",
+     "video_id": "K6Jk3uEkIMA",
+     "duration_claimed": "28:04",
+     "questions_claimed": 4,
+     "difficulty_claimed": "basic",
+     "paid_push": "none",
+     "student_time_claimed": "45-55 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 2
+    },
+    {
+     "level": "L2",
+     "title": "Logarithmic Equations with Quadratic Forms | Algebra for CAT",
+     "channel": "Rodha",
+     "video_id": "SzseQAYENMc",
+     "duration_claimed": "26:17",
+     "questions_claimed": 5,
+     "difficulty_claimed": "medium",
+     "paid_push": "none",
+     "student_time_claimed": "45-60 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 2
+    },
+    {
+     "level": "L3",
+     "title": "All CAT Questions from Logarithms | 2017 to 2021 | Blitzkrieg",
+     "channel": "2IIM CAT Preparation",
+     "video_id": "W4uKD3Pp47k",
+     "duration_claimed": "1:07:35",
+     "questions_claimed": 12,
+     "difficulty_claimed": "CAT-level",
+     "paid_push": "mild",
+     "student_time_claimed": "90-110 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 2
+    },
+    {
+     "level": "L4",
+     "video_id": null,
+     "gap": true,
+     "reason": "YouTube lacks a standalone high-quality Logarithms exam-ready speed video that is not an ad-heavy webinar"
+    }
+   ],
+   "flags": [
+    "*** MOST DAMNING DEFECT IN THE ENTIRE BATCH ***",
+    "SAME VIDEO ID, TWO DIFFERENT DURATIONS: K6Jk3uEkIMA reported as 26:15 (run 1) and 28:04 (run 2) - a 1m49s conflict, far beyond rounding",
+    "SzseQAYENMc reported as 24:06 (run 1) and 26:17 (run 2) - a 2m11s conflict",
+    "Duration is an objective immutable fact about a video. Reporting two different durations for the same ID proves the model is NOT reading real metadata - it is generating plausible numbers",
+    "question counts also drifted (5->4, 6->5)",
+    "L4 refused consistently in BOTH runs - the only field that held perfectly"
+   ],
+   "verdict": "CRITICAL: duration claims across the WHOLE batch are now unreliable"
+  },
+  {
+   "topic": "Quadratic Equations",
+   "section": "QA/Algebra",
+   "factory_prompt": 30,
+   "unit_shape": "ladder",
+   "candidates": [
+    {
+     "level": "L1",
+     "title": "Quadratic Equation 2: Nature Of Roots",
+     "channel": "Rodha",
+     "video_id": "X3c60CCB18U",
+     "duration_claimed": "21:40",
+     "questions_claimed": 2,
+     "difficulty_claimed": "basic",
+     "paid_push": "none",
+     "student_time_claimed": "35-45 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L2",
+     "title": "Quadratic Equation 3: Imaginary and Common Roots",
+     "channel": "Rodha",
+     "video_id": "27OVCl0b0nQ",
+     "duration_claimed": "19:45",
+     "questions_claimed": 4,
+     "difficulty_claimed": "medium",
+     "paid_push": "none",
+     "student_time_claimed": "30-40 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L3",
+     "title": "CAT Linear and Quadratic Equations - #17",
+     "channel": "2IIM CAT Preparation",
+     "video_id": "6fPFZcqMGKU",
+     "duration_claimed": "55:20",
+     "questions_claimed": 9,
+     "difficulty_claimed": "CAT-level",
+     "paid_push": "mild",
+     "student_time_claimed": "75-90 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L4",
+     "title": "CAT Algebra Marathon - Session - 1 (Quadratic Equations Practice)",
+     "channel": "ELITES GRID - CAT PREP",
+     "video_id": "YK_CSNoXwPg",
+     "duration_claimed": "1:14:30",
+     "questions_claimed": 8,
+     "difficulty_claimed": "CAT-level",
+     "paid_push": "mild",
+     "student_time_claimed": "90-110 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    }
+   ],
+   "flags": [
+    "NOTE: L1 is 'Quadratic Equation 2', not part 1 - the actual first video of the series was not offered, so the concept ladder may start mid-series",
+    "L4 at 74 min is a marathon, not an exam-ready technique video - questionable fit for the level"
+   ],
+   "verdict": "USABLE; check whether a 'Quadratic Equation 1' exists for the true L1"
+  },
+  {
+   "topic": "Inequalities",
+   "section": "QA/Algebra",
+   "factory_prompt": 32,
+   "unit_shape": "ladder",
+   "candidates": [
+    {
+     "level": "L1",
+     "title": "Inequalities 1: Rules and Applications",
+     "channel": "Rodha",
+     "video_id": "zIrr1lkvyBY",
+     "duration_claimed": "18:24",
+     "questions_claimed": 5,
+     "difficulty_claimed": "basic",
+     "paid_push": "none",
+     "student_time_claimed": "30-40 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L2",
+     "title": "INEQUALITIES - 9: Rational Inequality and Quadratic Range",
+     "channel": "Rodha",
+     "video_id": "w-ez6YnTnJ4",
+     "duration_claimed": "16:11",
+     "questions_claimed": 5,
+     "difficulty_claimed": "medium",
+     "paid_push": "none",
+     "student_time_claimed": "35-45 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L3",
+     "title": "CAT Inequalities - #19",
+     "channel": "2IIM CAT Preparation",
+     "video_id": "-me6rKm0AcA",
+     "duration_claimed": "1:04:12",
+     "questions_claimed": 8,
+     "difficulty_claimed": "CAT-level",
+     "paid_push": "mild",
+     "student_time_claimed": "80-95 min",
+     "watched_claimed": "yes",
+     "link_format": "direct",
+     "run": 1
+    },
+    {
+     "level": "L4",
+     "video_id": null,
+     "gap": true,
+     "reason": "free 'shortcut' inequality videos rely on gimmick value-plugging that fails against modern multi-case CAT constraints"
+    }
+   ],
+   "flags": [
+    "BEST DURATION PROFILE IN THE BATCH: L1 18min, L2 16min - both fit a daily task slot without splitting",
+    "L2 jumps from part 1 to part 9 of the series - a large gap; parts 2-8 unexamined",
+    "2IIM L3 duration 1:04:12 is identical to the Ratio & Proportion L3 duration - coincidence or copy; flag for verification"
+   ],
+   "verdict": "STRONGEST ALGEBRA LADDER for L1/L2"
+  },
+  {
+   "topic": "Functions",
+   "section": "QA/Algebra",
+   "factory_prompt": 31,
+   "unit_shape": "ladder",
+   "candidates": [
+    {
+     "level": "L1",
+     "title": "Functions for CAT - Complete Concept & Basics | CAT Quantitative Aptitude",
+     "channel": "Rodha",
+     "video_id": "34d7Uo1yv30",
+     "duration_claimed": "58:12",
+     "questions_claimed": 6,
+     "difficulty_claimed": "basic",
+     "paid_push": "mild",
+     "student_time_claimed": "75-90 min",
+     "watched_claimed": "partly",
+     "link_format": "SEARCH-LINK",
+     "run": 1
+    },
+    {
+     "level": "L2",
+     "title": "Functions Basics & Practice Questions | CAT QA Preparation",
+     "channel": "Elites Grid",
+     "video_id": "R9N2sI_rM0U",
+     "duration_claimed": "1:12:45",
+     "questions_claimed": 9,
+     "difficulty_claimed": "basic-medium",
+     "paid_push": "mild",
+     "student_time_claimed": "90-110 min",
+     "watched_claimed": "partly",
+     "link_format": "SEARCH-LINK",
+     "run": 1
+    },
+    {
+     "level": "L3",
+     "title": "Functions Top Questions for CAT | Real CAT Questions Solved",
+     "channel": "Takshzila",
+     "video_id": "p1hO8Wq7Vl8",
+     "duration_claimed": "1:04:18",
+     "questions_claimed": 8,
+     "difficulty_claimed": "CAT-level",
+     "paid_push": "none",
+     "student_time_claimed": "80-100 min",
+     "watched_claimed": "partly",
+     "link_format": "SEARCH-LINK",
+     "run": 1
+    },
+    {
+     "level": "L4",
+     "title": "Functions Advance Shortcuts, Traps & Value Substitution for CAT",
+     "channel": "MBA Pathshala",
+     "video_id": "5Ew4fP3T1w0",
+     "duration_claimed": "47:35",
+     "questions_claimed": 7,
+     "difficulty_claimed": "CAT-level",
+     "paid_push": "mild",
+     "student_time_claimed": "60-75 min",
+     "watched_claimed": "partly",
+     "link_format": "SEARCH-LINK",
+     "run": 1
+    }
+   ],
+   "flags": [
+    "LIKELY FABRICATED - ALL FOUR levels are google.com/search links; not one direct video URL in the entire response",
+    "all four titles are generic pipe-separated descriptions, unlike verified real titles from the same claimed channels",
+    "WORSE THAN HYBRID DILR: Functions is a MAINSTREAM CAT algebra topic with abundant real coverage (Rodha's own numbered Algebra series produced the verified Logarithms videos) - there was no scarcity to explain the invention",
+    "this kills the last predictor: fabrication is not confined to weak-coverage topics, not to a section, and not signalled by response shape"
+   ],
+   "verdict": "REJECT ALL FOUR"
+  }
+ ]
+}
