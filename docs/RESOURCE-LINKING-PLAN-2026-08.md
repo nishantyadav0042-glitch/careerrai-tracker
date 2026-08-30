@@ -249,9 +249,12 @@ version              -- bumped on any URL/supply change; events freeze it
 ## 5. Phases
 
 ### Phase 0 — Kill-test (one weekend of curation, ~zero engineering)
-NOT an A/B experiment: with 19 students active in the last 3 days, no
-percentage from n=20 is valid, and inventing one violates our own rules.
-It answers exactly two questions:
+**Label, everywhere it is discussed: an operational kill-test, not a
+statistical experiment.** Success is "some real students used it and gave an
+actionable return signal" — never "CTR = X%, therefore retention improved".
+With 19 students active in the last 3 days, no percentage from n=20 is
+valid, and inventing one violates our own rules. It answers exactly two
+questions:
 1. **Does anyone open the link at all?**
 2. **Do returners tell us something we didn't know?** (wrong level, wrong
    length, "video was great", "link needed login")
@@ -278,6 +281,18 @@ starting with the top-N topics by actual plan frequency** — not all at once.
 The card: target (engine's), "Suggested learning: [Open free resource ↗ ·
 Provider · ~24 min]", the autonomy line ("Already have another source?
 That's fine — use yours."), started-state flip, completion tick unchanged.
+**Expectation before the jump (founder, 30 Aug):** the card states, before
+the student leaves, exactly what they are opening — provider, type, and
+honest time estimate ("Free external resource · YouTube · ~24 min"). A count
+("15 questions") appears only when we counted it (Gate S); otherwise the
+target is time-phrased. Applies from Phase 0's manual cards onward.
+
+**Legal posture, stated as the two separate questions (founder, 30 Aug):**
+- **A. Source-level permission — can we LINK to it?** Potentially yes, after
+  the 8-gate vetting. This is the only question Phase 0–3 ever asks.
+- **B. Content-level rights — can we HOST/reproduce it?** No. Default answer
+  is permanently no (R1); we do not even attempt to acquire third-party
+  rights in Phase 0.
 
 ### Phase 3 — Return loop
 The return prompt + event capture (versioned per R11). This is what turns the
