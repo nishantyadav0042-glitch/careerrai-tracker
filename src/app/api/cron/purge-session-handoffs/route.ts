@@ -84,3 +84,13 @@ export async function POST(request: NextRequest) {
     });
   });
 }
+
+// Vercel Cron invokes with GET. Without this line the platform's daily call
+// lands on a route that only answers POST, Next returns 405, the handler body
+// never runs — and because `withCronTracking` lives INSIDE the handler, no
+// cron_runs row is written either. The job then looks identical to one that
+// was never scheduled at all, which is exactly how this route was recorded as
+// "declared but NEVER RUN" for days (Incidents #55 and #56). Every other cron
+// in this repo carries this line; these two were the only ones that did not,
+// and they were the only two that had never run.
+export { POST as GET };

@@ -3095,3 +3095,39 @@ Three properties carry all the risk, and all three are mutation-proven:
 **Lesson.** *A second origin is not a deployment detail, it is a second product. Everything host-scoped has to be re-decided for it — cookies, OAuth, push, and payments — and payments are the one where the failure is silent, because a blocked checkout looks exactly like a student who changed their mind. This repo had already answered the question three times for three other subsystems and never noticed that the fourth had not been asked.*
 
 **Second lesson.** *The fix for #58 paid for itself in five minutes. Storing what Razorpay already told us turned "iOS payments are broken, cause unknown" into a named mechanism on a different axis entirely — and the previous report's confident device-level numbers, built on a proxy join, were wrong in both directions. Instrument first, theorise second.*
+
+## Incident #60
+
+**2026-08-30 · Infrastructure / learning loop (P0) · two crons "never ran" because they only answered POST**
+
+**The thing that was actually wrong.** Vercel Cron invokes an endpoint with **GET**. `outcome-sweep` and `purge-session-handoffs` exported only `POST`. Next answered **405**, the handler body never executed — and because `withCronTracking` lives INSIDE the handler, no `cron_runs` row was written either.
+
+So a job that was being called on schedule, every day, and rejected every day, was **indistinguishable in our own telemetry from a job nobody had ever scheduled**. That is precisely how both were recorded:
+
+- Incident #55: *"`/api/cron/outcome-sweep` was declared in `vercel.json` on 24 Aug and had NEVER run."*
+- Incident #56: *"`/api/cron/purge-session-handoffs` was declared on 27 Aug and had NEVER run."*
+
+Of 41 crons in `vercel.json`, **exactly two lacked the GET export, and they were exactly the two that had never run.** Every other cron carries `export { POST as GET };`.
+
+**Two incidents were diagnosed as the wrong thing, by me, twice.** Both were read as scheduling failures and both were "fixed" by routing the job through a GitHub Actions fallback that POSTs. That is a workaround for a problem neither job had. Worse, it looked like it worked for `purge-session-handoffs`, which did start appearing in `cron_runs` — via the fallback, not via Vercel — which is why the real defect survived a second investigation.
+
+**And the fallback is not a scheduler.** Its runs are dropped wholesale: an hourly entry (`50 * * * *`) plus twelve daily ones should produce well over 24 runs a day; the workflow fired 12, 10, 1 and 5 times on the four days before this. `outcome-sweep`'s `15 2 * * *` entry has not fired once. Scheduled GitHub Actions are best-effort and skipped under load — acceptable as a backstop, useless as the only path.
+
+**The second defect, underneath the first.** `purge-session-handoffs` did run three times via the fallback, and failed all three:
+
+```
+[purge-handoffs] scrub failed: null value in column "payload" of
+relation "pwa_session_handoff" violates not-null constraint
+```
+
+`payload` was declared **NOT NULL**, and the scrub's entire job is to set it to NULL. The two-stage design — strip the credential within the hour, keep the row as history for seven days — was never representable in the schema. 595 rows, every one still holding an AES-GCM blob of a Supabase access+refresh token pair, oldest from 12 July.
+
+So even after the route was reachable, the purge would still have failed. Two independent bugs, stacked, both of which had to be fixed for a single credential to be destroyed.
+
+**The fix.** One line on each route, and `alter column payload drop not null`.
+
+**The prevention.** `cron-get-export.guard.test.ts` reads `vercel.json` and asserts every declared cron path resolves to a route file that exports a GET handler. It generates one test per cron (42 today), so a new cron added without the export fails the build rather than silently never running. Removing the export from `outcome-sweep` fails it.
+
+**Lesson.** *"It has never run" is a claim about our telemetry, not about the platform. When the tracking lives inside the handler, every pre-handler rejection — 405, 401, 404 — produces exactly the same evidence as "never scheduled", and the obvious reading is the wrong one. Before concluding a job is not being called, confirm that a call would leave a trace: if the only proof of life is written by code the failure prevents from running, absence of proof is not evidence of absence.*
+
+**Second lesson.** *I diagnosed this twice and built a fallback for it twice. A workaround that makes the symptom partially disappear is the most expensive kind of wrong fix, because it removes the pressure to find the cause. The fallback made `purge-session-handoffs` appear in `cron_runs`, which read as success, and the actual 405 went unexamined for another three days.*
