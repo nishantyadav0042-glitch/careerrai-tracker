@@ -33,7 +33,10 @@
 | 18 | Profit & Loss | ⚠️ | 4/4, but **L3 is literally titled with the paid batch name** |
 | 19 | Para Summary | ✅ | 4/4 — cleanest response in the batch so far |
 | 20 | Hybrid DILR Sets | 🚨 | **LIKELY FABRICATED — all 3 filled levels are search-links with constructed titles** |
-| 11–14, 21–24, 28–46 | — | pending | |
+| 21 | Caselets | ✅ | 1/4 + **3 honest refusals — refutes the refusal-fatigue hypothesis** |
+| 22 | Games & Tournaments | ✅ | 3/4 + L4 gap; clean response |
+| 25 | Time & Work (RE-RUN) | 🚨 | **contradicts its own earlier run — same video placed at L4 and at L2** |
+| 11–14, 23–24, 28–46 | — | pending | |
 
 ---
 
@@ -632,3 +635,99 @@ Before logging any candidate, check: (a) is the href an actual
 real, branded, messy channel title? (c) does the watch-depth claim contradict
 the link quality? Any row failing (a) or (c) is logged as suspect and is not
 counted toward coverage.
+
+---
+
+## Caselets (DILR) — factory #21 ✅ MODEL BEHAVIOUR WORTH NOTING
+
+| Level | Title | Channel | Video ID | Duration | Sets | Difficulty | Paid | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | Caselet Based DI for CAT 2022 (Jatin Agrawal) | BYJU'S Exam Prep | `14UUSu_XxjQ` | 46:40 | 2 | basic | mild | 55–65 min | yes |
+| L2 | — | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+| L3 | — | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+| L4 | — | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+
+Reasoning given: "Caselets" is a format, not a topic — modern CAT DILR is
+almost entirely paragraph-driven, so educators file these sets under their
+underlying mechanism (quant puzzles, matrix/grid, Venn, tournaments) rather
+than as standalone "Caselet" videos; the ones that exist skew Banking/SSC.
+
+### This REFUTES the refusal-fatigue hypothesis recorded at Hybrid DILR
+
+Caselets is a weak-coverage topic — exactly the profile that produced
+fabrication at Hybrid DILR — and here the response **refused three of four
+levels honestly, with a specific structural argument**. So the model is not
+subject to a simple "won't refuse more than twice" limit.
+
+**Corrected finding, and it is worse than the original hypothesis:** the
+behaviour is **inconsistent, not predictable**. Two weak-coverage DILR
+topics, one answered with exemplary honesty and one apparently fabricated.
+We therefore **cannot infer trustworthiness from the shape of a response** —
+a confident four-level answer is not more suspect than a mostly-empty one,
+and vice versa. Only per-row verification separates them. Recorded here as a
+correction to the earlier note rather than deleting it, because the earlier
+hypothesis was reasonable on the evidence then available and the correction
+is itself the useful part.
+
+---
+
+## Games & Tournaments (DILR) — factory #22
+
+| Level | Title | Channel | Video ID | Duration | Sets | Difficulty | Paid | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | Games and Tournaments 1 — LR & DI Preparation | Rodha | `bC3Wlg6DIRg` | 26:14 | 1 | basic | none | 40–50 min | yes |
+| L2 | Games & Tournament for CAT 2025 (Gaurav Kapoor) | ELITES GRID | `zsyDbQwC1Vg` | 14:59 | 1 | medium | none | 25–35 min | yes |
+| L3 | Games & Tournaments — Difficult Set | Rodha | `Oy9ERJEboWY` | 37:20 | 1 | CAT-level | mild | 55–70 min | yes |
+| L4 | — | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+
+- Clean response: direct YouTube URLs throughout, messy real-looking branded
+  titles, familiar channels, and a specific L4 refusal (shortcut videos are
+  re-hashed arithmetic or clipped paid-batch excerpts; recommends timed past
+  CAT sets instead). Passes all three screening checks.
+
+---
+
+## Time & Work (QA) — RE-RUN as factory #25 🚨 CONTRADICTS ITS OWN EARLIER ANSWER
+
+| Level | Earlier run (sent as "11") | This run (sent as "25") | Same? |
+|---|---|---|---|
+| L1 | `oApzHGJNx38` — TW 1: LCM Method | `oApzHGJNx38` — TW 1: LCM Method | ✅ identical |
+| L2 | `6IbA-nSj28g` — TW 2: Alternate Days | **`MJIlrpc2oKc` — TW 3: Efficiency and Time Ratios** | ❌ different |
+| L3 | `CgNjuFqom7s` — 2IIM Blitzkrieg | `CgNjuFqom7s` — 2IIM Blitzkrieg | ✅ identical |
+| L4 | **`MJIlrpc2oKc` — TW 3: Efficiency and Time Ratios** | `Iht9lGW7ntY` — Anastasis Academy, Arvind Shankar | ❌ different |
+
+### The headline defect: the SAME video is graded L4 in one run and L2 in the other
+
+`MJIlrpc2oKc` ("Time and Work 3: Efficiency and Time Ratios") was returned
+as the **EXAM-READY** resource in the first run and as the **EASY PRACTICE**
+resource in the second — two levels apart, by the same model, on the same
+video, days apart. Its worked-question count also drifted (5 → 4), and the
+2IIM L3's claimed student time drifted (100–120 → 120–150 min) with no
+change to the video.
+
+**Consequence for the report: the L1–L4 level assignment is the least
+reliable field in the entire dataset.** Titles and URLs have proven mostly
+stable across runs; difficulty grading has not. Any final ladder we build
+must have levels assigned by *us* on hand-check, using the video's actual
+content — never inherited from Gemini's level label.
+
+### Note on `Anastasis Academy`
+
+This channel appeared in the suspected-fabricated Hybrid DILR response
+(as a search-link). Here it appears with a **direct URL** and a title
+naming **Arvind Shankar**, a real and well-known CAT educator. So the
+channel may well be genuine and the Hybrid DILR entry a fabricated use of a
+real channel's name — which is a more dangerous failure mode than inventing
+a fake channel, because the name checks out. Verify the specific video IDs,
+not just the channel.
+
+## Verification-priority list (running)
+
+Highest-value IDs to check first, because a wrong answer here changes a
+conclusion rather than just a row:
+1. `F3GZ6iLGB04`, `2Tz8v_v7Qx4`, `Xw8U4wQ2f9A` — Hybrid DILR, suspected fabricated
+2. `4jnQpFaS57g`, `ouybCha6v9E` — Vocabulary, search-link supplied
+3. `kYc5hN7yV9I` — Selection & Distribution L2, title does not match 2IIM conventions
+4. `TBhanaOLNvc` — Average, one ID given for two different levels
+5. `Iht9lGW7ntY` — Anastasis Academy, to establish whether the channel is real
+6. `5t6OdAz2zzw` — Profit & Loss L3, "R4 BATCH" paid-funnel title
