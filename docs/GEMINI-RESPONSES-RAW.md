@@ -18,7 +18,8 @@
 | 2 | Percentages | ✅ | 4/4 levels filled |
 | 3 | Arrangements | ✅ | 3/4 levels + 1 honest "NO GOOD VIDEO FOUND" (L4) |
 | 4 | Editorial Reading | ✅ | 1/4 levels + 3 structural "NO GOOD VIDEO FOUND" — see the habit-track finding below |
-| 5–46 | — | pending | |
+| 5 | Tables | ✅ | 3/4 levels + 1 "NO GOOD VIDEO FOUND" (L4) |
+| 6–46 | — | pending | |
 
 ---
 
@@ -163,3 +164,42 @@ classify every unit as ladder-shaped (4 levels apply) or habit-shaped
   well outside the 1.0–2.5× band the effort model assumes for instructional
   video). A 3-minute video is also an odd fit for a daily task slot — more
   a one-time setup pointer than a recurring resource. Flag for the report.
+
+---
+
+## Prompt 5 — Tables (DILR)
+
+| Level | Title | Channel | Video ID | Stated duration | Sets claimed | Difficulty claimed | Paid push | Student time claimed |
+|---|---|---|---|---|---|---|---|---|
+| L1 CONCEPT | Tabular Set — LR & DI Preparation for CAT | Rodha | `gqYVcVjqW0k` | 21:38 | 1 | basic | none | 35–45 min |
+| L2 EASY PRACTICE | CAT Infinite DILR Set 303 — Organizing the scholarship test | Aptitude Jab | `L6lxPe9gx68` | **9:24** | 1 | medium | none | 20–30 min |
+| L3 CAT-LEVEL | CAT Infinite DILR Set 410 — Lehra Do, Table Mapping | Aptitude Jab | `AfQf--BGAeo` | **7:51** | 1 | CAT-level | none | 25–35 min |
+| L4 EXAM-READY | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+
+**Open items for the verification pass:**
+- **`Aptitude Jab` is the fifth new channel** and the first to supply TWO
+  levels for one topic. Provenance entirely unverified — an unfamiliar
+  channel carrying two of a topic's three filled levels is a concentration
+  risk, so this one needs a real tier assignment before either link ships.
+- **Durations here are the opposite problem from RC.** 9:24 and 7:51 are the
+  shortest practice candidates seen so far, and their claimed student times
+  (20–30, 25–35 min) imply ~2.7–4.5× multipliers — well above the effort
+  model's 1.0–2.5× band. Plausible for a single DILR set (the student
+  attempts the set themselves before watching the walkthrough, which is
+  most of the time), but it means **the video-effort multiplier probably
+  needs a separate, higher band for "one worked set" videos than for
+  expository concept videos.** Worth recording in the effort model.
+- **A second structural finding, and it mirrors prompt 3's.** Gemini's
+  opening note claims calculation-heavy tabular DI has largely been phased
+  out of CAT in favour of logical/constraint-based table sets, and that
+  "speed calculation shortcut" videos for tables are mostly clickbait
+  funnels into paid coaching. That is the same shape of answer as the
+  Arrangements L4 refusal: **the L4 "exam-ready shortcuts" level appears to
+  be structurally empty for DILR topics**, because DILR speed comes from
+  set-selection and elimination discipline, not from tricks. Two DILR
+  topics, two independent L4 refusals with the same reasoning. If this
+  repeats for Charts/Caselets/etc., the report should conclude that the
+  4-level ladder is a QA/VARC shape and DILR is a 3-level shape — a finding
+  about the model, not a gap in coverage.
+- Unverified as always: durations, channel ownership, whether these open
+  logged-out from India, and the set counts.
