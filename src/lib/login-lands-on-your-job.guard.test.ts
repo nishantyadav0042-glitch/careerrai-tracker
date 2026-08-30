@@ -52,10 +52,18 @@ describe('the OAuth callback lands people by their real role', () => {
     expect(callback).toMatch(/from '@\/lib\/admin-auth'/);
   });
 
+  // Incident #62: the role-correct destination is computed first and then
+  // OVERRIDDEN by the anchor gate. Both facts matter — a rename that dropped
+  // the gate would still satisfy the role assertion below.
+  it('an unanchored account cannot reach its role destination', () => {
+    expect(callback).toMatch(/arrival\.kind === 'gate_link_phone'/);
+    expect(callback).toMatch(/LINK_PHONE_PATH/);
+  });
+
   it('the set-password wall also respects the real role', () => {
     // Using the entry-derived role here sent a counsellor through a wall meant
     // for staff, or past one meant for them, depending on the entry.
-    expect(callback).toMatch(/const dest = \(effectiveRole === 'student' \|\| hasPassword\)/);
+    expect(callback).toMatch(/const normalRoleDest = \(effectiveRole === 'student' \|\| hasPassword\)/);
   });
 
   it('a buddy still lands on their student list, not the generic home', () => {

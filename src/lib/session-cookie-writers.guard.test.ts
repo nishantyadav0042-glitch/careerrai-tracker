@@ -47,6 +47,8 @@ const COOKIE_WRITERS: Record<string, string> = {
   'src/app/api/auth/request-phone-otp/route.ts': 'same, for the phone rail',
   'src/app/api/auth/verify-otp/route.ts': 'exchanges the code for a session — writes the cookies',
   'src/app/api/auth/verify-phone-otp/route.ts': 'exchanges the phone OTP for a session',
+  'src/app/api/auth/link-phone/request/route.ts': 'stages a phone change on the CALLER\'s live session — getUser() must validate the same cookies updateUser mutates',
+  'src/app/api/auth/link-phone/verify/route.ts': 'verifyOtp(type: phone_change) attaches the identity to the live session and can re-issue its cookies',
   'src/app/api/auth/set-password/route.ts': 'password set re-issues the session',
   'src/app/api/install/exchange/route.ts': 'hands a session to the installed app',
   'src/app/auth/callback/route.ts': 'the OAuth/magic-link callback that mints the session',

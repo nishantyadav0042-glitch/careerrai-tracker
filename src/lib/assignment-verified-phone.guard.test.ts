@@ -79,9 +79,37 @@ describe('the resolver reads the verified number only', () => {
 });
 
 describe('scope containment', () => {
-  it('onboarding still collects a phone — 2 email signups depend on it', () => {
-    expect(read('src/app/student/onboarding/screens/screen-about-you.tsx'))
-      .toMatch(/onChange=\{\(e\) => setPhone\(e\.target\.value\)\}/);
+  // ── SUPERSEDED BY THE ANCHOR GATE (Incident #62) ────────────────────────
+  //
+  // This used to assert that onboarding still had an EDITABLE phone input,
+  // because students who came in through the email door had no other way to
+  // supply a number. That input turned out to be a client write straight into
+  // profiles.phone: it put 92 bare 10-digit numbers over the verified E.164
+  // ones, and let anyone point the column the sales team calls at a number they
+  // do not hold.
+  //
+  // The population it protected is now served properly — an account with no
+  // verified phone is stopped at /auth/link-phone and gets a real OTP
+  // round-trip. So the guard is inverted rather than deleted: onboarding must
+  // NOT be able to set a phone, and the two verified routes must be the only
+  // writers.
+  it('onboarding displays the phone and cannot set it', () => {
+    const screen = read('src/app/student/onboarding/screens/screen-about-you.tsx');
+    expect(screen).not.toMatch(/onChange=\{\(e\) => setPhone\(e\.target\.value\)\}/);
+    expect(screen).not.toMatch(/type="tel"/);
+    const modal = read('src/app/student/onboarding/onboarding-modal.tsx');
+    expect(modal, 'onboarding writes profiles.phone again').not.toMatch(/\bay\.phone\s*=/);
+  });
+
+  it('only a completed OTP round-trip may stamp the anchor', () => {
+    const writers = [
+      'src/app/api/auth/verify-phone-otp/route.ts',
+      'src/app/api/auth/link-phone/verify/route.ts',
+    ];
+    for (const w of writers) expect(read(w)).toMatch(/verifyOtp\(/);
+    // link-phone/verify is the new writer and must stamp the column the gate
+    // reads, or a student loops through the gate forever having verified.
+    expect(read('src/app/api/auth/link-phone/verify/route.ts')).toMatch(/phone_verified_at:/);
   });
 
   it('bulk-import already assigned by id and is untouched', () => {

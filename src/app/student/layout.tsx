@@ -26,6 +26,7 @@ import { SessionForensicsProbe } from '@/components/session-forensics-probe';
 import { BuddyDemoTour } from '@/components/buddy-demo-tour';
 import { CoverageReviewGate } from '@/components/coverage-review-gate';
 import { isReviewDue } from '@/lib/coverage-review';
+import { requiresPhoneAnchor, LINK_PHONE_PATH } from '@/lib/identity';
 
 export default async function StudentLayout({ children }: { children: React.ReactNode }) {
   const user = await getAuthUser();
@@ -49,6 +50,29 @@ export default async function StudentLayout({ children }: { children: React.Reac
   // back here by the proxy, which is the infinite-redirect loop. '/' does a DB
   // role lookup and lands them on their real home.
   if (profile && profile.role !== 'student') redirect('/');
+
+  // ── THE ANCHOR GATE (Incident #62) ────────────────────────────────────────
+  //
+  // A student account with no VERIFIED phone is not usable, and this is where
+  // that is enforced rather than merely intended. /auth/callback already routes
+  // an unanchored Google arrival here-ward, but a redirect is a suggestion: the
+  // five accounts that already exist in production have live sessions and can
+  // open /student/tracker directly, and any future door that forgets the check
+  // would quietly re-open the hole. The gate belongs on the way IN to the
+  // product, not on one path towards it.
+  //
+  // `profile` is the shared per-request read, so this costs no extra query.
+  // A null profile still degrades to rendering, exactly as the role checks
+  // above do — a transient read failure must never eject a real student into a
+  // phone-verification screen they do not need.
+  if (profile && requiresPhoneAnchor({
+    role: profile.role,
+    isTestAccount: profile.is_test_account,
+    isDemo: profile.is_demo,
+    anchor: { phoneVerifiedAt: profile.phone_verified_at },
+  })) {
+    redirect(LINK_PHONE_PATH);
+  }
 
   // Buddy demo account = the guided tour and NOTHING else (founder, 4 Aug:
   // "in this ID just keep the tour only"). Every growth prompt, gate and
