@@ -28,8 +28,15 @@
 | `R2NDKFK3K3U` | Percentage, Profit and Loss 3 | Rodha | 57m29s | 1,520 | **FAIL** — raw live-class recording, ~2× the video-effort band, thin engagement (posted 2026, essentially unvetted by other viewers) |
 | `4tI-h-GKWVk` | Linear and Circular Arrangement - I | Rodha | **20m11s** | 845,389 | **PASS** — concise, high engagement, general channel (not tied to a course pitch) |
 | `YWVPmlYnUWE` | Master Linear Arrangements-1 (LRDI Live Class) | Rodha | 48m37s | 1,234 | **FAIL** — live-class recording AND its own description links straight to a ₹35,499 paid-batch checkout page. This is the "competitor funnel" risk (SWOT §7 threat #4) caught in an actual candidate, not a hypothetical. |
+| `3ox1DwbOOx0` | Percentages 3: Percentage Increase Decrease | Rodha | **20m16s** | 602,691 | **PASS** — Gemini-sourced, same playlist as row 1 ("Part 9 of 65"); closes the Foundation-practice gap (§ Candidate P-3) |
+| `VT9-jeEmlJ8` | Speed Maths 1: Percentage of a Number | Rodha | **31m22s** | 1,828,745 | **PASS but deprioritized** — highest engagement of any candidate found, but "Part 1 of 65" is a general speed-math primer, not percentages-specific; doesn't fill a gap P-2/P-3 don't already cover |
+| `spET6FqiBZ8` | Linear Arrangement I Set-1 | Rodha | **10m57s** | 529,748 | **PASS** — Gemini-sourced; one complete worked DILR set, the bridge row 3's pure-theory video was missing (§ Candidate A-2b) |
 
-Both FAILs share a pattern: recent (2026) live-class recordings, 45+ minutes,
+The three Gemini-sourced rows were independently re-verified via vidIQ —
+every duration matched to the second, every channel matched, no
+discrepancy found. Consensus was not assumed; it was checked.
+
+Both original FAILs share a pattern: recent (2026) live-class recordings, 45+ minutes,
 thin independent engagement — the opposite of the PASS pair, which are
 older, concise, standalone concept uploads from an organized playlist. This
 is now a standing selection rule for future video candidates: **prefer an
@@ -205,18 +212,46 @@ later for registered students only, with `requires_login` disclosed.
   their explicit no-signup policy is the best access posture found.**
 
 ### Candidate P-2 — Rodha percentages lecture (YouTube) · CONCEPT
-- Candidate URLs (exact one to be picked by curator on hand-check):
-  `https://www.youtube.com/watch?v=x-k8iSNr85g` ("Percentages 1 | CAT
-  Preparation | Arithmetic") or the newer CAT-2026 series equivalent
-  (e.g. `watch?v=R2NDKFK3K3U`). Channel: Rodha (creator-owned, ~391K subs,
-  the channel's own uploads — not re-uploads). Tier 3, competitor — allowed.
-- Not verified: duration (→ student time = duration × 1.5), availability,
-  region. A >45-min lecture likely overshoots a foundation slot — curator
-  should prefer the shortest video that actually teaches CAT-level
-  percentages, and must record duration.
-- Verdict: **CONDITIONAL.**
+- **RESOLVED, 30 Aug.** `https://www.youtube.com/watch?v=x-k8iSNr85g`
+  ("Percentages 1: Fractions to Percentages", 26m19s) — verified via vidIQ
+  (duration, channel, 1.18M views) and Gemini (full watch: fraction↔%
+  conversion theory + 7 calculation drills, no full CAT word-problems, no
+  self-attempt prompts, no paid interruption). Genuinely standalone,
+  foundation-appropriate. Estimated consumption 45–55 min.
+  Verdict: **PASS** for the FOUNDATION concept slot only.
 
-### Rejected (Percentages)
+### Candidate P-3 — Rodha "Percentages 3: Percentage Increase Decrease" · CLOSES THE FOUNDATION-PRACTICE GAP
+- `https://www.youtube.com/watch?v=3ox1DwbOOx0`, 20m16s. Verified via
+  vidIQ (duration exact match, channel Rodha, 602,691 views) and Gemini
+  (full watch). This is "Part 9 of 65" of the SAME organized playlist as
+  P-2's "Part 7 of 65" — a natural next step, not an unrelated pick.
+- Gemini's watch reports 10 worked problems spanning exactly the missing
+  middle difficulty: successive % change, base-change logic (A→B vs B→A
+  asymmetry), "A is x% more than B" word problems (in both numeric and
+  fraction form), and the classic inverse-relation CAT foundation problem
+  (price↑ / consumption↓ at constant expenditure). No self-attempt prompts,
+  no paid interruption (chapter markers from vidIQ's own metadata —
+  0:00 decrease examples, 9:59 the n/D ratio, 12:20 "A is 40% more than B",
+  16:53 price/consumption — independently corroborate this content shape).
+- Question count (10) and difficulty characterization are Gemini-reported,
+  not frame-by-frame verified by us — flagged, not blindly trusted; the
+  chapter markers are consistent with, not proof of, the exact count.
+- **This resolves the Foundation-task practice gap identified after the
+  first Gemini review**: video P-2 (basic drills) → this video (word
+  problems, still sub-CAT-hard) → 2IIM (P-1, Standard-CAT/CAT-hard) is now
+  a genuine three-step difficulty ladder for Percentages, foundation to
+  practising. Verdict: **PASS**, pending the founder's own hand-check of
+  the 10-question claim.
+
+### Rejected / deprioritized (Percentages)
+- **Rodha "Speed Maths 1" (`VT9-jeEmlJ8`, 31m22s)** — verified via vidIQ
+  (exact duration match, 1.83M views — the highest-engagement candidate
+  found in this entire research pass) and Gemini. Genuinely good content
+  (mental-calculation speed tricks, 7 examples), but it is "Part 1 of 65"
+  — a general speed-math primer, not percentages-specific word-problem
+  practice. Kept as an optional pre-requisite reference, not part of the
+  Phase-0 primary/backup pair — it doesn't fill a gap P-2/P-3 don't
+  already cover.
 - **Khan Academy percentages** — legitimate, stable, free; but school-level
   register, not CAT traps/speed. FAIL on CAT-relevance for the main task.
   Retain as a possible *remedial* alternative later (their policy permits
@@ -242,14 +277,41 @@ later for registered students only, with `requires_login` disclosed.
 - Verdict: **CONDITIONAL — the only free candidate found with claimed
   set-level supply at CAT level.**
 
-### Candidate A-2 — Rodha LRDI arrangements lecture (YouTube) · CONCEPT
-- Candidate URLs: `watch?v=YWVPmlYnUWE` ("Master Linear Arrangements-1 |
-  LRDI Live Class", Apoorv Sir, Rodha) or `watch?v=4tI-h-GKWVk` ("Linear and
-  Circular Arrangement - I"). Channel legitimacy: Rodha's own uploads.
-- Caveat: live-class recordings run long (60–90+ min → 90–135 student-min);
-  likely exceeds a foundation slot. Curator should check for a shorter
-  concept video first. Not verified: durations, availability.
-- Verdict: **CONDITIONAL.**
+### Candidate A-2 — Rodha "Linear and Circular Arrangement-I" (YouTube) · CONCEPT (technique-only)
+- **RESOLVED, 30 Aug.** `https://www.youtube.com/watch?v=4tI-h-GKWVk`,
+  20m11s. Verified via vidIQ (845K views) and Gemini (full watch): first
+  7 min basic direction fundamentals, remaining 13 min two deduction
+  techniques (neighbour-swap case analysis; position-pairing sum rule) —
+  taught in isolation, **zero complete DILR sets solved**. No self-attempt
+  prompts, no paid promotion. Estimated consumption 35–45 min.
+  Verdict: **PASS for technique/theory only** — cannot alone satisfy any
+  practice target (§ Video content review above).
+- **`watch?v=YWVPmlYnUWE`** ("Master Linear Arrangements-1 | LRDI Live
+  Class", 48m37s, only 1,234 views) — **REJECTED**: live-class recording,
+  thin independent engagement, and its own description links straight to
+  a ₹35,499 paid-batch checkout page. The competitor-funnel risk (SWOT
+  threat #4) caught in an actual candidate, not hypothetically.
+
+### Candidate A-2b — Rodha "Linear Arrangement I Set-1" (YouTube) · WORKED EXAMPLE, stronger pairing partner
+- `https://www.youtube.com/watch?v=spET6FqiBZ8`, 10m57s. Verified via
+  vidIQ (529,748 views, exact duration match) and Gemini (full watch):
+  **one complete CAT-style DILR set solved end to end** — 7 people × 7
+  sports, 6 interlocking constraints — with the video's own description
+  confirming "beginner to advanced" worked practice, distinct from A-2's
+  pure theory. Gemini's estimate: student pauses at 0:38 to attempt the
+  grid/cases themselves (~6–7 min) before a ~10 min walkthrough — 25–35
+  min total.
+- **This is the bridge A-2 alone cannot provide.** A-2 teaches two
+  reusable techniques in isolation; A-2b applies technique to one full
+  worked set; Bodhee's `lrdi-practice-set-1` / `lrdi-questions-difficult-
+  set-20` (verified above) then give independent full-difficulty-range
+  practice. Recommendation: **A-2 (theory) → A-2b (one worked example) →
+  Bodhee sets (independent practice)** is a stronger three-step ladder for
+  Arrangements than A-2 alone, mirroring the Percentages P-2→P-3→2IIM
+  ladder above. Description mentions "three-part session" — Set-2/Set-3
+  likely exist on the same channel; not chased further, out of Phase-0
+  scope discipline (same 3 topics, no unbounded search).
+  Verdict: **PASS**, pending the founder's own hand-check.
 
 ### Candidate A-3 — Quantifiers.in DILR arrangement sets · PRACTICE backup
 - URL: `https://quantifiers.in/dilr/dilr-arrangement/`
