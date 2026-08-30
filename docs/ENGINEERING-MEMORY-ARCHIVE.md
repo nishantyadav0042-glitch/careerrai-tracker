@@ -3131,3 +3131,38 @@ So even after the route was reachable, the purge would still have failed. Two in
 **Lesson.** *"It has never run" is a claim about our telemetry, not about the platform. When the tracking lives inside the handler, every pre-handler rejection — 405, 401, 404 — produces exactly the same evidence as "never scheduled", and the obvious reading is the wrong one. Before concluding a job is not being called, confirm that a call would leave a trace: if the only proof of life is written by code the failure prevents from running, absence of proof is not evidence of absence.*
 
 **Second lesson.** *I diagnosed this twice and built a fallback for it twice. A workaround that makes the symptom partially disappear is the most expensive kind of wrong fix, because it removes the pressure to find the cause. The fallback made `purge-session-handoffs` appear in `cron_runs`, which read as success, and the actual 405 went unexamined for another three days.*
+
+## Incident #61
+
+**2026-08-30 · Diagnostics (P1) · the answer was in the table for two days and three wrong diagnoses**
+
+**What was actually true.** The forensics probe read the login visit correctly, the first time, and every time. Arnav's forced login on 29 Aug produced, on `/login` at 20:21:10:
+
+```
+verdict: no_marker   cookieMarker: false   localMarker: false
+persistedBefore: false      (it was TRUE at his 16:17 visit, same device)
+```
+
+Both stores gone, and the persistence grant lost between visits. That is origin-level eviction, not the cookie-specific loss I had been reporting.
+
+**Why nobody could see it.** On `/login` the student is not signed in, so the event lands with `user_id` NULL. Every query run against this problem filtered by his user id, so every one of them excluded the only reading that mattered. The rows that DID carry his user id were taken seconds later on `/student/tracker` — after the probe had re-armed the markers on `/login` — and so reported `all_intact, markerAgeH=0` every time.
+
+**The attributed reading was the meaningless one and the meaningful one was anonymous.** That is the whole defect.
+
+**Three wrong diagnoses, in order, all mine.**
+
+1. *"He has not returned after a gap yet"* — he had, twice.
+2. *"The probe is vacuous and must not be trusted"* — too broad. It is contaminated only on the post-login mount; ordinary return visits produced genuine readings (`markerAgeH` 11 and 12) within hours of that claim.
+3. *"The /login event never arrives — its `track()` beacon dies with the navigation"* — flatly wrong. `track()` already flushes on `pagehide` via `sendBeacon`, the `/login` OTP events from that same batch arrived fine, and so did the forensics event. I asserted a mechanism without checking `journey.ts`, which does exactly what I said it did not.
+
+Each diagnosis was a claim about our telemetry made without querying the telemetry the right way — the same shape as Incident #60, one day apart.
+
+**The fix.** The `/login` reading is stashed in `sessionStorage` (which survives login's full page load and dies with the tab) and re-emitted verbatim by the first signed-in mount, flagged `carriedFromLogin: true`. Same verdict, now attached to a person. It is re-emitted rather than moved, so a student who never completes the login still leaves the anonymous trace.
+
+The once-per-session guard moved from module scope — which reset on every page load, which is what produced the artefact — to `sessionStorage`. A carried reading beats a fresh one on the signed-in screen, because the fresh reading available there is the probe reading its own handwriting.
+
+**Prevention.** `session-forensics-carry.test.ts` covers the decision table and pins the wiring: `/login` mounts the probe unsigned, the student layout mounts it `signedIn`. The entire carry depends on that one prop, and dropping it fails the guard. Four of five logic mutations fail a test; the fifth (an early `if (!raw) return null`) is an equivalent mutant, redundant with the `try/catch` below it — recorded rather than papered over.
+
+**Lesson.** *A filter is a hypothesis. Querying `where user_id = X` for an event that happens before sign-in does not return nothing because nothing happened — it returns nothing because the question excluded the answer. When a diagnostic "produces no data", check what the query would have had to look like for the data to appear, before concluding the diagnostic is broken.*
+
+**Second lesson.** *I claimed three times that a mechanism did not work without reading the mechanism. `track()`'s `pagehide`/`sendBeacon` flush is nine lines and would have refuted the third diagnosis in thirty seconds. L2 — no claim about behaviour from code location alone — applies just as hard to claims about code that is NOT there.*

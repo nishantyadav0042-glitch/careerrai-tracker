@@ -189,7 +189,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
       <StoragePersistenceProbe />
       {/* Same tracker on the signed-in side, so a healthy open is recorded too
           — a verdict with no baseline is a number nobody can read. */}
-      <SessionForensicsProbe />
+      <SessionForensicsProbe signedIn />
       {/* Buddy demo overlay: banner + guided tour, keyed off the cr_demo
           cookie set at login for buddydemo@careerrai.in. Renders null for
           everyone else. */}

@@ -142,3 +142,85 @@ export function browserStores(): MarkerStores {
       document.cookie.split('; ').map((c) => c.split('=')[0]).filter(Boolean),
   };
 }
+
+// ── CARRYING THE LOGIN READING TO A NAME (30 Aug 2026) ──────────────────────
+//
+// The reading that matters is taken on /login, because that is where a student
+// who was forgotten arrives. It has always been taken correctly — Arnav's
+// forced login on 29 Aug produced `no_marker`, both stores gone, on that page.
+//
+// It was almost unusable anyway, for a reason the verdict doc above already
+// names: "a first visit, or everything was wiped — the join to a known account
+// server-side is what tells those apart." On /login there IS no known account
+// yet. The event lands with `user_id` NULL, joinable only by hand through
+// anon_id and IP, and it took two days and three wrong diagnoses to find it.
+//
+// Worse, the reading that DID carry a user id was the one taken seconds later
+// on the signed-in screen — which had just re-armed its own markers on /login
+// and so reported `all_intact, markerAgeH=0` every single time. The attributed
+// reading was the meaningless one and the meaningful one was anonymous.
+//
+// So the /login reading is stashed in sessionStorage (which survives the
+// full page load that login performs, and dies with the tab), and the first
+// signed-in run re-emits it VERBATIM instead of taking a fresh one. Same
+// verdict, now attached to a person.
+//
+// It is re-emitted, not moved: the anonymous /login event still fires, because
+// a student who never completes the login would otherwise leave no trace at
+// all, and that is a population worth being able to count.
+
+export const PENDING_KEY = 'cr_fx_pending';
+
+/** Where a carried reading lives between the login page and the app. */
+export interface PendingStore {
+  read(): string | null;
+  write(value: string): void;
+  clear(): void;
+}
+
+export function stashPending(store: PendingStore, reading: ForensicsReading): void {
+  try { store.write(JSON.stringify(reading)); } catch { /* storage blocked */ }
+}
+
+/** Read and CONSUME the carried reading. Single-use: a stale one must never
+ *  be re-reported on a later navigation as if it were fresh evidence. */
+export function takePending(store: PendingStore): ForensicsReading | null {
+  let raw: string | null = null;
+  try { raw = store.read(); } catch { return null; }
+  if (!raw) return null;
+  try { store.clear(); } catch { /* best effort */ }
+  try {
+    const v = JSON.parse(raw) as ForensicsReading;
+    // Shape-check rather than trust: sessionStorage is writable by anything
+    // running on this origin, and a malformed value must not become a verdict.
+    return typeof v?.verdict === 'string' && typeof v?.cookieMarker === 'boolean' ? v : null;
+  } catch { return null; }
+}
+
+export type ProbeAction =
+  /** Report the reading taken on /login, now that we know whose it is. */
+  | { kind: 'emit_carried'; reading: ForensicsReading }
+  /** Take and report a reading here. */
+  | { kind: 'emit_fresh' }
+  /** Already read once this browsing session — reading again would only
+   *  measure the markers this probe itself just re-armed. */
+  | { kind: 'skip' };
+
+/**
+ * What the probe should do on this mount. Pure, so the ordering that caused
+ * the artefact is testable without a browser.
+ *
+ * A carried reading WINS over a fresh one on the signed-in screen. That is the
+ * whole point: the fresh reading available there is worthless, because this
+ * probe re-armed the markers on /login moments earlier and would be reading
+ * its own handwriting.
+ */
+export function decideProbeAction(s: {
+  signedIn: boolean;
+  alreadyReadThisSession: boolean;
+  pending: ForensicsReading | null;
+}): ProbeAction {
+  if (s.signedIn && s.pending) return { kind: 'emit_carried', reading: s.pending };
+  if (s.alreadyReadThisSession) return { kind: 'skip' };
+  return { kind: 'emit_fresh' };
+}
