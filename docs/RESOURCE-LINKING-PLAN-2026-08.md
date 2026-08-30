@@ -19,6 +19,22 @@
 > actually contains what the task demands** — opened outside the app, never
 > hosted, never mandated — and the student's return + outcome is captured.
 
+### The product thesis (founder-locked, 30 Aug)
+
+> **CareerRai does not provide content. CareerRai provides an execution
+> path.** When a student receives a preparation task, CareerRai may
+> optionally provide a vetted external starting point that helps the
+> student execute that task. The student remains free to use that resource,
+> another resource, or no resource at all.
+>
+> CareerRai Task → optional resource → student leaves → learns/practices →
+> returns → continues the CareerRai plan.
+
+What we are building is a **resource intelligence + routing layer**, not a
+content recommendation app: research corpus → human verification → Phase-0
+live test on exactly 3 topics → observed outcomes → calibration →
+personalization. In that order, no step skipped forward.
+
 We are not building a content library, a video platform, or a question bank.
 We are attaching a starting point to an instruction that today has none.
 
@@ -293,6 +309,30 @@ target is time-phrased. Applies from Phase 0's manual cards onward.
 - **B. Content-level rights — can we HOST/reproduce it?** No. Default answer
   is permanently no (R1); we do not even attempt to acquire third-party
   rights in Phase 0.
+
+Two refinements (founder, 30 Aug, second pass):
+- **The stance is "lower-risk architecture", never "zero legal risk".**
+  Link-only is the safest structure available, and it is still an
+  architecture choice, not a legal conclusion — the written India-specific
+  lawyer review remains mandatory before broad deployment.
+- **Rights are checked at the RESOURCE level, not the brand level.** A
+  platform's own terms can treat content classes differently (ordinary
+  content vs CC-licensed subsets vs non-commercial restrictions — Khan
+  Academy's terms are the worked example). "Platform X = open" is never a
+  valid curation shortcut; each linked resource carries its own
+  `license_note`.
+
+**The minimum useful engineering slice (founder-locked, 30 Aug):** when
+Phase-0 resources are finalized, what gets BUILT is exactly:
+task → optional external resource → external browser → student returns →
+completion tick → simple outcome signal. Nothing more: no content hosting,
+no embedding, no recommendation engine, no AI resource-ranking, and **no
+adaptive-effort calculator inside the live planner** — the effort model
+(`docs/ADAPTIVE-EFFORT-MODEL.md`) governs curation-time sufficiency
+judgments only, until observed Phase-0 outcomes exist to calibrate it.
+Ordering is fixed: research → resources → verification → Phase-0 →
+observed outcomes → calibration → personalization. Building the
+personalization before its input data exists is the named failure mode.
 
 ### Phase 3 — Return loop
 The return prompt + event capture (versioned per R11). This is what turns the

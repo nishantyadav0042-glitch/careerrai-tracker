@@ -188,6 +188,32 @@ On an Indian phone, logged out, airplane-mode-off, record for each:
    on the card? (gate 6)
 6. Date + initials → this doc, then the winning link per topic is Phase 0.
 
+## Synthesis protocol — when the multi-AI outputs arrive (founder + Claude, 30 Aug)
+
+The v3 master prompt (`docs/RESOURCE-RESEARCH-MASTER-PROMPT.md`) goes to
+5–6 independent AIs, identically. When outputs are in, synthesis runs in
+exactly three passes — and the multi-AI rule applies to us too:
+**consensus is NOT proof; five AIs repeating one unsupported claim is
+still one unsupported claim.**
+
+1. **Candidate intersection.** Which resources surfaced independently in
+   multiple outputs? Independent convergence raises priority for
+   hand-checking — it never substitutes for it.
+2. **Contradiction audit.** Every field where outputs disagree (one says
+   "no login", another caught a wall; conflicting counts; conflicting
+   durations) becomes a mandatory hand-check item. Contradictions are the
+   most valuable rows in the corpus: they mark exactly where AI research
+   hit its limits.
+3. **Final three.** RC → PRIMARY/BACKUP; Percentages → PRIMARY/BACKUP;
+   Arrangements → PRIMARY/BACKUP **or an explicit FAIL** ("external
+   linking does not sufficiently solve DILR practice"), which flows
+   straight into the Phase-5 own-bank decision. Every final pick still
+   passes the 8 gates by hand (sheet above) before touching a student.
+
+Only after the final three (or two + FAIL) exist does the Phase-0 build
+start — and that build is the minimum slice locked in
+`RESOURCE-LINKING-PLAN-2026-08.md` §Phase 2, nothing more.
+
 ## What the card may say (only after the hand-check)
 - RC: "Need help? Practice passages here — free external resource." +
   count only if counted.
