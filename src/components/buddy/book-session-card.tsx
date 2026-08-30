@@ -6,6 +6,7 @@ import { loadRazorpay, failureMessage, redirectCheckoutOptions, checkoutCallback
 import { track } from '@/lib/journey';
 import { readPaymentSurfaceSignals } from '@/lib/store-build';
 import { paymentSurface, usesRedirectCheckout } from '@/lib/payment-surface';
+import { ensureTransactableOrigin } from '@/lib/checkout-origin-guard';
 import { IntentPicker, intentIsComplete } from '@/components/session/intent-picker';
 import type { SessionIntent } from '@/lib/session-intent';
 import { payFunnel } from '@/lib/payment-funnel-client';
@@ -76,6 +77,12 @@ export function BookSessionCard({ findingKind, findingEvidence, mentorFirst, has
 
     setBusy(true); setError(null);
     try {
+      // Incident #59: Razorpay refuses careerrai-daily.vercel.app outright, so
+      // an order minted here can never be paid. Move to the checkout origin
+      // BEFORE minting — a hand-off after the order exists would strand a live
+      // order on a dead domain. A no-op on every transactable origin.
+      if ((await ensureTransactableOrigin('buddy')).move) return;
+
       const res = await fetch('/api/sessions/book', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

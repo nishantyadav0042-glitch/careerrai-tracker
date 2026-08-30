@@ -2,17 +2,26 @@ import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ScreenLoginBuild from './screen-login-build';
 
-// ── GOOGLE IS THE RECOMMENDED DOOR; OTP IS THE FALLBACK ─────────────────────
+// ── PHONE OTP IS THE ONLY ACCOUNT-CREATION DOOR (Incident #62) ──────────────
 //
-// Founder, 29 Aug: prioritise Google on this screen and make mobile OTP the
-// secondary option. Asserted on the rendered DOM rather than by reading the
-// file, because "which control does a student see first" is a question about
-// ORDER and EMPHASIS — two things a grep cannot see and a reorder can silently
-// destroy.
+// This file previously asserted the opposite: Google first, filled CTA, OTP
+// demoted beneath an "or" divider (founder, 29 Aug). Two days of production
+// retired that decision. Every Google account created in that window — five of
+// them — had NO phone number, because Supabase can only attach a Google
+// identity to an existing user on a matching CONFIRMED email and 963 of 969
+// students have no email on file. So on this screen Google could not recognise
+// a returning student even in principle; it could only mint a second account
+// beside the real one, with a fresh streak and no plan, buddy or history.
 //
-// The screen is also where Incident #10's lesson lives: a login screen with a
-// single door cost us an App Store 2.1 rejection. Demoting OTP is the ask;
-// dropping it is not, so its survival is pinned here too.
+// Asserted on the rendered DOM rather than by reading the file, for the same
+// reason as before: which control a student sees, and how loudly, is a question
+// about ORDER and EMPHASIS that a grep cannot answer.
+//
+// Incident #10 — a single-door login cost an App Store 2.1 rejection — is NOT
+// re-created here. A student who cannot receive an SMS still has the password
+// door on this screen, and a Google sign-in from /login converges on the same
+// verified account through /auth/link-phone. What is gone is the door that
+// could create an account we can never contact.
 
 const html = renderToStaticMarkup(
   <ScreenLoginBuild isLoading={false} onboarding={{ target_percentile: 98 }} />
@@ -20,41 +29,32 @@ const html = renderToStaticMarkup(
 
 const at = (needle: string) => html.indexOf(needle);
 
-describe('the final /start screen leads with Google', () => {
-  it('renders both doors', () => {
-    expect(at('Continue with Google')).toBeGreaterThan(-1);
-    expect(at('Send OTP'), 'mobile OTP was dropped, not demoted — Incident #10')
-      .toBeGreaterThan(-1);
+describe('the final /start screen creates accounts by phone only', () => {
+  it('renders the phone door', () => {
     expect(at('Mobile number')).toBeGreaterThan(-1);
+    expect(at('Send OTP')).toBeGreaterThan(-1);
   });
 
-  it('puts Google ABOVE the mobile-number form, not below it', () => {
-    // The whole change in one assertion. Before 29 Aug the OTP form came first
-    // and Google sat under an "or" divider beneath it.
-    expect(at('Continue with Google')).toBeLessThan(at('Mobile number'));
-    expect(at('Continue with Google')).toBeLessThan(at('Send OTP'));
+  // THE REGRESSION TEST. Restoring this button re-opens the P0: an
+  // unauthenticated Google sign-in on this screen is an account-creation door.
+  it('offers no Google door — it cannot create an account it can recognise', () => {
+    expect(at('Continue with Google'), 'Google is an account-creation door here again — Incident #62')
+      .toBe(-1);
   });
 
-  it('gives Google the filled CTA and OTP the outline one', () => {
-    // Emphasis, not just order: two filled buttons would leave the student
-    // with no recommendation at all, and an outlined Google under a filled
-    // OTP would be the old hierarchy with the order changed.
-    const googleBtn = html.slice(at('<button'), at('Continue with Google'));
-    const googleTag = googleBtn.slice(googleBtn.lastIndexOf('<button'));
-    expect(googleTag, 'the Google button is not the filled/primary CTA')
-      .toMatch(/bg-stone-900/);
-
+  it('gives the phone door the filled CTA, since it is now the recommendation', () => {
+    // Emphasis follows the decision. When Google held the filled style this
+    // button was deliberately outlined so as not to compete; with Google gone,
+    // an outlined lone CTA would leave the screen with no clear action at all.
     const otpTag = html.slice(0, at('Send OTP')).lastIndexOf('<button');
     const otp = html.slice(otpTag, at('Send OTP'));
-    expect(otp, 'the OTP button is still a filled CTA competing with Google')
-      .not.toMatch(/bg-stone-900/);
-    expect(otp, 'the OTP button lost its outline styling').toMatch(/border-stone-300/);
+    expect(otp, 'the primary action on this screen is not the filled CTA')
+      .toMatch(/bg-stone-900/);
   });
 
   it('does not steal the screen with an autofocused keyboard', () => {
     // autoFocus on the name field pops the mobile keyboard on load and scrolls
-    // the primary CTA out of view — which would undo the reorder on exactly
-    // the devices that matter most.
+    // the primary CTA out of view — on exactly the devices that matter most.
     const nameField = html.slice(at('Your name'), at('Mobile number'));
     expect(nameField).not.toMatch(/autofocus/i);
   });

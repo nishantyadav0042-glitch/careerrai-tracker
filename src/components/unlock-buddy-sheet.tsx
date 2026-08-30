@@ -15,6 +15,7 @@ import { trackMeta } from '@/lib/track';
 import { track } from '@/lib/journey';
 import { readPaymentSurfaceSignals } from '@/lib/store-build';
 import { paymentSurface, usesRedirectCheckout } from '@/lib/payment-surface';
+import { ensureTransactableOrigin } from '@/lib/checkout-origin-guard';
 import { loadRazorpay, failureMessage, redirectCheckoutOptions, checkoutCallbackUrl } from '@/lib/razorpay-checkout';
 import { catUrgencyLabel } from '@/lib/cat-countdown';
 import { payFunnel } from '@/lib/payment-funnel-client';
@@ -96,6 +97,12 @@ function useBuddyCheckout() {
     setBusy(planId);
     setMessage(null);
     try {
+      // Incident #59: Razorpay refuses careerrai-daily.vercel.app outright, so
+      // an order minted here can never be paid. Move to the checkout origin
+      // BEFORE minting — a hand-off after the order exists would strand a live
+      // order on a dead domain. A no-op on every transactable origin.
+      if ((await ensureTransactableOrigin('buddy')).move) return;
+
       const res = await fetch('/api/payments/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

@@ -7,7 +7,6 @@ import { createClient } from '@/lib/supabase/client';
 interface Props {
   onNext: (data: {
     full_name: string;
-    phone: string;
     college: string;
     course_year: number | null;
     is_working_professional: boolean;
@@ -68,7 +67,6 @@ export default function ScreenAboutYou({ onNext, onBack, canGoBack, isLoading }:
     if (!isValid) return;
     onNext({
       full_name: fullName.trim(),
-      phone: phone.trim(),
       college: college.trim(),
       course_year: !isWorkingProfessional ? courseYear : null,
       is_working_professional: isWorkingProfessional,
@@ -97,15 +95,25 @@ export default function ScreenAboutYou({ onNext, onBack, canGoBack, isLoading }:
           />
         </div>
 
+        {/* ── DISPLAY ONLY (Incident #62) ────────────────────────────────
+            This was an editable input whose value was written straight into
+            profiles.phone from the browser. It overwrote the verified E.164
+            number with whatever was typed — 92 production rows ended up
+            holding a bare 10-digit string, and any student could have pointed
+            the column the sales team calls at a number they do not own.
+
+            The phone is established by an OTP round-trip and changed only by
+            one, so here it is shown and not asked. */}
         <div>
           <label className={labelClass}>Mobile</label>
-          <input
-            type="tel"
-            placeholder="e.g. 9876543210"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            className={inputClass}
-          />
+          <div className="flex items-center justify-between rounded-xl border border-stone-200 bg-stone-50 px-4 py-3">
+            <span className="text-sm font-medium text-stone-700">
+              {phone ? `+91 ${phone}` : 'Not added yet'}
+            </span>
+            {phone && (
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-emerald-600">Verified</span>
+            )}
+          </div>
         </div>
 
         <div>

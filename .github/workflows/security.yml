@@ -11,6 +11,19 @@ on:
     branches: [main]
   schedule:
     - cron: '0 6 * * 1' # weekly, to catch newly-disclosed CVEs in unchanged deps
+  # MANUAL RE-RUN, added 29 Aug 2026 — the only workflow here that lacked it.
+  #
+  # PR #150 is why. Its head commit was pushed to the branch moments before the
+  # PR was opened, and no `pull_request` event fired for it: ci.yml ran off the
+  # `push` trigger (branches: '**') and reported green, while THIS workflow —
+  # which has no push trigger for feature branches — never ran at all. The PR's
+  # checks looked passing because the checks that existed had passed.
+  #
+  # That is the dangerous shape: not a red scan, an ABSENT one. Without a
+  # dispatch trigger there was no way to run the scan on that ref short of
+  # pushing another commit, which is the one thing you should not have to do to
+  # find out whether code is safe to merge.
+  workflow_dispatch: {}
 
 permissions:
   contents: read

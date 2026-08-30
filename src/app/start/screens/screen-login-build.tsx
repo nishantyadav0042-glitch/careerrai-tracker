@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { track } from '@/lib/journey';
-import { ContinueWithGoogle } from '@/components/auth/continue-with-google';
 
 interface Props {
   isLoading: boolean;
@@ -34,23 +33,6 @@ export default function ScreenLoginBuild({ isLoading, onboarding }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Park the answers this screen is holding before Google takes the browser
-  // away. `onboarding` is the SAME object handed to verify-phone-otp below, so
-  // the two doors carry identical payloads by construction rather than by two
-  // pieces of code agreeing with each other.
-  //
-  // Awaited, so the cookie is set before the redirect starts. Never throws:
-  // ContinueWithGoogle proceeds regardless, because a lost draft costs the
-  // questionnaire while a blocked redirect costs the account.
-  async function stashOnboarding(): Promise<void> {
-    try {
-      await fetch('/api/auth/stash-onboarding', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(onboarding),
-      });
-    } catch { /* best-effort; the sign-in must still happen */ }
-  }
   const [building, setBuilding] = useState(false);
   const [progress, setProgress] = useState(0);
   const [checkedCount, setCheckedCount] = useState(0);
@@ -178,36 +160,30 @@ export default function ScreenLoginBuild({ isLoading, onboarding }: Props) {
 
       {step === 'phone' ? (
         <div className="space-y-5">
-          {/* ── GOOGLE IS THE RECOMMENDED DOOR (founder, 29 Aug) ────────────
-              Still AFTER the questionnaire and never before it: a student who
-              signs in before answering anything is an account with no plan.
-              By this screen the questions are complete and the only decision
-              left is which door — and the fastest door should be the obvious
-              one. Google is one tap with no SMS to wait for, no carrier to
-              drop the message, and no 10-digit Indian number required.
+          {/* ── PHONE IS THE ONLY ACCOUNT-CREATION DOOR (Incident #62) ──────
+              Google was the primary CTA here from 29 Aug. Two days later
+              production held 5 Google accounts and every one of them had NO
+              phone number — one of them a real, onboarded, returning student
+              nobody can ever SMS or WhatsApp.
 
-              The draft is parked server-side before the redirect, because the
-              browser is about to leave for accounts.google.com and come back
-              to /auth/callback, which cannot see localStorage. That is the
-              whole reason this is not simply the same button as /login. */}
-          <div>
-            <ContinueWithGoogle variant="primary" beforeRedirect={stashOnboarding} />
-            <p className="mt-2 text-center text-[11px] text-stone-400">
-              One tap. No OTP to wait for.
-            </p>
-          </div>
+              That is not a Google problem, it is an anchor problem. Supabase
+              attaches a Google identity to an existing user only on a matching
+              CONFIRMED email, and 963 of 969 students have no email on file
+              because this product sold phone-first auth for a year. So on this
+              screen Google could not recognise a returning student even in
+              principle: it could only mint a second account beside the real
+              one, with a fresh streak and no plan, no buddy and no history.
 
-          {/* THE ESCAPE FROM A GOOGLE-ONLY DEAD END, kept for exactly the
-              reason the SMS-only one was removed: a student with no Google
-              account on the device, or one who simply does not want to use it,
-              must still have a plain way through. Demoted, never dropped —
-              Incident #10 was a login screen with a single door, and it cost
-              us a Guideline 2.1 rejection. */}
-          <div className="flex items-center gap-3">
-            <div className="h-px flex-1 bg-stone-200" />
-            <span className="text-[11px] font-medium text-stone-400">or use your mobile number</span>
-            <div className="h-px flex-1 bg-stone-200" />
-          </div>
+              So the fastest door is not the right door when it is the one that
+              loses the student. Google is now a LINKING action offered from
+              inside a signed-in session, where we already know who they are —
+              see /auth/link-phone and the anchor gate.
+
+              Incident #10 is why this is not a regression to a single-door
+              screen: that rejection was about having no alternative at all.
+              A student who cannot receive an SMS is not stranded here — the
+              gate on the other side of a Google sign-in leads to this same
+              verification, so both doors converge on one verified account. */}
 
           <form onSubmit={requestOtp} className="space-y-4">
             <div>
@@ -249,7 +225,7 @@ export default function ScreenLoginBuild({ isLoading, onboarding }: Props) {
               <button
                 type="submit"
                 disabled={busy || isLoading || phone.length < 10 || name.trim().length < 2}
-                className="w-full rounded-2xl border border-stone-300 bg-white py-4 text-sm font-semibold text-stone-800 transition-all hover:border-stone-900 active:scale-[0.98] disabled:opacity-50"
+                className="w-full rounded-2xl bg-stone-900 py-4 text-sm font-semibold text-white transition-all active:scale-[0.98] disabled:opacity-50"
               >
                 {busy ? 'Sending…' : 'Send OTP →'}
               </button>

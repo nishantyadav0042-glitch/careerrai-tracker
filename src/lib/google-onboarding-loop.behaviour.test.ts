@@ -76,6 +76,9 @@ function makeAdmin() {
           return chain;
         },
         eq: (col: string, val: unknown) => { filters.push((r) => r[col] === val); return chain; },
+        // The duplicate-account lookup excludes the caller's OWN row in SQL
+        // (Incident #62), so the fake has to model it or the guard is untested.
+        neq: (col: string, val: unknown) => { filters.push((r) => r[col] !== val); return chain; },
         is: (col: string, val: unknown) => { filters.push((r) => (r[col] ?? null) === val); return chain; },
         gte: (col: string, val: string) => { filters.push((r) => String(r[col]) >= val); return chain; },
         update: (values: Row) => { pending = values; return chain; },
@@ -259,7 +262,12 @@ describe('coming back from Google', () => {
     expect(applyOnboarding).toHaveBeenCalledTimes(1);
     expect(applyOnboarding.mock.calls[0][1]).toBe('auth-user-1');
     expect(applyOnboarding.mock.calls[0][2]).toEqual(DRAFT);
-    expect(res.headers.get('location')).toBe('https://careerrai.in/student/tracker');
+    // Incident #62: a Google arrival with no VERIFIED phone is not admitted to
+    // the product. The draft is still applied — their answers are not thrown
+    // away — but the destination is the anchor gate, carrying where they were
+    // headed so the journey finishes once a number is attached.
+    expect(res.headers.get('location'))
+      .toBe('https://careerrai.in/auth/link-phone?dest=%2Fstudent%2Ftracker');
   });
 
   it('lets an interrupted signup recover on the next try', async () => {
@@ -320,7 +328,12 @@ describe('coming back from Google', () => {
     const res = await GET(callbackRequest({}));
 
     expect(applyOnboarding).not.toHaveBeenCalled();
-    expect(res.headers.get('location')).toBe('https://careerrai.in/student/tracker');
+    // Incident #62: a Google arrival with no VERIFIED phone is not admitted to
+    // the product. The draft is still applied — their answers are not thrown
+    // away — but the destination is the anchor gate, carrying where they were
+    // headed so the journey finishes once a number is attached.
+    expect(res.headers.get('location'))
+      .toBe('https://careerrai.in/auth/link-phone?dest=%2Fstudent%2Ftracker');
   });
 
   it('ignores a forged draft id instead of failing the sign-in', async () => {
@@ -330,7 +343,12 @@ describe('coming back from Google', () => {
     const res = await GET(callbackRequest({ [COOKIE]: '../../etc/passwd' }));
 
     expect(applyOnboarding).not.toHaveBeenCalled();
-    expect(res.headers.get('location')).toBe('https://careerrai.in/student/tracker');
+    // Incident #62: a Google arrival with no VERIFIED phone is not admitted to
+    // the product. The draft is still applied — their answers are not thrown
+    // away — but the destination is the anchor gate, carrying where they were
+    // headed so the journey finishes once a number is attached.
+    expect(res.headers.get('location'))
+      .toBe('https://careerrai.in/auth/link-phone?dest=%2Fstudent%2Ftracker');
     expect(table('onboarding_drafts')[0].consumed_at).toBeNull();
   });
 
@@ -367,6 +385,11 @@ describe('the whole hand-off', () => {
 
     expect(applyOnboarding).toHaveBeenCalledTimes(1);
     expect(applyOnboarding.mock.calls[0][2]).toEqual(DRAFT);
-    expect(res.headers.get('location')).toBe('https://careerrai.in/student/tracker');
+    // Incident #62: a Google arrival with no VERIFIED phone is not admitted to
+    // the product. The draft is still applied — their answers are not thrown
+    // away — but the destination is the anchor gate, carrying where they were
+    // headed so the journey finishes once a number is attached.
+    expect(res.headers.get('location'))
+      .toBe('https://careerrai.in/auth/link-phone?dest=%2Fstudent%2Ftracker');
   });
 });

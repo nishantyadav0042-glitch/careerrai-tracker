@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { applyOnboarding, type OnboardingPayload } from '@/lib/onboarding-apply';
 import { COOKIE as ONBOARDING_DRAFT_COOKIE } from '@/app/api/auth/stash-onboarding/route';
 import { supabaseUrl, supabaseAnonKey } from '@/lib/supabase/env';
+import { decideGoogleArrival, LINK_PHONE_PATH } from '@/lib/identity';
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
@@ -87,7 +88,7 @@ export async function GET(request: NextRequest) {
 
   const { data: existing } = await admin
     .from('profiles')
-    .select('id, password_set, role, onboarding_completed')
+    .select('id, password_set, role, onboarding_completed, phone_verified_at, is_test_account, is_demo')
     .eq('id', userId)
     .maybeSingle();
 
@@ -103,26 +104,58 @@ export async function GET(request: NextRequest) {
   // operation with real failure modes, and doing it silently on a login is the
   // wrong place to attempt it.
   //
-  // WHAT THIS CANNOT COVER, stated rather than glossed: production holds 924
-  // PHONE identities, and a phone account has no email to match on. If one of
-  // those students signs in with Google they get a genuinely new account,
-  // because nothing shared exists to recognise them by. That is a property of
-  // having sold phone-first auth for a year, not something this route can fix;
-  // closing it needs a deliberate "link your Google account" step from INSIDE
-  // a signed-in session, where we already know who they are.
-  if (!existing && userEmail) {
-    const { data: sameEmail } = await admin
-      .from('profiles')
-      .select('id')
-      .eq('email', userEmail)
-      .maybeSingle();
-    if (sameEmail && sameEmail.id !== userId) {
-      const res = NextResponse.redirect(`${origin}/login?error=account_exists`);
-      pending.forEach(({ name, value, options }) =>
-        res.cookies.set(name, value, options as Parameters<typeof res.cookies.set>[2])
-      );
-      return res;
-    }
+  // ── THE `!existing` HERE WAS DEAD, EXACTLY AS `isNewUser` WAS (Incident #62)
+  //
+  // Same root cause the comment further down already documents for the draft
+  // claim: `handle_new_user` inserts the profile INSIDE the GoTrue transaction
+  // that creates the auth user, so by the time this route runs `existing` is
+  // ALWAYS non-null. `!existing && userEmail` could therefore never be true,
+  // and this duplicate-account refusal — the one guard standing between a
+  // Google sign-in and a second account — has never executed once in
+  // production. Location in the code is not behaviour; that lesson was written
+  // twenty lines below and the same mistake was live twenty lines above it.
+  //
+  // Now it runs on every arrival, and asks the question that actually matters:
+  // does a DIFFERENT profile already carry this email? `.neq('id', userId)`
+  // does the excluding in SQL, so the row for this very account can never be
+  // mistaken for a rival claim on it.
+  const { data: sameEmail } = userEmail
+    ? await admin.from('profiles').select('id').eq('email', userEmail).neq('id', userId).maybeSingle()
+    : { data: null };
+
+  // ── THE ANCHOR GATE (Incident #62) ────────────────────────────────────────
+  //
+  // A CareerRai student is a VERIFIED PHONE NUMBER. Google proves an email,
+  // which for 963 of 969 students matches nothing we hold, so Google can only
+  // ever mint a stranger — and did, five times in its first two days, every one
+  // of them unreachable by SMS or WhatsApp forever.
+  //
+  // Supabase has already created the auth user and the trigger has already
+  // created the profile by the time we get here; that cannot be prevented from
+  // this route. What CAN be prevented is that account being usable. So an
+  // unanchored student is not admitted and is not deleted either — they are
+  // sent to attach a phone to THIS id, which is the one outcome that produces
+  // one account rather than two.
+  const arrival = decideGoogleArrival({
+    emailOwnedByAnotherAccount: !!sameEmail,
+    profile: {
+      // The allowlist-derived role is not used here: it says what this person
+      // is ENTITLED to be, and the gate is about what their account IS. A
+      // student whose allowlist row makes them a buddy is still an unanchored
+      // student until the row is applied a few lines below.
+      role: (existing?.role as string | null | undefined) ?? 'student',
+      isTestAccount: existing?.is_test_account as boolean | null | undefined,
+      isDemo: existing?.is_demo as boolean | null | undefined,
+      anchor: { phoneVerifiedAt: existing?.phone_verified_at as string | null | undefined },
+    },
+  });
+
+  if (arrival.kind === 'refuse_account_exists') {
+    const res = NextResponse.redirect(`${origin}/login?error=account_exists`);
+    pending.forEach(({ name, value, options }) =>
+      res.cookies.set(name, value, options as Parameters<typeof res.cookies.set>[2])
+    );
+    return res;
   }
 
   // The allowlist gate. It exists because the emailed-link path is invite-only:
@@ -248,7 +281,16 @@ export async function GET(request: NextRequest) {
   // Students skip the set-password wall (day-2 in-app reminder instead —
   // see SetPasswordReminder); buddies/admins still set one immediately.
   const hasPassword = existing?.password_set === true;
-  const dest = (effectiveRole === 'student' || hasPassword) ? roleDest : `/set-password?dest=${encodeURIComponent(roleDest)}`;
+  const normalRoleDest = (effectiveRole === 'student' || hasPassword) ? roleDest : `/set-password?dest=${encodeURIComponent(roleDest)}`;
+
+  // The gate outranks every other destination, including `next`. An unanchored
+  // account may not be handed a landing page it asked for — that is precisely
+  // how it would end up inside the product with no phone attached. Where they
+  // WERE going is preserved so the link step can finish the journey rather than
+  // dumping them on a generic home.
+  const dest = arrival.kind === 'gate_link_phone'
+    ? `${LINK_PHONE_PATH}?dest=${encodeURIComponent(normalRoleDest)}`
+    : normalRoleDest;
 
   const res = NextResponse.redirect(`${origin}${dest}`);
   pending.forEach(({ name, value, options }) =>

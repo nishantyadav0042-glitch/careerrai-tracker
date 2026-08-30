@@ -482,7 +482,29 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
         setIsLoading(true);
         const ay: Record<string, unknown> = {};
         if (typeof data.full_name === 'string' && data.full_name.trim()) ay.full_name = data.full_name.trim();
-        if (typeof data.phone === 'string' && data.phone.trim()) ay.phone = data.phone.trim();
+        // ── PHONE IS NOT WRITTEN HERE ANY MORE (Incident #62) ───────────────
+        //
+        // This line used to assign the posted phone onto the update payload,
+        // and it is where 92 production profiles got a bare 10-digit number
+        // written over the
+        // canonical +91XXXXXXXXXX that the OTP route had verified. Two separate
+        // defects in one line:
+        //
+        //   1. FORMAT. The field strips '+91' to display and posted back what
+        //      it displayed, so profiles.phone and auth.users.phone drifted into
+        //      two shapes for the same human. Everything that matches a student
+        //      by phone — counsellor outreach, WhatsApp, the Expedify webhook —
+        //      then needs phoneVariants() to paper over it.
+        //   2. AUTHORITY, which is the serious one. This is a CLIENT write, so
+        //      a student could put any ten digits into the column the sales team
+        //      calls and the notification system trusts. A number somebody typed
+        //      is not a number we proved they hold. Checked before removing:
+        //      across all 917 accounts holding both, the digits matched in 917
+        //      cases and differed in 0 — so nobody had exploited it yet.
+        //
+        // The phone is now set in exactly two places, both of which require a
+        // completed OTP round-trip: /api/auth/verify-phone-otp and
+        // /api/auth/link-phone/verify. Onboarding displays it and never sets it.
         if (data.college !== undefined) ay.college = data.college || null;
         if (data.course_year !== undefined) ay.course_year = data.course_year ?? null;
         if (data.is_working_professional !== undefined) ay.is_working_professional = data.is_working_professional ?? false;

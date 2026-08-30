@@ -3026,4 +3026,175 @@ That pass exposed a trap. The route began `if (!stuck?.length) return ...` — a
 
 **Second lesson.** *A backfill is part of the fix, not a follow-up. A change that only records new data leaves the incident that motivated it permanently unexplained — the failures you already have are the ones you most need explained, and they are exactly the ones outside the new code path.*
 
+**CORRECTION, same day, after a forensic re-audit the founder demanded.**
+
+The device numbers that open this entry were wrong. They came from a join keyed on
+`distinct on (user_id, date_trunc('minute', created_at))` — one arbitrary event per
+user-minute — which silently dropped every order whose surface emits no matching event
+(nine of them landed in "unattributed") and merged in-app sessions with the browser
+sessions the app itself handed students to.
+
+Re-derived from the SESSION that initiated each order:
+
+| claimed | actual |
+|---|---|
+| installed iOS: 0 paid of 8 | **0 paid of 11** (App Store 5, home-screen PWA 6) |
+| iOS Safari: 1 paid of 1 | **2 paid of 3** |
+| installed Android: 2 paid of 13 | **3 paid of 16** |
+
+The one paid order that looked like it came from the App Store build did not: the
+student escaped to Safari 18 seconds earlier and paid there. Session id is the only key
+that separates "inside the app" from "the browser the app handed them to", and a
+±5-minute window merges the two.
+
+The instrumentation defect this entry is about is real and unchanged. What it motivated
+was right; the numbers used to motivate it were a proxy presented as a measurement.
+
+**And the answer, once the explain pass ran (5 minutes after deploy):** not iOS at all.
+Two of the five failures were `source=internal`, "Payment blocked as website does not
+match registered website(s)" — Razorpay refusing an origin. See Incident #59. The other
+three were UPI collect-request timeouts, one of them on an ANDROID home-screen PWA,
+which is what finally killed the iOS-specific hypothesis.
+
 **Still open, deliberately.** *Why* installed iOS fails is UNKNOWN until the explain pass reports. No iOS behaviour was changed in this commit, because nothing yet justifies one. Separately noted: the session checkout mints orders through `/api/sessions/book` rather than `/api/payments/create-order`, so it emits no `payment_order_created` event and does not share the 30-minute duplicate-order reuse guard — two `session` orders were minted 2.5 minutes apart for the same student on 25 Aug. Not fixed here; not money-losing (an unpaid order costs nothing), but it is a real divergence between two order-minting paths.
+
+## Incident #59
+
+**2026-08-29 · Payments / conversion (P0) · we served a paywall on a domain Razorpay refuses**
+
+**What #58 made visible.** The moment the reconcile cron stopped discarding Razorpay's failure fields, the very first read of the five recorded failures answered a question that had been open for weeks — and the answer was not the one anyone expected:
+
+```
+order_TTc9Xwf45TqoaR   upi / payment_initiation / source=INTERNAL
+order_TTcAJRnVkWzuXC   upi / payment_initiation / source=INTERNAL
+  "Payment blocked as website does not match registered website(s)"
+```
+
+`source=internal` means **Razorpay refused, before the student ever chose how to pay**. Not a bank decline, not a UPI timeout, not iOS.
+
+**The controlled experiment production handed us.** Both orders belong to one student on `careerrai-daily.vercel.app`, minted 44 seconds apart. Nine minutes later the same student, same plan, same amount, same phone, paid — on `careerrai.in`. And the whole ledger agrees: **13 orders minted from the legacy origin, 0 paid; 20 from the canonical origin, 5 paid.** 101 students used the legacy origin in the seven days to 29 Aug; the most recent was 90 minutes before this was written.
+
+**Why the domain exists at all, and why it is not a mistake.** CareerRai serves from two live origins on one deployment. `careerrai-daily.vercel.app` was deliberately left serving rather than redirected, because installed PWAs and their push subscriptions live on it and a canonical redirect would break them (`lib/site.ts`, `proxy.ts`). Both origins are real and both carry signed-in students. The repo already knew this and had already paid for it once — the ten-day Google OAuth investigation that ended in `APP_ORIGINS` existed for exactly this reason.
+
+**So the defect is not the second origin. It is that the payment flow never knew the difference.** Every other cross-origin hazard in this codebase had been handled: OAuth round-trips, cookie scoping, session hand-off. Payments — the one flow where the cost is measured in rupees rather than in a re-login — had no origin concept at all.
+
+**What this cost, and the honest bound on it.** Between 0 and 13 orders. The two blocked ones are certain. The other 11 legacy-origin orders never produced a Razorpay payment attempt of any kind, so nothing distinguishes "the block stopped them" from "they changed their mind". Claiming 13 lost sales would be exactly the kind of precise-looking number this file exists to prevent.
+
+**The fix.** `lib/payment-origin.ts` decides — purely — whether the current origin can transact, and `lib/checkout-origin-guard.ts` moves the student to `careerrai.in` before an order is minted, reusing the existing one-time encrypted session hand-off rather than inventing a second way to move a session between origins. `/pay/continue` lands them back on the same paywall, signed in.
+
+Three properties carry all the risk, and all three are mutation-proven:
+
+- **Fail-closed.** `needsCheckoutHandoff` fires only on an origin positively established as non-transactable. localhost, previews, unknown hosts, lookalike hosts, wrong scheme — all return false. The inverted rule ("anything that isn't the canonical origin") would hand every developer and every preview reviewer off to production; that mutation fails three tests.
+- **Before the order, never after.** A hand-off after minting would strand a live Razorpay order on a domain that can never pay it — and the 30-minute reuse guard would then hand that dead order back for the next half hour. Moving the gate below the mint fails the surface guard.
+- **Never claims to have moved without navigating.** All three callers `return` on `move: true`. A hand-off that reported success without navigating would leave the student on a button that does nothing at all — worse than the block, which is at least visible. Every failure path resolves to `move: false` and lets today's checkout run unchanged.
+
+`checkout-surfaces-gated.guard.test.ts` pins the wiring in all three surfaces, because these three components have drifted before: only two emit `payment_order_created`, and only two share the duplicate-order reuse guard — which is why one student minted three session orders in nine minutes.
+
+**Registering the second domain in the Razorpay dashboard also clears the block, and should still be done.** It is not a substitute. It leaves the product one console setting away from silently losing every payment again, on any origin anyone adds later. A payment page belongs on the payment domain, and that should be a property of the code.
+
+**Lesson.** *A second origin is not a deployment detail, it is a second product. Everything host-scoped has to be re-decided for it — cookies, OAuth, push, and payments — and payments are the one where the failure is silent, because a blocked checkout looks exactly like a student who changed their mind. This repo had already answered the question three times for three other subsystems and never noticed that the fourth had not been asked.*
+
+**Second lesson.** *The fix for #58 paid for itself in five minutes. Storing what Razorpay already told us turned "iOS payments are broken, cause unknown" into a named mechanism on a different axis entirely — and the previous report's confident device-level numbers, built on a proxy join, were wrong in both directions. Instrument first, theorise second.*
+
+## Incident #60
+
+**2026-08-30 · Infrastructure / learning loop (P0) · two crons "never ran" because they only answered POST**
+
+**The thing that was actually wrong.** Vercel Cron invokes an endpoint with **GET**. `outcome-sweep` and `purge-session-handoffs` exported only `POST`. Next answered **405**, the handler body never executed — and because `withCronTracking` lives INSIDE the handler, no `cron_runs` row was written either.
+
+So a job that was being called on schedule, every day, and rejected every day, was **indistinguishable in our own telemetry from a job nobody had ever scheduled**. That is precisely how both were recorded:
+
+- Incident #55: *"`/api/cron/outcome-sweep` was declared in `vercel.json` on 24 Aug and had NEVER run."*
+- Incident #56: *"`/api/cron/purge-session-handoffs` was declared on 27 Aug and had NEVER run."*
+
+Of 41 crons in `vercel.json`, **exactly two lacked the GET export, and they were exactly the two that had never run.** Every other cron carries `export { POST as GET };`.
+
+**Two incidents were diagnosed as the wrong thing, by me, twice.** Both were read as scheduling failures and both were "fixed" by routing the job through a GitHub Actions fallback that POSTs. That is a workaround for a problem neither job had. Worse, it looked like it worked for `purge-session-handoffs`, which did start appearing in `cron_runs` — via the fallback, not via Vercel — which is why the real defect survived a second investigation.
+
+**And the fallback is not a scheduler.** Its runs are dropped wholesale: an hourly entry (`50 * * * *`) plus twelve daily ones should produce well over 24 runs a day; the workflow fired 12, 10, 1 and 5 times on the four days before this. `outcome-sweep`'s `15 2 * * *` entry has not fired once. Scheduled GitHub Actions are best-effort and skipped under load — acceptable as a backstop, useless as the only path.
+
+**The second defect, underneath the first.** `purge-session-handoffs` did run three times via the fallback, and failed all three:
+
+```
+[purge-handoffs] scrub failed: null value in column "payload" of
+relation "pwa_session_handoff" violates not-null constraint
+```
+
+`payload` was declared **NOT NULL**, and the scrub's entire job is to set it to NULL. The two-stage design — strip the credential within the hour, keep the row as history for seven days — was never representable in the schema. 595 rows, every one still holding an AES-GCM blob of a Supabase access+refresh token pair, oldest from 12 July.
+
+So even after the route was reachable, the purge would still have failed. Two independent bugs, stacked, both of which had to be fixed for a single credential to be destroyed.
+
+**The fix.** One line on each route, and `alter column payload drop not null`.
+
+**The prevention.** `cron-get-export.guard.test.ts` reads `vercel.json` and asserts every declared cron path resolves to a route file that exports a GET handler. It generates one test per cron (42 today), so a new cron added without the export fails the build rather than silently never running. Removing the export from `outcome-sweep` fails it.
+
+**Lesson.** *"It has never run" is a claim about our telemetry, not about the platform. When the tracking lives inside the handler, every pre-handler rejection — 405, 401, 404 — produces exactly the same evidence as "never scheduled", and the obvious reading is the wrong one. Before concluding a job is not being called, confirm that a call would leave a trace: if the only proof of life is written by code the failure prevents from running, absence of proof is not evidence of absence.*
+
+**Second lesson.** *I diagnosed this twice and built a fallback for it twice. A workaround that makes the symptom partially disappear is the most expensive kind of wrong fix, because it removes the pressure to find the cause. The fallback made `purge-session-handoffs` appear in `cron_runs`, which read as success, and the actual 405 went unexamined for another three days.*
+
+## Incident #61
+
+**2026-08-30 · Diagnostics (P1) · the answer was in the table for two days and three wrong diagnoses**
+
+**What was actually true.** The forensics probe read the login visit correctly, the first time, and every time. Arnav's forced login on 29 Aug produced, on `/login` at 20:21:10:
+
+```
+verdict: no_marker   cookieMarker: false   localMarker: false
+persistedBefore: false      (it was TRUE at his 16:17 visit, same device)
+```
+
+Both stores gone, and the persistence grant lost between visits. That is origin-level eviction, not the cookie-specific loss I had been reporting.
+
+**Why nobody could see it.** On `/login` the student is not signed in, so the event lands with `user_id` NULL. Every query run against this problem filtered by his user id, so every one of them excluded the only reading that mattered. The rows that DID carry his user id were taken seconds later on `/student/tracker` — after the probe had re-armed the markers on `/login` — and so reported `all_intact, markerAgeH=0` every time.
+
+**The attributed reading was the meaningless one and the meaningful one was anonymous.** That is the whole defect.
+
+**Three wrong diagnoses, in order, all mine.**
+
+1. *"He has not returned after a gap yet"* — he had, twice.
+2. *"The probe is vacuous and must not be trusted"* — too broad. It is contaminated only on the post-login mount; ordinary return visits produced genuine readings (`markerAgeH` 11 and 12) within hours of that claim.
+3. *"The /login event never arrives — its `track()` beacon dies with the navigation"* — flatly wrong. `track()` already flushes on `pagehide` via `sendBeacon`, the `/login` OTP events from that same batch arrived fine, and so did the forensics event. I asserted a mechanism without checking `journey.ts`, which does exactly what I said it did not.
+
+Each diagnosis was a claim about our telemetry made without querying the telemetry the right way — the same shape as Incident #60, one day apart.
+
+**The fix.** The `/login` reading is stashed in `sessionStorage` (which survives login's full page load and dies with the tab) and re-emitted verbatim by the first signed-in mount, flagged `carriedFromLogin: true`. Same verdict, now attached to a person. It is re-emitted rather than moved, so a student who never completes the login still leaves the anonymous trace.
+
+The once-per-session guard moved from module scope — which reset on every page load, which is what produced the artefact — to `sessionStorage`. A carried reading beats a fresh one on the signed-in screen, because the fresh reading available there is the probe reading its own handwriting.
+
+**Prevention.** `session-forensics-carry.test.ts` covers the decision table and pins the wiring: `/login` mounts the probe unsigned, the student layout mounts it `signedIn`. The entire carry depends on that one prop, and dropping it fails the guard. Four of five logic mutations fail a test; the fifth (an early `if (!raw) return null`) is an equivalent mutant, redundant with the `try/catch` below it — recorded rather than papered over.
+
+**Lesson.** *A filter is a hypothesis. Querying `where user_id = X` for an event that happens before sign-in does not return nothing because nothing happened — it returns nothing because the question excluded the answer. When a diagnostic "produces no data", check what the query would have had to look like for the data to appear, before concluding the diagnostic is broken.*
+
+**Second lesson.** *I claimed three times that a mechanism did not work without reading the mechanism. `track()`'s `pagehide`/`sendBeacon` flush is nine lines and would have refuted the third diagnosis in thirty seconds. L2 — no claim about behaviour from code location alone — applies just as hard to claims about code that is NOT there.*
+
+## Incident #62
+
+**2026-08-30 · Identity / Auth (P0) · "Continue with Google" could only ever create a second account**
+
+**What was live.** Google identity sign-in shipped 28 Aug and was made the PRIMARY CTA on `/start` on 29 Aug. Two days later production held exactly 5 Google accounts, and **all 5 had no phone identity at all**. Three were real students. One — Anshita Kulshrestha, `44ea1750` — completed onboarding, returned the next day, and has `profiles.phone` NULL: an active student nobody can ever reach by SMS or WhatsApp.
+
+**Why it could not have gone any other way.** Supabase links a Google identity to an existing user only when the email matches and is **confirmed**. Production: **963 of 969 student profiles have no email on file**, because this product sold phone-first auth for a year. So on that screen Google could not recognise a returning student even in principle. The only account it could produce was a *new* one — fresh streak, no plan, no buddy, no payment history — sitting beside the real one under a different id.
+
+**The guard that existed and had never run.** `/auth/callback` already carried a duplicate-account refusal. It was gated on `if (!existing && userEmail)`. But `handle_new_user` inserts the profile INSIDE the GoTrue transaction that creates the auth user, so `existing` is **always** non-null by the time the route runs — production shows `profiles.created_at` 21ms *earlier* than `auth.users.created_at`. The refusal was structurally unreachable and had never executed once.
+
+The file already documented this exact trap twenty lines lower, for `isNewUser`, in a comment ending *"Location in the code is not behaviour."* The same mistake was live twenty lines above it.
+
+**Three more defects found by tracing the same path.**
+
+- **The onboarding "Mobile" field was a client write into `profiles.phone`.** It stripped `+91` to display and posted back what it displayed, so 92 rows held a bare 10-digit number over the verified E.164 the OTP route had written. Worse than format drift: a student could point the column the sales team calls, and the notification system trusts, at a number they do not hold. Checked before removing — across all 917 accounts holding both a profile phone and an auth phone, the last ten digits matched in **917** cases and differed in **0**. Nobody had exploited it.
+- **The "54 students with a NULL profile phone" were not students.** All 54 have `phone_confirmed_at` NULL and `last_sign_in_at` NULL. GoTrue creates the auth user at OTP **send** time, not verify time, so an abandoned signup leaves a complete-looking profile row behind. 84 such rows exist. Every "students" count in the product is inflated by them. *I had reported these to the founder as reachable students being missed by outreach; that was wrong and is corrected here.*
+- **`otp_send_events` stores phone numbers in its `email` column** (`claim_otp_send_slot` inserts `(email, ip)` from `p_phone`). Self-consistent, so rate limiting works — but the `phone` column and `idx_otp_send_events_phone_time` are dead, and any split of "phone vs email OTP" by column is silently inverted. My own first query on this incident read "0 phone, 939 email" and was exactly backwards.
+
+**The fix — an anchor, not a better heuristic.** Guessing which account a stranger belongs to is how one student's history gets handed to another. So: **a student account is a verified phone number**, recorded in `profiles.phone_verified_at`, stamped only by a completed OTP round-trip. `lib/identity.ts` is the sole authority for the rules; `/auth/callback` and the student layout both consult it.
+
+Google no longer creates anything. It is a door onto an account that must already be anchored; an unanchored arrival is routed to `/auth/link-phone`, which attaches a phone to **that same id** via `updateUser({phone})` + `verifyOtp({type:'phone_change'})`. Never `type:'sms'` — that verifier would mint a *second session for whoever holds the number*, which is the very account we are preventing. A number already owned by another account is refused, never merged, and the student is sent to the OTP door that owns their real history.
+
+**What was deliberately not done.** No auth user was deleted, including the 5 orphans — they keep their sessions and their answers, and are asked once for a number. No second "who owns this phone" function: the drafted one was deleted in favour of the existing `profile_id_for_verified_phone` (20260819f).
+
+**The gate's blast radius was measured before it shipped, not after.** A blanket gate would have locked out `appreview@careerrai.in` — the **Apple App Store reviewer**, who has no Indian SIM to receive an OTP on — failing the next submission, plus `buddydemo`, plus Neelam Singh, an active counsellor on the email door whose phone was never confirmed. `requiresPhoneAnchor` is therefore scoped to `role === 'student'` and skips `is_test_account`/`is_demo`. Final radius: **6 live accounts, 3 of them the founder's own**; the other 84 unanchored rows have no session and never see it.
+
+**Prevention.** `identity.test.ts` (24 cases) proves the rules; `phone-anchor.behaviour.test.ts` and `anchor-gate.behaviour.test.ts` call the real route handlers and the real layout and assert what they *did*. **12 mutations** — inverted role scope, swapped decision order, auto-merge on conflict, always-anchored, gate deleted, test/demo exemption dropped, anchoring on the phone string instead of the verification, writing the raw posted phone, anchoring after a failed OTP, conflict refusal bypassed, self-exclusion dropped, gate override removed — **each fail a test**. The old guard that asserted onboarding must keep an editable phone input was inverted, not deleted.
+
+**Lesson.** *A guard is not a defence until you have watched it refuse something. Both defences that failed here — the duplicate-account check and `isNewUser` — were correct rules behind conditions that could never be true, in a file whose own comments warned about exactly that. The repo had the lesson written down and shipped the bug anyway, because the lesson lived in a comment instead of a test.*
+
+**Second lesson.** *Ask what a column is EVIDENCE of, not what it contains. `profiles.phone` held a plausible number for 54 people who never verified anything and 92 people who typed it themselves. "Has a phone" and "we proved they hold this phone" are different facts, and a schema that cannot tell them apart will be read as the stronger one every time.*

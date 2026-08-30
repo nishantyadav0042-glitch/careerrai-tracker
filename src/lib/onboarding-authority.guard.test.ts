@@ -336,18 +336,31 @@ describe('a cancelled or failed Google sign-in', () => {
   });
 
   it('an abandoned draft is simply never consumed — nothing is destroyed early', () => {
-    // Cancelling at Google means /auth/callback never runs. The row keeps
-    // consumed_at null and the student can come back and use OTP instead; the
-    // answers are still in localStorage, which the stash never cleared.
+    // The row keeps consumed_at null and the answers stay in localStorage,
+    // which the stash never cleared.
     const stash = read('app/api/auth/stash-onboarding/route.ts');
     expect(stash).not.toMatch(/removeItem|localStorage/);
+  });
+
+  // ── SUPERSEDES THE OLD "stash before the Google redirect" ORDERING GUARD ──
+  //
+  // That guard existed because /start sent the browser to accounts.google.com
+  // mid-funnel, and the answers had to be parked server-side first or they were
+  // lost. Incident #62 removed the detour rather than protecting it: Google
+  // could not recognise a returning student on that screen even in principle
+  // (963 of 969 students have no email to match on), so the only account it
+  // could produce was a second one.
+  //
+  // The property is now stronger and is asserted as such — there is no redirect
+  // to lose the draft TO. Written as a behaviour about the door, not about the
+  // order of two calls, so it cannot be satisfied by restoring the button and
+  // stashing before it.
+  it('/start creates accounts through the phone door only — no OAuth detour to lose answers to', () => {
     const screen = read('app/start/screens/screen-login-build.tsx');
-    const stashAt = screen.indexOf('stash-onboarding');
-    const clearAt = screen.indexOf('removeItem');
-    expect(stashAt).toBeGreaterThan(-1);
-    if (clearAt > -1) {
-      expect(clearAt > stashAt || screen.slice(0, stashAt).includes('verifyAndBuild'),
-        'the draft is cleared as part of stashing — a cancelled Google sign-in would lose it').toBe(true);
-    }
+    expect(screen).not.toMatch(/ContinueWithGoogle/);
+    expect(screen).not.toMatch(/signInWithOAuth/);
+    // The phone door is still there. A screen with NO door is Incident #10.
+    expect(screen).toMatch(/verify-phone-otp/);
+    expect(screen).toMatch(/request-phone-otp/);
   });
 });
