@@ -18,7 +18,7 @@ import { STATUS_ORDER, STATUS_LABEL, type CoverageStatus } from '@/lib/coverage-
 // one tap and a completely valid answer.
 interface Row { topic: string; section: string; status: CoverageStatus }
 
-export function WeeklyCoverageReview({ onDone }: { onDone: () => void }) {
+export function WeeklyCoverageReview({ onDone, onDemand = false }: { onDone: () => void; onDemand?: boolean }) {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [picked, setPicked] = useState<Map<string, CoverageStatus>>(new Map());
   const [neverReviewed, setNeverReviewed] = useState(false);
@@ -28,7 +28,9 @@ export function WeeklyCoverageReview({ onDone }: { onDone: () => void }) {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch('/api/coverage/weekly-review');
+      // onDemand: the student opened this themselves, so the schedule must not
+      // close it in their face — see the route's GET for why those are separate.
+      const res = await fetch(`/api/coverage/weekly-review${onDemand ? '?onDemand=1' : ''}`);
       const json = await res.json();
       if (!json.due) { onDone(); return; }
       setRows((json.topics as Row[]) ?? []);
@@ -39,7 +41,7 @@ export function WeeklyCoverageReview({ onDone }: { onDone: () => void }) {
       // A failed fetch must not trap the student behind a blank blocking sheet.
       onDone();
     }
-  }, [onDone]);
+  }, [onDone, onDemand]);
 
   /* eslint-disable-next-line react-hooks/set-state-in-effect -- initial fetch */
   useEffect(() => { void load(); }, [load]);

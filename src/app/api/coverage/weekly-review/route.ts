@@ -13,7 +13,7 @@ export const maxDuration = 60;
 // GET  — is a review due, and which topics should lead it.
 // POST — apply the student's updates and stamp the checkpoint.
 
-export async function GET() {
+export async function GET(request: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
@@ -30,8 +30,21 @@ export async function GET() {
   // gate from disagreeing about whether a review is due — a disagreement would
   // render the sheet and then have it immediately close itself.
   const filledAt = (prof?.onboarding_last_activity_at as string | null) ?? (prof?.created_at as string | null) ?? null;
+  // ── ON DEMAND (30 Aug) ────────────────────────────────────────────────────
+  //
+  // The schedule decides when a review is REQUIRED. It must not decide when a
+  // student is ALLOWED to correct their own syllabus status. Those were the
+  // same condition until a student who wanted to fix hers found no way in and
+  // used Delete Account instead — the only self-service "redo" the app offered.
+  //
+  // `onDemand` is the student pressing "Update where you stand" themselves, so
+  // the topics are returned whatever the clock says. It does not touch the
+  // weekly obligation: the gate still calls this without the flag, and
+  // coverage_reviewed_at is still stamped by the same POST, so answering early
+  // simply satisfies the week rather than adding a second review to it.
+  const onDemand = new URL(request.url).searchParams.get('onDemand') === '1';
   const due = isReviewDue(reviewedAt, prof?.onboarding_completed === true, new Date(), filledAt);
-  if (!due) return NextResponse.json({ due: false, topics: [] });
+  if (!due && !onDemand) return NextResponse.json({ due: false, topics: [] });
 
   const { data: rows } = await admin
     .from('topic_coverage')
