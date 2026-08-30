@@ -25,7 +25,11 @@
 | 9 | Average | ⚠️ | 3/4 + L4 gap, but **L1 and L2 cite the same video ID** — needs re-run |
 | 10 | Odd One Out | ✅ | **4/4 — L4 filled** |
 | 25 | Time & Work | ✅ | **4/4 — L4 filled** (arrived labelled "11"; see numbering note) |
-| 11–24, 26–46 | — | pending | |
+| 15 | Progressions | ✅ | 4/4 |
+| 16 | Vocabulary | ⚠️ | 2/4 + structural gap — **both URLs given as Google-search links, low confidence** |
+| 26 | Time Speed Distance | ✅ | 4/4 (arrived labelled "12") |
+| 27 | SI & CI | ✅ | 4/4 (arrived labelled "13") |
+| 11–14, 17–24, 28–46 | — | pending | |
 
 ---
 
@@ -398,3 +402,116 @@ levels rather than treating those as holes to fill.
   these channels genuinely push harder. Since "mild" is now the common case,
   it cannot by itself be a rejection criterion — the report needs a concrete
   threshold for what level of promotion actually disqualifies a link.
+
+---
+
+## Time Speed Distance (QA / Arithmetic) — arrived labelled "12"; factory #26
+
+| Level | Title | Channel | Video ID | Duration | Qs | Difficulty | Paid | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | TSD 1: Constant Distance Problems | Rodha | `CKiP208avbc` | 22:17 | **1** | basic | mild | 35–45 min | yes |
+| L2 | TSD 2: Speed Time Inverse Proportion | Rodha | `PQvBSkJDF_E` | 23:38 | **2** | medium | none | 35–45 min | yes |
+| L3 | TSD 8: Solving Escalator Problems | Rodha | `RHflaojKVlI` | 24:13 | 4 | CAT-level | mild | 45–60 min | yes |
+| L4 | Advance Quant 19: Meeting Point | ELITES GRID | `Kblu48aZ7bA` | 8:08 | 2 | CAT-level | none | 15–20 min | yes |
+
+- **Topic-purity concern at L3:** "Escalator Problems" is a narrow TSD
+  sub-type, not general CAT-level TSD practice. A student sent here for a
+  generic TSD task gets escalators only. Same shape as the Charts L4
+  ("Triangular Graph") issue — a specialised video filed as a general level.
+- **Question counts at L1 (1) and L2 (2) are the lowest seen.** An "EASY
+  PRACTICE" level with two worked questions cannot satisfy a practice target
+  of 8–12 questions on its own. This is the target-resource contract biting
+  again: these are concept videos wearing a practice label.
+
+---
+
+## SI & CI (QA / Arithmetic) — arrived labelled "13"; factory #27
+
+| Level | Title | Channel | Video ID | Duration | Qs | Difficulty | Paid | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | SI and CI 1: Basic Concepts | Rodha | `hvikOiSu_D4` | 21:37 | 4 | basic | none | 35–45 min | yes |
+| L2 | SI and CI 2: Difference Formula | Rodha | `TG3M3QFyY0k` | 26:14 | 3 | medium | none | 45–55 min | yes |
+| L3 | All Questions From SI & CI, CAT 2018–2023 (Amiya Sir) | **AzuCATion : CAT Prep By Amiya Sir** | `-lbU6SgPPH8` | **1:45:11** | 14 | CAT-level | mild | 130–150 min | yes |
+| L4 | Arithmetic Practice 44: Installment Ratio Method | Rodha | `MTdAQnGCUtM` | 14:35 | 1 | CAT-level | mild | 25–35 min | yes |
+
+- `AzuCATion : CAT Prep By Amiya Sir` = **10th distinct channel**. Unverified.
+- L3 at 1:45:11 is the **eighth** hour-plus candidate; 130–150 min claimed.
+- L4 comes from a different series ("Arithmetic Practice 44") than L1/L2 —
+  a one-off practice video repurposed as the exam-ready level, with a single
+  worked question. Weak fill; flag rather than count.
+
+---
+
+## Progressions (QA / Algebra) — factory #15 ✅ correctly numbered
+
+| Level | Title | Channel | Video ID | Duration | Qs | Difficulty | Paid | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | CAT 2026 Progressions & Series: Master AP, GP & HP | **Cracku - MBA CAT Preparation** | `VFhQKdcZml8` | 55:06 | 5 | basic | mild | 75–90 min | yes |
+| L2 | Arithmetic Progression 1: AP Average Funda | Rodha | `wSbjXsULtrI` | 22:25 | 2 | medium | none | 35–45 min | yes |
+| L3 | All CAT Questions from Progressions, 2017–2021 (Blitzkrieg) | 2IIM | `XP098K63oAI` | **1:19:41** | 10 | CAT-level | mild | 100–120 min | yes |
+| L4 | Advance Quant 9: Sequence & Series (Hunny Malhotra) | ELITES GRID | `8TygSoo-4Ig` | 14:23 | 1 | CAT-level | mild | 20–25 min | yes |
+
+- **`Cracku` appears for the first time — and this needs a deliberate
+  decision.** We previously rejected Cracku's *website* candidates on the
+  gate-2 access test (signup-funnel model). Their **YouTube channel is a
+  separate surface** and may pass where the website failed. The report must
+  make the channel-vs-website distinction explicit rather than letting a
+  blanket "Cracku rejected" carry over — or letting it silently in.
+- Ninth hour-plus candidate (L3).
+
+---
+
+## Vocabulary (VARC) — factory #16 ⚠️ TWO PROBLEMS
+
+| Level | Title | Channel | Video ID | Duration | Qs | Difficulty | Paid | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | CAT 2026 VARC: Vocabulary Masterclass (Sharwari Mam) | Rodha | `4jnQpFaS57g` | 58:16 | **0** | basic–medium | mild | 70–85 min | yes |
+| L2 | Vocabulary Booster For XAT, CAT, MAHCET & All MBA Exam 2021 Part-1 | **BYJU'S Exam Prep: CAT & MBA** | `ouybCha6v9E` | 33:37 | 10 | basic | mild | 40–50 min | yes |
+| L3 | — | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+| L4 | — | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+
+### Problem 1 — the URLs are Google-search links in disguise
+
+Both video links in this response were given as markdown whose **actual href
+is `https://www.google.com/search?q=...`** wrapping the YouTube URL, not the
+YouTube URL itself. The prompt explicitly forbids search links. A search-link
+fallback is the classic signature of a model that **could not confirm the
+video exists**. Both IDs (`4jnQpFaS57g`, `ouybCha6v9E`) must therefore be
+treated as **low-confidence, possibly non-existent**, and verified before any
+other use. This is the second hard defect in the batch after the prompt-9
+duplicate ID.
+
+### Problem 2 — the response contradicts itself
+
+Gemini's own structural note says CAT has had **no standalone vocabulary
+questions since ~2015**, and that any "CAT vocab practice" video is really
+OMET (SNAP/NMAT/XAT) material — which is why it refused L3 and L4. But its
+**L2 pick is exactly that**: a 2021 "Vocabulary Booster for XAT, CAT, MAHCET
+& All MBA Exam" of standalone root-word drills. By its own reasoning, that
+L2 should have been refused too. Treat L2 as **failing the CAT-relevance
+gate on the responder's own argument.**
+
+### The structural finding itself is sound, and it is the third of its kind
+
+Vocabulary is not an exam question-unit in modern CAT — it is tested only in
+context inside RC. This mirrors the Editorial Reading finding exactly, and
+matches how our own graph already treats skill/habit units. **Three topics
+now (Editorial Reading, Vocabulary, and partly Reading Speed Practice when
+it arrives) look like skill units where only L1 is meaningful.** The report
+should classify units as ladder-shaped vs skill-shaped up front, so empty
+levels there are recorded as correct results.
+
+## Running defect tally (15 topics logged)
+
+| Defect | Where |
+|---|---|
+| Answer never arrived (prompt echoed) | RC — later re-sent, resolved |
+| Same video ID given for two different levels | Average |
+| URLs supplied as Google-search links | Vocabulary (both) |
+| Response contradicts its own reasoning | Vocabulary L2 |
+| Specialised sub-topic filed as a general level | Charts L4, TSD L3 |
+| Practice level with 1–2 worked questions | TSD L1/L2, SI&CI L4, Progressions L4 |
+| Numbering drift vs the factory | TSD, SI&CI, Time & Work |
+
+Twelve distinct channels have now appeared. None beyond Rodha/2IIM has had
+provenance verified.
