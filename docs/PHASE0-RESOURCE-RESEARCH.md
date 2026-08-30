@@ -65,6 +65,44 @@ not a clean pick, even from an otherwise legitimate creator channel.
   moves from "near-FAIL" to **"CONDITIONAL, more promising than first
   read"** pending that per-set check.
 
+### Per-set topic-purity check (Firecrawl + Exa, 30 Aug) — the real answer
+
+Firecrawl search surfaced a fourth grouping missed on the first pass: a
+**"Topic Wise" list** whose titles carry explicit brackets —
+`Set 01 [Circular Arrangement]`, `Set 011 [Tabular Arrangement]`,
+`Set 023 [Circular Arrangement]`, `Set 026 [Tabular Arrangement]`,
+`Set 030 [Circular Arrangement]` — separate from the 6 Video-Solution / 20
+Tough / 13+ Easy sets counted earlier. Opened 5 sets (1 Topic-Wise-tagged,
+2 from Tough, 1 untagged-but-adjacent, 1 from Easy) to test whether the
+labels are trustworthy:
+
+| Set | Label | Actual content | Genuinely Arrangements? |
+|---|---|---|---|
+| `lrdi-practice-set-1` | Topic-Wise **[Circular Arrangement]** | 6 people, 6 chairs, circular table, wraparound seating | ✅ yes — moderate difficulty |
+| `lrdi-questions-difficult-set-20` | Tough | 4 couples, circular table, seating + colour constraints | ✅ yes — CAT-hard, genuinely complex (matches modern multi-attribute DILR style) |
+| `lrdi-questions-difficult-set-13` | Tough | people getting off a bus at sequential stops | 🟡 borderline — an ordering/sequencing puzzle, not a seating arrangement; countable under the broader "ordering/ranking" definition, not a clean seating-arrangement example |
+| `lrdi-practice-set-4` | *no bracket tag* (picked because it sat near the Topic-Wise list in search results) | railway-ticket colour/month matrix puzzle | ❌ no — pure attribute-matching logic, not an arrangement at all |
+| `lrdi-sets-elementary-1` | Easy | students × compulsory/optional subjects matching | ❌ no — attribute-matching, not an arrangement |
+
+**The curation rule this produces:** a set's presence near the Topic-Wise
+list, or its membership in the "Tough"/"Easy" difficulty tiers, does NOT
+by itself mean it's an Arrangement. The bracket-tagged Topic-Wise titles
+were reliable in this sample (1-for-1); the untagged set picked by
+proximity alone was wrong. **Only pull individual sets whose own title
+carries an explicit `[Circular/Tabular/Linear Arrangement]` tag, or whose
+opened content is verified directly** (as done for the two Tough-tier
+picks here) — never infer type from tier membership or list position.
+
+**Updated Arrangements verdict:** genuine, free, no-login CAT-level
+Arrangements content is confirmed to exist on this single source — Set 1
+(moderate, foundation-appropriate) and Set 20 (CAT-hard, genuinely
+multi-constraint, practising-appropriate) are both real, verified
+candidates. This is now a firmer **CONDITIONAL** than the earlier
+near-FAIL read: Arrangements does not fail on supply once sets are
+individually verified — it fails only if curation skips the per-set check
+and trusts tier/adjacency labels, which is exactly the failure mode this
+pass caught.
+
 The same assignment is being run independently through external research AIs
 using `docs/RESOURCE-RESEARCH-MASTER-PROMPT.md`; cross-check their outputs
 against this sheet before the founder's hand-vetting round.
@@ -77,7 +115,7 @@ against this sheet before the founder's hand-vetting round.
 |---|---|---|---|---|
 | Reading Comprehension | Bodhee Prep "How to read CAT RC passages" (article) | Bodhee Prep free RC practice bank ("521+ questions") | Medium | gating on individual passages not verified |
 | Percentages | Rodha YouTube percentages lecture (creator-owned) | 2IIM free question bank, percents cluster ("no sign-up" is their own stated policy) | Medium-high | video duration/fit unverified; question count per cluster needs a hand count |
-| Arrangements (stress case) | Rodha LRDI arrangements lecture | Bodhee Prep "101+ LRDI sets" w/ video solutions | **Low-medium — stress case behaving as predicted** | set-level sufficiency and CAT-difficulty unverified; strongest sources are login-walled |
+| Arrangements (stress case) | Rodha "Linear and Circular Arrangement-I" (20m11s, verified) | Bodhee `lrdi-practice-set-1` (moderate) + `lrdi-questions-difficult-set-20` (CAT-hard) — both individually opened and confirmed genuine circular-seating content | **Medium — upgraded from initial near-FAIL after per-set verification** | supply exists and is verified, but curation must check each set's own bracket-tag/content, never infer type from tier or list position — see §3 |
 
 **One finding that changes our earlier assumption:** official CAT past
 papers on iimcat.ac.in sit behind a **candidate login** (registration number
