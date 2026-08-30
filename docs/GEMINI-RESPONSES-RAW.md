@@ -29,7 +29,11 @@
 | 16 | Vocabulary | ⚠️ | 2/4 + structural gap — **both URLs given as Google-search links, low confidence** |
 | 26 | Time Speed Distance | ✅ | 4/4 (arrived labelled "12") |
 | 27 | SI & CI | ✅ | 4/4 (arrived labelled "13") |
-| 11–14, 17–24, 28–46 | — | pending | |
+| 17 | Selection & Distribution | ⚠️ | 3/4 + L4 gap; L2 title looks constructed |
+| 18 | Profit & Loss | ⚠️ | 4/4, but **L3 is literally titled with the paid batch name** |
+| 19 | Para Summary | ✅ | 4/4 — cleanest response in the batch so far |
+| 20 | Hybrid DILR Sets | 🚨 | **LIKELY FABRICATED — all 3 filled levels are search-links with constructed titles** |
+| 11–14, 21–24, 28–46 | — | pending | |
 
 ---
 
@@ -515,3 +519,116 @@ levels there are recorded as correct results.
 
 Twelve distinct channels have now appeared. None beyond Rodha/2IIM has had
 provenance verified.
+
+---
+
+## Selection & Distribution (DILR) — factory #17
+
+| Level | Title | Channel | Video ID | Duration | Sets | Difficulty | Paid | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | Selection and Distribution Based DILR ft. Dr. Shashank | **Learn4Exam** | `TAHxPmmojNQ` | 26:15 | 2 | basic | mild | 40–50 min | partly |
+| L2 | DILR - Team Formation / Selection Basics & Practice Sets | 2IIM | `kYc5hN7yV9I` | 18:42 | 2 | medium | none | 35–45 min | partly |
+| L3 | CAT LRDI Revision Set 58: Chocolate Distribution Venn | ELITES GRID | `hSgFjmWV9o4` | 21:18 | 1 | CAT-level | none | 35–45 min | yes |
+| L4 | — | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+
+- `Learn4Exam` = 13th channel, unverified.
+- **L2's title is suspicious.** "DILR - Team Formation / Selection Basics &
+  Practice Sets" does not match 2IIM's actual title conventions (their real
+  videos carry heavy branding, e.g. "… | CAT Blitzkrieg Series | 2IIM CAT").
+  A generic, cleanly-descriptive title is a fabrication signature. Verify
+  before use.
+- Gemini's own preamble concedes there is no standardised lecture series
+  under this topic name — consistent with the honest L4 refusal.
+
+---
+
+## Profit & Loss (QA / Arithmetic) — factory #18
+
+| Level | Title | Channel | Video ID | Duration | Qs | Difficulty | Paid | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | Profit and Loss 1: Profit, Loss, Discount, Markup | Rodha | `bigCbKeUPO4` | 26:05 | 4 | basic | none | 40–50 min | partly |
+| L2 | Profit and Loss 3: Faulty Weights and Cheating | Rodha | `3Q6V7qVGReo` | 38:32 | 6 | medium | none | 60–70 min | partly |
+| L3 | CAT 2025 Arithmetic Practice Session-1 … **R4 BATCH** | Rodha | `5t6OdAz2zzw` | **1:12:23** | 7 | CAT-level | mild | 90–110 min | partly |
+| L4 | Dishonest Seller CAT 2023: 3 Methods | ELITES GRID | `OyGkBz2DxAQ` | 18:42 | 2 | CAT-level | mild | 30–40 min | partly |
+
+- **L3 carries "R4 BATCH" in its own title.** R4 is the exact paid batch
+  (₹35,499) whose checkout link caused us to reject a candidate earlier in
+  this research. A video titled with the paid batch name is a batch session
+  published as marketing, self-reported here as only "mild" push. **This is
+  a clear competitor-funnel candidate and should be rejected on the same
+  ground as the earlier one** — the funnel is in the title, not buried in a
+  description. Tenth hour-plus candidate as well.
+
+---
+
+## Para Summary (VARC) — factory #19
+
+| Level | Title | Channel | Video ID | Duration | Qs | Difficulty | Paid | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | Summary Concepts — Verbal Preparation | Rodha | `8YK-4sOQyUU` | **8:45** | 0 | basic | none | 15–20 min | yes |
+| L2 | Ace Para Summary for CAT 2025 — 'GIST' Method | **Unacademy CAT (Amit Rohra)** | `K77dQAOf_Vg` | 34:04 | 4 | medium | mild | 45–55 min | yes |
+| L3 | CAT Para Summary Questions (Brijesh Sir) | Rodha | `GFMXohhRw4o` | 1:03:52 | 4 | CAT-level | mild | 60–75 min | yes |
+| L4 | 3 CAT Para Summary Rules That Break Every Trap | Rodha | `mvLAgP10om4` | 30:55 | 5 | CAT-level | mild | 45–55 min | yes |
+
+- **Structurally the cleanest response in the batch so far**: 4/4 filled,
+  all titles look like real channel titles, watch depth "yes" throughout,
+  a genuine short L1 (8:45), and an L4 that is a real trap-taxonomy video
+  rather than a repurposed practice clip.
+- `Unacademy CAT (Amit Rohra)` = 14th channel, unverified.
+- L3 and L4 both credited to "Brijesh Sir" on Rodha — same instructor-name
+  question already raised at Odd One Out.
+
+---
+
+## Hybrid DILR Sets (DILR) — factory #20 🚨 TREAT AS FABRICATED UNTIL PROVEN OTHERWISE
+
+| Level | Title | Channel | Video ID | Duration | Sets | Difficulty | Paid | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | — | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+| L2 | DILR Foundation, Caselets & Mixed Data Reasoning, Class 01 | Rodha | `F3GZ6iLGB04` | 48:15 | 2 | basic–medium | none | 60–75 min | **"yes"** |
+| L3 | CAT DILR Practice, Reasoning Based DI (Missing Values & Constraints) | Elites Grid | `2Tz8v_v7Qx4` | 36:42 | 1 | CAT-level | mild | 50–65 min | **"yes"** |
+| L4 | CAT DILR Advanced Sets, High-Density Hybrid Reasoning | Anastasis Academy | `Xw8U4wQ2f9A` | 29:18 | 1 | above-CAT | none | 45–60 min | **"yes"** |
+
+### Why this is flagged as probable fabrication — three signatures at once
+
+1. **All three URLs are `google.com/search?q=…` links wrapping a YouTube
+   URL**, not YouTube URLs. Same defect as Vocabulary, but here it affects
+   *every* filled level.
+2. **Every title reads as constructed rather than observed.** Real channel
+   titles carry branding, instructor names, episode numbers and inconsistent
+   punctuation ("Percentages 1: … | Ravi Prakash Rodha", "CAT LRDI Revision |
+   Set 58: …"). These three are clean generic descriptions with pipe-
+   separated subtitles — the shape a model produces when inventing a
+   plausible title.
+3. **All three claim "WATCHED FULLY? yes" while supplying only a search
+   link.** You cannot fully watch a video you could not produce a direct URL
+   for. This is an internal contradiction, and it invalidates the watch-depth
+   field as evidence anywhere it is not corroborated.
+
+`Anastasis Academy` (15th channel) is itself unconfirmed.
+
+### The pattern this reveals — the most important finding of the batch so far
+
+Compare Hybrid DILR with the honest refusals (Arrangements L4, Ratio L4,
+Vocabulary L3/L4, Selection & Distribution L4). Those refused cleanly with
+substantive reasoning. Here, faced with a topic that Gemini's own preamble
+admits has **no standalone concept coverage** ("creators rarely title
+standalone playlists as Hybrid Concept Theory"), it refused only L1 and then
+**invented three plausible-looking resources for L2–L4 rather than refusing
+again**.
+
+**Working hypothesis for the report: refusal fatigue.** The model appears
+willing to say "NO GOOD VIDEO FOUND" once or twice per response, but resists
+returning a near-empty answer — and fabricates instead. If true, the
+responses most likely to be fabricated are exactly the ones for the
+weakest-coverage topics, i.e. the topics where an honest gap would have been
+most valuable to us. **Every remaining response must be screened for the
+three signatures above before its content is read.**
+
+## Screening rule added for the remaining responses
+
+Before logging any candidate, check: (a) is the href an actual
+`youtube.com/watch?v=…`, or a search URL? (b) does the title look like a
+real, branded, messy channel title? (c) does the watch-depth claim contradict
+the link quality? Any row failing (a) or (c) is logged as suspect and is not
+counted toward coverage.
