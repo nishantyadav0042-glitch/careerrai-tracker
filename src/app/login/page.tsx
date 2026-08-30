@@ -5,7 +5,6 @@ import { ArrowRight, Eye, EyeOff, Smartphone, ChevronLeft, KeyRound } from 'luci
 import Image from 'next/image';
 import Link from 'next/link';
 import { InstallButton } from '@/components/install/install-button';
-import { ContinueWithGoogle } from '@/components/auth/continue-with-google';
 import { cn } from '@/lib/utils';
 import { track } from '@/lib/journey';
 import { StoragePersistenceProbe } from '@/components/storage-persistence-probe';
@@ -223,16 +222,24 @@ function LoginForm() {
                   <ArrowRight className="w-4 h-4 text-white ml-auto transition-transform group-hover:translate-x-0.5" />
                 </Link>
 
-                {/* Continue with Google — one tap, and it both signs up and
-                    logs in, so it sits above the two mode-specific buttons
-                    rather than inside either. Identity scopes only; a student
-                    is never asked for calendar permission (see the component).
-                    Mobile OTP and password stay exactly as visible as before —
-                    Google is an addition, never a replacement, and nothing
-                    here is required to pay. */}
-                <div className="pt-1">
-                  <ContinueWithGoogle />
-                </div>
+                {/* ── NO GOOGLE DOOR FOR STUDENTS (30 Aug, founder) ──────────────
+                    Google sat here as a one-tap sign-up-and-log-in, above the
+                    OTP and password buttons. It is gone, and the phone journey
+                    is the primary path again, as it was before 28 Aug.
+
+                    Why, in one line: Google could not recognise a returning
+                    phone student, so the only account it could make was a
+                    SECOND one — and its first two days produced five accounts
+                    with no reachable number.
+
+                    Google is NOT gone from the product. It stays exactly where
+                    it earns its place, both untouched by this change:
+                      · the MENTOR calendar connection (/api/google/connect),
+                        which is what makes Meet links and invites work;
+                      · the PREMIUM moment (post-payment-google.tsx), offered to
+                        a student who has converted and now has sessions to put
+                        in a calendar.
+                    Identity for a student is a verified phone. Nothing else. */}
 
                 <div className="flex items-center gap-3 pt-1">
                   <span className="h-px flex-1 bg-stone-200" />
