@@ -356,7 +356,22 @@ export type EventName =
   // and folding the single-session link in with them would record the deepest
   // engagement on the screen as an abandonment.
   | 'buddy_nudge_shown' | 'buddy_nudge_dismissed'
-  | 'buddy_nudge_cta' | 'buddy_nudge_rung';
+  | 'buddy_nudge_cta' | 'buddy_nudge_rung'
+  // Free external resources attached to a study task (31 Aug). The plan has
+  // always been able to say "solve 15 questions" without being able to say
+  // where the 15 questions are; these three measure whether closing that gap
+  // actually helps anyone.
+  //
+  // `_shown` exists so that "students ignore the links" and "students never
+  // saw the links" are different numbers — the same lesson daily_slot_served
+  // cost an hour of SQL to learn.
+  //
+  // `_verdict` is the ONLY outcome signal available. The student watches on
+  // YouTube, where we can see nothing: no watch time, no completion, no
+  // drop-off. One tap on return is the whole measurement, and it is what the
+  // weekly link review reads. Props carry videoId, topic and intent so a bad
+  // link is one query away from being named, not a mood.
+  | 'resource_shown' | 'resource_opened' | 'resource_verdict';
 
 export function track(event: EventName, props: Record<string, unknown> = {}): void {
   try {

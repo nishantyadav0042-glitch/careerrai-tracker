@@ -1,0 +1,134 @@
+import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+
+// ── We link. We do not host, and we do not compel ─────────────────────────
+//
+// The founder's position on external content is four sentences long and every
+// one of them is a constraint a future edit could quietly break:
+//
+//   We will not host anything, we will only send the student to the original
+//   source. Options and choice — we mandate nothing. One link, never a list.
+//   We will never link pirated or re-uploaded material.
+//
+// Each rule below is one of those sentences, expressed as something a diff
+// cannot pass without someone noticing. See
+// docs/RESOURCE-LINKING-PLAN-2026-08.md for the full plan and the SWOT.
+
+const SURFACE = 'src/components/task-resource.tsx';
+const CARD = 'src/components/DailyTracker/TodaysRoutineCard.tsx';
+
+const read = (p: string) => readFileSync(p, 'utf8');
+// Comments explain the rules, so they would satisfy every check below on
+// their own. Strip them and test the code that actually ships.
+const code = (p: string) =>
+  read(p)
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '')
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, '');
+
+describe('the resource is linked, never hosted', () => {
+  it('sends the student to the original watch page', () => {
+    expect(code(SURFACE)).toContain('https://www.youtube.com/watch?v=');
+  });
+
+  it('never embeds, frames, or proxies the video', () => {
+    // An embed puts someone else's video inside our chrome and makes us look
+    // like the publisher. That is the one posture the whole plan is built to
+    // avoid — legally the interesting question, commercially a claim we have
+    // not earned.
+    const s = code(SURFACE);
+    expect(s, 'an iframe would make us the publisher').not.toContain('<iframe');
+    expect(s).not.toContain('youtube.com/embed');
+    expect(s).not.toContain('youtube-nocookie');
+    expect(s).not.toContain('dangerouslySetInnerHTML');
+  });
+
+  it('opens outside the app, without handing the target our referrer or window', () => {
+    const s = code(SURFACE);
+    expect(s).toContain("target=\"_blank\"");
+    expect(s).toContain('rel="noopener noreferrer"');
+  });
+});
+
+describe('the resource is optional', () => {
+  it('does not gate task completion', () => {
+    // Incident #2 is the standing lesson here: requiring an extra tick before
+    // a student could log an honest day cost a whole cohort. A link they did
+    // not open must never be able to do the same.
+    const s = code(SURFACE);
+    expect(s).not.toContain('complete-task');
+    expect(s).not.toContain('disabled');
+  });
+
+  it('says so on the row, before the tap', () => {
+    expect(read(SURFACE)).toContain('optional');
+  });
+
+  it('stops its taps from reaching the task row', () => {
+    // The task row is one big button. Without this, opening a resource would
+    // tick the task — recording progress the student never made, into the
+    // completion data every other surface reads from.
+    expect(code(SURFACE)).toContain('stopPropagation');
+  });
+});
+
+describe('one link, never a list', () => {
+  it('renders a single anchor', () => {
+    const anchors = code(SURFACE).match(/<a\b/g) ?? [];
+    expect(anchors.length, 'a list hands the decision back to the student').toBe(1);
+  });
+
+  it('takes one resource, not an array', () => {
+    const s = read(SURFACE);
+    expect(s).toContain('resource: TaskResource');
+    expect(s).not.toContain('resources: TaskResource[]');
+  });
+});
+
+describe('the source is always named', () => {
+  it('shows the channel and the real runtime before the student commits', () => {
+    // Twenty-two researched durations were wrong, one by more than twenty
+    // minutes. A student told "13 min" who loses forty was misled by our
+    // plan, not by YouTube — so the figure shown is the platform-read one.
+    const s = read(SURFACE);
+    expect(s).toContain('{resource.channel}');
+    expect(s).toContain('{resource.realMinutes}');
+  });
+});
+
+describe('the outcome signal exists and is honest', () => {
+  it('asks only after the student actually left', () => {
+    // We can see nothing on YouTube — no watch time, no completion. Asking
+    // "did it help?" about a link nobody opened would manufacture an opinion.
+    const s = code(SURFACE);
+    expect(s).toContain('opened && verdict === null');
+  });
+
+  it('records impressions separately from opens', () => {
+    // Otherwise "students ignore the links" and "students never saw the
+    // links" are the same number.
+    const s = code(SURFACE);
+    expect(s).toContain("track('resource_shown'");
+    expect(s).toContain("track('resource_opened'");
+    expect(s).toContain("track('resource_verdict'");
+  });
+
+  it('carries enough props to name a bad link in one query', () => {
+    const s = code(SURFACE);
+    expect(s).toContain('videoId: resource.videoId');
+    expect(s).toContain('intent: resource.intent');
+  });
+});
+
+describe('the plan card actually renders it', () => {
+  it('shows the resource on both task shapes', () => {
+    // The card renders a hero task and ordinary rows through two separate
+    // branches. Wiring only one is the silent half-ship this guards against.
+    const hits = code(CARD).match(/<TaskResource\b/g) ?? [];
+    expect(hits.length, 'hero task and ordinary rows both need it').toBe(2);
+  });
+
+  it('never renders it on a finished task', () => {
+    expect(code(CARD).match(/!done && task\.resource/g)?.length).toBe(2);
+  });
+});

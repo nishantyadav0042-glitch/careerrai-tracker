@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card';
 import { Check, CalendarDays } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TopicInsights } from '@/components/topic-insights';
+import { TaskResource, type TaskResource as TaskResourceData } from '@/components/task-resource';
 import { BusyDayButton } from '@/components/busy-day-button';
 import { isMockSitting } from '@/lib/mock-in-plan';
 import { FirstWeekAskCard } from '@/components/first-week-ask-card';
@@ -30,6 +31,11 @@ interface RoutineTask {
   coverageStatus?: CoverageStatus | null;
   lastTouchedDaysAgo?: number | null;
   timesPracticed?: number;
+  // One optional verified link to somebody else's video, attached by the
+  // engine (routine-engine.resourceForTask). Absent for most tasks and for
+  // every routine generated before this shipped — the card must render
+  // identically without it, because absence is the normal case, not an error.
+  resource?: TaskResourceData | null;
 }
 
 // "Last done 6 days ago" / "First time" / "3rd revision" — three words, not
@@ -762,6 +768,11 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
                         {!done && task.topic && (
                           <div className="mt-2"><TopicInsights topic={task.topic} /></div>
                         )}
+                        {/* The execution path: where the fifteen questions
+                            actually are. Optional, never gates the tick. */}
+                        {!done && task.resource && (
+                          <TaskResource resource={task.resource} topic={task.topic} taskId={task.id} />
+                        )}
                       </div>
                       {isMockSitting(task) && (
                         <div onClick={(e) => e.stopPropagation()}>
@@ -819,6 +830,9 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
                       </span>
                       {!done && task.reason && (
                         <p className="mt-0.5 text-[11px] leading-snug text-stone-500">{task.reason}</p>
+                      )}
+                      {!done && task.resource && (
+                        <TaskResource resource={task.resource} topic={task.topic} taskId={task.id} />
                       )}
                     </div>
                     <span className="shrink-0 text-xs text-stone-400">{task.estMinutes}m</span>

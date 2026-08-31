@@ -280,6 +280,16 @@ and most have a guard test that fails the build if violated.
 8. **Never blame a student for time before they joined** (`reconcileWeek`
    joinedOn), never claim the app did something it didn't
    (`plan-reason.ts` refuses untrue because-lines).
+9. **We link to content; we never host it, and never require it.** External
+   resources (`lib/topic-resources.ts` → `routine-engine.resourceForTask` →
+   `components/task-resource.tsx`) are one anchor to the original watch page,
+   opened outside the app, marked optional, with the channel and the
+   platform-read runtime shown before the tap. No iframe, no `/embed`, no
+   proxy — an embed makes us the publisher. Attaching a resource must never
+   change a task's `target`, and opening one must never tick a task.
+   *Guards: `task-resource-surface.guard.test.ts` (the surface),
+   `topic-resources.guard.test.ts` (the data — nine researched videos did not
+   exist, twenty-two runtimes were wrong, three channels were misattributed).*
 
 ---
 
