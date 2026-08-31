@@ -74,8 +74,15 @@ export interface RoutineTask {
   // applied to exactly ONE vivid, personal trigger rather than diluted
   // across every task, which is the closest a static list gets to that gap.
   isImplementationIntention?: boolean;
-  /** Held back by the surface until the student says the primary missed. */
-  secondary?: TopicResource | null;
+  /**
+   * The phase this task's instruction was written for.
+   *
+   * Stored so the resource can be re-resolved later against the SAME phase the
+   * target was worded for. Without it, a student who advances a topic's
+   * coverage mid-day would see the row change under a target that still says
+   * "Learn X".
+   */
+  topicPhase?: Phase;
 }
 
 export interface GeneratedRoutine {
@@ -121,8 +128,19 @@ const RESOURCE_PREFERENCE: Record<Phase, readonly ResourceIntent[]> = {
   revision:   [],
 };
 
-/** The task layer's single entry point. Null whenever we have nothing
- *  verified for this topic, which is the common case. */
+/**
+ * The task layer's single entry point. Null whenever we have nothing verified
+ * for this topic, which is the common case.
+ *
+ * NOTE: a resolved resource is deliberately NEVER written into a generated
+ * task, and therefore never into `daily_routines.tasks`. Routines are
+ * persisted as JSON and only regenerate on a new day, so a stored resource
+ * would keep serving whatever the inventory said when the row was written —
+ * including, before Layer A, a practice video on a practice task. The resource
+ * is a READ-TIME PROJECTION over the live inventory (see
+ * api/routine/today), which makes a stale resource structurally impossible
+ * rather than merely unlikely.
+ */
 export function resourceForTask(topic: string | null, topicPhase: Phase): TopicResource | null {
   if (!topic) return null;
   return resourceByPreference(topic, RESOURCE_PREFERENCE[topicPhase]);
@@ -138,6 +156,40 @@ export function resourceForTask(topic: string | null, topicPhase: Phase): TopicR
 export function secondaryForTask(topic: string | null, topicPhase: Phase): TopicResource | null {
   if (!resourceForTask(topic, topicPhase)) return null;
   return resourceSecondary(topic);
+}
+
+/**
+ * Attach the resource to a task at READ time — the only place a task ever
+ * acquires one.
+ *
+ * `daily_routines.tasks` is a JSON column written once per day, and
+ * planStaleReason rebuilds only on completed work, changed hours or a late
+ * check-in — never on a code or inventory change. So anything resolved at
+ * generation would keep serving whatever the inventory said when the row was
+ * written; before Layer A that meant a practice video on a practice task.
+ *
+ * Two properties make a stale resource impossible rather than unlikely:
+ *   · the task is spread FIRST, so any resource on the stored row is
+ *     overwritten, never merged;
+ *   · generation no longer writes one at all, so there is nothing to overwrite.
+ *
+ * The phase comes from the task's own `topicPhase` — the phase its target was
+ * worded for — so the row can never contradict the instruction above it. Tasks
+ * written before that field existed fall back to the topic's current coverage,
+ * which is also what discards their stale resource.
+ */
+export function projectTaskResources<T extends { topic?: string | null; topicPhase?: Phase }>(
+  task: T,
+  currentStatus: CoverageStatus | null | undefined,
+  calendarPhase: Phase,
+): T & { resource: TopicResource | null; secondary: TopicResource | null } {
+  const phase = task.topicPhase ?? phaseForTopic(currentStatus, calendarPhase);
+  const topic = task.topic ?? null;
+  return {
+    ...task,
+    resource: resourceForTask(topic, phase),
+    secondary: secondaryForTask(topic, phase),
+  };
 }
 
 // A student already at sectionals/mocks shouldn't get "concept + practice"
@@ -726,8 +778,7 @@ export function generateRoutine(
       label: `${weak} — ${choice.topic}`,
       // Verb from the TOPIC's status; volume still priced by the day's phase.
       target: targetPhrase(weak, choice.topic, minutes, phaseForTopic(choice.coverageStatus, phase)),
-      resource: resourceForTask(choice.topic, phaseForTopic(choice.coverageStatus, phase)),
-      secondary: secondaryForTask(choice.topic, phaseForTopic(choice.coverageStatus, phase)),
+      topicPhase: phaseForTopic(choice.coverageStatus, phase),
       estMinutes: minutes,
       reason: i === 0
         ? implementationIntention(weak, choice.topic, choice.reasons, phase)
@@ -748,8 +799,7 @@ export function generateRoutine(
         topic: choice.topic,
         label: `${section} — ${choice.topic}`,
         target: targetPhrase(section, choice.topic, minutes, phaseForTopic(choice.coverageStatus, phase)),
-        resource: resourceForTask(choice.topic, phaseForTopic(choice.coverageStatus, phase)),
-        secondary: secondaryForTask(choice.topic, phaseForTopic(choice.coverageStatus, phase)),
+        topicPhase: phaseForTopic(choice.coverageStatus, phase),
         estMinutes: minutes,
         reason: sectionReason(section, choice.topic, choice.reasons, i === 0 ? 'second' : 'third'),
       });

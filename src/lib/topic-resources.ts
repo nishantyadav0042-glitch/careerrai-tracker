@@ -179,14 +179,6 @@ export const TOPIC_RESOURCES: Record<string, TopicResource[]> = {
       channel: "Rodha", verifiedOn: '2026-08-31',
       title: "HCF LCM 2 | Number System for CAT 2026 | Ravi Prakash Rodha" },
   ],
-  "Hybrid DILR Sets": [
-    { intent: 'concept', videoId: 'gqYVcVjqW0k', realMinutes: 22, views: 134794,
-      channel: "Rodha", verifiedOn: '2026-08-31',
-      title: "Tabular Set || LR & DI Preparation for CAT || CAT exam Preparation" },
-    { intent: 'worked_example', videoId: 'e3MUWMNxkKo', realMinutes: 12, views: 27916,
-      channel: "Aptitude Jab", verifiedOn: '2026-08-31',
-      title: "CAT Infinite DILR - Set 420 | Averaging out the IQ | Data Table | Logi" },
-  ],
   "Inequalities": [
     { intent: 'concept', videoId: 'zIrr1lkvyBY', realMinutes: 19, views: 233003,
       channel: "Rodha", verifiedOn: '2026-08-31',

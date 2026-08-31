@@ -100,17 +100,28 @@ describe('the outcome signal exists and is honest', () => {
   it('asks only after the student actually left', () => {
     // We can see nothing on YouTube — no watch time, no completion. Asking
     // "did it help?" about a link nobody opened would manufacture an opinion.
+    //
+    // This used to scan for the inline condition. The rule now lives in
+    // lib/resource-feedback (shouldAskVerdict) because three sequence defects
+    // shipped while it was tangled in JSX and no render test could catch them;
+    // resource-feedback.test.ts drives it through whole journeys instead. What
+    // this guard still owns is that the component DELEGATES rather than
+    // re-deciding.
     const s = code(SURFACE);
-    expect(s).toContain('opened && verdict === null');
+    expect(s).toContain('shouldAskVerdict(state)');
+    expect(s, 'the surface must not re-implement the rule').not.toMatch(/opened && verdict === null/);
   });
 
   it('records impressions separately from opens', () => {
-    // Otherwise "students ignore the links" and "students never saw the
-    // links" are the same number.
+    // Otherwise "students ignore the links" and "students never saw the links"
+    // are the same number. The three event names are now emitted from one place
+    // driven by the reducer, so the guard checks the single emission point
+    // exists and that nothing else in the file emits behind its back.
     const s = code(SURFACE);
-    expect(s).toContain("track('resource_shown'");
-    expect(s).toContain("track('resource_opened'");
-    expect(s).toContain("track('resource_verdict'");
+    expect(s).toContain('function advance(');
+    expect(s).toContain('for (const e of emit) track(e.event');
+    const trackCalls = s.match(/track\(/g) ?? [];
+    expect(trackCalls.length, 'exactly one emission point').toBe(1);
   });
 
   it('carries enough props to name a bad link in one query', () => {
@@ -162,6 +173,6 @@ describe('the secondary replaces the primary, never joins it', () => {
     // Recording that as an opinion on content they never saw would be a lie.
     const s = code(SURFACE);
     expect(s).toContain("ask('not_opened')");
-    expect(s).toContain('!opened && verdict === null');
+    expect(s).toContain('shouldOfferNotOpened(state)');
   });
 });

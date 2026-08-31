@@ -1,8 +1,12 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useReducer } from 'react';
 import { ExternalLink } from 'lucide-react';
 import { track } from '@/lib/journey';
+import {
+  reduceFeedback, initialFeedback, canOfferSecondary, shouldAskVerdict, shouldOfferNotOpened,
+  type Verdict, type FeedbackState, type FeedbackAction,
+} from '@/lib/resource-feedback';
 
 // One optional link to somebody else's video, attached to the task it helps
 // with. This is the whole of CareerRai's content position, rendered:
@@ -44,7 +48,16 @@ export interface TaskResource {
   longForm?: true;
 }
 
-type Verdict = 'helped' | 'okay' | 'did_not' | 'not_opened';
+// A stable id linking one verdict to the reason that may follow it. Without
+// this the reason would have to be a second resource_verdict, and every
+// "not helpful" count would double.
+function newVerdictId(): string {
+  try {
+    return globalThis.crypto?.randomUUID?.() ?? `v${Date.now()}${Math.random().toString(36).slice(2, 8)}`;
+  } catch {
+    return `v${Date.now()}${Math.random().toString(36).slice(2, 8)}`;
+  }
+}
 
 // Why an intent maps to a verb: it names what the student is about to do. The
 // intent itself is our vocabulary, not theirs.
@@ -77,12 +90,15 @@ export function TaskResource({
   topic: string | null;
   taskId: string;
 }) {
-  const [onSecondary, setOnSecondary] = useState(false);
-  const [verdict, setVerdict] = useState<Verdict | null>(null);
-  const [opened, setOpened] = useState(false);
-  const shown = useRef(false);
-
+  // All feedback semantics live in lib/resource-feedback — one authority,
+  // driven through whole journeys by a node test. This component renders it
+  // and forwards the events it asks for; it decides nothing itself.
+  const [state, commit] = useReducer(
+    (st: FeedbackState, a: FeedbackAction) => reduceFeedback(st, a).state,
+    initialFeedback,
+  );
   // The resource actually on screen. One at a time, always.
+  const onSecondary = state.onSecondary;
   const resource = onSecondary && secondary ? secondary : primary;
 
   const base = {
@@ -94,35 +110,37 @@ export function TaskResource({
     rank: onSecondary ? 'secondary' : 'primary',
   };
 
-  // One impression per mount. Without this, "students ignore the links" and
-  // "students never saw the links" are the same number.
+  // Single emission point. The reducer says what a transition means; nothing
+  // else in this file is allowed to call track() for feedback.
+  //
+  // Deliberately NOT called `dispatch`: that name belongs to the notification
+  // dispatcher, and event-registry-completeness.guard.test.ts reads
+  // `dispatch({ type: ... })` as a notification type needing an EVENT_POLICY
+  // entry. This is a React reducer, not a notification.
+  function advance(a: FeedbackAction) {
+    // Computed from THIS render's committed state, which is what both the
+    // effect and the handlers close over. No ref: writing one during render is
+    // forbidden, and every transition here is one user action or one effect,
+    // with a re-render between — and the reducer ignores repeats regardless.
+    const { emit } = reduceFeedback(state, a);
+    commit(a);
+    for (const e of emit) track(e.event, { ...base, ...e.props });
+  }
+
+  // Announce the resource on screen. The reducer makes this exactly-once per
+  // video, so a re-render is silent and a swap to the secondary is not.
   useEffect(() => {
-    if (shown.current) return;
-    shown.current = true;
-    track('resource_shown', base);
+    advance({ type: 'present', videoId: resource.videoId });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [resource.videoId]);
 
   // We cannot see what happened on YouTube — no watch time, no completion.
   // These taps are the only honest outcome signal available.
-  function ask(v: Verdict) {
-    setVerdict(v);
-    track('resource_verdict', { ...base, verdict: v });
-  }
+  const ask = (v: Verdict) => advance({ type: 'verdict', verdict: v, verdictId: newVerdictId() });
+  const reason = (r: string) => advance({ type: 'reason', reason: r });
+  const tryOther = () => advance({ type: 'try_other' });
 
-  function reason(r: string) {
-    track('resource_verdict', { ...base, verdict: 'did_not', reason: r });
-    setVerdict('helped'); // collapses the panel; the miss is already recorded
-  }
-
-  function tryOther() {
-    setOnSecondary(true);
-    setVerdict(null);
-    setOpened(false);
-    shown.current = false;
-  }
-
-  const canOffer = verdict === 'did_not' && !onSecondary && !!secondary;
+  const canOffer = canOfferSecondary(state, !!secondary);
 
   return (
     // Stops the tap from reaching the task row, which would tick the task.
@@ -133,10 +151,7 @@ export function TaskResource({
         href={`https://www.youtube.com/watch?v=${resource.videoId}`}
         target="_blank"
         rel="noopener noreferrer"
-        onClick={() => {
-          setOpened(true);
-          track('resource_opened', base);
-        }}
+        onClick={() => advance({ type: 'open' })}
         className="flex items-start gap-2 rounded-xl border border-stone-200 bg-white px-3 py-2 transition-colors hover:border-stone-300 hover:bg-stone-50"
       >
         <ExternalLink className="mt-0.5 h-3.5 w-3.5 shrink-0 text-stone-400" aria-hidden="true" />
@@ -164,7 +179,7 @@ export function TaskResource({
 
       {/* Only after they have actually gone. Asking "did it help?" about a
           link nobody opened would manufacture an opinion out of nothing. */}
-      {opened && verdict === null && (
+      {shouldAskVerdict(state) && (
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5 px-1">
           <span className="text-[11px] text-stone-500">Did that help?</span>
           {([['helped', 'Helpful'], ['okay', 'Okay'], ['did_not', 'Not helpful']] as const).map(
@@ -185,7 +200,7 @@ export function TaskResource({
       {/* A student who never tapped is also telling us something — but about
           the row, not about the video. Kept separate so it can never be read
           as an opinion on content they did not see. */}
-      {!opened && verdict === null && (
+      {shouldOfferNotOpened(state) && (
         <button
           type="button"
           onClick={() => ask('not_opened')}
@@ -208,7 +223,7 @@ export function TaskResource({
         </button>
       )}
 
-      {verdict === 'did_not' && (
+      {state.verdict === 'did_not' && !state.reasonGiven && (
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5 px-1">
           <span className="text-[11px] text-stone-500">What went wrong?</span>
           {REASONS.map((r) => (
@@ -224,10 +239,16 @@ export function TaskResource({
         </div>
       )}
 
-      {verdict !== null && verdict !== 'did_not' && (
+      {state.verdict !== null && state.verdict !== 'did_not' && (
         <p className="mt-1.5 px-1 text-[11px] text-stone-400">
-          {verdict === 'helped' ? 'Good — noted.' : "Noted. We'll review this link."}
+          {state.verdict === 'helped' ? 'Good — noted.' : "Noted. We'll review this link."}
         </p>
+      )}
+
+      {/* Stays after a reason is given — the offer belongs to the verdict, not
+          to whether they explained it. */}
+      {state.verdict === 'did_not' && state.reasonGiven && !canOffer && (
+        <p className="mt-1.5 px-1 text-[11px] text-stone-400">Noted. We&rsquo;ll review this link.</p>
       )}
     </div>
   );

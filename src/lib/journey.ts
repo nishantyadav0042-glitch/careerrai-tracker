@@ -371,7 +371,11 @@ export type EventName =
   // drop-off. One tap on return is the whole measurement, and it is what the
   // weekly link review reads. Props carry videoId, topic and intent so a bad
   // link is one query away from being named, not a mood.
-  | 'resource_shown' | 'resource_opened' | 'resource_verdict';
+  | 'resource_shown' | 'resource_opened' | 'resource_verdict'
+  // Enriches an existing resource_verdict with the student's reason. A SEPARATE
+  // name on purpose: a reason is not a second opinion, and counting verdicts
+  // must never double just because somebody told us why. Join on `verdictId`.
+  | 'resource_verdict_reason';
 
 export function track(event: EventName, props: Record<string, unknown> = {}): void {
   try {

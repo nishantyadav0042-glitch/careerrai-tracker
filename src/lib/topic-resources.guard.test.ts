@@ -193,3 +193,35 @@ describe('Layer A: a resource must match what the task asks', () => {
     }
   });
 });
+
+describe('a video is the primary for at most one topic', () => {
+  it('never uses one video to teach two different topics', () => {
+    // Found by audit: `gqYVcVjqW0k` ("Tabular Set", Rodha) was the concept
+    // primary for BOTH Tables and Hybrid DILR Sets. It is genuinely a Tables
+    // video; hybrid sets are a different thing, and no verified concept video
+    // for them exists. The topic was dropped rather than kept wrong — a
+    // missing resource is acceptable, a wrong one is not.
+    const seen = new Map<string, string>();
+    for (const [topic, rs] of Object.entries(TOPIC_RESOURCES)) {
+      for (const r of rs) {
+        if (r.intent !== 'concept') continue;
+        const prior = seen.get(r.videoId);
+        expect(prior, `${r.videoId} teaches both "${prior}" and "${topic}"`).toBeUndefined();
+        seen.set(r.videoId, topic);
+      }
+    }
+  });
+
+  it('never reuses one video across topics at all', () => {
+    const seen = new Map<string, string>();
+    for (const [topic, rs] of Object.entries(TOPIC_RESOURCES)) {
+      for (const r of rs) {
+        const prior = seen.get(r.videoId);
+        if (prior && prior !== topic) {
+          expect.fail(`${r.videoId} appears under both "${prior}" and "${topic}"`);
+        }
+        seen.set(r.videoId, topic);
+      }
+    }
+  });
+});
