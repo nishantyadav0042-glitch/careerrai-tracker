@@ -1,8 +1,8 @@
 # Task-Attached External Resources — the build plan (30 Aug 2026)
 
 > Status: **DRAFT FOR FOUNDER REVIEW — nothing here is built.** This is the
-> plan + rules document the founder asked for ("पहले plan बनाओ, rules discuss
-> करेंगे, फिर build"). The rules in §3 are proposed as binding once the founder
+> plan + rules document the founder asked for ("first build the plan, then we
+> discuss the rules, then we build"). The rules in §3 are proposed as binding once the founder
 > signs off; the founder will cross-examine them (incl. with other AI) before
 > anything is coded.
 >
@@ -198,7 +198,7 @@ Every resource passes ALL gates before `is_active = true`:
     comes from practice outcomes — otherwise we rank by entertainment, and in
     CAT the most entertaining video is rarely the most useful.
 13. **R13 — Dead link = one Exception** (`src/lib/os/exception.ts`), per
-    SCALE-CONTRACT. No new dashboard. The student-facing "यह link नहीं चला"
+    SCALE-CONTRACT. No new dashboard. The student-facing "this link did not work"
     button feeds the same queue as the automated check.
 
 ---
@@ -289,7 +289,7 @@ Protocol:
 
 ### Phase 1 — Resource infrastructure
 `topic_resources` (schema locked from Phase 0 learnings), the 8-gate
-workflow, machine health checks, Exception wiring, "link नहीं चला" button.
+workflow, machine health checks, Exception wiring, "this link did not work" button.
 Curation load: 56 units × up to 3 intents, but **shipped incrementally,
 starting with the top-N topics by actual plan frequency** — not all at once.
 
@@ -386,7 +386,7 @@ averaged.
 
 ---
 
-## 7. SWOT — where this backfires for a startup (founder asked: "practically, कहाँ गलती कर सकते हैं")
+## 7. SWOT — where this backfires for a startup (founder asked: "practically, where can we go wrong")
 
 ### Strengths
 - Plan engine already emits structured unit+count targets — sufficiency is
@@ -413,8 +413,8 @@ averaged.
 - DILR gap is a mapped, data-justified place for our own bank (Phase 5).
 
 ### Threats (ranked by expected damage, worst first)
-1. **Sufficiency failure → trust collapse.** "App ने बोला 4 sets, link में
-   2 थे" — one such experience and the student stops believing every card.
+1. **Sufficiency failure → trust collapse.** "The app said 4 sets, the link had
+   2" — one such experience and the student stops believing every card.
    Trust damage compounds worse than absence of the feature. (Mitigation:
    Gate S human-counted, time-phrased targets when counts are unstable.)
 2. **Retention theater.** Click counted as engagement while the student is 40
@@ -450,7 +450,7 @@ averaged.
 | Machine health check (YouTube API + HTTP) | cron | daily (cost ≈ free) |
 | Exception triage for dead links | owner | within 48h, swap or deactivate |
 | Human re-verification (gates 5/6/8) | owner (founder initially, named) | fortnightly, batched |
-| Student "link नहीं चला" reports | same Exception queue | same 48h SLA |
+| Student "this link did not work" reports | same Exception queue | same 48h SLA |
 | License/tier re-review of providers | owner | quarterly |
 
 ---

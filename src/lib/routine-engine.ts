@@ -53,6 +53,18 @@ export interface RoutineTask {
   target: string | null;
   estMinutes: number;
   reason: string | null;
+  /**
+   * An OPTIONAL vetted external link the student may open to help execute this
+   * task — never required, never hosted by us, and never a substitute for the
+   * target above. null is the normal case: we have verified resources for 22
+   * of 46 units, so most tasks carry none and the card must read perfectly
+   * without one.
+   *
+   * Attaching a resource must NEVER change `target`. The engine's target is
+   * the authority; the link either helps a student reach it or is absent.
+   * (`docs/RESOURCE-LINKING-PLAN-2026-08.md` §2, the target–resource contract.)
+   */
+  resource?: TopicResource | null;
   // True only for the single priority task. Backed by a real meta-analysis
   // (Wang, Wang & Gai 2021, Frontiers in Psychology, N=15,907): explicit
   // if-then implementation intentions have a real, domain-general effect on
@@ -75,6 +87,34 @@ export interface GeneratedRoutine {
 // re-exported here because every phase consumer historically imports it from
 // this module, and the convention must stay ONE implementation.
 export { catExamDate };
+
+// Verified external resources. Data only — this module maps the student's
+// phase to an intent preference; topic-resources knows nothing about phases,
+// which is what stops it becoming a second planning authority.
+import { resourceByPreference, type TopicResource, type ResourceIntent } from './topic-resources';
+
+/**
+ * Which kind of resource suits a student at this phase, best first.
+ *
+ * Ordered, not exact, because most topics carry two or three intents rather
+ * than four — asking for one and giving up would miss far more often than it
+ * would hit. The fallbacks always step TOWARDS easier material, never harder:
+ * showing a foundation student a CAT-level set is worse than showing them
+ * nothing, while showing a practising student a concept video merely wastes a
+ * little of their time.
+ */
+const RESOURCE_PREFERENCE: Record<Phase, readonly ResourceIntent[]> = {
+  foundation: ['concept', 'practice_easy'],
+  intensive:  ['practice_cat', 'practice_easy', 'concept'],
+  revision:   ['exam_ready', 'practice_cat', 'practice_easy'],
+};
+
+/** The task layer's single entry point. Null whenever we have nothing
+ *  verified for this topic, which is the common case. */
+export function resourceForTask(topic: string | null, topicPhase: Phase): TopicResource | null {
+  if (!topic) return null;
+  return resourceByPreference(topic, RESOURCE_PREFERENCE[topicPhase]);
+}
 
 // A student already at sectionals/mocks shouldn't get "concept + practice"
 // framing just because their exam is still far off on the calendar — but the
@@ -662,6 +702,7 @@ export function generateRoutine(
       label: `${weak} — ${choice.topic}`,
       // Verb from the TOPIC's status; volume still priced by the day's phase.
       target: targetPhrase(weak, choice.topic, minutes, phaseForTopic(choice.coverageStatus, phase)),
+      resource: resourceForTask(choice.topic, phaseForTopic(choice.coverageStatus, phase)),
       estMinutes: minutes,
       reason: i === 0
         ? implementationIntention(weak, choice.topic, choice.reasons, phase)
@@ -682,6 +723,7 @@ export function generateRoutine(
         topic: choice.topic,
         label: `${section} — ${choice.topic}`,
         target: targetPhrase(section, choice.topic, minutes, phaseForTopic(choice.coverageStatus, phase)),
+        resource: resourceForTask(choice.topic, phaseForTopic(choice.coverageStatus, phase)),
         estMinutes: minutes,
         reason: sectionReason(section, choice.topic, choice.reasons, i === 0 ? 'second' : 'third'),
       });
