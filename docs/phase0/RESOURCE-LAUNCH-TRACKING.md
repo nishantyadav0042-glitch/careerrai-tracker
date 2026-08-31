@@ -1,7 +1,7 @@
 # Concept Resource Layer — launch record and what to check
 
 **Shipped:** 31 Aug 2026, night.
-**Announcement fires:** 1 Sep 2026, 09:30 IST (push) and on first app open (in-app card).
+**Announcement fires:** 1 Sep 2026, 08:00 IST (push) and on first app open (in-app card).
 **Owner of this document:** whoever reads the numbers on 1 Sep morning.
 
 This is the tracking record the founder asked for. It states what went live, the
@@ -19,7 +19,7 @@ answer "did it work" without anyone re-deriving them.
 | Resource resolved at read time, never stored | `routine-engine.projectTaskResources` | live |
 | Hidden alternative behind "Not helpful" | 37 of the 45 topics | live |
 | In-app announcement, once ever, dismissible | `components/resource-announce.tsx` | fires on first open |
-| Morning push carries the news, one day only | `RESOURCE_ANNOUNCE_DAY = 2026-09-01` | fires 09:30 IST |
+| Morning push carries the news, one day only | `RESOURCE_ANNOUNCE_DAY`, `RESOURCE_ANNOUNCE_SLOT` | fires 08:00 IST |
 
 **No database change shipped.** No column, no migration, no backfill. A student's
 routine row is byte-identical before and after. That is why the links appear on
@@ -51,6 +51,46 @@ tasks that correctly got nothing:
   no video.** This is the whole point of the correction that reset this work:
   a video is a concept resource, and practice needs questions, which we do not
   have yet.
+
+---
+
+## 2b. How far the announcement actually reaches — read this before celebrating
+
+The push is the smaller of the two channels by a wide margin. Measured on
+`companion_kickoff`, the 08:00 IST morning slot the announcement rides, over
+the seven days to 31 Aug:
+
+| Per day | Value |
+|---|---|
+| Students the cadence decided to notify | ~800–860 |
+| Notifications actually **pushed** to a device | **~150** |
+| App opens attributed to that push | **0–3** |
+
+Two honest readings of that last row: either the morning push genuinely does
+not drive opens, or `app_opened_at` is under-instrumented. This launch does not
+resolve which, and nobody should claim it does.
+
+So: **the push reaches roughly 150 devices, not 974 students.** The in-app card
+is what most students will actually meet, and it reaches whoever opens the
+app — about 25 students generated a routine on 31 Aug. Tomorrow's realistic
+audience is dozens, not the whole cohort. The link layer itself is live for
+everyone the moment they open; the announcement is only how they hear about it.
+
+**A bug worth recording, because it nearly shipped.** The announcement was
+first written into the 09:30 `morning` companion slot. That slot has **no cron
+entry in `vercel.json`** — only kickoff, spark, progress and log are scheduled.
+It would have deployed, passed every test, and reached nobody; production
+confirmed it, with zero `Companion 09:30` notifications ever sent. It now rides
+`kickoff`, and a guard asserts the announcement slot appears in `vercel.json`,
+so the same class of mistake fails the build rather than the launch.
+
+The second half of that fix matters as much: the announcement is applied
+**after** every cadence has decided, and after the null check. Almost every
+student is in the *activation* cadence (never logged), which short-circuits
+before the active-student branch entirely — an announcement written into that
+branch would have reached only a small active minority. Laid over the decision
+instead, it carries in every cadence, creates no send of its own, and leaves
+the daily ceiling untouched.
 
 ---
 
@@ -163,9 +203,13 @@ where reason like '%lesson-link announcement%'
 group by 1 order by 1;
 ```
 
-This must be non-zero on 1 Sep and **zero on every later day**. If it is
-non-zero on 2 Sep, the date guard failed and that is a P1 — an announcement
-that repeats is the EvidenceAnnounce failure again.
+`decided` should land near the ordinary kickoff volume (~800) and `pushed`
+near ~150 — if `pushed` is far below that, the problem is push subscriptions,
+not this feature.
+
+This must return **exactly one row, for 1 Sep**. A row for 2 Sep means the date
+guard failed, and that is a P1 — an announcement that repeats is the
+EvidenceAnnounce failure again.
 
 ---
 

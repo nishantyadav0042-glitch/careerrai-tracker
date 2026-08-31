@@ -13,13 +13,15 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { TOPIC_RESOURCES } from './topic-resources';
-import { planMorningCopy, planMorningCopyWithLessonNews, RESOURCE_ANNOUNCE_DAY } from './companion';
+import { activationSlotCopy, reactivationSlotCopy, lessonLinkAnnounceCopy,
+         RESOURCE_ANNOUNCE_DAY, RESOURCE_ANNOUNCE_SLOT } from './companion';
 import { resourceForTask } from './routine-engine';
 
 const SRC = join(__dirname, '..');
 const ANNOUNCE = join(SRC, 'components', 'resource-announce.tsx');
 const LAYOUT = join(SRC, 'app', 'student', 'layout.tsx');
 const CRON = join(SRC, 'app', 'api', 'cron', 'study-companion', 'route.ts');
+const VERCEL = join(SRC, '..', 'vercel.json');
 const read = (p: string) => readFileSync(p, 'utf8');
 const code = (p: string) =>
   read(p).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/\{\/\*[\s\S]*?\*\/\}/g, '');
@@ -96,36 +98,62 @@ describe('the announcement cannot nag', () => {
 //
 // The in-app card only reaches a student who already opened the app. The
 // morning push is what gets them to open it. It is NOT a blast script: the
-// Notification OS is decision-first, so this rides the already-approved 09:30
-// companion decision and only changes that one morning's body.
+// Notification OS is decision-first, so this is laid over the decision each
+// student's own cadence already made, and cannot cause a send.
 
-describe('the announcement push rides the approved morning decision', () => {
-  it('keeps the title that already earns opens', () => {
-    const plain = planMorningCopy('Aarav', 'Geometry', 'RC', 4, 2.5);
-    const news = planMorningCopyWithLessonNews('Aarav', 'Geometry', 'RC');
-    expect(news.title).toBe(plain.title);
+const ANNOUNCE_CTX = { firstName: 'Aarav', daysToExam: 47, rotate: 3, weakest: 'QA', dreamCollege: 'IIM Ahmedabad' };
+
+describe('the announcement push rides a decision that actually fires', () => {
+  it('uses a slot that is scheduled in vercel.json', () => {
+    // The bug this exists for: the announcement was first written into the
+    // 09:30 `morning` slot, which has NO cron entry. It would have shipped,
+    // passed every other test, and reached nobody. Production confirmed it —
+    // zero `Companion 09:30` notifications had ever been sent.
+    const crons = JSON.parse(read(VERCEL)).crons as { path: string }[];
+    const scheduled = crons
+      .filter((c) => c.path.includes('/api/cron/study-companion'))
+      .map((c) => new URL(c.path, 'https://x').searchParams.get('slot'));
+    expect(scheduled, 'announcement slot has no cron').toContain(RESOURCE_ANNOUNCE_SLOT);
   });
 
-  it('keeps the same expected action, so dedup and attribution are unchanged', () => {
-    const plain = planMorningCopy('Aarav', 'Geometry', 'RC', 4, 2.5);
-    const news = planMorningCopyWithLessonNews('Aarav', 'Geometry', 'RC');
-    expect(news.expectedAction).toBe(plain.expectedAction);
+  it('is applied after every cadence has decided, so it can never cause a send', () => {
+    const s = code(CRON);
+    const nullCheck = s.indexOf('if (!copy) { skipped++; continue; }');
+    const applied = s.indexOf('lessonLinkAnnounceCopy(');
+    expect(nullCheck).toBeGreaterThan(-1);
+    expect(applied).toBeGreaterThan(nullCheck);
   });
 
-  it('still names the plan — the news is additive, not a replacement', () => {
-    const news = planMorningCopyWithLessonNews('Aarav', 'Geometry', 'RC');
-    expect(news.body).toContain('Geometry');
-    expect(news.body).toContain('RC');
-    const solo = planMorningCopyWithLessonNews('Aarav', 'Geometry', null);
-    expect(solo.body).toContain('Geometry');
-    expect(solo.body).not.toContain('then');
+  it('reaches every cadence, not only the active minority', () => {
+    // Nearly every student is in the activation cadence. An announcement that
+    // only altered the active-student branch would reach almost nobody.
+    for (const base of [
+      activationSlotCopy(RESOURCE_ANNOUNCE_SLOT, ANNOUNCE_CTX),
+      reactivationSlotCopy(RESOURCE_ANNOUNCE_SLOT, { ...ANNOUNCE_CTX, daysSinceLastLog: 4 }),
+    ]) {
+      expect(base, 'cadence has no copy for the announcement slot').not.toBeNull();
+      const news = lessonLinkAnnounceCopy(base!, 'Aarav');
+      expect(news.title).not.toBe(base!.title);
+      expect(news.body).toMatch(/lesson link/);
+    }
+  });
+
+  it('keeps the underlying expected action, so attribution stays comparable', () => {
+    const base = activationSlotCopy(RESOURCE_ANNOUNCE_SLOT, ANNOUNCE_CTX)!;
+    expect(lessonLinkAnnounceCopy(base, 'Aarav').expectedAction).toBe(base.expectedAction);
   });
 
   it('never promises a practice link in the push either', () => {
-    for (const second of ['RC', null]) {
-      const body = planMorningCopyWithLessonNews('Aarav', 'Geometry', second).body;
-      expect(body).not.toMatch(/practice|questions|solve/i);
-    }
+    const base = activationSlotCopy(RESOURCE_ANNOUNCE_SLOT, ANNOUNCE_CTX)!;
+    const { title, body } = lessonLinkAnnounceCopy(base, 'Aarav');
+    expect(`${title} ${body}`).not.toMatch(/practice|questions|solve/i);
+  });
+
+  it('stays short enough to survive a push preview', () => {
+    const base = activationSlotCopy(RESOURCE_ANNOUNCE_SLOT, ANNOUNCE_CTX)!;
+    const { title, body } = lessonLinkAnnounceCopy(base, 'Aarav');
+    expect(title.length).toBeLessThanOrEqual(65);
+    expect(body.length).toBeLessThanOrEqual(140);
   });
 });
 
@@ -134,19 +162,17 @@ describe('the announcement push expires by date, not by memory', () => {
     expect(RESOURCE_ANNOUNCE_DAY).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
-  it('fires only on that day, behind the ordinary morning branch', () => {
+  it('fires on that day and that slot only', () => {
     // EvidenceAnnounce ran for eight days because nothing stopped it. A date
     // equality check stops this one whether or not anyone remembers to.
     const s = code(CRON);
-    expect(s).toContain('today === RESOURCE_ANNOUNCE_DAY');
-    expect(s.match(/planMorningCopyWithLessonNews\(/g)?.length).toBe(1);
+    expect(s).toContain('slot === RESOURCE_ANNOUNCE_SLOT && today === RESOURCE_ANNOUNCE_DAY');
+    expect(s.match(/lessonLinkAnnounceCopy\(/g)?.length).toBe(1);
   });
 
-  it('does not displace the coaching-class morning, which is more specific', () => {
-    const s = code(CRON);
-    const classAt = s.indexOf('classMorningCopy(');
-    const newsAt = s.indexOf('planMorningCopyWithLessonNews(');
-    expect(classAt).toBeGreaterThan(-1);
-    expect(classAt).toBeLessThan(newsAt);
+  it('leaves a reason string that says which decision carried it', () => {
+    // The morning check reads `notifications.reason`; without this the
+    // announcement would be invisible in the one table that records it.
+    expect(code(CRON)).toMatch(/reason = `\$\{reason\} . lesson-link announcement`/);
   });
 });
