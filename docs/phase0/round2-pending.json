@@ -6,19 +6,27 @@
     "method": "Search claimed title + channel, then read the video id out of the returned youtube.com/watch URL. Confirms existence, title, channel and id together. Can confirm; cannot refute.",
     "method_rejected": "Bare quoted video-id search. Calibration against four vidIQ-verified ids (m6EGM_UtY-Q, 4tI-h-GKWVk, spET6FqiBZ8, TBhanaOLNvc) returned nothing for all four. Search engines do not index bare video ids. Any conclusion drawn from an empty bare-id search is void.",
     "confirmed_real": [
-      "m6EGM_UtY-Q",
-      "0xvx3q17jZs",
-      "q-ZUkah-xys",
-      "DcX3oOYVDh0",
-      "d38v_cGG0Y0",
-      "bIMpphNLj4o",
-      "gqYVcVjqW0k",
-      "IzzDC2qCYu0",
-      "4Ns1jYVuJ7s",
-      "X_CpUw7JPnU",
-      "zIrr1lkvyBY",
       "-me6rKm0AcA",
-      "TMOq7m_OKUw"
+      "0S_rT7720t8",
+      "0xvx3q17jZs",
+      "1KYf9l1wGTY",
+      "4Ns1jYVuJ7s",
+      "ADkdD9aEhas",
+      "DcX3oOYVDh0",
+      "IzzDC2qCYu0",
+      "JU-b_Zu-z7U",
+      "TMOq7m_OKUw",
+      "TZadcVDti64",
+      "X_CpUw7JPnU",
+      "b6hmLsjbA7E",
+      "bIMpphNLj4o",
+      "d38v_cGG0Y0",
+      "dRbw57eHvuo",
+      "gqYVcVjqW0k",
+      "jdusH0OI-jY",
+      "m6EGM_UtY-Q",
+      "q-ZUkah-xys",
+      "zIrr1lkvyBY"
     ],
     "contradicted": {
       "uC87E_QC_14": "Bottle Neck approach video is uz9vTOTgxkU",
@@ -34,7 +42,44 @@
       "consequence": "The L1-L4 ladder level was assigned from those subtitles. If the subtitle was generated, the level is generated. Every round-2 level needs re-grading against the real video, not just a runtime check."
     },
     "round1_correction": "Reading Speed Practice L1 was 0U5n10P3x_c in round 1 (audited as non-existent). The video is real at IzzDC2qCYu0, which is what round 2 returned. First case of a re-run repairing a known fabrication.",
-    "blocks_merge": true
+    "blocks_merge": true,
+    "confirmed_detail": {
+      "dRbw57eHvuo": "Venn Diagrams - 2 | 4 parameter Venn Diagram | CAT Preparation 2024 — title matches claim",
+      "0S_rT7720t8": "HCF LCM 2 || Number Systems || Quantitative Aptitude || CAT Preparation — claimed as \"for CAT 2026\"; real title says CAT Preparation",
+      "JU-b_Zu-z7U": "Numbers 3 || Number Systems | CAT Preparation | Quantitative Aptitude CAT 2026 — MISFILED: a general number-systems video, claimed as \"Numbers 3: Prime Composite Numbers Divisibility\" at Divisibility L3",
+      "TZadcVDti64": "Quadrilaterals 1 | CAT Preparation 2024 | Geometry | Quantitative Aptitude — claimed as \"Geometry for CAT 2026\"",
+      "ADkdD9aEhas": "Mensuration 4 | CAT Preparation | Geometry | Quantitative Aptitude — claimed subtitle \"Pyramids, Prisms & Max Sphere Radius\" is not in the real title",
+      "b6hmLsjbA7E": "Probability 1 | CAT Preparation 2019 | Quantitative Aptitude — a 2019 video; claimed subtitle \"Basics, Coin Tosses and Odds\" invented",
+      "1KYf9l1wGTY": "Probability 2 | CAT Preparation 2019 | Quantitative Aptitude — a 2019 video; claimed subtitle \"Graphical and Geometric Probability\" invented",
+      "jdusH0OI-jY": "VENN DIAGRAM SET I CAT PREVIOUS YEAR QUESTION I BY SWAPANIL SIR (Rodha) — REAL, exact id and title match. This is one of the eight ids the withdrawn bare-id method had flagged as fabricated; the retraction was correct."
+    },
+    "stale_year_finding": {
+      "what": "Several confirmed-real videos are 2019 or 2024 uploads presented under a \"for CAT 2026\" title that the real video does not carry.",
+      "examples": [
+        "b6hmLsjbA7E (2019)",
+        "1KYf9l1wGTY (2019)",
+        "TZadcVDti64 (2024)",
+        "0S_rT7720t8 (no year)"
+      ],
+      "why_it_matters": "A student told a video is \"for CAT 2026\" and handed a 2019 upload has been misled by our label, not by the creator. Rodha genuinely runs both series; the responses mix the two naming conventions."
+    },
+    "search_as_discovery": {
+      "finding": "Web search returns a real video id and its real title together, which is exactly what the research step kept getting wrong separately.",
+      "candidates_found_directly": {
+        "NqgFXVIrRmY": "Divisibility Rules 3 || Number Systems || Quantitative Aptitude || CAT Preparation (Rodha)",
+        "_g89_8Bb57g": "Numbers 1: Real Rational Irrational Odd Even | Number System for CAT 2026 | Ravi Prakash Rodha",
+        "KiG0yg61alo": "Numbers 2: Sums Primes 6k+ 1 Form | Number System for CAT 2026 | Ravi Prakash Rodha",
+        "pHyuUy_spww": "HCF LCM 5 || Number Systems || Quantitative Aptitude || CAT Preparation 2024",
+        "Ikxsz4En-RQ": "HCF LCM 4 || Number Systems || Quantitative Aptitude || CAT Preparation 2024"
+      },
+      "implication": "These carry higher confidence than any Gemini candidate, because the id and the title arrived from the same index entry rather than being asserted separately."
+    },
+    "connectors_31_aug_0630": "vidIQ, Exa and Firecrawl are connected at the account but enabledInChat=false for this session, so their tools are not loaded. YouTube oEmbed and every Invidious/Piped mirror remain blocked by the egress policy. Runtime is therefore still unverified for all 71.",
+    "retraction_vindicated": "jdusH0OI-jY was positively confirmed real by title search. It was among the eight ids the bare-id method had wrongly implied were fabricated. Withdrawing that finding was correct, and this is the proof rather than the argument.",
+    "platform_access_finding": {
+      "what": "The Unacademy \"Complete Geometry & Mensuration in One Video\" resource (claimed as FjC3L4s3C2A, Circles L1) is an Unacademy platform class, not a free YouTube video.",
+      "why_it_matters": "A link that lands on a login or paywall is not a free resource, whatever its title says. Unacademy candidates need the extra check that the video is actually on YouTube and actually free, before the channel is trusted as a source tier."
+    }
   },
   "topics": [
     {
