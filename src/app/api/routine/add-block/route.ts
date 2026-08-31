@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getLogDateString } from '@/lib/streak-utils';
-import { getPhase, phaseForTopic, targetPhrase, archetypeRevisionMultiplier, type Section, type Stage } from '@/lib/routine-engine';
+import { getPhase, phaseForTopic, targetPhrase, archetypeRevisionMultiplier, type Section, type Stage, type Phase } from '@/lib/routine-engine';
 import { chooseTopicForSection, type CoverageStatus } from '@/lib/topic-selector';
 import { topicsInSection } from '@/lib/prep-model';
 import { mutatePlanTasks } from '@/lib/plan-mutate';
@@ -27,7 +27,13 @@ const BLOCK_MINUTES = 30;
 const MAX_EXTRAS = 8;
 const SECTIONS: Section[] = ['VARC', 'DILR', 'QA'];
 
-interface StoredTask { id: string; section: string; topic: string | null; label: string; target: string | null; estMinutes: number; reason: string | null }
+interface StoredTask {
+  id: string; section: string; topic: string | null; label: string;
+  target: string | null; estMinutes: number; reason: string | null;
+  /** The phase this target was worded for. Read by api/routine/today to
+   *  resolve the resource — see the projection comment there. */
+  topicPhase?: Phase;
+}
 
 export async function POST(_request: NextRequest) {
   const supabase = await createClient();
@@ -99,6 +105,13 @@ export async function POST(_request: NextRequest) {
       topic: choice.topic,
       label: `${section} — ${choice.topic}`,
       target: targetPhrase(section, choice.topic, BLOCK_MINUTES, phaseForTopic(choice.coverageStatus, phase)),
+      // Recorded for the SAME reason generateRoutine records it: the resource
+      // is resolved at read time in api/routine/today, and it must be resolved
+      // against the phase this target was worded for. Without this an added
+      // block would fall back to live coverage and could show a row that
+      // contradicts its own instruction. The resource itself is deliberately
+      // not resolved here — one authority, and it is not this file.
+      topicPhase: phaseForTopic(choice.coverageStatus, phase),
       estMinutes: BLOCK_MINUTES,
       reason: choice.reasons[0] ?? 'One more block',
     };

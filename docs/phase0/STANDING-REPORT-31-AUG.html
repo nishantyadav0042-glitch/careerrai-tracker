@@ -1,0 +1,338 @@
+<title>Resource Corpus Standing</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,600;0,700;1,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root{
+    --ground:#F5F7F6; --panel:#FFFFFF; --ink:#14181A; --ink-soft:#3B4547;
+    --muted:#6B7573; --line:#DCE3E0; --line-soft:#EAEFEC;
+    --ok:#0E6B5A; --ok-bg:#E6F1EE;
+    --warn:#8A5B00; --warn-bg:#FBF0DC;
+    --crit:#9E3729; --crit-bg:#FAE7E3;
+    --accent:#0E6B5A;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ground:#0E1211; --panel:#161B1A; --ink:#E7EDEA; --ink-soft:#BAC5C1;
+      --muted:#8A9793; --line:#28312F; --line-soft:#1E2523;
+      --ok:#5FC7AE; --ok-bg:#12312B;
+      --warn:#DBA43F; --warn-bg:#332714;
+      --crit:#E08877; --crit-bg:#361F1B;
+      --accent:#5FC7AE;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#0E1211; --panel:#161B1A; --ink:#E7EDEA; --ink-soft:#BAC5C1;
+    --muted:#8A9793; --line:#28312F; --line-soft:#1E2523;
+    --ok:#5FC7AE; --ok-bg:#12312B;
+    --warn:#DBA43F; --warn-bg:#332714;
+    --crit:#E08877; --crit-bg:#361F1B;
+    --accent:#5FC7AE;
+  }
+
+  *{box-sizing:border-box}
+  body{
+    background:var(--ground); color:var(--ink);
+    font-family:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+    font-size:16px; line-height:1.6; margin:0;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:820px; margin:0 auto; padding:40px 22px 88px}
+  @media(max-width:600px){ .wrap{padding:28px 16px 64px} }
+
+  .eyebrow{
+    font-size:11px; font-weight:600; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--muted); margin:0 0 10px;
+  }
+  h1{
+    font-family:Spectral,Georgia,serif; font-weight:700; font-size:clamp(30px,6.2vw,44px);
+    line-height:1.12; letter-spacing:-.015em; margin:0 0 14px; text-wrap:balance;
+  }
+  h2{
+    font-family:Spectral,Georgia,serif; font-weight:600; font-size:clamp(21px,3.6vw,27px);
+    line-height:1.22; letter-spacing:-.01em; margin:0 0 4px; text-wrap:balance;
+  }
+  h3{
+    font-family:"IBM Plex Sans",sans-serif; font-weight:600; font-size:15px;
+    margin:0 0 6px; letter-spacing:-.005em;
+  }
+  p{margin:0 0 14px; max-width:66ch; color:var(--ink-soft)}
+  .lede{font-size:17px; color:var(--ink-soft); max-width:62ch}
+  strong{color:var(--ink); font-weight:600}
+  code,.mono{font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:.88em}
+  code{background:var(--line-soft); padding:1px 5px; border-radius:3px; color:var(--ink)}
+
+  header{border-bottom:2px solid var(--ink); padding-bottom:22px; margin-bottom:30px}
+  .stamp{
+    font-family:"IBM Plex Mono",monospace; font-size:12px; color:var(--muted);
+    display:flex; flex-wrap:wrap; gap:6px 16px; margin-top:16px;
+  }
+
+  /* status band */
+  .band{display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--line);
+        border:1px solid var(--line); border-radius:8px; overflow:hidden; margin:0 0 34px}
+  @media(max-width:620px){ .band{grid-template-columns:repeat(2,1fr)} }
+  .cell{background:var(--panel); padding:15px 14px 14px}
+  .cell .n{font-family:Spectral,Georgia,serif; font-size:30px; font-weight:700;
+           line-height:1; letter-spacing:-.02em; font-variant-numeric:tabular-nums}
+  .cell .k{font-size:11px; letter-spacing:.09em; text-transform:uppercase;
+           color:var(--muted); margin-top:7px; font-weight:600; line-height:1.35}
+  .n.ok{color:var(--ok)} .n.warn{color:var(--warn)} .n.crit{color:var(--crit)}
+
+  section{margin:0 0 38px}
+  .rule{height:1px; background:var(--line); border:0; margin:0 0 26px}
+
+  /* status rows with severity stripe */
+  .rows{display:flex; flex-direction:column; gap:9px; margin:16px 0 0}
+  .row{
+    background:var(--panel); border:1px solid var(--line); border-left:3px solid var(--muted);
+    border-radius:0 7px 7px 0; padding:12px 14px;
+  }
+  .row.ok{border-left-color:var(--ok)}
+  .row.warn{border-left-color:var(--warn)}
+  .row.crit{border-left-color:var(--crit)}
+  .row p{margin:0; font-size:14px; max-width:none}
+  .row .h{display:flex; align-items:baseline; gap:9px; flex-wrap:wrap; margin-bottom:3px}
+
+  .pill{
+    display:inline-block; font-size:10px; font-weight:600; letter-spacing:.08em;
+    text-transform:uppercase; padding:2px 7px; border-radius:3px; white-space:nowrap;
+  }
+  .pill.ok{background:var(--ok-bg); color:var(--ok)}
+  .pill.warn{background:var(--warn-bg); color:var(--warn)}
+  .pill.crit{background:var(--crit-bg); color:var(--crit)}
+
+  .scroll{overflow-x:auto; -webkit-overflow-scrolling:touch; margin:16px 0 0;
+          border:1px solid var(--line); border-radius:7px; background:var(--panel)}
+  table{border-collapse:collapse; width:100%; font-size:13.5px; min-width:520px}
+  th,td{text-align:left; padding:9px 13px; border-bottom:1px solid var(--line-soft); vertical-align:top}
+  th{font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--muted);
+     font-weight:600; background:var(--ground); position:sticky; top:0}
+  tr:last-child td{border-bottom:0}
+  td.id{font-family:"IBM Plex Mono",monospace; white-space:nowrap; font-size:12.5px}
+  td.num{font-variant-numeric:tabular-nums; text-align:right}
+
+  ol.queue{counter-reset:q; list-style:none; padding:0; margin:16px 0 0;
+           display:flex; flex-direction:column; gap:13px}
+  ol.queue li{counter-increment:q; display:flex; gap:13px; align-items:flex-start}
+  ol.queue li::before{
+    content:counter(q); font-family:"IBM Plex Mono",monospace; font-size:12px; font-weight:500;
+    background:var(--ink); color:var(--ground); width:23px; height:23px; flex:0 0 23px;
+    border-radius:50%; display:flex; align-items:center; justify-content:center; margin-top:2px;
+  }
+  ol.queue p{margin:0; font-size:14.5px}
+
+  blockquote{
+    margin:18px 0; padding:2px 0 2px 18px; border-left:2px solid var(--accent);
+    font-family:Spectral,Georgia,serif; font-size:17px; font-style:italic; color:var(--ink);
+  }
+  blockquote p{color:inherit; margin:0}
+
+  footer{border-top:1px solid var(--line); margin-top:46px; padding-top:18px;
+         font-size:13px; color:var(--muted)}
+  a{color:var(--accent)}
+</style>
+
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">CareerRai · Phase 0 · Free resource linking</p>
+  <h1>Where the resource corpus actually stands</h1>
+  <p class="lede">Fifty-two links are live in front of students. Seventy-one more are collected
+  and cannot ship yet. The reason is worth reading, because it changed overnight.</p>
+  <div class="stamp">
+    <span>31 August 2026, 06:30</span>
+    <span>branch <span class="mono">claude/cat-prep-free-content-5k73d4</span></span>
+    <span>4,943 tests passing</span>
+  </div>
+</header>
+
+<div class="band">
+  <div class="cell"><div class="n ok">52</div><div class="k">Live resources<br>across 22 units</div></div>
+  <div class="cell"><div class="n warn">21<span style="font-size:17px;color:var(--muted)">/71</span></div><div class="k">Round 2 confirmed<br>real</div></div>
+  <div class="cell"><div class="n crit">0<span style="font-size:17px;color:var(--muted)">/71</span></div><div class="k">Runtimes<br>verified</div></div>
+  <div class="cell"><div class="n">3</div><div class="k">Prompts never<br>run</div></div>
+</div>
+
+<section>
+  <p class="eyebrow">Shipped overnight</p>
+  <h2>Students can now see the links</h2>
+  <hr class="rule">
+  <p>The verified resource map was being attached to tasks by the engine and read by nobody.
+  It renders now — one optional link under the task, opening the original watch page in the
+  student's own browser, with the channel and real runtime shown before the tap.</p>
+  <p>All three Phase-0 topics — Reading Comprehension, Percentages, Arrangements — resolve at
+  every phase, so a day-one student sees this.</p>
+  <p>Four rules are enforced by a guard test rather than trusted to reviewers, because each is
+  the kind of rule that erodes one reasonable edit at a time:</p>
+  <div class="rows">
+    <div class="row ok"><div class="h"><h3>Never hosted</h3><span class="pill ok">guarded</span></div>
+      <p>An anchor with <code>target=_blank</code>. No iframe, no <code>/embed</code>, no proxy.
+      An embed would put someone else's video inside our chrome and make us look like the publisher.</p></div>
+    <div class="row ok"><div class="h"><h3>Never mandatory</h3><span class="pill ok">guarded</span></div>
+      <p>The row says "optional", touches nothing in the completion path, and stops its own taps
+      from reaching the task row. Incident&nbsp;#2 is the standing lesson — a required extra tick cost a whole cohort.</p></div>
+    <div class="row ok"><div class="h"><h3>One link, never a list</h3><span class="pill ok">guarded</span></div>
+      <p>The guard counts anchors. A list hands the decision back to a student who came here to be told what to do next.</p></div>
+    <div class="row ok"><div class="h"><h3>The source is always named</h3><span class="pill ok">guarded</span></div>
+      <p>Channel and platform-read runtime, before the tap. Twenty-two researched durations were
+      wrong, one by more than twenty minutes.</p></div>
+  </div>
+  <p style="margin-top:18px">Three events measure it: <code>resource_shown</code> separates
+  "ignored the link" from "never saw the link", <code>resource_opened</code> records the departure,
+  and <code>resource_verdict</code> is one tap on return. That last one is the <em>entire</em>
+  outcome signal — on YouTube we can see nothing, so it is self-reported by whoever chooses to answer.</p>
+</section>
+
+<section>
+  <p class="eyebrow">The overnight finding</p>
+  <h2>The ladder level is the least trustworthy thing we have</h2>
+  <hr class="rule">
+  <p>Two unrelated methods reached this independently in the same night, which is why it now
+  outranks the runtime check in the queue.</p>
+  <p><strong>From searching titles:</strong> real video IDs keep coming back under invented titles —
+  a descriptive subtitle after a colon that the real title does not contain. The L1–L4 level was
+  assigned <em>from those subtitles</em>. If the subtitle was generated, so was the level.</p>
+  <p><strong>From re-reading your own pasted messages:</strong> of 33 videos that appear in more
+  than one response, the question count disagrees with itself in 8, the duration in 8, and the
+  assigned level in <strong>5</strong>. The same video is graded L1 in one run and L2 in another.</p>
+  <blockquote><p>A resource at the wrong rung breaks the task–resource contract as surely as a dead
+  link does. The task says fifteen easy questions; the video delivers a CAT-hard marathon.</p></blockquote>
+  <p>A concrete case found this morning: <code>JU-b_Zu-z7U</code> was filed as Divisibility L3 under
+  the title "Numbers 3: Prime Composite Numbers Divisibility". The real video is
+  "Numbers 3 || Number Systems" — a general number-systems lecture, not a divisibility drill.
+  Real video, wrong shelf.</p>
+  <p>A second pattern worth your eye: several confirmed-real videos are <strong>2019 or 2024
+  uploads</strong> presented under a "for CAT 2026" title the real video never carried. Rodha
+  genuinely runs both series, and the research mixed the two naming conventions.</p>
+</section>
+
+<section>
+  <p class="eyebrow">Consumption audit</p>
+  <h2>Nothing you sent was lost — but five fields per link were</h2>
+  <hr class="rule">
+  <p>I rebuilt everything from the session transcript: 40 messages, 289,888 characters. Every one
+  of the <strong>165 video IDs</strong> you ever pasted is present in the logs. Nothing was dropped
+  at the link level.</p>
+  <p>The loss was one level down. Each response carries eleven fields; my round-2 log stored six.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Field</th><th>Round 1</th><th>Round 2</th><th>Now</th></tr></thead>
+    <tbody>
+      <tr><td>Title, channel, URL, duration, student time</td><td>kept</td><td>kept</td><td>—</td></tr>
+      <tr><td><strong>Worked questions solved</strong></td><td>kept</td><td><span class="pill crit">dropped</span></td><td><span class="pill ok">recovered</span></td></tr>
+      <tr><td><strong>Paid-course push</strong></td><td>kept</td><td><span class="pill crit">dropped</span></td><td><span class="pill ok">recovered</span></td></tr>
+      <tr><td><strong>Watched fully?</strong></td><td>kept</td><td><span class="pill crit">dropped</span></td><td><span class="pill ok">recovered</span></td></tr>
+      <tr><td><strong>Real difficulty</strong></td><td>kept</td><td><span class="pill crit">dropped</span></td><td><span class="pill ok">recovered</span></td></tr>
+      <tr><td><strong>Why this one</strong></td><td><span class="pill crit">dropped</span></td><td><span class="pill crit">dropped</span></td><td><span class="pill ok">recovered</span></td></tr>
+    </tbody>
+  </table></div>
+  <p style="margin-top:16px">Worked-questions is the expensive one: it is <em>your</em> sufficiency
+  test. Dropping it removed the only evidence for the judgement this whole feature rests on.</p>
+  <p>All 250 level blocks are now recovered with every field, your unedited text is committed
+  alongside them, and a guard test fails if the structured record ever falls behind the archive again.</p>
+</section>
+
+<section>
+  <p class="eyebrow">What the recovered fields show</p>
+  <h2>The sufficiency gap, measured</h2>
+  <hr class="rule">
+  <p>Of the 34 shipped rows carrying a practice intent, ten claim to work fewer than four questions.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Video</th><th>Topic</th><th>Shipped as</th><th class="num">Questions</th></tr></thead>
+    <tbody>
+      <tr><td class="id">MTdAQnGCUtM</td><td>SI &amp; CI</td><td>exam_ready</td><td class="num"><strong>1</strong></td></tr>
+      <tr><td class="id">8TygSoo-4Ig</td><td>Progressions</td><td>exam_ready</td><td class="num"><strong>1</strong></td></tr>
+      <tr><td class="id">PQvBSkJDF_E</td><td>Time Speed Distance</td><td>practice_easy</td><td class="num">2</td></tr>
+      <tr><td class="id">Kblu48aZ7bA</td><td>Time Speed Distance</td><td>exam_ready</td><td class="num">2</td></tr>
+      <tr><td class="id">wSbjXsULtrI</td><td>Progressions</td><td>practice_easy</td><td class="num">2</td></tr>
+      <tr><td class="id">OyGkBz2DxAQ</td><td>Profit &amp; Loss</td><td>exam_ready</td><td class="num">2</td></tr>
+      <tr><td class="id">qQcGkxuf4ws</td><td>Mixtures</td><td>practice_easy</td><td class="num">2</td></tr>
+      <tr><td class="id">NXlFmkHm0N0</td><td>Coordinate Geometry</td><td>practice_cat</td><td class="num">2</td></tr>
+      <tr><td class="id">6IbA-nSj28g</td><td>Time &amp; Work</td><td>practice_easy</td><td class="num">3</td></tr>
+      <tr><td class="id">TG3M3QFyY0k</td><td>SI &amp; CI</td><td>practice_easy</td><td class="num">3</td></tr>
+    </tbody>
+  </table></div>
+  <p style="margin-top:16px">This is a <strong>review list, not a verdict</strong> — the counts
+  themselves drift between runs, which is exactly why they stay out of the shipped data and in the
+  research record. What they are good for is ordering your hand-check.</p>
+  <p>Two smaller things. Twelve of the 52 shipped rows do not carry a clean "yes" on
+  <em>watched fully</em> — seven say <code>partly</code>, meaning every other claim in those blocks
+  describes a video that was, by its own account, not finished. And only <strong>three</strong>
+  blocks anywhere carry a genuinely heavy paid-course push; <strong>none of them is shipped</strong>.</p>
+</section>
+
+<section>
+  <p class="eyebrow">Round 2 · 71 candidates</p>
+  <h2>Twenty-one confirmed real, none clearable</h2>
+  <hr class="rule">
+  <p>Confirmed means a search returned the exact video ID inside a real YouTube URL with a matching
+  channel — existence, title and channel in one check. It cannot produce a runtime, and
+  <code>topic-resources.ts</code> requires a platform-read runtime. So all 71 stay out.</p>
+  <div class="rows">
+    <div class="row ok"><div class="h"><h3>21 confirmed real</h3><span class="pill ok">blocked on runtime</span></div>
+      <p>Averages, Selection &amp; Distribution, Inequalities, Probability, Venn/Sets, Quadrilaterals,
+      HCF&nbsp;&amp;&nbsp;LCM and others. Several carry a title mismatch even where the video is real.</p></div>
+    <div class="row warn"><div class="h"><h3>2 contradicted</h3><span class="pill warn">reject</span></div>
+      <p><code>uC87E_QC_14</code> — the Bottle Neck video is <code>uz9vTOTgxkU</code>.
+      <code>Ky5lzMv_1ns</code> — College Accreditation is CAT 2018 Slot 2 <em>Set 1</em>, at a different ID.</p></div>
+    <div class="row warn"><div class="h"><h3>Unacademy candidates need an extra check</h3><span class="pill warn">access</span></div>
+      <p>The "Complete Geometry &amp; Mensuration in One Video" resource is an Unacademy platform
+      class, not a free YouTube video. A link that lands on a login is not a free resource.</p></div>
+    <div class="row"><div class="h"><h3>48 still unresolved</h3><span class="pill">pending</span></div>
+      <p>A search miss is not evidence of fabrication — the method can confirm, it cannot refute.</p></div>
+  </div>
+</section>
+
+<section>
+  <p class="eyebrow">Corrections</p>
+  <h2>Two of my own findings I had to withdraw</h2>
+  <hr class="rule">
+  <div class="rows">
+    <div class="row crit"><div class="h"><h3>"Eight round-2 IDs are fabricated"</h3><span class="pill crit">withdrawn</span></div>
+      <p>Based on empty bare-ID searches. Calibrating against four IDs vidIQ had already confirmed
+      real, all four returned nothing — search engines do not index bare video IDs. The finding was
+      an artifact of my method. <code>jdusH0OI-jY</code>, one of those eight, has since been
+      positively confirmed real, which is the proof rather than the argument.</p></div>
+    <div class="row crit"><div class="h"><h3>"Fifteen videos carry a heavy paid push"</h3><span class="pill crit">withdrawn</span></div>
+      <p>My search for the word matched the unfilled template string <code>(none / mild / heavy)</code>.
+      The real count is three, none shipped.</p></div>
+  </div>
+</section>
+
+<section>
+  <p class="eyebrow">Blocked</p>
+  <h2>vidIQ cannot reach this session</h2>
+  <hr class="rule">
+  <p>vidIQ, Exa and Firecrawl are authenticated at your account but report
+  <code>enabledInChat: false</code> here, and their tools are absent from this session's registry.
+  Direct network routes are closed too — YouTube oEmbed and every Invidious/Piped mirror are
+  blocked by the environment's egress policy.</p>
+  <p>Toggling the connector on mid-session does not inject its tools into a session already running;
+  the tool list is loaded once, at session start. <strong>The 71 runtimes need a fresh session
+  with those three toggled on before it opens.</strong> It is one batch call once it can run.</p>
+</section>
+
+<section>
+  <p class="eyebrow">Queue</p>
+  <h2>What happens next, in order</h2>
+  <hr class="rule">
+  <ol class="queue">
+    <li><p><strong>Re-grade every ladder level</strong> — round 1 and round 2 both. Now the
+    best-evidenced defect, and the one that puts a student in front of the wrong difficulty.</p></li>
+    <li><p><strong>Hand-check the ten low-question practice rows</strong>, hardest first. This is
+    the one that needs your phone and your judgement, not a tool.</p></li>
+    <li><p><strong>Run the 71 runtimes through vidIQ</strong> in a new session. One batch call.</p></li>
+    <li><p><strong>Re-send three prompts never run:</strong> #13 Sentence Completion,
+    #14 Binary Logic, #29 Pipes &amp; Cisterns.</p></li>
+  </ol>
+  <p style="margin-top:22px">One recommendation I'd make as a build decision: <strong>search is a
+  better discovery tool than Gemini for this job.</strong> It returns the video ID and the real
+  title from the same index entry, so the two cannot disagree — which is precisely the failure mode
+  that has cost us two rounds. Five clean Rodha candidates surfaced that way this morning without
+  being asked for.</p>
+</section>
+
+<footer>
+  All figures drawn from <span class="mono">docs/phase0/</span> in the repository.
+  Claims sourced from research are marked as claims; only platform-verified figures are stated as fact.
+</footer>
+
+</div>

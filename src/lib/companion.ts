@@ -160,6 +160,50 @@ export function planMorningCopy(firstName: string, firstTopic: string, secondTop
   };
 }
 
+/**
+ * The ONE morning the concept-resource layer is announced by push.
+ *
+ * Date-bounded so it expires by itself. The last announcement in this codebase
+ * kept shipping for eight days after the capability it described was deleted;
+ * an expiry that a human has to remember to remove is the same bug waiting to
+ * happen, so this one cannot outlive its day.
+ *
+ * The title is deliberately unchanged from planMorningCopy — that title is what
+ * makes a student open the app, and the news is worth nothing if they do not.
+ * The body carries the news instead, and stays the same length as the copy it
+ * replaces so nothing gets truncated on the lock screen.
+ */
+// ── The lesson-link announcement, for exactly one morning ───────────────────
+//
+// The 09:30 `morning` slot is NOT scheduled in vercel.json — only kickoff,
+// spark, progress and log are — so an announcement written into that slot
+// would have shipped, passed every test, and reached nobody. It rides
+// `kickoff` (08:00 IST) instead, which is the morning push students actually
+// receive.
+//
+// This is not a reason to notify. It is laid over whatever decision the
+// student's own cadence already made, so it creates no send: a student who
+// was not going to get a kickoff push still gets nothing, the daily ceiling
+// is untouched, and every cadence — activation, reactivation, active —
+// carries the news rather than only the small active minority.
+export const RESOURCE_ANNOUNCE_DAY = '2026-09-01';
+export const RESOURCE_ANNOUNCE_SLOT: CompanionSlot = 'kickoff';
+
+/**
+ * `base` is the copy that cadence already chose. Its `expectedAction` is
+ * preserved deliberately: the morning push's job is still to get the student
+ * into their plan, and keeping it means this day's delivery, dedup and
+ * attribution stay comparable to every other morning instead of becoming a
+ * one-off nobody can read against the baseline.
+ */
+export function lessonLinkAnnounceCopy(base: SlotCopy, firstName: string): SlotCopy {
+  return {
+    title: `${firstName}, new topics now come with a lesson`,
+    body: 'A topic you have not started yet now carries one free lesson link. Optional, and it changes nothing about your plan.',
+    expectedAction: base.expectedAction,
+  };
+}
+
 // 17:00 — study window opens, on the first not-yet-done topic with its target.
 export function planOpenCopy(nextTopic: string, target: string | null, hoursToday: number): SlotCopy {
   return {

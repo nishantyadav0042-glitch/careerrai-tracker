@@ -1,0 +1,46 @@
+{
+  "generated": "2026-08-31",
+  "status": "STAGED — NOT SHIPPED",
+  "why_staged": "Discovery ran through vidiq_youtube_search, so every id/title/channel/duration/viewCount below is platform-read, not model-generated. Our standard also requires a redundant confirm through vidiq_get_videos_by_ids, which catches transcription errors on our side. vidIQ credits were exhausted before that pass could run, so these rows are NOT in topic-resources.ts. Ship them only after the confirm lookup.",
+  "covers": "6 of the 7 uncovered topics. Hybrid DILR Sets was not searched — credits ran out first.",
+  "rule_applied": "A missing resource is acceptable; a wrong one is not. Nothing here was forced.",
+  "candidates": [
+    {
+      "topic": "Ratio & Proportion",
+      "primary":   { "videoId": "Q4yXuv5g5nc", "title": "Ratios for CAT Exam | CAT Arithmetic Basics, Concepts & Question Types", "channel": "Cracku - MBA CAT Preparation", "runtimeSeconds": 1256, "views": 13728, "note": "20:56, fully chaptered concept walkthrough — the best-shaped concept video found for this topic." },
+      "secondary": { "videoId": "J9ccMZAG01o", "title": "Arithmetic for CAT Class 1 | Ratio and Proportion", "channel": "CAT Preparation - iQuanta", "runtimeSeconds": 1687, "views": 195565, "note": "28:07, different teacher and approach — a genuine alternative explanation." }
+    },
+    {
+      "topic": "Progressions",
+      "primary":   { "videoId": "6jk_4y3qEZg", "title": "Sequence And Series (Arithmetic Progression) | Quant Modern Math 06 | CAT 2024", "channel": "MBA Wallah", "runtimeSeconds": 5118, "views": 134890, "longForm": true, "caveat": "PARTIAL TOPIC FIT — covers Arithmetic Progression only. Our topic 'Progressions' also spans GP. Needs a founder call: ship as partial, or hold for a video covering both." },
+      "secondary": { "videoId": "YEckpCtPo54", "title": "Arithmetic Progression AP | Part-1 | CAT Preparation", "channel": "MBA Pathshala", "runtimeSeconds": 4752, "views": 159047, "longForm": true, "caveat": "Same partial fit — AP only." }
+    },
+    {
+      "topic": "Para Jumbles",
+      "primary":   { "videoId": "UCjd5d-YZ40", "title": "Trick to Solve Parajumbles in CAT | CAT Preparation", "channel": "Ananta Chhajer", "runtimeSeconds": 467, "views": 96890, "note": "7:47, chaptered: theory then a live solve. Tight and genuinely concept-shaped." },
+      "secondary": { "videoId": "jXBjJIp3U_A", "title": "Best Approach to Solve Parajumbles in CAT | VARC Practice for CAT 2025", "channel": "CAT Preparation - iQuanta", "runtimeSeconds": 4022, "views": 9095, "longForm": true }
+    },
+    {
+      "topic": "Odd One Out",
+      "primary":   { "videoId": "QJYT1UPEp3o", "title": "Crack Sentence Odd One Out with 100% Accuracy | CORE Method Explained", "channel": "Unacademy CAT", "runtimeSeconds": 1620, "views": 49423, "note": "27:00, names a method and teaches it — the right shape and size for first exposure." },
+      "secondary": { "videoId": "-8YPOWyt5v8", "title": "VARC for CAT 2026: Solve Odd Sentence Out Without Guessing | KD Sir Rodha", "channel": "Rodha", "runtimeSeconds": 4118, "views": 1223, "longForm": true, "note": "Fully chaptered, different teacher. Low view count — recent upload." }
+    },
+    {
+      "topic": "Caselets",
+      "primary":   { "videoId": "Z3SWdERmAVE", "title": "CAT Caselets: Important CAT DILR Topic | CAT 2023 DILR Preparation", "channel": "BYJU'S Exam Prep: CAT & MBA", "runtimeSeconds": 2631, "views": 19333, "note": "43:51, caselet-specific rather than general DILR." },
+      "secondary": { "videoId": "kbKFCy5HA20", "title": "CAT 2025 Preparation Playlist: LRDI Caselets – Day 33", "channel": "CAT Preparation - iQuanta", "runtimeSeconds": 6023, "views": 4911, "longForm": true }
+    },
+    {
+      "topic": "Vocabulary",
+      "skillUnit": true,
+      "primary":   { "videoId": "Rhg1QRLnM8U", "title": "VOCABULARY BUILDING — HOW TO READ FROM WORD POWER MADE EASY", "channel": "MBA Wallah", "runtimeSeconds": 2845, "views": 11564, "longForm": true, "note": "An orientation pointer on HOW to build vocabulary, which is what a skill unit should carry. Vocabulary is a habit, not a concept — the existing guard caps this topic at one concept resource and forbids a secondary, and that is correct." },
+      "secondary": null
+    }
+  ],
+  "no_resource": [
+    {
+      "topic": "Hybrid DILR Sets",
+      "reason": "Not searched — vidIQ credits ran out. Separately, this topic already lost its previous primary in the final audit: gqYVcVjqW0k was a Tables video serving two topics. It stays uncovered until a genuine hybrid-set concept video is found."
+    }
+  ]
+}

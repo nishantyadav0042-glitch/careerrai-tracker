@@ -1,0 +1,1011 @@
+{
+  "received": "2026-08-31 round 2",
+  "verification": {
+    "runtime": "PENDING — vidIQ, YouTube oEmbed and all Invidious/Piped mirrors are blocked by this environment egress policy. No id has a platform-read duration.",
+    "existence_title_channel": "PARTIAL — web search, 2026-08-31. See docs/phase0/VERIFICATION-ROUND2-SEARCH.md",
+    "method": "Search claimed title + channel, then read the video id out of the returned youtube.com/watch URL. Confirms existence, title, channel and id together. Can confirm; cannot refute.",
+    "method_rejected": "Bare quoted video-id search. Calibration against four vidIQ-verified ids (m6EGM_UtY-Q, 4tI-h-GKWVk, spET6FqiBZ8, TBhanaOLNvc) returned nothing for all four. Search engines do not index bare video ids. Any conclusion drawn from an empty bare-id search is void.",
+    "confirmed_real": [
+      "-me6rKm0AcA",
+      "0S_rT7720t8",
+      "0xvx3q17jZs",
+      "1KYf9l1wGTY",
+      "4Ns1jYVuJ7s",
+      "ADkdD9aEhas",
+      "DcX3oOYVDh0",
+      "IzzDC2qCYu0",
+      "JU-b_Zu-z7U",
+      "TMOq7m_OKUw",
+      "TZadcVDti64",
+      "X_CpUw7JPnU",
+      "b6hmLsjbA7E",
+      "bIMpphNLj4o",
+      "d38v_cGG0Y0",
+      "dRbw57eHvuo",
+      "gqYVcVjqW0k",
+      "jdusH0OI-jY",
+      "m6EGM_UtY-Q",
+      "q-ZUkah-xys",
+      "zIrr1lkvyBY"
+    ],
+    "contradicted": {
+      "uC87E_QC_14": "Bottle Neck approach video is uz9vTOTgxkU",
+      "Ky5lzMv_1ns": "College Accreditation is CAT 2018 Slot 2 Set 1, at AXTDqYeyRpI / ie3Ipz-EizQ; claimed set number also wrong"
+    },
+    "title_fabrication": {
+      "finding": "Real ids returned under invented titles. The pattern is a descriptive subtitle after a colon that the real title does not contain.",
+      "cases": {
+        "q-ZUkah-xys": "real title: Averages 2 | CAT Exam Preparation | Arithmetic | Quantitative Aptitude",
+        "TMOq7m_OKUw": "real title: Inequalities 5 | CAT Preparation 2024 | Algebra | Quantitative Aptitude",
+        "4Ns1jYVuJ7s": "real title: CAT Reading Comprehension Tricks for 99 percentile | How to eliminate options in RC | CAT Preparation"
+      },
+      "consequence": "The L1-L4 ladder level was assigned from those subtitles. If the subtitle was generated, the level is generated. Every round-2 level needs re-grading against the real video, not just a runtime check."
+    },
+    "round1_correction": "Reading Speed Practice L1 was 0U5n10P3x_c in round 1 (audited as non-existent). The video is real at IzzDC2qCYu0, which is what round 2 returned. First case of a re-run repairing a known fabrication.",
+    "blocks_merge": true,
+    "confirmed_detail": {
+      "dRbw57eHvuo": "Venn Diagrams - 2 | 4 parameter Venn Diagram | CAT Preparation 2024 — title matches claim",
+      "0S_rT7720t8": "HCF LCM 2 || Number Systems || Quantitative Aptitude || CAT Preparation — claimed as \"for CAT 2026\"; real title says CAT Preparation",
+      "JU-b_Zu-z7U": "Numbers 3 || Number Systems | CAT Preparation | Quantitative Aptitude CAT 2026 — MISFILED: a general number-systems video, claimed as \"Numbers 3: Prime Composite Numbers Divisibility\" at Divisibility L3",
+      "TZadcVDti64": "Quadrilaterals 1 | CAT Preparation 2024 | Geometry | Quantitative Aptitude — claimed as \"Geometry for CAT 2026\"",
+      "ADkdD9aEhas": "Mensuration 4 | CAT Preparation | Geometry | Quantitative Aptitude — claimed subtitle \"Pyramids, Prisms & Max Sphere Radius\" is not in the real title",
+      "b6hmLsjbA7E": "Probability 1 | CAT Preparation 2019 | Quantitative Aptitude — a 2019 video; claimed subtitle \"Basics, Coin Tosses and Odds\" invented",
+      "1KYf9l1wGTY": "Probability 2 | CAT Preparation 2019 | Quantitative Aptitude — a 2019 video; claimed subtitle \"Graphical and Geometric Probability\" invented",
+      "jdusH0OI-jY": "VENN DIAGRAM SET I CAT PREVIOUS YEAR QUESTION I BY SWAPANIL SIR (Rodha) — REAL, exact id and title match. This is one of the eight ids the withdrawn bare-id method had flagged as fabricated; the retraction was correct."
+    },
+    "stale_year_finding": {
+      "what": "Several confirmed-real videos are 2019 or 2024 uploads presented under a \"for CAT 2026\" title that the real video does not carry.",
+      "examples": [
+        "b6hmLsjbA7E (2019)",
+        "1KYf9l1wGTY (2019)",
+        "TZadcVDti64 (2024)",
+        "0S_rT7720t8 (no year)"
+      ],
+      "why_it_matters": "A student told a video is \"for CAT 2026\" and handed a 2019 upload has been misled by our label, not by the creator. Rodha genuinely runs both series; the responses mix the two naming conventions."
+    },
+    "search_as_discovery": {
+      "finding": "Web search returns a real video id and its real title together, which is exactly what the research step kept getting wrong separately.",
+      "candidates_found_directly": {
+        "NqgFXVIrRmY": "Divisibility Rules 3 || Number Systems || Quantitative Aptitude || CAT Preparation (Rodha)",
+        "_g89_8Bb57g": "Numbers 1: Real Rational Irrational Odd Even | Number System for CAT 2026 | Ravi Prakash Rodha",
+        "KiG0yg61alo": "Numbers 2: Sums Primes 6k+ 1 Form | Number System for CAT 2026 | Ravi Prakash Rodha",
+        "pHyuUy_spww": "HCF LCM 5 || Number Systems || Quantitative Aptitude || CAT Preparation 2024",
+        "Ikxsz4En-RQ": "HCF LCM 4 || Number Systems || Quantitative Aptitude || CAT Preparation 2024"
+      },
+      "implication": "These carry higher confidence than any Gemini candidate, because the id and the title arrived from the same index entry rather than being asserted separately."
+    },
+    "connectors_31_aug_0630": "vidIQ, Exa and Firecrawl are connected at the account but enabledInChat=false for this session, so their tools are not loaded. YouTube oEmbed and every Invidious/Piped mirror remain blocked by the egress policy. Runtime is therefore still unverified for all 71.",
+    "retraction_vindicated": "jdusH0OI-jY was positively confirmed real by title search. It was among the eight ids the bare-id method had wrongly implied were fabricated. Withdrawing that finding was correct, and this is the proof rather than the argument.",
+    "platform_access_finding": {
+      "what": "The Unacademy \"Complete Geometry & Mensuration in One Video\" resource (claimed as FjC3L4s3C2A, Circles L1) is an Unacademy platform class, not a free YouTube video.",
+      "why_it_matters": "A link that lands on a login or paywall is not a free resource, whatever its title says. Unacademy candidates need the extra check that the video is actually on YouTube and actually free, before the channel is trusted as a source tier."
+    }
+  },
+  "topics": [
+    {
+      "topic": "Average",
+      "factory": 9,
+      "why_rerun": "round 1 returned the same video for L1 and L2",
+      "candidates": [
+        {
+          "level": "L1",
+          "id": "m6EGM_UtY-Q",
+          "title": "Averages for CAT: Part 1 (Basic Concepts, Tricks, Solved Examples)",
+          "channel": "Takshzila",
+          "dur": "14:39",
+          "time": "25-35 min"
+        },
+        {
+          "level": "L2",
+          "id": "MYud15DuP6s",
+          "title": "Averages for CAT: Part 2 (More Concepts and Solved Examples)",
+          "channel": "Takshzila",
+          "dur": "18:16",
+          "time": "30-45 min"
+        },
+        {
+          "level": "L3",
+          "id": "0xvx3q17jZs",
+          "title": "All CAT Questions from Averages | CAT 2017-2021 | Blitzkrieg",
+          "channel": "2IIM CAT Preparation",
+          "dur": "1:31:14",
+          "time": "100-120 min"
+        },
+        {
+          "level": "L4",
+          "id": "q-ZUkah-xys",
+          "title": "Averages 2: Group Changes | Arithmetic for CAT 2026",
+          "channel": "Rodha",
+          "dur": "30:37",
+          "time": "50-65 min"
+        }
+      ]
+    },
+    {
+      "topic": "Selection & Distribution",
+      "factory": 17,
+      "why_rerun": "round 1's L2 video did not exist",
+      "candidates": [
+        {
+          "level": "L1",
+          "id": "DcX3oOYVDh0",
+          "title": "Selections and Distribution Puzzles by Elites Grid | Best Approach",
+          "channel": "ELITES GRID - CAT PREP",
+          "dur": "12:25",
+          "time": "25-35 min"
+        },
+        {
+          "level": "L2",
+          "id": "d38v_cGG0Y0",
+          "title": "SELECTIONS & Distibutions | Conventional method | CAT LRDI",
+          "channel": "ELITES GRID - CAT PREP",
+          "dur": "13:01",
+          "time": "30-40 min"
+        },
+        {
+          "level": "L3",
+          "id": "TAHxPmmojNQ",
+          "title": "Selection and Distribution Based DILR ft.Dr.Shashank Prabhu | DILR Dangal Ep.7",
+          "channel": "TestPrep By InsideIIM",
+          "dur": "31:45",
+          "time": "45-60 min",
+          "already_verified": {
+            "real_duration": "31:45",
+            "real_channel": "TestPrep By InsideIIM",
+            "duration_match": true,
+            "channel_match": true
+          }
+        },
+        {
+          "level": "L4",
+          "id": "bIMpphNLj4o",
+          "title": "Selections & Distribution based LRDI for CAT | Smart approaches",
+          "channel": "ELITES GRID - CAT PREP",
+          "dur": "12:02",
+          "time": "25-35 min"
+        }
+      ]
+    },
+    {
+      "topic": "Hybrid DILR Sets",
+      "factory": 20,
+      "why_rerun": "round 1 invented all three filled levels",
+      "candidates": [
+        {
+          "level": "L1",
+          "id": "gqYVcVjqW0k",
+          "title": "Tabular Set || LR & DI Preparation for CAT",
+          "channel": "Rodha",
+          "dur": "21:38",
+          "time": "35-45 min",
+          "already_verified": {
+            "real_duration": "21:38",
+            "real_channel": "Rodha",
+            "duration_match": true,
+            "channel_match": true
+          }
+        },
+        {
+          "level": "L2",
+          "id": "e3MUWMNxkKo",
+          "title": "CAT Infinite DILR - Set 420 | Averaging out the IQ | Data Table",
+          "channel": "Aptitude Jab",
+          "dur": "12:15",
+          "time": "25-35 min"
+        },
+        {
+          "level": "L3",
+          "id": "Ky5lzMv_1ns",
+          "title": "CAT 2018 DILR Solutions | Slot 2 Set 8 | College Accreditation",
+          "channel": "Aptitude Jab",
+          "dur": "16:03",
+          "time": "30-40 min"
+        },
+        {
+          "level": "L4",
+          "id": "uC87E_QC_14",
+          "title": "LRDI for CAT | Bottle Neck approach",
+          "channel": "ELITES GRID - CAT PREP",
+          "dur": "10:33",
+          "time": "20-30 min"
+        }
+      ]
+    },
+    {
+      "topic": "Reading Speed Practice",
+      "factory": 24,
+      "why_rerun": "round 1's L1 video did not exist",
+      "candidates": [
+        {
+          "level": "L1",
+          "id": "IzzDC2qCYu0",
+          "title": "How to read a passage effectively | CAT-RC-Series | GejoSpeaks",
+          "channel": "Gejo Speaks",
+          "dur": "18:45",
+          "time": "25-35 min"
+        },
+        {
+          "level": "L2",
+          "gap": true,
+          "reason": "reading speed has no isolated basic-level drills"
+        },
+        {
+          "level": "L3",
+          "gap": true,
+          "reason": "at CAT difficulty this is just RC practice"
+        },
+        {
+          "level": "L4",
+          "id": "4Ns1jYVuJ7s",
+          "title": "CAT RC Tricks for 99 percentile | How to eliminate options in RC",
+          "channel": "Ananta Chhajer",
+          "dur": "9:24",
+          "time": "15-20 min"
+        }
+      ]
+    },
+    {
+      "topic": "Functions",
+      "factory": 31,
+      "why_rerun": "round 1 invented all four videos",
+      "note": "TWO runs supplied; L1 agrees across both",
+      "candidates": [
+        {
+          "level": "L1",
+          "id": "6FEnbG2Ux5o",
+          "title": "Functions 1: Domain Range Types Of Functions | Algebra for CAT 2026",
+          "channel": "Rodha",
+          "dur": "21:16",
+          "time": "35-45 min",
+          "run": "A+B agree"
+        },
+        {
+          "level": "L2",
+          "id": "EWB1NaL4N4U",
+          "title": "Function 2: Total Onto And Bijective Functions | Algebra for CAT 2026",
+          "channel": "Rodha",
+          "dur": "19:12",
+          "time": "30-40 min",
+          "run": "A"
+        },
+        {
+          "level": "L3",
+          "id": "w4NV03jDx78",
+          "title": "CAT - QA - Problem Solving - Function leading to simultaneous equations",
+          "channel": "Takshzila",
+          "dur": "22:41",
+          "time": "35-45 min",
+          "run": "A"
+        },
+        {
+          "level": "L4",
+          "id": "LChCPuxO83s",
+          "title": "Functions - 4: General Solutions Of Functions | Algebra for CAT 2026",
+          "channel": "Rodha",
+          "dur": "16:34",
+          "time": "25-35 min",
+          "run": "A"
+        },
+        {
+          "level": "L2",
+          "id": "AMl31tXkyS8",
+          "title": "Functions 1",
+          "channel": "Takshzila Shikshak -The Art of learning. (Grok)",
+          "dur": "8:25",
+          "time": "20-30 min",
+          "run": "B",
+          "flag": "channel name contains '(Grok)' — looks like contamination, verify carefully"
+        },
+        {
+          "level": "L3",
+          "id": "sKmBBaj1bbE",
+          "title": "Functions and Graphs 2 | CAT PYQs 2017-23",
+          "channel": "Mathological",
+          "dur": "31:38",
+          "time": "50-65 min",
+          "run": "B"
+        },
+        {
+          "level": "L4",
+          "id": "X_CpUw7JPnU",
+          "title": "CAT 2026 Algebra Revision (Functions & Graphs) By Maruti Sir",
+          "channel": "Cracku - MBA CAT Preparation",
+          "dur": "47:28",
+          "time": "60-75 min",
+          "run": "B"
+        }
+      ]
+    },
+    {
+      "topic": "Inequalities",
+      "factory": 32,
+      "why_rerun": "not a required re-run — a second run arrived anyway, and it contradicts the first",
+      "candidates": [
+        {
+          "level": "L1",
+          "id": "EDLqKDO4ruY",
+          "title": "Inequalities 6: Polynomial and Rational Inequalities",
+          "channel": "Rodha",
+          "dur": "28:40",
+          "time": "45-55 min"
+        },
+        {
+          "level": "L2",
+          "id": "zIrr1lkvyBY",
+          "title": "Inequalities 1: Rules and Applications",
+          "channel": "Rodha",
+          "dur": "19:48",
+          "time": "35-45 min",
+          "flag": "was L1 in round 1; claimed 18:24 then, 19:48 now, REAL is 18:52",
+          "already_verified": {
+            "real_duration": "18:52",
+            "real_channel": "Rodha",
+            "duration_match": false,
+            "channel_match": true
+          }
+        },
+        {
+          "level": "L3",
+          "id": "-me6rKm0AcA",
+          "title": "CAT Inequalities - #19",
+          "channel": "2IIM CAT Preparation",
+          "dur": "1:06:40",
+          "time": "90-110 min",
+          "flag": "claimed 1:04:12 in round 1, 1:06:40 now, REAL is 1:03:40 — both wrong",
+          "already_verified": {
+            "real_duration": "63:40",
+            "real_channel": "2IIM CAT Preparation",
+            "duration_match": false,
+            "channel_match": true
+          }
+        },
+        {
+          "level": "L4",
+          "id": "TMOq7m_OKUw",
+          "title": "Inequalities 5: AM-HM Inequality Applications",
+          "channel": "Rodha",
+          "dur": "21:12",
+          "time": "40-50 min",
+          "flag": "round 1 refused L4 outright; round 2 found one"
+        }
+      ]
+    },
+    {
+      "topic": "Linear Equations",
+      "factory": 12,
+      "why_rerun": "never run before (arrived labelled 33)",
+      "candidates": [
+        {
+          "level": "L1",
+          "id": "W6MKuAnB0h4",
+          "title": "Simple Equations 1: Linear Equation Solutions | Algebra for CAT 2026",
+          "channel": "Rodha",
+          "dur": "26:09",
+          "time": "40-50 min"
+        },
+        {
+          "level": "L2",
+          "id": "b72RfaOsAmg",
+          "title": "Linear Eqn in 2 variables, Integer solns - 1",
+          "channel": "Takshzila",
+          "dur": "15:23",
+          "time": "25-35 min"
+        },
+        {
+          "level": "L3",
+          "id": "P-emknCdeZE",
+          "title": "Simple Equations 2: Number of Integer Solutions",
+          "channel": "Rodha",
+          "dur": "28:32",
+          "time": "45-60 min"
+        },
+        {
+          "level": "L4",
+          "id": "vrtKzaspVjs",
+          "title": "Simple Equations 3: Integral Solutions Shortcuts",
+          "channel": "Rodha",
+          "dur": "21:38",
+          "time": "35-45 min"
+        }
+      ]
+    },
+    {
+      "topic": "Lines & Angles",
+      "factory": 34,
+      "why_rerun": "never run before",
+      "unit_shape": "prerequisite-not-tested",
+      "structural_finding": "Standalone Lines & Angles questions do not appear in CAT. Its properties (transversals, alternate angles, auxiliary parallels) are tested only as sub-steps inside Triangles, Circles and Polygons problems. This is the FIFTH structural finding of its kind and the FIRST in QA — the previous four were all VARC.",
+      "candidates": [
+        {
+          "level": "L1",
+          "id": "GaEZEJbKLtY",
+          "title": "Lines and Angles | Quant Geometry L1 | CAT 2024 | MBA Wallah",
+          "channel": "MBA Wallah",
+          "dur": "43:37",
+          "time": "55-70 min"
+        },
+        {
+          "level": "L2",
+          "id": "rUI1bbCvk7E",
+          "title": "Geometry Introduction | Quantitative Aptitude I CAT PREPARATION",
+          "channel": "Rodha",
+          "dur": "21:30",
+          "time": "30-45 min"
+        },
+        {
+          "level": "L3",
+          "gap": true,
+          "reason": "pure Lines & Angles is never tested standalone at CAT difficulty; CAT-level angle problems require triangle theorems, cyclic quadrilaterals or circle properties"
+        },
+        {
+          "level": "L4",
+          "gap": true,
+          "reason": "no dedicated CAT speed or trap videos for standalone Lines & Angles; pacing is taught inside Triangles and Polygons"
+        }
+      ]
+    },
+    {
+      "topic": "Triangles",
+      "factory": 35,
+      "candidates": [
+        {
+          "level": "L1",
+          "id": "25P2O9r3AfM",
+          "title": "Triangles 1: Centroid Orthocenter Incenter Circumcenter",
+          "channel": "Rodha",
+          "dur": "32:53",
+          "time": "45-60 min"
+        },
+        {
+          "level": "L2",
+          "id": "9H2CftySPkI",
+          "title": "Geometry for CAT (Sides of a Triangle): Part 1",
+          "channel": "Takshzila",
+          "dur": "11:18",
+          "time": "20-30 min"
+        },
+        {
+          "level": "L3",
+          "id": "tcVXuTo00wk",
+          "title": "Geometry Practice 1: High Level Problems",
+          "channel": "Rodha",
+          "dur": "20:42",
+          "time": "40-50 min"
+        },
+        {
+          "level": "L4",
+          "gap": true,
+          "reason": "no standalone exam-ready Triangles video"
+        }
+      ]
+    },
+    {
+      "topic": "Quadrilaterals",
+      "factory": 36,
+      "candidates": [
+        {
+          "level": "L1",
+          "id": "TZadcVDti64",
+          "title": "Quadrilaterals 1 | Geometry for CAT 2026",
+          "channel": "Rodha",
+          "dur": "38:34",
+          "time": "55-70 min"
+        },
+        {
+          "level": "L2",
+          "id": "Dy4_ESXGjeY",
+          "title": "Quadrilaterals 3: Trapezium & Area Questions",
+          "channel": "Rodha",
+          "dur": "13:17",
+          "time": "25-35 min"
+        },
+        {
+          "level": "L3",
+          "id": "0h9-VSm6Hfo",
+          "title": "Quadrilaterals 2: Trapezium & Rhombus Properties",
+          "channel": "Rodha",
+          "dur": "22:09",
+          "time": "35-45 min"
+        },
+        {
+          "level": "L4",
+          "gap": true,
+          "reason": "no standalone shortcuts video; existing ones are generic marathons or sales pitches"
+        }
+      ]
+    },
+    {
+      "topic": "Circles",
+      "factory": 37,
+      "quality": "WEAK — every duration returned as NOT CONFIRMED",
+      "candidates": [
+        {
+          "level": "L1",
+          "id": "FjC3L4s3C2A",
+          "title": "Complete Geometry & Mensuration in One Video | Ronak Shah",
+          "channel": "Unacademy CAT",
+          "dur": "NOT CONFIRMED",
+          "time": "60-80 min",
+          "flag": "duration unconfirmed; title is a whole-geometry marathon, not Circles-specific"
+        },
+        {
+          "level": "L2",
+          "id": "M5K3uQ9jN5E",
+          "title": "Geometry (Circles) - Practice Questions",
+          "channel": "Rodha",
+          "dur": "NOT CONFIRMED",
+          "time": "45-60 min",
+          "flag": "duration unconfirmed"
+        },
+        {
+          "level": "L3",
+          "id": "mH5uU0K8s8w",
+          "title": "Circles - Advanced Questions for CAT",
+          "channel": "Takshzila Shikshak",
+          "dur": "NOT CONFIRMED",
+          "time": "50-70 min",
+          "flag": "duration unconfirmed"
+        },
+        {
+          "level": "L4",
+          "gap": true,
+          "reason": "none found"
+        }
+      ]
+    },
+    {
+      "topic": "Mensuration",
+      "factory": 38,
+      "note": "two runs supplied; L1, L3 and L4 identical across both, only L2 differs",
+      "candidates": [
+        {
+          "level": "L1",
+          "id": "HhtLt2JZKu4",
+          "title": "Mensuration 1: Prisms, Pyramids & Spheres",
+          "channel": "Rodha",
+          "dur": "24:47",
+          "time": "40-50 min",
+          "run": "A+B agree"
+        },
+        {
+          "level": "L2",
+          "id": "17lfsV7IbR0",
+          "title": "Mensuration 2-D | CAT & OMETs | Session 01 | Udit Saini",
+          "channel": "MBA Pathshala",
+          "dur": "58:22",
+          "time": "75-90 min",
+          "run": "A"
+        },
+        {
+          "level": "L2",
+          "id": "jQmPUysLjlg",
+          "title": "Mensuration 2: Cubes, Cuboids & Shortest Distance",
+          "channel": "Rodha",
+          "dur": "29:02",
+          "time": "40-50 min",
+          "run": "B"
+        },
+        {
+          "level": "L3",
+          "id": "ADkdD9aEhas",
+          "title": "Mensuration 4: Pyramids, Prisms & Max Sphere Radius",
+          "channel": "Rodha",
+          "dur": "23:52",
+          "time": "45-60 min",
+          "run": "A+B agree"
+        },
+        {
+          "level": "L4",
+          "id": "CQH4cGBNPMg",
+          "title": "Mensuration 5: Cone Ratio Method",
+          "channel": "Rodha",
+          "dur": "22:55",
+          "time": "40-50 min",
+          "run": "A+B agree"
+        }
+      ]
+    },
+    {
+      "topic": "Coordinate Geometry",
+      "factory": 39,
+      "note": "second run; round 1 gave a different, all-verified set",
+      "candidates": [
+        {
+          "level": "L1",
+          "id": "Fj-yZ7-t09s",
+          "title": "Coordinate Geometry for CAT | Basics, Formulas, Concepts",
+          "channel": "Rodha",
+          "dur": "1:35:12",
+          "time": "120-150 min",
+          "flag": "95 min — the longest single candidate in the whole corpus"
+        },
+        {
+          "level": "L2",
+          "gap": true,
+          "reason": "standalone easy-practice videos are promo-heavy livestreams or SSC/Banking lectures"
+        },
+        {
+          "level": "L3",
+          "id": "k-aC41P5cWg",
+          "title": "Coordinate Geometry Best Questions for CAT",
+          "channel": "MBA Pathshala",
+          "dur": "48:22",
+          "time": "75-90 min"
+        },
+        {
+          "level": "L4",
+          "gap": true,
+          "reason": "none found"
+        }
+      ]
+    },
+    {
+      "topic": "Permutation & Combination",
+      "factory": 40,
+      "quality": "WEAK — durations unconfirmed, half the ladder empty",
+      "candidates": [
+        {
+          "level": "L1",
+          "id": "Fj2F2o_gVqA",
+          "title": "Permutation and Combination - Part 1 | CAT 2022",
+          "channel": "Takshzila Shiksha",
+          "dur": "NOT CONFIRMED",
+          "time": "60-75 min",
+          "flag": "duration unconfirmed"
+        },
+        {
+          "level": "L2",
+          "id": "kYJvM9l2Uro",
+          "title": "Permutation and Combination - Level 1 Practice Questions",
+          "channel": "Elite's Grid",
+          "dur": "NOT CONFIRMED",
+          "time": "70-90 min",
+          "flag": "duration unconfirmed"
+        },
+        {
+          "level": "L3",
+          "gap": true,
+          "reason": "none found"
+        },
+        {
+          "level": "L4",
+          "gap": true,
+          "reason": "none found"
+        }
+      ]
+    },
+    {
+      "topic": "Probability",
+      "factory": 41,
+      "candidates": [
+        {
+          "level": "L1",
+          "id": "b6hmLsjbA7E",
+          "title": "Probability 1: Basics, Coin Tosses and Odds",
+          "channel": "Rodha",
+          "dur": "21:31",
+          "time": "30-40 min"
+        },
+        {
+          "level": "L2",
+          "id": "1KYf9l1wGTY",
+          "title": "Probability 2: Graphical and Geometric Probability",
+          "channel": "Rodha",
+          "dur": "21:09",
+          "time": "30-40 min"
+        },
+        {
+          "level": "L3",
+          "gap": true,
+          "reason": "standalone end-to-end CAT probability videos without batch promotion are sparse"
+        },
+        {
+          "level": "L4",
+          "gap": true,
+          "reason": "no dedicated free speed/trap video that does not steer into a paid test series"
+        }
+      ]
+    },
+    {
+      "topic": "Venn / Sets",
+      "factory": 11,
+      "candidates": [
+        {
+          "level": "L1",
+          "id": "D3iR5cIr_VQ",
+          "title": "Venn Diagram & Chocolate Distribution (Introduction) - 1",
+          "channel": "Rodha",
+          "dur": "9:39",
+          "time": "20-30 min"
+        },
+        {
+          "level": "L2",
+          "id": "dRbw57eHvuo",
+          "title": "Venn Diagrams - 2 | 4 parameter Venn Diagram",
+          "channel": "Rodha",
+          "dur": "29:42",
+          "time": "45-60 min"
+        },
+        {
+          "level": "L3",
+          "id": "6tpQeFXahuY",
+          "title": "Venn Diagrams - 9 | Maxima Minima in Venn Diagram",
+          "channel": "Rodha",
+          "dur": "32:47",
+          "time": "50-70 min"
+        },
+        {
+          "level": "L4",
+          "id": "8gZokJQ_SCY",
+          "title": "Venn Diagrams - 8 | Unconventional Set On Venn Diagram",
+          "channel": "Rodha",
+          "dur": "22:25",
+          "time": "35-45 min"
+        }
+      ]
+    },
+    {
+      "topic": "Set Theory",
+      "factory": 42,
+      "quality": "WEAK — nothing watched, no duration confirmed, one placeholder URL",
+      "candidates": [
+        {
+          "level": "L1",
+          "id": "IgEKyxYTXDg",
+          "title": "SET THEORY 1 || BASIC CONCEPTS || CAT LRDI",
+          "channel": "Rodha",
+          "dur": "NOT CONFIRMED",
+          "time": "NOT CONFIRMED",
+          "flag": "watched: no"
+        },
+        {
+          "level": "L2",
+          "id": "jdusH0OI-jY",
+          "title": "VENN DIAGRAM SET | CAT PREVIOUS YEAR QUESTION | BY SWAPANIL SIR",
+          "channel": "Rodha",
+          "dur": "NOT CONFIRMED",
+          "time": "NOT CONFIRMED",
+          "flag": "watched: no"
+        },
+        {
+          "level": "L3",
+          "id": "n_icgerqO7Q",
+          "title": "CAT 2022 Detailed Solution Slot 1 Q10 | Venn Diagram | Chocolate distribution",
+          "channel": "Rodha",
+          "dur": "NOT CONFIRMED",
+          "time": "NOT CONFIRMED",
+          "flag": "watched: no"
+        },
+        {
+          "level": "L4",
+          "gap": true,
+          "reason": "no dedicated speed-techniques module — but the response put the literal string NOT_CONFIRMED inside a youtube.com/watch URL, which is a malformed row, not a clean gap"
+        }
+      ]
+    },
+    {
+      "topic": "Divisibility",
+      "factory": 43,
+      "candidates": [
+        {
+          "level": "L1",
+          "id": "p0JbJd5DpWY",
+          "title": "Divisibility Rules 1 | Number System for CAT 2026",
+          "channel": "Rodha",
+          "dur": "30:08",
+          "time": "45-60 min"
+        },
+        {
+          "level": "L2",
+          "id": "rb3Sk_L7vMQ",
+          "title": "Divisibility Rules 4 | Number System for CAT 2026",
+          "channel": "Rodha",
+          "dur": "25:12",
+          "time": "40-50 min"
+        },
+        {
+          "level": "L3",
+          "id": "JU-b_Zu-z7U",
+          "title": "Numbers 3: Prime Composite Numbers Divisibility",
+          "channel": "Rodha",
+          "dur": "26:06",
+          "time": "50-60 min"
+        },
+        {
+          "level": "L4",
+          "gap": true,
+          "reason": "no single reliable standalone free video for divisibility speed tricks outside a paid batch"
+        }
+      ]
+    },
+    {
+      "topic": "HCF & LCM",
+      "factory": 44,
+      "candidates": [
+        {
+          "level": "L1",
+          "id": "JyN6EROdhrw",
+          "title": "HCF LCM 1 | Number System for CAT 2026",
+          "channel": "Rodha",
+          "dur": "25:43",
+          "time": "40-50 min"
+        },
+        {
+          "level": "L2",
+          "id": "0S_rT7720t8",
+          "title": "HCF LCM 2 | Number System for CAT 2026",
+          "channel": "Rodha",
+          "dur": "19:41",
+          "time": "30-40 min"
+        },
+        {
+          "level": "L3",
+          "id": "GUsdagnVKFA",
+          "title": "HCF LCM 3: Concepts Tricks | Number System for CAT 2026",
+          "channel": "Rodha",
+          "dur": "22:00",
+          "time": "45-60 min"
+        },
+        {
+          "level": "L4",
+          "id": "okXfBsuXsbk",
+          "title": "Factors 8: HCF And LCM | Number System for CAT 2026",
+          "channel": "Rodha",
+          "dur": "27:06",
+          "time": "50-60 min"
+        }
+      ]
+    },
+    {
+      "topic": "Remainders",
+      "factory": 45,
+      "quality": "ALL FOUR ARE MARATHONS — 58 to 85 min each, 1.5 to 2.5 hours claimed student time",
+      "candidates": [
+        {
+          "level": "L1",
+          "id": "FqSj5i15lvc",
+          "title": "Number System - Remainder Theorem Concepts & Shortcuts",
+          "channel": "Rodha",
+          "dur": "1:12:45",
+          "time": "105-120 min",
+          "flag": "marathon"
+        },
+        {
+          "level": "L2",
+          "id": "cM2yT2O_z80",
+          "title": "Number System (Remainders) Part - 2 | CAT 2023",
+          "channel": "Rodha",
+          "dur": "58:20",
+          "time": "90-120 min",
+          "flag": "marathon"
+        },
+        {
+          "level": "L3",
+          "id": "k5jG3x8-8Gg",
+          "title": "Number System - Remainder Theorem Advanced Questions",
+          "channel": "Rodha",
+          "dur": "1:25:10",
+          "time": "120-150 min",
+          "flag": "marathon"
+        },
+        {
+          "level": "L4",
+          "id": "M2_xYx3L71k",
+          "title": "Remainder Theorem Shortcuts & Tricks | Unacademy CAT",
+          "channel": "Unacademy CAT",
+          "dur": "1:05:40",
+          "time": "90-120 min",
+          "flag": "REJECT — self-reported paid-course push is HEAVY"
+        }
+      ]
+    },
+    {
+      "topic": "Base System",
+      "factory": 46,
+      "quality": "MALFORMED — the response template was returned unfilled; no watch status, no question counts, no difficulty",
+      "candidates": [
+        {
+          "level": "L1",
+          "id": "yVXgLm09yuM",
+          "title": "Number System - Converting from Decimal to Other Bases | Ravi Handa",
+          "channel": "CAT Funda by Unacademy",
+          "dur": "56:01",
+          "time": "NOT PROVIDED",
+          "flag": "all assessment fields blank"
+        },
+        {
+          "level": "L2",
+          "id": "mp1A85pK6YQ",
+          "title": "Base System for CAT: Part 1 (Introduction)",
+          "channel": "Takshzila",
+          "dur": "5:19",
+          "time": "NOT PROVIDED",
+          "flag": "all assessment fields blank; 5:19 is very short for a practice level"
+        },
+        {
+          "level": "L3",
+          "gap": true,
+          "reason": "none found"
+        },
+        {
+          "level": "L4",
+          "gap": true,
+          "reason": "none found"
+        }
+      ]
+    }
+  ],
+  "pending_verification": [
+    "m6EGM_UtY-Q",
+    "MYud15DuP6s",
+    "0xvx3q17jZs",
+    "q-ZUkah-xys",
+    "DcX3oOYVDh0",
+    "d38v_cGG0Y0",
+    "bIMpphNLj4o",
+    "e3MUWMNxkKo",
+    "Ky5lzMv_1ns",
+    "uC87E_QC_14",
+    "IzzDC2qCYu0",
+    "4Ns1jYVuJ7s",
+    "6FEnbG2Ux5o",
+    "EWB1NaL4N4U",
+    "w4NV03jDx78",
+    "LChCPuxO83s",
+    "AMl31tXkyS8",
+    "sKmBBaj1bbE",
+    "X_CpUw7JPnU",
+    "EDLqKDO4ruY",
+    "TMOq7m_OKUw",
+    "W6MKuAnB0h4",
+    "b72RfaOsAmg",
+    "P-emknCdeZE",
+    "vrtKzaspVjs",
+    "GaEZEJbKLtY",
+    "rUI1bbCvk7E",
+    "TAHxPmmojNQ",
+    "gqYVcVjqW0k",
+    "zIrr1lkvyBY",
+    "-me6rKm0AcA",
+    "25P2O9r3AfM",
+    "9H2CftySPkI",
+    "tcVXuTo00wk",
+    "TZadcVDti64",
+    "Dy4_ESXGjeY",
+    "0h9-VSm6Hfo",
+    "FjC3L4s3C2A",
+    "M5K3uQ9jN5E",
+    "mH5uU0K8s8w",
+    "HhtLt2JZKu4",
+    "17lfsV7IbR0",
+    "jQmPUysLjlg",
+    "ADkdD9aEhas",
+    "CQH4cGBNPMg",
+    "Fj-yZ7-t09s",
+    "k-aC41P5cWg",
+    "Fj2F2o_gVqA",
+    "kYJvM9l2Uro",
+    "b6hmLsjbA7E",
+    "1KYf9l1wGTY",
+    "D3iR5cIr_VQ",
+    "dRbw57eHvuo",
+    "6tpQeFXahuY",
+    "8gZokJQ_SCY",
+    "IgEKyxYTXDg",
+    "jdusH0OI-jY",
+    "n_icgerqO7Q",
+    "p0JbJd5DpWY",
+    "rb3Sk_L7vMQ",
+    "JU-b_Zu-z7U",
+    "JyN6EROdhrw",
+    "0S_rT7720t8",
+    "GUsdagnVKFA",
+    "okXfBsuXsbk",
+    "FqSj5i15lvc",
+    "cM2yT2O_z80",
+    "k5jG3x8-8Gg",
+    "M2_xYx3L71k",
+    "yVXgLm09yuM",
+    "mp1A85pK6YQ"
+  ]
+}

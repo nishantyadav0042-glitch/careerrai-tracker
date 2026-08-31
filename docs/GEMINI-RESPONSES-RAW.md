@@ -1,0 +1,1002 @@
+# Gemini responses — raw collection log (46 topics)
+
+> Collection in progress. Responses are logged here verbatim-in-substance as
+> they arrive from the founder's Gemini runs (`docs/GEMINI-PROMPT-FACTORY.md`).
+> **Nothing here is verified yet.** Verification (vidIQ metadata cross-check,
+> duration/channel/availability confirmation) and the consolidated report
+> happen once all 46 are in — per the founder's instruction to consume the
+> full batch before reporting.
+>
+> Treat every claim below as an untrusted external research claim until the
+> verification pass marks it otherwise.
+
+## Status
+
+| # | Topic | Received | Notes |
+|---|---|---|---|
+| 1 | Reading Comprehension | ✅ | 4/4 levels filled |
+| 2 | Percentages | ✅ | 4/4 levels filled |
+| 3 | Arrangements | ✅ | 3/4 levels + 1 honest "NO GOOD VIDEO FOUND" (L4) |
+| 4 | Editorial Reading | ✅ | 1/4 levels + 3 structural "NO GOOD VIDEO FOUND" — see the habit-track finding below |
+| 5 | Tables | ✅ | 3/4 levels + 1 "NO GOOD VIDEO FOUND" (L4) |
+| 6 | Ratio & Proportion | ✅ | 3/4 + L4 gap |
+| 7 | Para Jumbles | ✅ | 3/4 + L4 gap |
+| 8 | Charts | ✅ | **4/4 — first DILR topic to fill L4** |
+| 9 | Average | ⚠️ | 3/4 + L4 gap, but **L1 and L2 cite the same video ID** — needs re-run |
+| 10 | Odd One Out | ✅ | **4/4 — L4 filled** |
+| 25 | Time & Work | ✅ | **4/4 — L4 filled** (arrived labelled "11"; see numbering note) |
+| 15 | Progressions | ✅ | 4/4 |
+| 16 | Vocabulary | ⚠️ | 2/4 + structural gap — **both URLs given as Google-search links, low confidence** |
+| 26 | Time Speed Distance | ✅ | 4/4 (arrived labelled "12") |
+| 27 | SI & CI | ✅ | 4/4 (arrived labelled "13") |
+| 17 | Selection & Distribution | ⚠️ | 3/4 + L4 gap; L2 title looks constructed |
+| 18 | Profit & Loss | ⚠️ | 4/4, but **L3 is literally titled with the paid batch name** |
+| 19 | Para Summary | ✅ | 4/4 — cleanest response in the batch so far |
+| 20 | Hybrid DILR Sets | 🚨 | **LIKELY FABRICATED — all 3 filled levels are search-links with constructed titles** |
+| 21 | Caselets | ✅ | 1/4 + **3 honest refusals — refutes the refusal-fatigue hypothesis** |
+| 22 | Games & Tournaments | ✅ | 3/4 + L4 gap; clean response |
+| 25 | Time & Work (RE-RUN) | 🚨 | **contradicts its own earlier run — same video placed at L4 and at L2** |
+| 14 | Mixtures | ✅ | 3/4 + honest L4 gap |
+| 23 | Grammar | ✅ | 2/4 + **structural gap — Grammar phased out of CAT post-2014** |
+| 24 | Reading Speed Practice | ✅ | 2/4 + structural gap (L2 empty, L3 filled — gap mid-ladder) |
+| 26 | Time Speed Distance (RE-RUN) | 🚨 | **second cross-run level contradiction; L1 question count drifted 1 → 4** |
+| 27 | Coordinate Geometry | ✅ | 4/4; L1 and L2 both over an hour |
+| 28 | Logarithms | ✅ | 3/4 + honest L4 gap; all-Rodha, clean |
+| 29 | Pipes & Cisterns | ❌ MISSING | prompt text pasted back instead of the answer — needs re-run |
+| 31 | Functions | 🚨 | **LIKELY FABRICATED — all 4 levels are search-links with constructed titles** |
+| 30 | Quadratic Equations | ✅ | 4/4; L1 starts at part 2 of the series |
+| 32 | Inequalities | ✅ | 3/4 + honest L4 gap; **best duration profile in the batch** |
+| 33 | Logarithms (RE-RUN) | 🚨 | **same video ID reported with TWO DIFFERENT DURATIONS — the batch's most serious defect** |
+| 11–13, 29, 34–46 | — | pending | |
+
+---
+
+## Prompt 2 — Percentages (QA / Arithmetic)
+
+| Level | Title | Channel | Video ID | Stated duration | Worked Qs claimed | Difficulty claimed | Paid push | Student time claimed |
+|---|---|---|---|---|---|---|---|---|
+| L1 CONCEPT | Percentages 1: Fractions to Percentages | Rodha | `x-k8iSNr85g` | 26:19 | 9 | basic | none | 45–60 min |
+| L2 EASY PRACTICE | Percentages 2: Successive Percentage Change | Rodha | `lzI_bpPpezE` | 22:46 | 5 | basic–medium | none | 40–50 min |
+| L3 CAT-LEVEL | All CAT Questions from Percentages, CAT 2017–2021 (Blitzkrieg) | 2IIM CAT Preparation | `BaBpzV3DwEE` | 1:09:09 | 8 | CAT-level | **mild** | 90–120 min |
+| L4 EXAM-READY | Speed Maths 1: Percentage of a Number | Rodha | `VT9-jeEmlJ8` | 31:22 | 6 | medium | none | 50–60 min |
+
+**Open items for the verification pass:**
+- `lzI_bpPpezE` and `BaBpzV3DwEE` are NEW — never seen in earlier passes. Both
+  need vidIQ metadata verification (duration, channel ownership, availability).
+- **Cross-run inconsistency (important):** an earlier Gemini run recommended
+  `3ox1DwbOOx0` ("Percentages 3: Percentage Increase Decrease", 20:16,
+  verified) as the middle-difficulty gap-filler. This run recommends
+  `lzI_bpPpezE` ("Percentages 2") for the same L2 slot and does not mention
+  Percentages 3. Two runs, two different answers for one slot — exactly what
+  the v3 protocol's "consensus is not proof" rule anticipates. Both are from
+  the same Rodha playlist; the curator picks one on hand-check, or we keep
+  one as the backup.
+- **Worked-question count drift on the SAME video:** earlier run said
+  `x-k8iSNr85g` has 7 worked examples; this run says 9. Neither is verifiable
+  by metadata. Treat all Gemini question-counts as approximate, never as the
+  number we print on a task card (this is precisely why the target-resource
+  contract phrases counts in time when unverified).
+- `BaBpzV3DwEE` — first non-Rodha video candidate (2IIM's own channel) and
+  the first "past CAT questions solved" video found. Potentially high value,
+  but 69 min stated / 90–120 min claimed student time overshoots any single
+  task slot; likely needs to be split across days or used at a coarser
+  granularity. Also carries a self-reported "mild" paid push.
+
+---
+
+## Prompt 3 — Arrangements (DILR)
+
+| Level | Title | Channel | Video ID | Stated duration | Worked sets claimed | Difficulty claimed | Paid push | Student time claimed |
+|---|---|---|---|---|---|---|---|---|
+| L1 CONCEPT | Linear and Circular Arrangement - I | Rodha | `4tI-h-GKWVk` | 20:11 | **0** | basic | none | 35–45 min |
+| L2 EASY PRACTICE | Linear Arrangement I Set - 1 | Rodha | `spET6FqiBZ8` | 10:57 | 1 | basic | none | 20–30 min |
+| L3 CAT-LEVEL | High LEVEL DILR puzzle & Detailed way to solve these puzzles | ELITES GRID - CAT PREP | `lF5YGHFysBA` | 34:36 | 1 | CAT-level | **mild** | 50–65 min |
+| L4 EXAM-READY | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+
+**Notes:**
+- **L1 and L2 independently reproduce our own verified picks**, including the
+  key detail that L1 solves **zero** sets (matches the earlier full-watch
+  review exactly) and L2 solves one. Two independent Gemini runs converging
+  on the same two videos, with the same structural read, is the strongest
+  signal we have so far on this topic — though still not proof.
+- `lF5YGHFysBA` is NEW and the **first candidate from a channel other than
+  Rodha or 2IIM** (ELITES GRID - CAT PREP). Channel legitimacy is therefore
+  unverified and must be checked properly — this is exactly the Tier-1/2/3
+  provenance gate, and an unfamiliar channel gets no benefit of the doubt.
+- **The L4 "NO GOOD VIDEO FOUND" is a high-quality answer, not a failure.**
+  The stated reasoning — that CAT Arrangements has no genuine formulaic
+  shortcuts, and YouTube videos claiming them typically teach Banking/SSC
+  circular tricks that do not transfer to CAT's reasoning-heavy sets — is a
+  substantive domain judgment, and it matches our own finding that
+  Arrangements speed comes from case-elimination discipline built through
+  solved sets. This is the honest-gap behaviour the prompt was written to
+  elicit; it should be treated as a finding, not a hole to be filled.
+
+---
+
+## Prompt 1 — Reading Comprehension (VARC)
+
+| Level | Title | Channel | Video ID | Stated duration | Passages claimed | Difficulty claimed | Paid push | Student time claimed |
+|---|---|---|---|---|---|---|---|---|
+| L1 CONCEPT | Cracking RC 101 — The Ultimate Guide to Acing Reading Comprehension | 2IIM CAT Preparation | `Qt_FK9fWlMg` | 25:55 | 0 | basic | none | 35–45 min |
+| L2 EASY PRACTICE | RODHA VARC — RC Practice Session, CAT 2023, Episode 1 | Rodha | `iYr1qM9D69M` | **1:12:14** | 1 | medium | mild | 75–90 min |
+| L3 CAT-LEVEL | CAT 2025 Slot 3 VARC Marathon — RC Video Solutions | 2IIM CAT Preparation | `Ky8gB3a26nw` | **1:58:09** | 4 | CAT-level | none | 130–150 min |
+| L4 EXAM-READY | CAT RC: Traps in Answer Choices — Smart Option Elimination | Career Launcher MBA | `ak5_O5CbrJE` | 27:20 | 1 | CAT-level | none | 45–60 min |
+
+**Open items for the verification pass:**
+- **This closes the RC video gap.** Earlier passes found only text resources
+  for RC (Bodhee article, 2IIM passage bank) and flagged the absence of any
+  RC video as a real hole. All four levels now have candidates.
+- **Duration problem, and it is serious.** L2 is 72 min and L3 is 118 min
+  stated; claimed student time is 75–90 and 130–150 min. Our RC task shapes
+  are "Read + solve 2–3 passages" (foundation) and "3–5 passages, timed"
+  (practising). A 118-minute video cannot sit under a single day's task —
+  it is 2–3 days of a student's entire study slot. This is the same
+  overshoot pattern that got the 57-minute Percentages live-class rejected
+  earlier, and it needs an explicit decision: reject, or split across days
+  with timestamped entry points (which the "no playlist-position / no
+  timestamp dependence" stability gate currently discourages).
+- **Two new channels to vet:** `Career Launcher MBA` (L4) is the third
+  non-Rodha/2IIM source to appear. Provenance and tier assignment unverified.
+- `Ky8gB3a26nw` is a **CAT 2025 Slot 3** solution video — genuine past-paper
+  content, high value in principle. Worth checking whether shorter
+  single-passage cuts of the same material exist on the same channel.
+
+---
+
+## Prompt 4 — Editorial Reading (VARC)
+
+| Level | Title | Channel | Video ID | Stated duration | Qs claimed | Difficulty claimed | Paid push | Student time claimed |
+|---|---|---|---|---|---|---|---|---|
+| L1 CONCEPT | From where should we read editorials? (AskPatrick) | Patrick100 | `G8IXAwpurqc` | **3:02** | 0 | basic | none | 10–15 min |
+| L2 EASY PRACTICE | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+| L3 CAT-LEVEL | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+| L4 EXAM-READY | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+
+### STRUCTURAL FINDING — this one is about the research design, not the topic
+
+Gemini's stated reason for three empty levels: Editorial Reading is a
+**reading habit, not an exam question-unit**. CAT never asks "editorial
+questions" — it asks standardised RC. Anything that solves exam-style
+questions is therefore filed under Reading Comprehension, and channels
+that label editorial videos as "practice questions" are almost always
+Banking/SSC current-affairs or translation classes, i.e. wrong pedagogy.
+
+**Our own codebase already agrees with this, and that matters.**
+`src/lib/topics-constants.ts` separates `READING_HABIT_UNITS` (Daily
+Editorials, Business & Economy Reading, Long-form Reading) from the exam
+topics, with the comment: *"habit tracks — declared in the Blueprint like
+everything else, but not exam topics: no weightage/prerequisite metadata,
+engines skip them."* The file even notes that `Daily Editorials` (habit)
+is deliberately named differently from VARC's `Editorial Reading` (skill
+unit) because unit names must be globally unique.
+
+So there is a real tension worth deciding in the report: `Editorial
+Reading` currently sits inside `VERBAL_TOPICS` (an exam section) but
+behaves like a habit unit — and Gemini, with no knowledge of our schema,
+independently arrived at the same read.
+
+**Consequence for the remaining 42 prompts:** the uniform 4-level template
+does not fit every unit. Habit-shaped and skill-shaped units
+(Editorial Reading, Reading Speed Practice, Vocabulary, Grammar, and the
+Mock/Reading habit tracks if they are ever run) will legitimately return
+L1-only with three honest "NO GOOD VIDEO FOUND"s. **That is a correct
+result, not a failed prompt — do not re-run those.** The report should
+classify every unit as ladder-shaped (4 levels apply) or habit-shaped
+(L1 only), rather than treating empty levels as coverage failures.
+
+**Other open items:**
+- `Patrick100` is the fourth new channel; provenance unverified.
+- `G8IXAwpurqc` is only **3:02** long, with 10–15 min claimed student time
+  (a ~4× multiplier, plausible for "go and read these sources" advice but
+  well outside the 1.0–2.5× band the effort model assumes for instructional
+  video). A 3-minute video is also an odd fit for a daily task slot — more
+  a one-time setup pointer than a recurring resource. Flag for the report.
+
+---
+
+## Prompt 5 — Tables (DILR)
+
+| Level | Title | Channel | Video ID | Stated duration | Sets claimed | Difficulty claimed | Paid push | Student time claimed |
+|---|---|---|---|---|---|---|---|---|
+| L1 CONCEPT | Tabular Set — LR & DI Preparation for CAT | Rodha | `gqYVcVjqW0k` | 21:38 | 1 | basic | none | 35–45 min |
+| L2 EASY PRACTICE | CAT Infinite DILR Set 303 — Organizing the scholarship test | Aptitude Jab | `L6lxPe9gx68` | **9:24** | 1 | medium | none | 20–30 min |
+| L3 CAT-LEVEL | CAT Infinite DILR Set 410 — Lehra Do, Table Mapping | Aptitude Jab | `AfQf--BGAeo` | **7:51** | 1 | CAT-level | none | 25–35 min |
+| L4 EXAM-READY | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+
+**Open items for the verification pass:**
+- **`Aptitude Jab` is the fifth new channel** and the first to supply TWO
+  levels for one topic. Provenance entirely unverified — an unfamiliar
+  channel carrying two of a topic's three filled levels is a concentration
+  risk, so this one needs a real tier assignment before either link ships.
+- **Durations here are the opposite problem from RC.** 9:24 and 7:51 are the
+  shortest practice candidates seen so far, and their claimed student times
+  (20–30, 25–35 min) imply ~2.7–4.5× multipliers — well above the effort
+  model's 1.0–2.5× band. Plausible for a single DILR set (the student
+  attempts the set themselves before watching the walkthrough, which is
+  most of the time), but it means **the video-effort multiplier probably
+  needs a separate, higher band for "one worked set" videos than for
+  expository concept videos.** Worth recording in the effort model.
+- **A second structural finding, and it mirrors prompt 3's.** Gemini's
+  opening note claims calculation-heavy tabular DI has largely been phased
+  out of CAT in favour of logical/constraint-based table sets, and that
+  "speed calculation shortcut" videos for tables are mostly clickbait
+  funnels into paid coaching. That is the same shape of answer as the
+  Arrangements L4 refusal: **the L4 "exam-ready shortcuts" level appears to
+  be structurally empty for DILR topics**, because DILR speed comes from
+  set-selection and elimination discipline, not from tricks. Two DILR
+  topics, two independent L4 refusals with the same reasoning. If this
+  repeats for Charts/Caselets/etc., the report should conclude that the
+  4-level ladder is a QA/VARC shape and DILR is a 3-level shape — a finding
+  about the model, not a gap in coverage.
+- Unverified as always: durations, channel ownership, whether these open
+  logged-out from India, and the set counts.
+
+---
+
+## Prompt 6 — Ratio & Proportion (QA / Arithmetic)
+
+| Level | Title | Channel | Video ID | Duration | Qs claimed | Difficulty | Paid push | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | Ratio Session-I, Basic to Advanced (Udit Sir) | **MBA Pathshala** | `xxorf_cKYsM` | **1:14:56** | 10 | basic | none | 90–110 min | partly |
+| L2 | Ratio 3: Comparing Actual and Error Ratios | Rodha | `eruwLy2vGV4` | 37:10 | 5 | basic–medium | none | 50–65 min | partly |
+| L3 | All CAT Questions from Ratio & Proportion, 2017–2021 (Blitzkrieg) | 2IIM | `X0E_S5awePs` | 1:04:12 | 11 | CAT-level | mild | 90–110 min | partly |
+| L4 | — | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+
+- L4 refusal reasoning matches prompts 3 and 5: "Ratio Shortcuts/Tricks" videos
+  teach SSC/bank hacks that break on modern CAT, or are paid funnels. Third
+  independent L4 refusal with the same shape of argument.
+- `MBA Pathshala` = 6th new channel. L1 at 75 min is another slot-overshoot.
+
+---
+
+## Prompt 7 — Para Jumbles (VARC)
+
+| Level | Title | Channel | Video ID | Duration | Qs claimed | Difficulty | Paid push | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | CAT Verbal Ability Lecture 01 — Parajumbles Basic Concepts | **Bodhee Prep CAT Preparation** | `jmvKymtP06Y` | 51:30 | 5 | basic–medium | mild | 65–75 min | partly |
+| L2 | RODHA VARC — Master PARAJUMBLES, Episode 1 | Rodha | `7AKFH60Jiik` | 42:15 | 6 | medium | mild | 55–65 min | partly |
+| L3 | Learn the ultimate mantra to solve Para Jumbles | **Gejo Speaks** | `PgNBT_Zp_Us` | 19:06 | 4 | CAT-level | none | 35–45 min | partly |
+| L4 | — | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+
+- Fourth L4 refusal, same reasoning — and this one is VARC, not DILR, which
+  weakens the earlier "DILR is a 3-level shape" hypothesis and points instead
+  at **L4 being structurally thin across sections**.
+- Two more new channels: `Bodhee Prep CAT Preparation` (their YouTube arm —
+  note we have already verified their *website* independently) and
+  `Gejo Speaks`. Provenance unverified for both.
+
+---
+
+## Prompt 8 — Charts (DILR)
+
+| Level | Title | Channel | Video ID | Duration | Sets claimed | Difficulty | Paid push | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | Pie Chart 1 — LR & DI Preparation | Rodha | `Kn17_JoFmjU` | 30:10 | 0 | basic | none | 40–50 min | yes |
+| L2 | Pie Chart 2 — LR & DI Preparation | Rodha | `A6K2pPl0BLA` | 17:17 | 1 | basic | none | 25–35 min | yes |
+| L3 | Pie Charts for CAT 2026 — How to Solve Any DI Set, Part 1 | ELITES GRID | `7_t3CWThCQM` | 25:40 | 1 | CAT-level | mild | 45–60 min | yes |
+| L4 | Triangular Graph (DI) — How to interpret it, Part 42 | **MBA Litmus** | `LlM00yczPBQ` | 7:49 | 1 | medium | none | 15–20 min | yes |
+
+- **First DILR topic to fill all four levels — this breaks the hypothesis
+  formed after prompts 3 and 5 that DILR is structurally a 3-level shape.**
+  Exactly why the batch is consumed before conclusions are drawn.
+- But read the L4 critically: "Triangular Graph" is a *niche chart type*, and
+  its self-reported difficulty is "medium", not exam-pace mastery of Charts.
+  It may be a specialised L3 filed under L4 rather than a genuine exam-ready
+  resource. Flag for the report — do not count it as a clean L4 fill.
+- `MBA Litmus` = 9th new channel.
+
+---
+
+## Prompt 9 — Average (QA / Arithmetic) ⚠️ CONTAINS AN ERROR
+
+| Level | Title | Channel | Video ID | Duration | Qs claimed | Difficulty | Paid push | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | Averages 1: Middle Term of an AP Series | Rodha | `TBhanaOLNvc` | ~27 min | 4 | basic | mild | 40–50 min | partly |
+| L2 | Averages 4: Average Weight Problems | Rodha | **`TBhanaOLNvc`** | ~26 min | 5 | basic–medium | mild | 45–60 min | partly |
+| L3 | CAT Averages: All PYQs with Timer | ELITES GRID | `F6za_fKICsU` | ~1:15 | 12 | CAT-level | mild | 90–110 min | partly |
+| L4 | — | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+
+- **HARD ERROR: L1 and L2 give the SAME video ID (`TBhanaOLNvc`) for two
+  differently-titled videos with different durations and question counts.**
+  At most one is correct. This is the first outright factual error in the
+  batch and it would have shipped two identical links under two different
+  levels. Needs a re-run of prompt 9.
+- Durations here are approximate ("~27 min", "~1 hr 15 min") rather than
+  exact — a further reliability drop.
+
+---
+
+## Batch-level quality signals (prompts 1–9) — for the final report
+
+1. **Self-reported watch depth collapsed at prompt 6.** Prompts 1–5 and 8
+   claim "WATCHED FULLY: yes". Prompts 6, 7 and 9 say **"partly"**. This is
+   welcome honesty, but it means question counts, difficulty grades and
+   paid-push assessments from those runs are materially weaker evidence.
+   The report must grade candidates by claimed watch depth, not treat all
+   rows as equal.
+2. **First hard error appeared at prompt 9** (duplicate video ID). Error rate
+   so far: 1 clear factual error and 1 missing answer in 9 prompts.
+3. **L4 is structurally thin, and it is not a DILR-only problem.** Four L4
+   refusals so far (Arrangements, Tables, Ratio & Proportion, Para Jumbles)
+   across both DILR and VARC and QA, all with the same argument: "shortcut"
+   videos are SSC/banking-style tricks that fail on CAT, or paid funnels.
+   Charts filled L4, but weakly (a niche chart type at "medium" difficulty).
+   **Provisional read: the 4-level ladder may really be a 3-level ladder plus
+   a mostly-empty L4 across the whole syllabus** — a finding about our
+   research design, to be confirmed or refuted over the remaining prompts.
+4. **Channel sprawl is now the top provenance risk.** Nine distinct channels
+   have appeared (Rodha, 2IIM, Career Launcher MBA, Patrick100, ELITES GRID,
+   Aptitude Jab, MBA Pathshala, Bodhee Prep CAT Preparation, MBA Litmus).
+   None of the newer ones has had provenance verified. The verification pass
+   must tier every channel once, centrally, rather than per link.
+5. **Long-video overshoot is now systemic, not incidental.** 1:58 (RC L3),
+   1:14 (Ratio L1), 1:12 (RC L2), 1:09 (Percentages L3), 1:04 (Ratio L3),
+   1:15 (Average L3). Six candidates exceed an hour, all claiming 90–150 min
+   of student time — several times any single daily task slot. The report
+   needs one explicit policy decision on hour-plus videos, not six ad-hoc ones.
+
+---
+
+## Prompt 10 — Odd One Out (VARC)
+
+| Level | Title | Channel | Video ID | Duration | Qs claimed | Difficulty | Paid push | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | CAT Verbal Ability Lecture 02 — Odd One Out Basic Concepts | Bodhee Prep CAT Preparation | `32bjj88vkk4` | 42:15 | 5 | basic | mild | 50–60 min | yes |
+| L2 | CAT Odd One Out Strategy: Stop Guessing (Brijesh Sir) | Rodha | `_R-zi-iIg_A` | 45:10 | 4 | medium | mild | 55–65 min | yes |
+| L3 | CAT 2025 Slot 2 VARC Marathon — VA Video Solutions | 2IIM | `-wsuOBoEn5k` | 54:40 | 8 | CAT-level | mild | 65–75 min | yes |
+| L4 | Why You're Getting Odd Sentence Out Wrong — And How to Fix It | Career Launcher MBA | `In0aLW6hKiU` | 34:20 | 4 | CAT-level | mild | 45–55 min | yes |
+
+- **Small provenance oddity to check:** L2 is credited to "Brijesh Sir" on the
+  **Rodha** channel, while prompt 7's L1 credited "Brijesh Pandey" on the
+  **Bodhee Prep** channel. Instructors do move between platforms, but the
+  same name appearing on two competing channels is exactly the kind of thing
+  that can indicate a re-upload. Verify channel ownership on both before
+  either ships.
+- L3 is another "CAT 2025 Slot N VARC Marathon" from 2IIM — the same series
+  as prompt 1's L3 (Slot 3). Whole-slot marathons are being used to cover
+  individual VARC sub-topics, which means one long video may be the L3 answer
+  for several VARC topics at once. Worth deciding centrally: is a shared
+  whole-slot video an acceptable per-topic L3, or does it fail topic purity?
+
+---
+
+## Prompt "11" as sent — Time & Work (QA / Arithmetic)
+
+> **Numbering note:** the factory's prompt 11 is `Venn / Sets` (DILR); this
+> answer is for `Time & Work`, which is prompt 25. Logged under its real
+> topic. `Venn / Sets` remains pending.
+
+| Level | Title | Channel | Video ID | Duration | Qs claimed | Difficulty | Paid push | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | Time and Work 1: LCM Method Introduction | Rodha | `oApzHGJNx38` | 21:58 | 4 | basic | mild | 35–45 min | yes |
+| L2 | Time and Work 2: Alternate Days and Workers Leaving | Rodha | `6IbA-nSj28g` | 24:25 | 3 | medium | mild | 40–50 min | yes |
+| L3 | All CAT Questions from Time and Work, 2017–2021 (Blitzkrieg) | 2IIM | `CgNjuFqom7s` | **1:37:56** | 10 | CAT-level | mild | 100–120 min | yes |
+| L4 | Time and Work 3: Efficiency and Time Ratios | Rodha | `MJIlrpc2oKc` | 26:05 | 5 | medium | mild | 40–50 min | yes |
+
+- Cleanest topic so far on provenance: all four from Rodha + 2IIM only, both
+  already familiar. No new channels introduced.
+- L3 at 1:37:56 is the **seventh** hour-plus candidate.
+
+---
+
+## REVISED READ on the L4 hypothesis (supersedes the provisional note after prompt 9)
+
+The earlier provisional read — "L4 is structurally thin across the syllabus"
+— **does not survive these two prompts** and should not go into the report as
+stated. Current tally:
+
+| L4 FILLED | L4 REFUSED |
+|---|---|
+| Reading Comprehension (option-elimination traps) | Arrangements |
+| Percentages (speed maths) | Tables |
+| Charts (niche chart type — weak fill) | Ratio & Proportion |
+| Odd One Out (error analysis + traps) | Para Jumbles |
+| Time & Work (efficiency/time ratios) | Average |
+| | Editorial Reading (structural — habit unit) |
+
+Roughly half and half, and the split is **not** by section (both VARC and QA
+and DILR appear on both sides). A better hypothesis, to be tested against the
+remaining prompts:
+
+> **L4 fills when the topic has a genuine reusable technique layer** —
+> efficiency/time ratios, speed-calculation methods, option-elimination trap
+> taxonomies. **L4 refuses when the topic's exam speed comes from practice
+> discipline rather than technique** — arrangements, ratio framing, para
+> jumble sequencing, averages. In the refusal cases Gemini's stated reason is
+> consistently that "shortcut" videos are SSC/banking hacks or paid funnels.
+
+If that holds, an empty L4 is a **property of the topic**, not a coverage
+failure — and the report should say which topics legitimately have three
+levels rather than treating those as holes to fill.
+
+## Two further batch signals
+
+- **Watch depth recovered:** prompts 10 and this one both report "yes" after
+  the "partly" runs at 6, 7 and 9. Reliability is uneven run to run, not
+  monotonically degrading — grade per row, never per batch.
+- **"PAID-COURSE PUSH: mild" on all 8 videos in these two prompts**, where
+  earlier runs frequently said "none". Either Gemini has become stricter or
+  these channels genuinely push harder. Since "mild" is now the common case,
+  it cannot by itself be a rejection criterion — the report needs a concrete
+  threshold for what level of promotion actually disqualifies a link.
+
+---
+
+## Time Speed Distance (QA / Arithmetic) — arrived labelled "12"; factory #26
+
+| Level | Title | Channel | Video ID | Duration | Qs | Difficulty | Paid | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | TSD 1: Constant Distance Problems | Rodha | `CKiP208avbc` | 22:17 | **1** | basic | mild | 35–45 min | yes |
+| L2 | TSD 2: Speed Time Inverse Proportion | Rodha | `PQvBSkJDF_E` | 23:38 | **2** | medium | none | 35–45 min | yes |
+| L3 | TSD 8: Solving Escalator Problems | Rodha | `RHflaojKVlI` | 24:13 | 4 | CAT-level | mild | 45–60 min | yes |
+| L4 | Advance Quant 19: Meeting Point | ELITES GRID | `Kblu48aZ7bA` | 8:08 | 2 | CAT-level | none | 15–20 min | yes |
+
+- **Topic-purity concern at L3:** "Escalator Problems" is a narrow TSD
+  sub-type, not general CAT-level TSD practice. A student sent here for a
+  generic TSD task gets escalators only. Same shape as the Charts L4
+  ("Triangular Graph") issue — a specialised video filed as a general level.
+- **Question counts at L1 (1) and L2 (2) are the lowest seen.** An "EASY
+  PRACTICE" level with two worked questions cannot satisfy a practice target
+  of 8–12 questions on its own. This is the target-resource contract biting
+  again: these are concept videos wearing a practice label.
+
+---
+
+## SI & CI (QA / Arithmetic) — arrived labelled "13"; factory #27
+
+| Level | Title | Channel | Video ID | Duration | Qs | Difficulty | Paid | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | SI and CI 1: Basic Concepts | Rodha | `hvikOiSu_D4` | 21:37 | 4 | basic | none | 35–45 min | yes |
+| L2 | SI and CI 2: Difference Formula | Rodha | `TG3M3QFyY0k` | 26:14 | 3 | medium | none | 45–55 min | yes |
+| L3 | All Questions From SI & CI, CAT 2018–2023 (Amiya Sir) | **AzuCATion : CAT Prep By Amiya Sir** | `-lbU6SgPPH8` | **1:45:11** | 14 | CAT-level | mild | 130–150 min | yes |
+| L4 | Arithmetic Practice 44: Installment Ratio Method | Rodha | `MTdAQnGCUtM` | 14:35 | 1 | CAT-level | mild | 25–35 min | yes |
+
+- `AzuCATion : CAT Prep By Amiya Sir` = **10th distinct channel**. Unverified.
+- L3 at 1:45:11 is the **eighth** hour-plus candidate; 130–150 min claimed.
+- L4 comes from a different series ("Arithmetic Practice 44") than L1/L2 —
+  a one-off practice video repurposed as the exam-ready level, with a single
+  worked question. Weak fill; flag rather than count.
+
+---
+
+## Progressions (QA / Algebra) — factory #15 ✅ correctly numbered
+
+| Level | Title | Channel | Video ID | Duration | Qs | Difficulty | Paid | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | CAT 2026 Progressions & Series: Master AP, GP & HP | **Cracku - MBA CAT Preparation** | `VFhQKdcZml8` | 55:06 | 5 | basic | mild | 75–90 min | yes |
+| L2 | Arithmetic Progression 1: AP Average Funda | Rodha | `wSbjXsULtrI` | 22:25 | 2 | medium | none | 35–45 min | yes |
+| L3 | All CAT Questions from Progressions, 2017–2021 (Blitzkrieg) | 2IIM | `XP098K63oAI` | **1:19:41** | 10 | CAT-level | mild | 100–120 min | yes |
+| L4 | Advance Quant 9: Sequence & Series (Hunny Malhotra) | ELITES GRID | `8TygSoo-4Ig` | 14:23 | 1 | CAT-level | mild | 20–25 min | yes |
+
+- **`Cracku` appears for the first time — and this needs a deliberate
+  decision.** We previously rejected Cracku's *website* candidates on the
+  gate-2 access test (signup-funnel model). Their **YouTube channel is a
+  separate surface** and may pass where the website failed. The report must
+  make the channel-vs-website distinction explicit rather than letting a
+  blanket "Cracku rejected" carry over — or letting it silently in.
+- Ninth hour-plus candidate (L3).
+
+---
+
+## Vocabulary (VARC) — factory #16 ⚠️ TWO PROBLEMS
+
+| Level | Title | Channel | Video ID | Duration | Qs | Difficulty | Paid | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | CAT 2026 VARC: Vocabulary Masterclass (Sharwari Mam) | Rodha | `4jnQpFaS57g` | 58:16 | **0** | basic–medium | mild | 70–85 min | yes |
+| L2 | Vocabulary Booster For XAT, CAT, MAHCET & All MBA Exam 2021 Part-1 | **BYJU'S Exam Prep: CAT & MBA** | `ouybCha6v9E` | 33:37 | 10 | basic | mild | 40–50 min | yes |
+| L3 | — | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+| L4 | — | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+
+### Problem 1 — the URLs are Google-search links in disguise
+
+Both video links in this response were given as markdown whose **actual href
+is `https://www.google.com/search?q=...`** wrapping the YouTube URL, not the
+YouTube URL itself. The prompt explicitly forbids search links. A search-link
+fallback is the classic signature of a model that **could not confirm the
+video exists**. Both IDs (`4jnQpFaS57g`, `ouybCha6v9E`) must therefore be
+treated as **low-confidence, possibly non-existent**, and verified before any
+other use. This is the second hard defect in the batch after the prompt-9
+duplicate ID.
+
+### Problem 2 — the response contradicts itself
+
+Gemini's own structural note says CAT has had **no standalone vocabulary
+questions since ~2015**, and that any "CAT vocab practice" video is really
+OMET (SNAP/NMAT/XAT) material — which is why it refused L3 and L4. But its
+**L2 pick is exactly that**: a 2021 "Vocabulary Booster for XAT, CAT, MAHCET
+& All MBA Exam" of standalone root-word drills. By its own reasoning, that
+L2 should have been refused too. Treat L2 as **failing the CAT-relevance
+gate on the responder's own argument.**
+
+### The structural finding itself is sound, and it is the third of its kind
+
+Vocabulary is not an exam question-unit in modern CAT — it is tested only in
+context inside RC. This mirrors the Editorial Reading finding exactly, and
+matches how our own graph already treats skill/habit units. **Three topics
+now (Editorial Reading, Vocabulary, and partly Reading Speed Practice when
+it arrives) look like skill units where only L1 is meaningful.** The report
+should classify units as ladder-shaped vs skill-shaped up front, so empty
+levels there are recorded as correct results.
+
+## Running defect tally (15 topics logged)
+
+| Defect | Where |
+|---|---|
+| Answer never arrived (prompt echoed) | RC — later re-sent, resolved |
+| Same video ID given for two different levels | Average |
+| URLs supplied as Google-search links | Vocabulary (both) |
+| Response contradicts its own reasoning | Vocabulary L2 |
+| Specialised sub-topic filed as a general level | Charts L4, TSD L3 |
+| Practice level with 1–2 worked questions | TSD L1/L2, SI&CI L4, Progressions L4 |
+| Numbering drift vs the factory | TSD, SI&CI, Time & Work |
+
+Twelve distinct channels have now appeared. None beyond Rodha/2IIM has had
+provenance verified.
+
+---
+
+## Selection & Distribution (DILR) — factory #17
+
+| Level | Title | Channel | Video ID | Duration | Sets | Difficulty | Paid | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | Selection and Distribution Based DILR ft. Dr. Shashank | **Learn4Exam** | `TAHxPmmojNQ` | 26:15 | 2 | basic | mild | 40–50 min | partly |
+| L2 | DILR - Team Formation / Selection Basics & Practice Sets | 2IIM | `kYc5hN7yV9I` | 18:42 | 2 | medium | none | 35–45 min | partly |
+| L3 | CAT LRDI Revision Set 58: Chocolate Distribution Venn | ELITES GRID | `hSgFjmWV9o4` | 21:18 | 1 | CAT-level | none | 35–45 min | yes |
+| L4 | — | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+
+- `Learn4Exam` = 13th channel, unverified.
+- **L2's title is suspicious.** "DILR - Team Formation / Selection Basics &
+  Practice Sets" does not match 2IIM's actual title conventions (their real
+  videos carry heavy branding, e.g. "… | CAT Blitzkrieg Series | 2IIM CAT").
+  A generic, cleanly-descriptive title is a fabrication signature. Verify
+  before use.
+- Gemini's own preamble concedes there is no standardised lecture series
+  under this topic name — consistent with the honest L4 refusal.
+
+---
+
+## Profit & Loss (QA / Arithmetic) — factory #18
+
+| Level | Title | Channel | Video ID | Duration | Qs | Difficulty | Paid | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | Profit and Loss 1: Profit, Loss, Discount, Markup | Rodha | `bigCbKeUPO4` | 26:05 | 4 | basic | none | 40–50 min | partly |
+| L2 | Profit and Loss 3: Faulty Weights and Cheating | Rodha | `3Q6V7qVGReo` | 38:32 | 6 | medium | none | 60–70 min | partly |
+| L3 | CAT 2025 Arithmetic Practice Session-1 … **R4 BATCH** | Rodha | `5t6OdAz2zzw` | **1:12:23** | 7 | CAT-level | mild | 90–110 min | partly |
+| L4 | Dishonest Seller CAT 2023: 3 Methods | ELITES GRID | `OyGkBz2DxAQ` | 18:42 | 2 | CAT-level | mild | 30–40 min | partly |
+
+- **L3 carries "R4 BATCH" in its own title.** R4 is the exact paid batch
+  (₹35,499) whose checkout link caused us to reject a candidate earlier in
+  this research. A video titled with the paid batch name is a batch session
+  published as marketing, self-reported here as only "mild" push. **This is
+  a clear competitor-funnel candidate and should be rejected on the same
+  ground as the earlier one** — the funnel is in the title, not buried in a
+  description. Tenth hour-plus candidate as well.
+
+---
+
+## Para Summary (VARC) — factory #19
+
+| Level | Title | Channel | Video ID | Duration | Qs | Difficulty | Paid | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | Summary Concepts — Verbal Preparation | Rodha | `8YK-4sOQyUU` | **8:45** | 0 | basic | none | 15–20 min | yes |
+| L2 | Ace Para Summary for CAT 2025 — 'GIST' Method | **Unacademy CAT (Amit Rohra)** | `K77dQAOf_Vg` | 34:04 | 4 | medium | mild | 45–55 min | yes |
+| L3 | CAT Para Summary Questions (Brijesh Sir) | Rodha | `GFMXohhRw4o` | 1:03:52 | 4 | CAT-level | mild | 60–75 min | yes |
+| L4 | 3 CAT Para Summary Rules That Break Every Trap | Rodha | `mvLAgP10om4` | 30:55 | 5 | CAT-level | mild | 45–55 min | yes |
+
+- **Structurally the cleanest response in the batch so far**: 4/4 filled,
+  all titles look like real channel titles, watch depth "yes" throughout,
+  a genuine short L1 (8:45), and an L4 that is a real trap-taxonomy video
+  rather than a repurposed practice clip.
+- `Unacademy CAT (Amit Rohra)` = 14th channel, unverified.
+- L3 and L4 both credited to "Brijesh Sir" on Rodha — same instructor-name
+  question already raised at Odd One Out.
+
+---
+
+## Hybrid DILR Sets (DILR) — factory #20 🚨 TREAT AS FABRICATED UNTIL PROVEN OTHERWISE
+
+| Level | Title | Channel | Video ID | Duration | Sets | Difficulty | Paid | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | — | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+| L2 | DILR Foundation, Caselets & Mixed Data Reasoning, Class 01 | Rodha | `F3GZ6iLGB04` | 48:15 | 2 | basic–medium | none | 60–75 min | **"yes"** |
+| L3 | CAT DILR Practice, Reasoning Based DI (Missing Values & Constraints) | Elites Grid | `2Tz8v_v7Qx4` | 36:42 | 1 | CAT-level | mild | 50–65 min | **"yes"** |
+| L4 | CAT DILR Advanced Sets, High-Density Hybrid Reasoning | Anastasis Academy | `Xw8U4wQ2f9A` | 29:18 | 1 | above-CAT | none | 45–60 min | **"yes"** |
+
+### Why this is flagged as probable fabrication — three signatures at once
+
+1. **All three URLs are `google.com/search?q=…` links wrapping a YouTube
+   URL**, not YouTube URLs. Same defect as Vocabulary, but here it affects
+   *every* filled level.
+2. **Every title reads as constructed rather than observed.** Real channel
+   titles carry branding, instructor names, episode numbers and inconsistent
+   punctuation ("Percentages 1: … | Ravi Prakash Rodha", "CAT LRDI Revision |
+   Set 58: …"). These three are clean generic descriptions with pipe-
+   separated subtitles — the shape a model produces when inventing a
+   plausible title.
+3. **All three claim "WATCHED FULLY? yes" while supplying only a search
+   link.** You cannot fully watch a video you could not produce a direct URL
+   for. This is an internal contradiction, and it invalidates the watch-depth
+   field as evidence anywhere it is not corroborated.
+
+`Anastasis Academy` (15th channel) is itself unconfirmed.
+
+### The pattern this reveals — the most important finding of the batch so far
+
+Compare Hybrid DILR with the honest refusals (Arrangements L4, Ratio L4,
+Vocabulary L3/L4, Selection & Distribution L4). Those refused cleanly with
+substantive reasoning. Here, faced with a topic that Gemini's own preamble
+admits has **no standalone concept coverage** ("creators rarely title
+standalone playlists as Hybrid Concept Theory"), it refused only L1 and then
+**invented three plausible-looking resources for L2–L4 rather than refusing
+again**.
+
+**Working hypothesis for the report: refusal fatigue.** The model appears
+willing to say "NO GOOD VIDEO FOUND" once or twice per response, but resists
+returning a near-empty answer — and fabricates instead. If true, the
+responses most likely to be fabricated are exactly the ones for the
+weakest-coverage topics, i.e. the topics where an honest gap would have been
+most valuable to us. **Every remaining response must be screened for the
+three signatures above before its content is read.**
+
+## Screening rule added for the remaining responses
+
+Before logging any candidate, check: (a) is the href an actual
+`youtube.com/watch?v=…`, or a search URL? (b) does the title look like a
+real, branded, messy channel title? (c) does the watch-depth claim contradict
+the link quality? Any row failing (a) or (c) is logged as suspect and is not
+counted toward coverage.
+
+---
+
+## Caselets (DILR) — factory #21 ✅ MODEL BEHAVIOUR WORTH NOTING
+
+| Level | Title | Channel | Video ID | Duration | Sets | Difficulty | Paid | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | Caselet Based DI for CAT 2022 (Jatin Agrawal) | BYJU'S Exam Prep | `14UUSu_XxjQ` | 46:40 | 2 | basic | mild | 55–65 min | yes |
+| L2 | — | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+| L3 | — | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+| L4 | — | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+
+Reasoning given: "Caselets" is a format, not a topic — modern CAT DILR is
+almost entirely paragraph-driven, so educators file these sets under their
+underlying mechanism (quant puzzles, matrix/grid, Venn, tournaments) rather
+than as standalone "Caselet" videos; the ones that exist skew Banking/SSC.
+
+### This REFUTES the refusal-fatigue hypothesis recorded at Hybrid DILR
+
+Caselets is a weak-coverage topic — exactly the profile that produced
+fabrication at Hybrid DILR — and here the response **refused three of four
+levels honestly, with a specific structural argument**. So the model is not
+subject to a simple "won't refuse more than twice" limit.
+
+**Corrected finding, and it is worse than the original hypothesis:** the
+behaviour is **inconsistent, not predictable**. Two weak-coverage DILR
+topics, one answered with exemplary honesty and one apparently fabricated.
+We therefore **cannot infer trustworthiness from the shape of a response** —
+a confident four-level answer is not more suspect than a mostly-empty one,
+and vice versa. Only per-row verification separates them. Recorded here as a
+correction to the earlier note rather than deleting it, because the earlier
+hypothesis was reasonable on the evidence then available and the correction
+is itself the useful part.
+
+---
+
+## Games & Tournaments (DILR) — factory #22
+
+| Level | Title | Channel | Video ID | Duration | Sets | Difficulty | Paid | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | Games and Tournaments 1 — LR & DI Preparation | Rodha | `bC3Wlg6DIRg` | 26:14 | 1 | basic | none | 40–50 min | yes |
+| L2 | Games & Tournament for CAT 2025 (Gaurav Kapoor) | ELITES GRID | `zsyDbQwC1Vg` | 14:59 | 1 | medium | none | 25–35 min | yes |
+| L3 | Games & Tournaments — Difficult Set | Rodha | `Oy9ERJEboWY` | 37:20 | 1 | CAT-level | mild | 55–70 min | yes |
+| L4 | — | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+
+- Clean response: direct YouTube URLs throughout, messy real-looking branded
+  titles, familiar channels, and a specific L4 refusal (shortcut videos are
+  re-hashed arithmetic or clipped paid-batch excerpts; recommends timed past
+  CAT sets instead). Passes all three screening checks.
+
+---
+
+## Time & Work (QA) — RE-RUN as factory #25 🚨 CONTRADICTS ITS OWN EARLIER ANSWER
+
+| Level | Earlier run (sent as "11") | This run (sent as "25") | Same? |
+|---|---|---|---|
+| L1 | `oApzHGJNx38` — TW 1: LCM Method | `oApzHGJNx38` — TW 1: LCM Method | ✅ identical |
+| L2 | `6IbA-nSj28g` — TW 2: Alternate Days | **`MJIlrpc2oKc` — TW 3: Efficiency and Time Ratios** | ❌ different |
+| L3 | `CgNjuFqom7s` — 2IIM Blitzkrieg | `CgNjuFqom7s` — 2IIM Blitzkrieg | ✅ identical |
+| L4 | **`MJIlrpc2oKc` — TW 3: Efficiency and Time Ratios** | `Iht9lGW7ntY` — Anastasis Academy, Arvind Shankar | ❌ different |
+
+### The headline defect: the SAME video is graded L4 in one run and L2 in the other
+
+`MJIlrpc2oKc` ("Time and Work 3: Efficiency and Time Ratios") was returned
+as the **EXAM-READY** resource in the first run and as the **EASY PRACTICE**
+resource in the second — two levels apart, by the same model, on the same
+video, days apart. Its worked-question count also drifted (5 → 4), and the
+2IIM L3's claimed student time drifted (100–120 → 120–150 min) with no
+change to the video.
+
+**Consequence for the report: the L1–L4 level assignment is the least
+reliable field in the entire dataset.** Titles and URLs have proven mostly
+stable across runs; difficulty grading has not. Any final ladder we build
+must have levels assigned by *us* on hand-check, using the video's actual
+content — never inherited from Gemini's level label.
+
+### Note on `Anastasis Academy`
+
+This channel appeared in the suspected-fabricated Hybrid DILR response
+(as a search-link). Here it appears with a **direct URL** and a title
+naming **Arvind Shankar**, a real and well-known CAT educator. So the
+channel may well be genuine and the Hybrid DILR entry a fabricated use of a
+real channel's name — which is a more dangerous failure mode than inventing
+a fake channel, because the name checks out. Verify the specific video IDs,
+not just the channel.
+
+## Verification-priority list (running)
+
+Highest-value IDs to check first, because a wrong answer here changes a
+conclusion rather than just a row:
+1. `F3GZ6iLGB04`, `2Tz8v_v7Qx4`, `Xw8U4wQ2f9A` — Hybrid DILR, suspected fabricated
+2. `4jnQpFaS57g`, `ouybCha6v9E` — Vocabulary, search-link supplied
+3. `kYc5hN7yV9I` — Selection & Distribution L2, title does not match 2IIM conventions
+4. `TBhanaOLNvc` — Average, one ID given for two different levels
+5. `Iht9lGW7ntY` — Anastasis Academy, to establish whether the channel is real
+6. `5t6OdAz2zzw` — Profit & Loss L3, "R4 BATCH" paid-funnel title
+
+---
+
+## Mixtures (QA) — factory #14
+
+| Level | Title | Channel | Video ID | Duration | Qs | Difficulty | Paid | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | Alligation and Mixture 1: Weighted Average Seesaw | Rodha | `3LmRyBpIhgQ` | 31:47 | 4 | basic | none | 45–55 min | yes |
+| L2 | Alligation and Mixture 3: Alligation in Mixtures | Rodha | `qQcGkxuf4ws` | 23:35 | 2 | medium | none | 35–45 min | yes |
+| L3 | Mixtures & Alligations — Arvind Shankar's Guess Questions | Anastasis Academy | `rM8zFErtUPE` | 52:54 | **16** | CAT-level | none | 75–90 min | yes |
+| L4 | — | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+
+- **`Anastasis Academy` is now corroborated.** A second video from the same
+  named series ("Arvind Shankar's Guess Questions"), supplied with a direct
+  URL, matching the Time & Work L4 pattern. The channel is very likely real;
+  the Hybrid DILR entry that used its name with a search-link remains the
+  suspect item, not the channel itself.
+- Honest L4 refusal with a specific argument (alligation "tricks" videos are
+  SSC/banking rote-formula content).
+
+---
+
+## Grammar (VARC) — factory #23 · FOURTH STRUCTURAL SKILL-UNIT FINDING
+
+| Level | Title | Channel | Video ID | Duration | Qs | Difficulty | Paid | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | Grammar (Sentence Correction & Error Spotting) — Subject Verb Agreement | **MBA Wallah** | `PlsBlgzhsXU` | 52:04 | 10 | basic | mild | 65–80 min | partly |
+| L2 | Grammar for CAT: Part 1 | **Takshzila** | `Vjd55QTv3nA` | 15:48 | 8 | basic | none | 25–35 min | partly |
+| L3 | — | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+| L4 | — | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+
+Reasoning: direct grammar questions (sentence correction, error spotting,
+fill-in-the-blanks) were **phased out of CAT after 2014**. Modern CAT VARC
+tests only RC, Para Jumbles, Para Summary, Odd One Out and Sentence
+Placement. Grammar survives only as a reading aid, or for OMETs (SNAP, NMAT,
+XAT, CMAT, MICAT). Two more new channels: `MBA Wallah` (16th), `Takshzila` (17th).
+
+---
+
+## Reading Speed Practice (VARC) — factory #24
+
+| Level | Title | Channel | Video ID | Duration | Qs | Difficulty | Paid | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | How to read a passage effectively (CAT-RC-Series) | Gejo Speaks | `0U5n10P3x_c` | 18:45 | 0 | basic | none | 25–35 min | yes |
+| L2 | — | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+| L3 | Reading Comprehension Strategy — CAT 2019 passage | Gejo Speaks | `ozhEHygD3YY` | **1:02:18** | 4 | CAT-level | none | 75–90 min | yes |
+| L4 | — | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+
+- Unusual shape: **the gap is in the middle of the ladder** (L2 empty, L3
+  filled), where every other topic gaps at the top. Reasoning given: reading
+  speed has no isolated basic-level practice; it only exists inside real RC
+  passages — so the "L3" here is really an RC video demonstrating pacing.
+- Note this makes the L3 pick **topically identical to the RC topic's own
+  material** — a duplicate resource serving two different units. Same issue
+  as the 2IIM whole-slot marathons. Needs a central de-duplication decision.
+
+---
+
+## Time Speed Distance — RE-RUN as factory #26 🚨 SECOND CROSS-RUN CONTRADICTION
+
+| Level | Earlier run (sent as "12") | This run (sent as "26") | Same? |
+|---|---|---|---|
+| L1 | `CKiP208avbc`, 22:17, **1 question** | `CKiP208avbc`, "~23 min", **4 questions** | same video, **count 1 → 4** |
+| L2 | `PQvBSkJDF_E` — TSD 2 | `tLsP7smddvQ` — TSD 3 | ❌ different |
+| L3 | **`RHflaojKVlI` — TSD 8: Escalator** | `VYn1dJ0Acdo` — 2IIM CAT 2018 Slot 2, ~6 min, 1 Q | ❌ different |
+| L4 | `Kblu48aZ7bA` — ELITES GRID | **`RHflaojKVlI` — TSD 8: Escalator** | ❌ different |
+
+**This confirms the Time & Work finding as a pattern, not a one-off.** Again
+a video moved between levels across runs (`RHflaojKVlI`: L3 → L4), and this
+time the **worked-question count on an unchanged video quadrupled (1 → 4)**.
+Two of the three "fact" fields — level and question count — are now
+demonstrably unstable across runs on the same video. Only title, channel and
+video ID have held.
+
+Also note the new L3 is a **~6-minute, single-question** clip presented as
+CAT-LEVEL PRACTICE — far too thin to satisfy a practice target.
+
+---
+
+## Coordinate Geometry (QA / Geometry) — factory #27
+
+| Level | Title | Channel | Video ID | Duration | Qs | Difficulty | Paid | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | Coordinate Geometry 1 (Quant Geometry L10) | MBA Wallah | `9t7cKr-KZ8U` | **1:07:42** | 7 | basic | mild | 85–105 min | yes |
+| L2 | Coordinate Geometry 2: Equations of line | MBA Wallah | `0GNr5I019-I` | **1:15:51** | 8 | medium | mild | 90–110 min | yes |
+| L3 | Geometry Practice 3: Coordinate Geometry & Medians | Rodha | `NXlFmkHm0N0` | 15:07 | 2 | CAT-level | mild | 25–35 min | yes |
+| L4 | CAT Quant Concept 6: Area of Modulus | ELITES GRID | `NTxJBUAnAq0` | 22:00 | 4 | CAT-level | none | 35–45 min | yes |
+
+- **Inverted difficulty-duration curve:** the two "basic/medium" levels are
+  67 and 76 minutes, while the two CAT-level ones are 15 and 22 minutes. A
+  beginner is asked for ~3 hours across L1+L2 before reaching 40 minutes of
+  actual CAT-level work. Whatever the videos' merits, that ladder is unusable
+  as a daily-task sequence without splitting.
+
+---
+
+## Logarithms (QA / Algebra) — factory #28
+
+| Level | Title | Channel | Video ID | Duration | Qs | Difficulty | Paid | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | Logarithms part 1: Logarithm Properties | Rodha | `K6Jk3uEkIMA` | 26:15 | 5 | basic | none | 45–55 min | yes |
+| L2 | Logarithms 2: Equations with Quadratic Forms | Rodha | `SzseQAYENMc` | 24:06 | 6 | medium | none | 45–60 min | yes |
+| L3 | Logarithms Practice: Logarithms & Product of Roots | Rodha | `s28TG0ERFr4` | 18:42 | 4 | CAT-level | mild | 35–45 min | yes |
+| L4 | — | — | — | — | — | — | — | — | **NO GOOD VIDEO FOUND** |
+
+- Cleanest QA response of the batch: one channel, one numbered series,
+  rising difficulty, sensible durations (26 → 24 → 19 min), direct URLs,
+  honest L4 gap. This is the shape a good topic ladder should have.
+
+---
+
+# MAJOR FINDING — nearly half of our VARC taxonomy is not a CAT question type
+
+Four VARC units have now returned the same structural verdict, each with an
+independent argument, and each **matching distinctions our own codebase
+already draws**:
+
+| VARC unit | Verdict | Reason given |
+|---|---|---|
+| Editorial Reading | skill/habit, not a question unit | CAT tests standardised RC, never "editorial questions" |
+| Vocabulary | skill, not a question unit | no standalone vocab questions since ~2015; tested only in RC context |
+| Grammar | **removed from the exam** | direct grammar questions phased out post-2014 |
+| Reading Speed Practice | skill, not a question unit | exists only inside RC passages |
+
+That is **four of VARC's nine units** (RC, Para Jumbles, Para Summary, Odd
+One Out are ladder-shaped; Sentence Completion still pending). This is no
+longer a finding about resource availability — **it is a finding about our
+own topic graph**: it contains units that modern CAT does not test as
+question types, and the 4-level resource ladder cannot apply to them by
+construction.
+
+For the report, this splits cleanly into two decisions:
+1. **Resource decision (in scope now):** these units get an L1 pointer only,
+   and empty L2–L4 are recorded as correct results, never as coverage gaps.
+2. **Product decision (out of scope, but must be surfaced):** whether the
+   plan engine should still be scheduling daily *tasks* against units that
+   are not exam question types — and if so, what a task on them should even
+   ask a student to do. That is a founder call, not a research output.
+
+## Running tallies
+
+- **~15 candidates now exceed one hour**, several claiming 90–150 minutes of
+  student time. Still needs one policy decision, not fifteen.
+- **17 distinct channels** have appeared; only Rodha and 2IIM have any prior
+  verification, and Anastasis Academy is now corroborated by a second
+  direct-URL video.
+- **Cross-run instability confirmed on two topics** (Time & Work, TSD).
+  Unstable fields: level assignment, worked-question count, student-time
+  estimate. Stable fields: video ID, title, channel.
+
+---
+
+## Functions (QA / Algebra) — factory #31 🚨 SECOND FULL-RESPONSE FABRICATION
+
+| Level | Title | Channel | Video ID | Duration | Qs | Difficulty | Paid | Student time | Watched |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 | Functions for CAT - Complete Concept & Basics \| CAT Quantitative Aptitude | Rodha | `34d7Uo1yv30` | 58:12 | 6 | basic | mild | 75–90 min | partly |
+| L2 | Functions Basics & Practice Questions \| CAT QA Preparation | Elites Grid | `R9N2sI_rM0U` | 1:12:45 | 9 | basic–medium | mild | 90–110 min | partly |
+| L3 | Functions Top Questions for CAT \| Real CAT Questions Solved | Takshzila | `p1hO8Wq7Vl8` | 1:04:18 | 8 | CAT-level | none | 80–100 min | partly |
+| L4 | Functions Advance Shortcuts, Traps & Value Substitution for CAT | MBA Pathshala | `5Ew4fP3T1w0` | 47:35 | 7 | CAT-level | mild | 60–75 min | partly |
+
+### All four levels fail the screening rule
+
+1. **Every one of the four URLs is a `google.com/search?q=…` link** wrapping a
+   YouTube URL. Not one direct video link in the entire response.
+2. **Every title is generic and pipe-separated** — "Functions for CAT -
+   Complete Concept & Basics | CAT Quantitative Aptitude". Compare with the
+   verified real titles from the same claimed channels: "Logarithms part 1:
+   Logarithm Properties | Algebra for CAT | Ravi Prakash Rodha", "CAT LRDI
+   Revision | Set 58: Chocolate Distribution Venn Diagram Concept". Real
+   titles carry instructor names, series numbers and inconsistent
+   punctuation. These four read as descriptions of videos that ought to
+   exist.
+3. **"WATCHED FULLY? partly" on all four**, which is still incompatible with
+   being unable to produce a direct URL for any of them.
+
+### Why this one matters more than Hybrid DILR
+
+Hybrid DILR was a genuinely obscure, format-not-topic unit, so fabrication
+there was at least explicable. **Functions is a mainstream CAT algebra topic
+with abundant real coverage** — Rodha alone has a numbered Algebra series
+(the verified Logarithms videos come from it). There was no scarcity to
+explain the invention.
+
+**This kills the last remaining predictor.** Fabrication is not confined to
+weak-coverage topics (Functions), not confined to a section (DILR and QA),
+and not signalled by the response's shape (Caselets refused honestly on an
+equally thin topic). **The only reliable discriminator found in 26 responses
+is the link format itself** — a `google.com/search` href versus a real
+`youtube.com/watch` href. That single check has caught every suspect
+response so far and has never produced a false alarm.
+
+### Running defect rate
+
+| Response | Status |
+|---|---|
+| Hybrid DILR Sets | 3 of 3 filled levels fabricated |
+| Functions | 4 of 4 levels fabricated |
+| Vocabulary | 2 of 2 filled levels search-linked |
+| Average | duplicate video ID across two levels |
+| Time & Work, TSD | cross-run level contradictions |
+| RC (first send), Pipes & Cisterns | answer never arrived — prompt echoed |
+
+**Roughly 3 of 26 responses (~12%) are wholly or largely unusable, and a
+further 2 carry hard internal contradictions.** For the report: this is not
+an argument against the method — the honest responses (Logarithms, Games &
+Tournaments, Para Summary, Mixtures) are genuinely good — but it settles
+that **no Gemini row may be shipped without independent verification**, and
+that the verification must start with the link format before anything else
+is read.
+
+---
+
+## Quadratic Equations · Inequalities · Logarithms re-run — logged 31 Aug
+
+Full per-link detail for these three is in
+`docs/phase0/PHASE0-LINK-ANALYSIS.md`; the corpus row for each is in
+`docs/phase0/resource-corpus.json`. Only the findings are repeated here.
+
+### Logarithms re-run — THE MOST SERIOUS DEFECT IN THE ENTIRE BATCH
+
+The same two video IDs were returned in both runs, with **different durations
+each time**:
+
+| Video ID | Run 1 (prompt 28) | Run 2 (prompt 33) | Conflict |
+|---|---|---|---|
+| `K6Jk3uEkIMA` | 26:15, 5 questions | **28:04**, 4 questions | **1m49s** |
+| `SzseQAYENMc` | 24:06, 6 questions | **26:17**, 5 questions | **2m11s** |
+
+A video's duration is an objective, immutable fact. Two different durations
+for one video ID is proof that **the metadata is being generated, not read**.
+This is categorically worse than the level and question-count drift recorded
+earlier, because those are judgments and this is not.
+
+**The counter-evidence that saves the corpus:** for the seven videos verified
+against real vidIQ metadata earlier in this session, **every duration Gemini
+reported was exact to the second**. So the model is accurate on videos it has
+genuinely seen; fabrication is a separate failure mode, not general
+unreliability. The corpus is therefore salvageable by verification rather
+than worthless — but no duration may be treated as fact until checked.
+
+One field held perfectly across both runs: the **L4 refusal**, with
+consistent reasoning both times.
+
+### Quadratic Equations
+4/4 filled, all direct URLs, familiar channels. Two notes: L1 is
+"Quadratic Equation **2**: Nature Of Roots" — the series' actual first video
+was never offered, so the concept ladder may start mid-series; and the L4 is
+a 74-minute "Algebra Marathon", which is a practice marathon rather than an
+exam-ready technique video and is a questionable fit for that level.
+
+### Inequalities — best duration profile found
+L1 is 18:24 and L2 is 16:11. **These are the only two consecutive levels in
+the entire batch that both fit a daily task slot without splitting.** Worth
+studying as the shape a good ladder should have. Two flags: L2 jumps from
+part 1 to part **9** of the series (parts 2–8 unexamined), and the 2IIM L3's
+stated duration (1:04:12) is identical to the Ratio & Proportion L3's stated
+duration — coincidence or copy, flag for verification.

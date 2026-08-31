@@ -1,0 +1,205 @@
+{
+ "generated": "2026-08-31T19:20+05:30",
+ "supersedes": "the four fully-fabricated topics in docs/phase0/round2-pending.json",
+ "discovery": "vidIQ vidiq_youtube_search \u2014 every id comes out of the platform's own index, so a fabricated id is structurally impossible.",
+ "verification": "vidIQ vidiq_get_videos_by_ids \u2014 all 14 ids re-confirmed by direct lookup. Title, channel, runtime, upload date and views below are platform-read.",
+ "levelWarning": "Every level is PROVISIONAL. No platform field grades difficulty. Levels here are inferred from the real title, the real runtime and the publisher's own framing (\"Basic Video\", \"Easy\", \"CAT PYQs One Shot\", \"Revision by a 100%iler\") \u2014 better evidence than round 2 had, but still not a graded difficulty. Founder hand-check required before ship.",
+ "totals": {
+  "slots": 16,
+  "filled": 14,
+  "gaps": 2,
+  "fabricated_replaced": 11
+ },
+ "topics": [
+  {
+   "topic": "Remainders",
+   "replaces": "all round-2 ids for this topic \u2014 every one was fabricated",
+   "candidates": [
+    {
+     "level": "L1",
+     "intent": "concept",
+     "videoId": "taNnRLuS4pk",
+     "title": "Remainder Theorem l Quant Number System 06 | CAT 2024 l MBA Wallah",
+     "channel": "MBA Wallah",
+     "realMinutes": 70.5,
+     "publishedAt": "2023-03-15",
+     "views": 179294,
+     "levelProvisional": true
+    },
+    {
+     "level": "L2",
+     "intent": "practice_easy",
+     "videoId": "VSFs3JuKafY",
+     "title": "Remainders 3: Euler's Theorem Cyclicity | Number System for CAT 2026 | Ravi Prakash Rodha",
+     "channel": "Rodha",
+     "realMinutes": 34.5,
+     "publishedAt": "2019-02-11",
+     "views": 177921,
+     "levelProvisional": true
+    },
+    {
+     "level": "L3",
+     "intent": "practice_cat",
+     "videoId": "QCOjb5FT-lM",
+     "title": "Remainders Revision | CAT 2025 Quants Revision Marathon |Euler, Fermat and Chinese Remainder theorem",
+     "channel": "Point99 | MBA Preparation",
+     "realMinutes": 127.2,
+     "publishedAt": "2025-10-28",
+     "views": 2752,
+     "levelProvisional": true
+    },
+    {
+     "level": "L4",
+     "intent": "exam_ready",
+     "videoId": "Ic8NMOiavXE",
+     "title": "Trick to Solve Remainder Questions in 30 Seconds By Maruti Sir (5 Time CAT 100%iler)",
+     "channel": "Cracku - MBA CAT Preparation",
+     "realMinutes": 5.0,
+     "publishedAt": "2024-09-12",
+     "views": 52714,
+     "levelProvisional": true
+    }
+   ]
+  },
+  {
+   "topic": "Circles",
+   "replaces": "all round-2 ids for this topic \u2014 every one was fabricated",
+   "candidates": [
+    {
+     "level": "L1",
+     "intent": "concept",
+     "videoId": "4vj3U-tEjYE",
+     "title": "Circles 1 Basic Terms + Angle Properties | Quant Geometry 07 | CAT 2024 | MBA Wallah",
+     "channel": "MBA Wallah",
+     "realMinutes": 44.9,
+     "publishedAt": "2023-03-16",
+     "views": 77996,
+     "levelProvisional": true
+    },
+    {
+     "level": "L2",
+     "intent": "practice_easy",
+     "videoId": "IqfBailsqTk",
+     "title": "CAT 2026 Easy Geometry Circles and Polygons | CAT Geometry Important Questions | Geometry Playlist",
+     "channel": "Cracku - MBA CAT Preparation",
+     "realMinutes": 67.3,
+     "publishedAt": "2021-09-22",
+     "views": 3796,
+     "levelProvisional": true
+    },
+    {
+     "level": "L3",
+     "intent": "practice_cat",
+     "videoId": "EzT5E9BZrTw",
+     "title": "Circles || CAT All PYQs 2017-23 One Shot || Geometry | CAT 2024 ||  Quantitative Aptitude",
+     "channel": "Mathological",
+     "realMinutes": 37.5,
+     "publishedAt": "2024-11-21",
+     "views": 1344,
+     "levelProvisional": true
+    },
+    {
+     "level": "L4",
+     "intent": "exam_ready",
+     "gap": true,
+     "reason": "No circles-specific exam-technique video found. The nearest candidates are whole-geometry revisions, which break the task-resource contract: the task names circles, the video delivers all of geometry."
+    }
+   ]
+  },
+  {
+   "topic": "Coordinate Geometry",
+   "replaces": "all round-2 ids for this topic \u2014 every one was fabricated",
+   "candidates": [
+    {
+     "level": "L1",
+     "intent": "concept",
+     "videoId": "9t7cKr-KZ8U",
+     "title": "Coordinate Geometry 1 | Quant Geometry L10 | CAT 2024 | MBA Wallah",
+     "channel": "MBA Wallah",
+     "realMinutes": 67.7,
+     "publishedAt": "2023-03-30",
+     "views": 84842,
+     "levelProvisional": true
+    },
+    {
+     "level": "L2",
+     "intent": "practice_easy",
+     "videoId": "0GNr5I019-I",
+     "title": "Coordinate Geometry- 2 | Equations of line | Quant Geometry 11 | CAT 2024 | MBA Wallah",
+     "channel": "MBA Wallah",
+     "realMinutes": 75.8,
+     "publishedAt": "2023-04-07",
+     "views": 64517,
+     "levelProvisional": true
+    },
+    {
+     "level": "L3",
+     "intent": "practice_cat",
+     "videoId": "MxioaLGqbqM",
+     "title": "Coordinate Geometry CAT Questions - 01 | Quant for CAT 2025 | Target 99%ile+ | Career Launcher",
+     "channel": "Career Launcher MBA",
+     "realMinutes": 23.7,
+     "publishedAt": "2025-03-10",
+     "views": 392,
+     "levelProvisional": true
+    },
+    {
+     "level": "L4",
+     "intent": "exam_ready",
+     "gap": true,
+     "reason": "Same shape as Circles L4. Coordinate geometry carries too little CAT weight to have earned its own technique video; every candidate was a general geometry revision."
+    }
+   ]
+  },
+  {
+   "topic": "Permutation & Combination",
+   "replaces": "all round-2 ids for this topic \u2014 every one was fabricated",
+   "candidates": [
+    {
+     "level": "L1",
+     "intent": "concept",
+     "videoId": "8kvqSY1-W5Y",
+     "title": "Permutations and Combinations 1: Fundamental Principle of Counting | CAT 2026 | Ravi Sir",
+     "channel": "Rodha",
+     "realMinutes": 26.9,
+     "publishedAt": "2019-01-29",
+     "views": 381258,
+     "levelProvisional": true
+    },
+    {
+     "level": "L2",
+     "intent": "practice_easy",
+     "videoId": "fnFjdi4XbTQ",
+     "title": "Permutations And Combinations - 1 | Quant Modern Maths 04 | CAT 2024 | MBA Wallah",
+     "channel": "MBA Wallah",
+     "realMinutes": 58.8,
+     "publishedAt": "2023-04-20",
+     "views": 158823,
+     "levelProvisional": true
+    },
+    {
+     "level": "L3",
+     "intent": "practice_cat",
+     "videoId": "Wjz0YSv8Oj4",
+     "title": "CAT 2024 | Permutations and Combinations CAT PYQs 2017-23 | One Shot || Quantitative Aptitude",
+     "channel": "Mathological",
+     "realMinutes": 76.8,
+     "publishedAt": "2024-11-04",
+     "views": 5511,
+     "levelProvisional": true
+    },
+    {
+     "level": "L4",
+     "intent": "exam_ready",
+     "videoId": "Kpmk4-d94f0",
+     "title": "CAT 2026 Quant Revision \ud83d\udd34 Permutations and Combinations by Sayali Ma'am (2-Time CAT 99.97%iler)",
+     "channel": "Cracku - MBA CAT Preparation",
+     "realMinutes": 117.2,
+     "publishedAt": "2024-11-08",
+     "views": 16564,
+     "levelProvisional": true
+    }
+   ]
+  }
+ ]
+}

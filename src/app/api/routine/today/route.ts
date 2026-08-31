@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { personalizationSummary, archetypeRevisionMultiplier, type Section, type Phase, type HistoryInput } from '@/lib/routine-engine';
+import { personalizationSummary, archetypeRevisionMultiplier, projectTaskResources, type Section, type Phase, type HistoryInput } from '@/lib/routine-engine';
 import { buildDayPlan } from '@/lib/plan-day';
 import { assessFinishDate, feasibilityMessage } from '@/lib/date-feasibility';
 import { pickMission, mockPendingAnalysisSignal, revisionOverdueSignal, baselineRoutineSignal, blockerBiasSignal, type Blocker } from '@/lib/mission-engine';
@@ -410,7 +410,10 @@ export async function GET() {
   // to be a well-formed array.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tasksWithStatus = (Array.isArray(routine.tasks) ? (routine.tasks as any[]) : []).map((t) => ({
-    ...t,
+    // The resource is a READ-TIME PROJECTION, never stored state. Any resource
+    // on the persisted row is discarded here — see routine-engine
+    // .projectTaskResources for why a stored one would go stale silently.
+    ...projectTaskResources(t, t.topic ? coverageByTopic.get(t.topic) : null, routine.phase as Phase),
     coverageStatus: t.topic ? coverageByTopic.get(t.topic) ?? null : null,
     // Memory tag — "Last done Nd ago" / "First time" / "Nth revision".
     // Reads the same 14-routine lookback whySummary/mission already use, so

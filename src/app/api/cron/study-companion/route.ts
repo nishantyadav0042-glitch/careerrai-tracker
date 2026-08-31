@@ -9,6 +9,7 @@ import {
   kickoffCopy, sparkCopy, windCopy, activationSlotCopy, reactivationSlotCopy,
   missedCheckInKickoffCopy,
   planMorningCopy, planOpenCopy, planProgressCopy, planLogCopy, classMorningCopy,
+  lessonLinkAnnounceCopy, RESOURCE_ANNOUNCE_DAY, RESOURCE_ANNOUNCE_SLOT,
   type CompanionSlot, type SlotCopy,
 } from '@/lib/companion';
 import { computeTodaysPlan, type TodaysPlan } from '@/lib/routine-plan';
@@ -393,6 +394,20 @@ async function studyCompanionRun(slot: CompanionSlot): Promise<NextResponse> {
         break;
     }
     if (!copy) { skipped++; continue; }
+
+    // One morning's news, laid over the decision this student's own cadence
+    // already made. Placed AFTER the null check on purpose: it can only ever
+    // change what an existing push says, never cause one. A student with no
+    // kickoff decision today still gets nothing.
+    //
+    // `today` is this file's IST calendar date and the gate is an equality on
+    // it, so the announcement expires on its own. EvidenceAnnounce ran for
+    // eight days advertising a capability we had deleted, because nothing
+    // stopped it.
+    if (slot === RESOURCE_ANNOUNCE_SLOT && today === RESOURCE_ANNOUNCE_DAY) {
+      copy = lessonLinkAnnounceCopy(copy, firstName);
+      reason = `${reason} · lesson-link announcement`;
+    }
 
     const outcome = await dispatch({
       userId: s.id,
