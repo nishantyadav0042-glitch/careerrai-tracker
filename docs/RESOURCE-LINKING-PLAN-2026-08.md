@@ -1,10 +1,24 @@
 # Task-Attached External Resources — the build plan (30 Aug 2026)
 
-> Status: **DRAFT FOR FOUNDER REVIEW — nothing here is built.** This is the
-> plan + rules document the founder asked for ("first build the plan, then we
-> discuss the rules, then we build"). The rules in §3 are proposed as binding once the founder
-> signs off; the founder will cross-examine them (incl. with other AI) before
-> anything is coded.
+> Status: **PARTLY BUILT — the minimum slice ships; the corpus does not.**
+> Updated 31 Aug 2026. This began as the plan + rules document the founder
+> asked for ("first build the plan, then we discuss the rules, then we
+> build"). The rules in §3 are now binding, and the ones that could be made
+> mechanical have guard tests rather than reviewers.
+>
+> **What is live:** 52 verified resources across 22 units
+> (`src/lib/topic-resources.ts`), attached to tasks by the engine
+> (`routine-engine.resourceForTask`) and rendered on the plan card
+> (`src/components/task-resource.tsx`). All three Phase-0 topics — Reading
+> Comprehension, Percentages, Arrangements — resolve at every phase, so a
+> day-one student sees this. Three events measure it: `resource_shown`,
+> `resource_opened`, `resource_verdict`.
+>
+> **What is not:** the round-2 research corpus, 71 candidate links across 21
+> further topics. None of it has a platform-read runtime, and a re-grade of
+> every ladder level is owed on top of that — see
+> `docs/phase0/VERIFICATION-ROUND2-SEARCH.md`. Three prompts have never been
+> run at all: #13 Sentence Completion, #14 Binary Logic, #29 Pipes & Cisterns.
 >
 > Prior work this consolidates: three research rounds (legal, platform ToS,
 > precedent, link rot, return mechanics, source supply) discussed with the
@@ -333,6 +347,15 @@ judgments only, until observed Phase-0 outcomes exist to calibrate it.
 Ordering is fixed: research → resources → verification → Phase-0 →
 observed outcomes → calibration → personalization. Building the
 personalization before its input data exists is the named failure mode.
+
+**Slice status, 31 Aug:** built and shipped, with one honest gap. The
+student sees the link, opens it outside the app, and is asked one question
+on return. What we cannot see is anything that happens on YouTube — no watch
+time, no completion, no drop-off — so `resource_verdict` is the entire
+outcome signal, and it is self-reported by whoever chooses to answer. That is
+a real limit on what the Phase-4 trigger (≥100 outcomes on a topic × resource
+pair) will eventually be counting, and it should be read as such rather than
+mistaken for observed behaviour.
 
 ### Phase 3 — Return loop
 The return prompt + event capture (versioned per R11). This is what turns the
