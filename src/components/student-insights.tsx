@@ -173,9 +173,17 @@ export function StudentInsights() {
         <section>
           <div className="flex items-end justify-between">
             <div>
-              <SectionLabel>Student Insights</SectionLabel>
+              {/* RENAMED 31 Aug. Both halves of the old line had become false.
+                  It promised questions — there are none left on this tab, the
+                  feed is hints-only. And it credited peers as the authors,
+                  when nobody ever wrote one: in six weeks the surface took a
+                  single non-curated submission, and it was the founder's own
+                  test post. Claiming peer authorship over content we wrote
+                  ourselves is the exact thing the byline rule below exists to
+                  prevent, and the section header was doing it. */}
+              <SectionLabel>More hints</SectionLabel>
               <p className="mt-0.5 text-[11.5px] text-stone-400">
-                Questions, shortcuts and lessons from students preparing alongside you.
+                Shortcuts and lessons worth keeping. Vote on the ones that helped.
               </p>
             </div>
             <div className="flex gap-1">

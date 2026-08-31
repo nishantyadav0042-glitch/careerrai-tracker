@@ -165,13 +165,21 @@ export async function GET() {
   // the same submission twice. Today's pick lives in the Daily Pick card; the
   // feed is everything else.
   //
-  // The FEED still carries both kinds, deliberately. The founder's 31 Aug
-  // instruction was about the daily pick — the one thing the surface offers —
-  // not about the library of student contributions below it. 51 live questions
-  // are real content students can still browse; deleting them from view is a
-  // bigger product change than was asked for, and is one line to make here if
-  // he wants it.
-  const feed = orderFeed(all.filter((r) => !pickIds.has(r.id)))
+  // HINTS ONLY, 31 Aug — and the reason matters more than the rule.
+  //
+  // This was left carrying both kinds earlier the same day, on the argument
+  // that the 50 questions were student contributions and hiding them was a
+  // bigger change than the founder had asked for. That argument was simply
+  // WRONG ON THE FACTS: every one of them is ours, written under the admin
+  // account with display_name 'CareerRai'. In six weeks the feature has taken
+  // exactly one non-curated submission, and that was the founder's own test
+  // post. There is no student content to protect.
+  //
+  // So the tab now does one thing. Questions are hidden, not deleted — the
+  // rows keep their history and their votes, and restoring this filter
+  // restores them. Filtered server-side, like the pick dedup above, so no
+  // client can drift back into rendering them.
+  const feed = orderFeed(all.filter((r) => r.kind === 'tip' && !pickIds.has(r.id)))
     .slice(0, FEED_PAGE_SIZE * 5) // room for "See more" paging client-side
     .map(withScore);
 

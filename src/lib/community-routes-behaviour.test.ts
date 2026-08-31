@@ -260,11 +260,12 @@ describe('deduplication is server-side, so no client can drift', () => {
     created_at: '2026-08-20', featured_on: featured, status: 'live',
   });
 
-  it("a featured QUESTION is never served as the day's pick any more", async () => {
-    // 31 Aug: questions are not promoted, so even a row still carrying an old
-    // featured_on stamp must not reappear as today's pick. It stays in the
-    // feed — the founder removed questions from the PICK, not from the library
-    // of student contributions below it.
+  it("a featured QUESTION reaches neither the pick nor the feed", async () => {
+    // 31 Aug, in two steps. First: questions are no longer promoted, so a row
+    // still carrying an old featured_on stamp must not reappear as today's
+    // pick. Then, once it was established that ALL 50 questions are ours and
+    // not a single student had ever submitted one, the feed went hints-only
+    // too — so the same row must not surface below the hint either.
     const today = '2026-08-21';
     currentAdmin = makeAdmin({
       'student_submissions.select': (call) =>
@@ -277,8 +278,8 @@ describe('deduplication is server-side, so no client can drift', () => {
     expect(json.dailyPick.question).toBeUndefined();
     expect(json.dailyPick.tip ?? null).toBeNull();
     const feedIds = json.feed.map((f: { id: string }) => f.id);
-    expect(feedIds).toContain('picked-q');
-    expect(feedIds).toContain('other');
+    expect(feedIds, 'a question must not appear in the feed').not.toContain('picked-q');
+    expect(feedIds, 'tips still render').toContain('other');
   });
 
   it("today's TIP is removed from the feed too", async () => {
