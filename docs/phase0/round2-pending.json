@@ -130,6 +130,239 @@
      "time": "20-30 min"
     }
    ]
+  },
+  {
+   "topic": "Reading Speed Practice",
+   "factory": 24,
+   "why_rerun": "round 1's L1 video did not exist",
+   "candidates": [
+    {
+     "level": "L1",
+     "id": "IzzDC2qCYu0",
+     "title": "How to read a passage effectively | CAT-RC-Series | GejoSpeaks",
+     "channel": "Gejo Speaks",
+     "dur": "18:45",
+     "time": "25-35 min"
+    },
+    {
+     "level": "L2",
+     "gap": true,
+     "reason": "reading speed has no isolated basic-level drills"
+    },
+    {
+     "level": "L3",
+     "gap": true,
+     "reason": "at CAT difficulty this is just RC practice"
+    },
+    {
+     "level": "L4",
+     "id": "4Ns1jYVuJ7s",
+     "title": "CAT RC Tricks for 99 percentile | How to eliminate options in RC",
+     "channel": "Ananta Chhajer",
+     "dur": "9:24",
+     "time": "15-20 min"
+    }
+   ]
+  },
+  {
+   "topic": "Functions",
+   "factory": 31,
+   "why_rerun": "round 1 invented all four videos",
+   "note": "TWO runs supplied; L1 agrees across both",
+   "candidates": [
+    {
+     "level": "L1",
+     "id": "6FEnbG2Ux5o",
+     "title": "Functions 1: Domain Range Types Of Functions | Algebra for CAT 2026",
+     "channel": "Rodha",
+     "dur": "21:16",
+     "time": "35-45 min",
+     "run": "A+B agree"
+    },
+    {
+     "level": "L2",
+     "id": "EWB1NaL4N4U",
+     "title": "Function 2: Total Onto And Bijective Functions | Algebra for CAT 2026",
+     "channel": "Rodha",
+     "dur": "19:12",
+     "time": "30-40 min",
+     "run": "A"
+    },
+    {
+     "level": "L3",
+     "id": "w4NV03jDx78",
+     "title": "CAT - QA - Problem Solving - Function leading to simultaneous equations",
+     "channel": "Takshzila",
+     "dur": "22:41",
+     "time": "35-45 min",
+     "run": "A"
+    },
+    {
+     "level": "L4",
+     "id": "LChCPuxO83s",
+     "title": "Functions - 4: General Solutions Of Functions | Algebra for CAT 2026",
+     "channel": "Rodha",
+     "dur": "16:34",
+     "time": "25-35 min",
+     "run": "A"
+    },
+    {
+     "level": "L2",
+     "id": "AMl31tXkyS8",
+     "title": "Functions 1",
+     "channel": "Takshzila Shikshak -The Art of learning. (Grok)",
+     "dur": "8:25",
+     "time": "20-30 min",
+     "run": "B",
+     "flag": "channel name contains '(Grok)' — looks like contamination, verify carefully"
+    },
+    {
+     "level": "L3",
+     "id": "sKmBBaj1bbE",
+     "title": "Functions and Graphs 2 | CAT PYQs 2017-23",
+     "channel": "Mathological",
+     "dur": "31:38",
+     "time": "50-65 min",
+     "run": "B"
+    },
+    {
+     "level": "L4",
+     "id": "X_CpUw7JPnU",
+     "title": "CAT 2026 Algebra Revision (Functions & Graphs) By Maruti Sir",
+     "channel": "Cracku - MBA CAT Preparation",
+     "dur": "47:28",
+     "time": "60-75 min",
+     "run": "B"
+    }
+   ]
+  },
+  {
+   "topic": "Inequalities",
+   "factory": 32,
+   "why_rerun": "not a required re-run — a second run arrived anyway, and it contradicts the first",
+   "candidates": [
+    {
+     "level": "L1",
+     "id": "EDLqKDO4ruY",
+     "title": "Inequalities 6: Polynomial and Rational Inequalities",
+     "channel": "Rodha",
+     "dur": "28:40",
+     "time": "45-55 min"
+    },
+    {
+     "level": "L2",
+     "id": "zIrr1lkvyBY",
+     "title": "Inequalities 1: Rules and Applications",
+     "channel": "Rodha",
+     "dur": "19:48",
+     "time": "35-45 min",
+     "flag": "was L1 in round 1; claimed 18:24 then, 19:48 now, REAL is 18:52",
+     "already_verified": {
+      "real_duration": "18:52",
+      "real_channel": "Rodha",
+      "duration_match": false,
+      "channel_match": true
+     }
+    },
+    {
+     "level": "L3",
+     "id": "-me6rKm0AcA",
+     "title": "CAT Inequalities - #19",
+     "channel": "2IIM CAT Preparation",
+     "dur": "1:06:40",
+     "time": "90-110 min",
+     "flag": "claimed 1:04:12 in round 1, 1:06:40 now, REAL is 1:03:40 — both wrong",
+     "already_verified": {
+      "real_duration": "63:40",
+      "real_channel": "2IIM CAT Preparation",
+      "duration_match": false,
+      "channel_match": true
+     }
+    },
+    {
+     "level": "L4",
+     "id": "TMOq7m_OKUw",
+     "title": "Inequalities 5: AM-HM Inequality Applications",
+     "channel": "Rodha",
+     "dur": "21:12",
+     "time": "40-50 min",
+     "flag": "round 1 refused L4 outright; round 2 found one"
+    }
+   ]
+  },
+  {
+   "topic": "Linear Equations",
+   "factory": 12,
+   "why_rerun": "never run before (arrived labelled 33)",
+   "candidates": [
+    {
+     "level": "L1",
+     "id": "W6MKuAnB0h4",
+     "title": "Simple Equations 1: Linear Equation Solutions | Algebra for CAT 2026",
+     "channel": "Rodha",
+     "dur": "26:09",
+     "time": "40-50 min"
+    },
+    {
+     "level": "L2",
+     "id": "b72RfaOsAmg",
+     "title": "Linear Eqn in 2 variables, Integer solns - 1",
+     "channel": "Takshzila",
+     "dur": "15:23",
+     "time": "25-35 min"
+    },
+    {
+     "level": "L3",
+     "id": "P-emknCdeZE",
+     "title": "Simple Equations 2: Number of Integer Solutions",
+     "channel": "Rodha",
+     "dur": "28:32",
+     "time": "45-60 min"
+    },
+    {
+     "level": "L4",
+     "id": "vrtKzaspVjs",
+     "title": "Simple Equations 3: Integral Solutions Shortcuts",
+     "channel": "Rodha",
+     "dur": "21:38",
+     "time": "35-45 min"
+    }
+   ]
+  },
+  {
+   "topic": "Lines & Angles",
+   "factory": 34,
+   "why_rerun": "never run before",
+   "unit_shape": "prerequisite-not-tested",
+   "structural_finding": "Standalone Lines & Angles questions do not appear in CAT. Its properties (transversals, alternate angles, auxiliary parallels) are tested only as sub-steps inside Triangles, Circles and Polygons problems. This is the FIFTH structural finding of its kind and the FIRST in QA — the previous four were all VARC.",
+   "candidates": [
+    {
+     "level": "L1",
+     "id": "GaEZEJbKLtY",
+     "title": "Lines and Angles | Quant Geometry L1 | CAT 2024 | MBA Wallah",
+     "channel": "MBA Wallah",
+     "dur": "43:37",
+     "time": "55-70 min"
+    },
+    {
+     "level": "L2",
+     "id": "rUI1bbCvk7E",
+     "title": "Geometry Introduction | Quantitative Aptitude I CAT PREPARATION",
+     "channel": "Rodha",
+     "dur": "21:30",
+     "time": "30-45 min"
+    },
+    {
+     "level": "L3",
+     "gap": true,
+     "reason": "pure Lines & Angles is never tested standalone at CAT difficulty; CAT-level angle problems require triangle theorems, cyclic quadrilaterals or circle properties"
+    },
+    {
+     "level": "L4",
+     "gap": true,
+     "reason": "no dedicated CAT speed or trap videos for standalone Lines & Angles; pacing is taught inside Triangles and Polygons"
+    }
+   ]
   }
  ],
  "pending_verification": [
@@ -142,6 +375,23 @@
   "bIMpphNLj4o",
   "e3MUWMNxkKo",
   "Ky5lzMv_1ns",
-  "uC87E_QC_14"
+  "uC87E_QC_14",
+  "IzzDC2qCYu0",
+  "4Ns1jYVuJ7s",
+  "6FEnbG2Ux5o",
+  "EWB1NaL4N4U",
+  "w4NV03jDx78",
+  "LChCPuxO83s",
+  "AMl31tXkyS8",
+  "sKmBBaj1bbE",
+  "X_CpUw7JPnU",
+  "EDLqKDO4ruY",
+  "TMOq7m_OKUw",
+  "W6MKuAnB0h4",
+  "b72RfaOsAmg",
+  "P-emknCdeZE",
+  "vrtKzaspVjs",
+  "GaEZEJbKLtY",
+  "rUI1bbCvk7E"
  ]
 }
