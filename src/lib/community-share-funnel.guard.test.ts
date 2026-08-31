@@ -67,7 +67,10 @@ describe('telemetry never becomes part of the product', () => {
     // Rule 6: no classification metadata. The sheet must not regrow a
     // section/topic/kind chooser — the server infers all three.
     expect(src).not.toMatch(/Select a section|Choose a topic|<select/i);
-    expect(src).toMatch(/image != null \|\| questionText\.trim\(\)\.length >= 10/);
+    // Send opens on a photo OR enough text, and on nothing else. The exact
+    // floor moved on 31 Aug (10 -> MIN_TIP_CHARS) when text-only became a
+    // hint; what must not change is that only their own content opens it.
+    expect(src).toMatch(/image != null \|\| trimmed\.length >= MIN_TIP_CHARS/);
   });
 });
 

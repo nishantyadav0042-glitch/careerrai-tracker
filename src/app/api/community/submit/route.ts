@@ -12,11 +12,11 @@ export const maxDuration = 60;
 
 // POST /api/community/submit — exactly two contribution types:
 //
-//   tip      — plain text ≤150 chars, section + topic mandatory
-//   question — typed text OR a photo OR both (founder, 20 Aug: the purpose
-//              is sharing a tough question as easily as possible — the
-//              mandatory image was an implementation shortcut, not the
-//              product), section mandatory, topic optional
+//   tip      — plain text 15–150 chars. What the share sheet asks for since
+//              31 Aug, and the only kind Daily Pick can promote.
+//   question — a photo (with an optional caption up to 600 chars), or text the
+//              safety screen reads as a doubt rather than advice. Lands in the
+//              feed, never in the daily slot.
 //
 // Flow: automated SAFETY gate (the only pre-publication check) → live in the
 // pool permanently, under a throwaway display name → ranked by student votes
@@ -194,6 +194,15 @@ export async function POST(request: NextRequest) {
   const resolvedSection = sub.section ?? imageVerdict?.section ?? textVerdict?.section ?? null;
   // A photo is a question. For text-only, the safety screen already read the
   // words and said which it is — so the student never had to.
+  //
+  // 31 Aug: the fallback is what decided this. When the screen returns kind
+  // null (it says null whenever it is unsure, and it is unsure often on a
+  // one-line hint), the row took `sub.kind` — which validation set to
+  // 'question' for ALL unhinted text. So a student's hint was filed as a
+  // question, never reached the hint shelf, and Daily Pick could only ever be
+  // stocked by us. `sub.kind` is now 'tip' for text-only, so an unsure screen
+  // lands on the thing the sheet actually asked for. An explicit 'question'
+  // from the screen still wins — a typed doubt still goes to the feed.
   const resolvedKind = sub.image ? 'question' : (textVerdict?.kind ?? sub.kind);
 
   const tIns = Date.now();
@@ -205,7 +214,10 @@ export async function POST(request: NextRequest) {
     // Section: what the student picked, else what the safety screen inferred,
     // else null — a card without a section chip is fine, an extra dropdown in
     // front of a contribution is not.
-    payload: sub.kind === 'tip'
+    // Keyed off the STORED kind, not the validation band. They agreed before
+    // only because both branches happen to carry the text for a text-only
+    // share; keeping them keyed to different things is how they drift.
+    payload: resolvedKind === 'tip'
       ? { text: sub.text, section: resolvedSection }
       : { section: resolvedSection, ...(sub.text ? { text: sub.text } : {}) },
     ...(imagePath ? { image_path: imagePath } : {}),
