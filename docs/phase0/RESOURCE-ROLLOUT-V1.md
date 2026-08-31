@@ -3,7 +3,7 @@
 **31 August 2026 — decisions locked.** Supersedes `PHASE-1-CONCEPT-LINKS.md`.
 
 Founder, after review: go wide rather than three topics — *"we are in learning
-stage... सब के लिए ready कर दो"* — plus a feedback vote on every link, and a
+stage, get it ready for all of them"* — plus a feedback vote on every link, and a
 secondary resource when the primary does not land.
 
 **Layer A ships on all 40 topics that have a platform-verified concept video,

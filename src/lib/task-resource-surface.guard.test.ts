@@ -132,3 +132,36 @@ describe('the plan card actually renders it', () => {
     expect(code(CARD).match(/!done && task\.resource/g)?.length).toBe(2);
   });
 });
+
+describe('the secondary replaces the primary, never joins it', () => {
+  it('holds the alternative back until the student says the primary missed', () => {
+    // Two links side by side is the "list" rule broken by another name: the
+    // student came here to be told what to do next, not to compare sources.
+    const s = code(SURFACE);
+    expect(s).toContain('canOffer');
+    expect(s).toContain("verdict === 'did_not'");
+    expect(s).toContain('onSecondary && secondary ? secondary : primary');
+  });
+
+  it('still renders exactly one anchor with a secondary in play', () => {
+    // Belt and braces with the count above: the secondary must be swapped INTO
+    // the existing anchor, never appended as a second one.
+    const anchors = code(SURFACE).match(/<a\b/g) ?? [];
+    expect(anchors.length).toBe(1);
+  });
+
+  it('tells the student when a resource is longer than the day asks for', () => {
+    // A 78-minute lecture under a 30-minute task is honest only if the row
+    // says so. The task target never changes; the row must not imply it did.
+    expect(read(SURFACE)).toContain('resource.longForm');
+    expect(read(SURFACE)).toContain('finish it today');
+  });
+
+  it('separates "did not open" from a verdict on the content', () => {
+    // A student who never tapped is telling us about the row, not the video.
+    // Recording that as an opinion on content they never saw would be a lie.
+    const s = code(SURFACE);
+    expect(s).toContain("ask('not_opened')");
+    expect(s).toContain('!opened && verdict === null');
+  });
+});

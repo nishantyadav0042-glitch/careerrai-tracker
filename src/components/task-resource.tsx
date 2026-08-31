@@ -9,31 +9,28 @@ import { track } from '@/lib/journey';
 //
 //   CareerRai does not provide content. CareerRai provides an execution path.
 //
-// The plan already tells a student to solve fifteen questions. The pain the
-// founder named is that fifteen questions have to come from somewhere, and
-// today the student is left to find them. This closes that gap without
-// becoming a content library — see docs/RESOURCE-LINKING-PLAN-2026-08.md.
-//
 // Four rules are load-bearing and are enforced by shape here, not by comment:
 //
 //  1. NEVER HOSTED. An anchor to the original watch page, opened in the
-//     student's own browser. No embed, no iframe, no proxy, no mirror. An
-//     embed would put someone else's video inside our chrome and make us look
-//     like the publisher — legally the interesting question, and commercially
-//     a promise we have not earned.
+//     student's own browser. No embed, no iframe, no proxy, no mirror.
 //  2. NEVER MANDATORY. The task above stands on its own and is completable
 //     without ever touching this. Nothing here gates the tick.
 //  3. ONE LINK, NEVER A LIST. A list is a decision handed back to a student
-//     who came here to be told what to do next.
+//     who came here to be told what to do next. The secondary below does not
+//     break this: it REPLACES the primary in the same anchor, and only after
+//     the student has told us the primary did not help. Never side by side.
 //  4. THE SOURCE IS ALWAYS NAMED. Channel and real runtime, in the row, before
-//     the tap. A student deserves to know whose video it is and what it will
-//     cost them in minutes — and we are a commercial linker, which is the one
-//     posture where knowing what you are pointing at actually matters.
+//     the tap.
 //
-// The runtime shown is the platform-read figure stored in topic-resources.ts,
-// never a claimed one. Twenty-two of the researched durations were wrong, one
-// by more than twenty minutes; a student who is told "13 min" and loses forty
-// has been lied to by our plan, not by YouTube.
+// The runtime shown is the platform-read figure from topic-resources.ts, never
+// a claimed one. A student told "13 min" who loses forty was misled by our
+// plan, not by YouTube.
+//
+// WHAT THE FEEDBACK IS FOR: catching a wrong or broken link, and nothing else.
+// It is NOT a ranking input. A beginner, a repeater, a Hindi speaker and
+// somebody with twenty minutes will judge the same video differently, so
+// ranking on thin data would launder noise into a recommendation. Collect
+// first. See docs/phase0/RESOURCE-ARCHITECTURE.md.
 
 export interface TaskResource {
   intent: string;
@@ -41,53 +38,91 @@ export interface TaskResource {
   title: string;
   channel: string;
   realMinutes: number;
+  /** Longer than a daily task block. We still link it — it is the best
+   *  explanation available for that topic — but we say so, because the plan
+   *  above it is asking for thirty minutes, not seventy-eight. */
+  longForm?: true;
 }
 
-type Verdict = 'helped' | 'did_not';
+type Verdict = 'helped' | 'okay' | 'did_not' | 'not_opened';
 
-// Why an intent maps to a verb: "Watch" is what the student is about to do.
-// The intent itself ('practice_cat') is our vocabulary, not theirs.
+// Why an intent maps to a verb: it names what the student is about to do. The
+// intent itself is our vocabulary, not theirs.
 const LEAD_IN: Record<string, string> = {
   concept: 'Learn it',
-  practice_easy: 'Practice',
-  practice_cat: 'CAT-level practice',
-  exam_ready: 'Revise',
+  worked_example: 'See it solved',
 };
 
+// Offered only after "not helpful". Recorded, never scored — the point is to
+// find the broken and the mis-shelved, not to build a preference model out of
+// six radio buttons.
+const REASONS = [
+  'Too basic',
+  'Too hard',
+  'Too long',
+  'Not clear',
+  "Couldn't open it",
+  'Not what I needed',
+] as const;
+
 export function TaskResource({
-  resource,
+  resource: primary,
+  secondary,
   topic,
   taskId,
 }: {
   resource: TaskResource;
+  /** The alternative explanation. Revealed only on a negative verdict. */
+  secondary?: TaskResource | null;
   topic: string | null;
   taskId: string;
 }) {
+  const [onSecondary, setOnSecondary] = useState(false);
   const [verdict, setVerdict] = useState<Verdict | null>(null);
   const [opened, setOpened] = useState(false);
   const shown = useRef(false);
 
-  const base = { topic, taskId, videoId: resource.videoId, intent: resource.intent, channel: resource.channel };
+  // The resource actually on screen. One at a time, always.
+  const resource = onSecondary && secondary ? secondary : primary;
+
+  const base = {
+    topic,
+    taskId,
+    videoId: resource.videoId,
+    intent: resource.intent,
+    channel: resource.channel,
+    rank: onSecondary ? 'secondary' : 'primary',
+  };
 
   // One impression per mount. Without this, "students ignore the links" and
-  // "students never saw the links" are the same number, which is how the
-  // Daily Pick rotation cost an hour of SQL (see journey.ts, daily_slot_served).
+  // "students never saw the links" are the same number.
   useEffect(() => {
     if (shown.current) return;
     shown.current = true;
     track('resource_shown', base);
-    // The row is static for the life of the mount; re-firing on every prop
-    // identity change would inflate impressions.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // The student left for YouTube and came back. We cannot see what happened
-  // over there — no watch time, no completion, nothing. This one tap is the
-  // only honest outcome signal available, so it is the one we ask for, once.
+  // We cannot see what happened on YouTube — no watch time, no completion.
+  // These taps are the only honest outcome signal available.
   function ask(v: Verdict) {
     setVerdict(v);
     track('resource_verdict', { ...base, verdict: v });
   }
+
+  function reason(r: string) {
+    track('resource_verdict', { ...base, verdict: 'did_not', reason: r });
+    setVerdict('helped'); // collapses the panel; the miss is already recorded
+  }
+
+  function tryOther() {
+    setOnSecondary(true);
+    setVerdict(null);
+    setOpened(false);
+    shown.current = false;
+  }
+
+  const canOffer = verdict === 'did_not' && !onSecondary && !!secondary;
 
   return (
     // Stops the tap from reaching the task row, which would tick the task.
@@ -116,34 +151,80 @@ export function TaskResource({
           <span className="mt-0.5 block text-[11px] text-stone-500">
             {resource.channel} on YouTube · {resource.realMinutes} min
           </span>
+          {/* The one sentence that keeps a 78-minute lecture from reading as a
+              78-minute instruction. The task's target is unchanged and always
+              was; this stops the ROW implying otherwise. */}
+          {resource.longForm && (
+            <span className="mt-0.5 block text-[11px] text-stone-400">
+              Longer than today&rsquo;s block — you don&rsquo;t have to finish it today.
+            </span>
+          )}
         </span>
       </a>
 
       {/* Only after they have actually gone. Asking "did it help?" about a
           link nobody opened would manufacture an opinion out of nothing. */}
       {opened && verdict === null && (
-        <div className="mt-1.5 flex items-center gap-2 px-1">
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5 px-1">
           <span className="text-[11px] text-stone-500">Did that help?</span>
-          <button
-            type="button"
-            onClick={() => ask('helped')}
-            className="rounded-full border border-stone-200 px-2.5 py-0.5 text-[11px] font-medium text-stone-700 hover:bg-stone-100"
-          >
-            Yes
-          </button>
-          <button
-            type="button"
-            onClick={() => ask('did_not')}
-            className="rounded-full border border-stone-200 px-2.5 py-0.5 text-[11px] font-medium text-stone-700 hover:bg-stone-100"
-          >
-            No
-          </button>
+          {([['helped', 'Helpful'], ['okay', 'Okay'], ['did_not', 'Not helpful']] as const).map(
+            ([v, label]) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => ask(v)}
+                className="rounded-full border border-stone-200 px-2.5 py-0.5 text-[11px] font-medium text-stone-700 hover:bg-stone-100"
+              >
+                {label}
+              </button>
+            ),
+          )}
         </div>
       )}
 
-      {/* "No" is the answer worth having — the weekly link review is fed by
-          exactly this, and a student who says it should see it was heard. */}
-      {verdict !== null && (
+      {/* A student who never tapped is also telling us something — but about
+          the row, not about the video. Kept separate so it can never be read
+          as an opinion on content they did not see. */}
+      {!opened && verdict === null && (
+        <button
+          type="button"
+          onClick={() => ask('not_opened')}
+          className="mt-1 px-1 text-[10px] text-stone-400 underline underline-offset-2 hover:text-stone-600"
+        >
+          Not useful to me
+        </button>
+      )}
+
+      {/* The whole point of a secondary: the student does not choose between
+          four links, they are given one, and a better one only if the first
+          missed. */}
+      {canOffer && (
+        <button
+          type="button"
+          onClick={tryOther}
+          className="mt-1.5 rounded-full border border-stone-300 px-2.5 py-0.5 text-[11px] font-medium text-stone-700 hover:bg-stone-100"
+        >
+          Try another explanation →
+        </button>
+      )}
+
+      {verdict === 'did_not' && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5 px-1">
+          <span className="text-[11px] text-stone-500">What went wrong?</span>
+          {REASONS.map((r) => (
+            <button
+              key={r}
+              type="button"
+              onClick={() => reason(r)}
+              className="rounded-full border border-stone-200 px-2 py-0.5 text-[10px] text-stone-600 hover:bg-stone-100"
+            >
+              {r}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {verdict !== null && verdict !== 'did_not' && (
         <p className="mt-1.5 px-1 text-[11px] text-stone-400">
           {verdict === 'helped' ? 'Good — noted.' : "Noted. We'll review this link."}
         </p>

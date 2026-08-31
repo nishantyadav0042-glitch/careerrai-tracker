@@ -1,6 +1,6 @@
 # Attaching question links to tasks — the plan
 
-**31 August 2026.** Founder: *"पहले plan करो... हर चीज़ बनाने मत भागा करो."*
+**31 August 2026.** Founder: *plan first; stop running to build everything.*
 So: no code in this document. This is what I found in our own system, and the
 smallest change that gets a question link under every practice task.
 
@@ -25,7 +25,7 @@ One lookup table returns the wrong *kind* of thing. That is the defect.
 CoverageStatus = 'not_started' | 'learning' | 'practicing' | 'revising' | 'exam_ready'
 ```
 
-That is exactly what you described — topic learn करो → mastery → practice →
+That is exactly what you described — learn the topic, then mastery, then
 exam ready. It is stored per student per topic in the `topic_coverage` table,
 and the student updates it themselves.
 
@@ -50,7 +50,7 @@ it. So the engine already refuses to re-teach a topic the student is past.
 completable. It returns `{ count, unit }` where unit is `question`, `set` or
 `passage` — QA in questions, DILR in sets, RC in passages.
 
-**That is where "पंद्रह question" comes from.** It is already computed, already
+**That is where "15 questions" comes from.** It is already computed, already
 on the task as `target`, already derived from the hours that student gave us.
 We do not need to invent a number; we need to point it somewhere.
 
@@ -72,7 +72,7 @@ right place.
 capped by `MAX_TOPIC_BLOCKS_PER_SECTION`. So a day of 4–5 tasks is 4–5
 **distinct topics**, each carrying its own topic + phase + count.
 
-So the answer to *"मेरे पांच task का link कहाँ से आ सकता है?"* is: **not five
+So the answer to *"where do my five tasks' links come from?"* is: **not five
 links from one place — five lookups into one table, one per topic.** Same as the
 concept video works today.
 

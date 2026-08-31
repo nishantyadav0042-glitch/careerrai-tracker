@@ -74,6 +74,8 @@ export interface RoutineTask {
   // applied to exactly ONE vivid, personal trigger rather than diluted
   // across every task, which is the closest a static list gets to that gap.
   isImplementationIntention?: boolean;
+  /** Held back by the surface until the student says the primary missed. */
+  secondary?: TopicResource | null;
 }
 
 export interface GeneratedRoutine {
@@ -91,22 +93,32 @@ export { catExamDate };
 // Verified external resources. Data only — this module maps the student's
 // phase to an intent preference; topic-resources knows nothing about phases,
 // which is what stops it becoming a second planning authority.
-import { resourceByPreference, type TopicResource, type ResourceIntent } from './topic-resources';
+import { resourceByPreference, resourceSecondary, type TopicResource, type ResourceIntent } from './topic-resources';
 
 /**
- * Which kind of resource suits a student at this phase, best first.
+ * Which kind of resource suits a student at this phase.
  *
- * Ordered, not exact, because most topics carry two or three intents rather
- * than four — asking for one and giving up would miss far more often than it
- * would hit. The fallbacks always step TOWARDS easier material, never harder:
- * showing a foundation student a CAT-level set is worse than showing them
- * nothing, while showing a practising student a concept video merely wastes a
- * little of their time.
+ * NOT a fallback chain any more, and the reason is the whole architecture.
+ * This map used to read ['concept', 'practice_easy'] for foundation, so a
+ * student meeting a topic for the FIRST time — the one person who needs
+ * teaching — was handed a practice video whenever no concept video existed.
+ * And intensive/revision resolved to a video for a task that says "solve 15
+ * questions", which is a video pretending to be practice.
+ *
+ * The rule now: a resource must match the FORMAT of what the task asks. Only
+ * `concept` is a video-shaped answer to "learn this", so only `concept` is
+ * reachable. `intensive` and `revision` want question sources we do not have
+ * yet, and until we do, no row is the honest answer — never a substitute of
+ * the wrong shape. See docs/phase0/RESOURCE-ARCHITECTURE.md.
+ *
+ * The secondary (`worked_example`) is deliberately NOT here: it is not a
+ * phase-level choice, it is what we offer one student who told us the primary
+ * did not help. topic-resources.resourceSecondary owns that.
  */
 const RESOURCE_PREFERENCE: Record<Phase, readonly ResourceIntent[]> = {
-  foundation: ['concept', 'practice_easy'],
-  intensive:  ['practice_cat', 'practice_easy', 'concept'],
-  revision:   ['exam_ready', 'practice_cat', 'practice_easy'],
+  foundation: ['concept'],
+  intensive:  [],
+  revision:   [],
 };
 
 /** The task layer's single entry point. Null whenever we have nothing
@@ -114,6 +126,18 @@ const RESOURCE_PREFERENCE: Record<Phase, readonly ResourceIntent[]> = {
 export function resourceForTask(topic: string | null, topicPhase: Phase): TopicResource | null {
   if (!topic) return null;
   return resourceByPreference(topic, RESOURCE_PREFERENCE[topicPhase]);
+}
+
+/**
+ * The alternative explanation for a task that already has a primary.
+ *
+ * Returned alongside, never instead: the surface holds it back until the
+ * student says the primary did not help. Null when the phase has no primary at
+ * all, so a practice task can never acquire a secondary by accident.
+ */
+export function secondaryForTask(topic: string | null, topicPhase: Phase): TopicResource | null {
+  if (!resourceForTask(topic, topicPhase)) return null;
+  return resourceSecondary(topic);
 }
 
 // A student already at sectionals/mocks shouldn't get "concept + practice"
@@ -703,6 +727,7 @@ export function generateRoutine(
       // Verb from the TOPIC's status; volume still priced by the day's phase.
       target: targetPhrase(weak, choice.topic, minutes, phaseForTopic(choice.coverageStatus, phase)),
       resource: resourceForTask(choice.topic, phaseForTopic(choice.coverageStatus, phase)),
+      secondary: secondaryForTask(choice.topic, phaseForTopic(choice.coverageStatus, phase)),
       estMinutes: minutes,
       reason: i === 0
         ? implementationIntention(weak, choice.topic, choice.reasons, phase)
@@ -724,6 +749,7 @@ export function generateRoutine(
         label: `${section} — ${choice.topic}`,
         target: targetPhrase(section, choice.topic, minutes, phaseForTopic(choice.coverageStatus, phase)),
         resource: resourceForTask(choice.topic, phaseForTopic(choice.coverageStatus, phase)),
+        secondary: secondaryForTask(choice.topic, phaseForTopic(choice.coverageStatus, phase)),
         estMinutes: minutes,
         reason: sectionReason(section, choice.topic, choice.reasons, i === 0 ? 'second' : 'third'),
       });

@@ -39,13 +39,26 @@ describe('topic-resources: the data must stay verifiable', () => {
     }
   });
 
-  it('records a real duration, never zero and never an unreviewed marathon', () => {
-    // 45 minutes is the ceiling a single daily topic block can hold. Anything
-    // longer is real content but needs a splitting decision before a student
-    // is pointed at it mid-task.
+  it('records a real duration, and never misrepresents a long one as today\'s work', () => {
+    // This test used to REJECT anything over 45 minutes. That was the wrong
+    // shape for the rule it was protecting. 45 minutes is still the ceiling a
+    // daily topic block can hold — but for six topics the best free
+    // explanation that exists is longer than that, and refusing to link it
+    // leaves the student with nothing rather than with something honest.
+    //
+    // Founder, 31 Aug: do not bypass the 45-minute rule — reframe it so that
+    // it protects the student from being misled.
+    //
+    // So the rule is now what it always meant: a resource may exceed the daily
+    // block, but the system must never represent its full runtime as today's
+    // required work. A long row must SAY it is long, and the surface must
+    // carry the sentence that says finishing today is not the job.
     for (const [topic, r] of rows) {
       expect(r.realMinutes, `${topic}/${r.intent}`).toBeGreaterThan(0);
-      expect(r.realMinutes, `${topic}/${r.intent} exceeds a daily task block`).toBeLessThanOrEqual(45);
+      expect(
+        r.longForm === true,
+        `${topic}/${r.intent} runs ${r.realMinutes} min and must be flagged longForm`,
+      ).toBe(r.realMinutes > 45);
     }
   });
 
@@ -99,7 +112,9 @@ describe('resourceFor', () => {
   it('returns null for a topic we have nothing verified for', () => {
     // The overwhelmingly common case, and the card must render fine without a
     // resource. Absence is a normal state, never an error.
-    expect(resourceFor('Base System', 'concept')).toBeNull();
+    // Base System used to be the example here and now ships a concept video,
+    // so the example moved rather than the rule.
+    expect(resourceFor('Odd One Out', 'concept')).toBeNull();
     expect(resourceFor('not a real topic', 'concept')).toBeNull();
   });
 
@@ -115,7 +130,7 @@ describe('resourceFor', () => {
     // not four, and the caller must handle the hole.
     const covered = Object.keys(TOPIC_RESOURCES)[0];
     const have = new Set(TOPIC_RESOURCES[covered].map((r) => r.intent));
-    const missing = (['concept', 'practice_easy', 'practice_cat', 'exam_ready'] as ResourceIntent[])
+    const missing = (['concept', 'worked_example', 'practice', 'revision', 'exam_practice'] as ResourceIntent[])
       .find((i) => !have.has(i));
     if (missing) expect(resourceFor(covered, missing)).toBeNull();
   });
@@ -126,5 +141,55 @@ describe('resourceCoverage', () => {
     const c = resourceCoverage();
     expect(c.topics).toBe(Object.keys(TOPIC_RESOURCES).length);
     expect(c.resources).toBeGreaterThan(0);
+  });
+});
+
+// ── Layer A: the format rule, enforced ──────────────────────────────────────
+//
+// "Never attach a resource merely because it exists. Attach it because its
+// format matches what the student is being asked to do."
+//
+// This was broken in production: `foundation` fell back to a practice video,
+// so a student meeting a topic for the first time was handed someone else's
+// practice. A comment would not have caught it. These three tests would.
+describe('Layer A: a resource must match what the task asks', () => {
+  it('ships nothing but concept and worked_example', () => {
+    // practice / revision / exam_practice are declared in the type because
+    // they are the plan, but no row may claim them until a real question
+    // source exists behind them.
+    const intents = new Set(
+      Object.values(TOPIC_RESOURCES).flatMap((rs) => rs.map((r) => r.intent)),
+    );
+    expect([...intents].sort()).toEqual(['concept', 'worked_example']);
+  });
+
+  it('never lets a practice task reach a video', async () => {
+    // The defect, stated as a test. If someone re-adds a fallback to
+    // RESOURCE_PREFERENCE, this fails before a student sees it.
+    const { resourceForTask } = await import('./routine-engine');
+    for (const topic of Object.keys(TOPIC_RESOURCES)) {
+      expect(resourceForTask(topic, 'intensive'), `${topic} at intensive`).toBeNull();
+      expect(resourceForTask(topic, 'revision'), `${topic} at revision`).toBeNull();
+    }
+  });
+
+  it('offers a secondary only where a primary exists', async () => {
+    // A practice task must not acquire an alternative explanation by accident
+    // just because the topic happens to own a worked_example.
+    const { secondaryForTask } = await import('./routine-engine');
+    for (const topic of Object.keys(TOPIC_RESOURCES)) {
+      expect(secondaryForTask(topic, 'intensive'), `${topic}`).toBeNull();
+      expect(secondaryForTask(topic, 'revision'), `${topic}`).toBeNull();
+    }
+  });
+
+  it('never uses the same video as both primary and secondary', () => {
+    for (const [topic, rs] of Object.entries(TOPIC_RESOURCES)) {
+      const primary = rs.find((r) => r.intent === 'concept');
+      const secondary = rs.find((r) => r.intent === 'worked_example');
+      if (primary && secondary) {
+        expect(secondary.videoId, `${topic} offers the same video twice`).not.toBe(primary.videoId);
+      }
+    }
   });
 });
