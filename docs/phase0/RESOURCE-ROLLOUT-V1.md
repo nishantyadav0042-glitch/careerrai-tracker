@@ -1,8 +1,14 @@
 # Resource Rollout v1
 
-**31 August 2026.** Supersedes `PHASE-1-CONCEPT-LINKS.md`, which proposed
-promoting 22 topics at once. Founder direction is narrower and better: **three
-topics, concept only, layer by layer.**
+**31 August 2026 — decisions locked.** Supersedes `PHASE-1-CONCEPT-LINKS.md`.
+
+Founder, after review: go wide rather than three topics — *"we are in learning
+stage... सब के लिए ready कर दो"* — plus a feedback vote on every link, and a
+secondary resource when the primary does not land.
+
+**Layer A ships on all 40 topics that have a platform-verified concept video,
+with a thumbs vote on every link and a secondary link revealed on a
+thumbs-down.**
 
 ## The two principles, locked
 
@@ -30,7 +36,83 @@ not better.
 
 ---
 
-## Phase 0 needs no new content. It needs deletions.
+## Decision 1 — go wide: 40 topics, not 3
+
+| | |
+|---|---|
+| Ship a concept video today | 18 topics |
+| Platform-verified L1 ready to promote | +22 topics |
+| **Layer A at launch** | **40 of 46** |
+| No concept video anywhere | 6 |
+
+Going wide is cheap here because the downside is bounded: the row is optional,
+a student who ignores it loses nothing, and the feedback vote below turns a bad
+link into a signal within days rather than a defect that sits for months. The
+six uncovered topics show no row, per the standing principle.
+
+Three of the 22 carry a flag from today's verification and go on a watchlist
+rather than a hold — `IgEKyxYTXDg` (Set Theory: the one genuine title
+mismatch), `e4Ec4KzqaME` (Sentence Completion: calls itself a demo session, and
+CAT has no question type by that name), and the paid-push set. **Read their
+first verdicts early.** That is what the feedback layer is for.
+
+## Decision 2 — a vote on every link, and a secondary behind it
+
+The event already exists: `resource_verdict`, wired in `task-resource.tsx`.
+
+```
+[ concept video ]            ← one anchor
+Did this help?  👍  👎
+        └─ 👎 → "Try a different explanation →"   ← the secondary, now the one anchor
+```
+
+**This resolves the collision from the previous draft.** The shipped guard
+counts anchors and asserts exactly one; primary and secondary are never visible
+together, so the guard survives untouched. No guard edit, no exception.
+
+Stock is already there: of the 40 topics with a primary, **37 also have a
+second concept-grade candidate** verified today. Three would ship with a primary
+only, and a thumbs-down there simply records the miss.
+
+Two rules for the vote:
+- **A thumbs-down is data, not a failure.** It is the fastest way to find a
+  wrong link at 40-topic scale, which is precisely what makes going wide safe.
+- **CTR is still not the metric.** The question stays: did this help the student
+  execute *this* task.
+
+## Decision 3 — rename the label, do not add a state
+
+You asked whether the stages should become *concept learning → concept mastery
+→ practicing → exam ready*. My recommendation, and the reasoning:
+
+**Change one label. Add no status.**
+
+`STATUS_LABEL` is a separate display map from the stored `CoverageStatus`, so
+`learning` can read **"Concept learning"** to students with zero schema risk —
+no migration, no DB trigger, no ranking change.
+
+Adding a real `concept_mastery` status is a different order of change:
+`coverage-status.ts` is a deliberate leaf module whose header records that five
+copies of this ladder once existed and that is how ranking silently broke. A
+sixth state means the enum, the trigger, a migration, and every consumer that
+switches on status.
+
+And it would buy little, because **"concept mastery" is not a state a student
+sits in — it is a depth of resource they want while still learning.** The moment
+they start attempting questions they are `practicing`. Your own
+primary/secondary idea already delivers mastery: primary is first exposure,
+secondary is the deeper explanation, same state, revealed by the vote. Mastery
+without a migration.
+
+One more reason to keep the ladder as-is: your four-stage sketch drops
+`revising`, but `topics-constants.ts` records that as deliberate — *"revision
+isn't a topic, it's a per-topic STATE"* — and the `revising` status replaced the
+old QA/VARC/DILR/Formula-Revision pseudo-units. Removing it would undo that.
+
+So the ladder stays `not_started → learning → practicing → revising →
+exam_ready`, and only the word on screen changes.
+
+## What Layer A actually is now
 
 All three chosen topics **already carry a verified concept video today**:
 
@@ -43,18 +125,19 @@ All three chosen topics **already carry a verified concept video today**:
 Reading Comprehension is already correct under the new model — concept plus an
 exam-ready video, no practice video at all.
 
-So Layer A ships by **turning things off**, not by adding anything:
-
 1. `foundation: ['concept', 'practice_easy']` → `foundation: ['concept']`
    — kills the fallback that hands a first-time student a practice video.
 2. `intensive: [...]` → `[]` and `revision: [...]` → `[]`
    — practice and exam-ready tasks show no row until Layers C and D exist.
-3. Delete the three practice rows above from `topic-resources.ts`.
-4. Add a guard test asserting `intensive` and `revision` return null, so nobody
-   re-enables them before their layer lands.
+3. Delete every `practice_*` row from `topic-resources.ts`. With the two phases
+   nulled they are unreachable anyway; deleting them stops the data lying about
+   what the product does.
+4. Promote the 22 verified L1 videos as `concept`.
+5. Add a `secondary` concept entry for the 37 topics that have one.
+6. Two guard tests: `intensive`/`revision` return null, and **no `practice_*`
+   intent is ever reachable from `foundation`.**
 
-Everything else in the file can stay where it is; with `intensive` and
-`revision` returning null, nothing else is reachable.
+The three Phase-0 topics below are simply the first rows of the same change.
 
 ### A guard for the principle itself
 
@@ -68,26 +151,12 @@ was quietly broken in production, and a comment would not have caught it.
 
 Neither is a blocker, both need a decision.
 
-### 1. "Primary + optional backup" fails a shipped guard
+### 1. ~~"Primary + optional backup" fails a shipped guard~~ — RESOLVED
 
-`task-resource-surface.guard.test.ts:77` counts anchors in the surface and
-asserts **exactly one**:
+Settled by Decision 2: the secondary appears only after a thumbs-down, so one
+anchor is visible at a time and the guard is untouched.
 
-```
-expect(anchors.length, 'a list hands the decision back to the student').toBe(1)
-```
-
-So "primary concept resource + optional backup" cannot ship as two visible
-links without deliberately changing that guard. Three ways:
-
-- **(a) One link only.** Keep the guard. Simplest, and consistent with "a
-  student who came here to be told what to do next." *Recommended for Phase 0.*
-- **(b) Show the backup only after a thumbs-down** on `resource_verdict` — the
-  event already exists. Still one anchor at a time; the guard survives.
-- **(c) Change the guard to allow two.** Do this only on purpose, with the
-  reason written into the test.
-
-### 2. "Concept Mastery" has no state to attach to
+### 2. "Concept Mastery" has no state to attach to — SETTLED BY DECISION 3
 
 Your Stage 2 has no home in the engine. There are five coverage statuses and
 three phases:
@@ -158,14 +227,15 @@ concentrated on one topic.
 
 ## Order
 
-1. Decide collision 1 (one link vs backup-on-thumbs-down).
-2. Ship Layer A: three topics, concept only, practice rows deleted, two phases
-   nulled, two guards added.
-3. Observe. No new topics until the verdict data says the shape works.
-4. Then widen Layer A — 22 more topics already have platform-verified concept
-   videos waiting in `round2-verified.json` and friends, so widening is cheap
-   *once the shape is proven*.
-5. Layer C research round against the gate above.
+1. **Build Layer A**: 40 topics, concept only, primary + secondary, vote on every
+   link, all `practice_*` rows deleted, `intensive`/`revision` nulled, two guards
+   added, `learning` relabelled "Concept learning".
+2. **Watch the three flagged links' first verdicts.**
+3. Read verdicts weekly. A topic whose primary and secondary both draw
+   thumbs-down goes back to research — that is the improvement loop, and it now
+   runs on student evidence instead of my rubric.
+4. The 6 uncovered topics: one platform-discovery round, ~1 hour, takes it to 46/46.
+5. Layer C research round against the source gate above.
 6. Layers B and D, each decided on its own.
 
 ## What is now explicitly dead
