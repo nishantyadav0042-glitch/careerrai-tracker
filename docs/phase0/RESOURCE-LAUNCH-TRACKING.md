@@ -99,7 +99,7 @@ comparison stated.
 **a) Did the announcement reach anyone?**
 
 ```sql
-select event, count(*), count(distinct student_id) as students
+select event, count(*), count(distinct user_id) as students
 from student_events
 where event in ('resource_announce_shown','resource_announce_dismissed')
   and created_at >= '2026-09-01'
@@ -113,7 +113,7 @@ check that the deploy actually landed before opening any other question.
 **b) Are students opening the links?**
 
 ```sql
-select event, count(*), count(distinct student_id) as students
+select event, count(*), count(distinct user_id) as students
 from student_events
 where event in ('resource_shown','resource_opened','resource_verdict')
   and created_at >= '2026-09-01'
@@ -154,9 +154,13 @@ warning is not doing its job and the fix is copy, not a new video.
 **e) Did the morning push go out, and did it say the right thing?**
 
 ```sql
-select count(*) from student_events
-where event = 'notification_sent' and created_at >= '2026-09-01'
-  and props->>'reason' like '%lesson-link announcement%';
+select date(created_at at time zone 'Asia/Kolkata') as ist_day,
+       count(*)                                as decided,
+       count(pushed_at)                        as pushed,
+       count(app_opened_at)                    as opened_the_app
+from notifications
+where reason like '%lesson-link announcement%'
+group by 1 order by 1;
 ```
 
 This must be non-zero on 1 Sep and **zero on every later day**. If it is
