@@ -30,12 +30,15 @@ async function community_recycleRun(): Promise<NextResponse> {
     // Idempotent — a second run today changes nothing.
     const pick = await promoteDailyPick(admin);
     console.log('[daily-pick]', JSON.stringify({ pick }));
-    if (pick.shortfall.question > 0 || pick.shortfall.tip > 0) {
-      // Visible, not silent: "at least one month" is a real requirement and
-      // this is the only place that knows whether it currently holds.
-      console.warn('[daily-pick] runway under a month —',
-        `questions ${pick.runway.question}d (need ${pick.shortfall.question} more),`,
-        `tips ${pick.runway.tip}d (need ${pick.shortfall.tip} more)`);
+    // Tips only since 31 Aug, so only the tip runway can be short. Visible,
+    // not silent: "at least one month" is a real requirement and this is the
+    // only place that knows whether it currently holds.
+    if (pick.shortfall.tip > 0) {
+      console.warn('[daily-pick] hint runway under a month —',
+        `${pick.runway.tip} never-featured tips left (need ${pick.shortfall.tip} more).`,
+        pick.runway.tip === 0
+          ? 'Shelf is dry: students are now seeing REPEATS of old hints.'
+          : '');
     }
     return NextResponse.json({ ok: true, pick });
   } catch (e) {

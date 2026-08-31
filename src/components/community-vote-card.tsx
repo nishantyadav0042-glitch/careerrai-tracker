@@ -31,7 +31,7 @@ import { track } from '@/lib/journey';
 
 interface PickItem {
   id: string;
-  kind: 'question' | 'tip';
+  kind: 'tip';
   text: string;
   section: string | null;
   displayName: string | null;
@@ -45,7 +45,7 @@ interface PickItem {
 }
 
 export function CommunityVoteCard() {
-  const [pick, setPick] = useState<{ question: PickItem | null; tip: PickItem | null } | null>(null);
+  const [pick, setPick] = useState<{ tip: PickItem | null } | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
   const [voteError, setVoteError] = useState<string | null>(null);
@@ -60,13 +60,8 @@ export function CommunityVoteCard() {
       const res = await fetch('/api/community/insights');
       if (!res.ok) { setLoadFailed(true); setLoaded(true); return; }
       const json = await res.json();
-      setPick(json.dailyPick ?? { question: null, tip: null });
-      if (json.dailyPick?.question || json.dailyPick?.tip) {
-        track('top_pick_shown', {
-          question: json.dailyPick?.question?.id ?? null,
-          tip: json.dailyPick?.tip?.id ?? null,
-        });
-      }
+      setPick(json.dailyPick ?? { tip: null });
+      if (json.dailyPick?.tip) track('top_pick_shown', { tip: json.dailyPick.tip.id });
     } catch { setLoadFailed(true); }
     setLoaded(true);
   }, []);
@@ -123,7 +118,11 @@ export function CommunityVoteCard() {
     );
   }
 
-  const items = [pick?.question, pick?.tip].filter(Boolean) as PickItem[];
+  // ONE item: the day's hint. Founder, 31 Aug — "just keep daily hint only in
+  // daily pick, remove all the questions." The array survives because the
+  // hide-on-report and vote paths below are written against a list, and a
+  // reported hint must still be able to disappear.
+  const items = [pick?.tip].filter(Boolean) as PickItem[];
   const visible = items.filter((i) => !hidden.has(i.id));
   if (!loaded || visible.length === 0) return null;
 
@@ -147,8 +146,7 @@ export function CommunityVoteCard() {
               🏆 Today&apos;s Pick
             </span>
             <span className="text-[10px] font-bold text-amber-700">
-              {item.kind === 'question' ? '📷 Question of the day' : '💡 Tip of the day'}
-              {item.section ? ` · ${item.section}` : ''}
+              💡 Hint of the day{item.section ? ` · ${item.section}` : ''}
             </span>
           </div>
 
@@ -194,20 +192,22 @@ export function CommunityVoteCard() {
             >
               <ThumbsDown className={`h-3.5 w-3.5 ${liveVote(item) === 'down' ? 'fill-stone-500' : ''}`} />
             </button>
-            {item.kind === 'question' && (
-              <button
-                type="button" onClick={() => void share(item)}
-                className="ml-auto inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-bold text-stone-500 active:scale-95"
-              >
-                <Share2 className="h-3.5 w-3.5" />
-                {sharedId === item.id ? 'Copied' : 'Challenge a friend'}
-              </button>
-            )}
+            {/* Share stays, retargeted: it used to be question-only and read
+                "Challenge a friend". A hint is not a challenge — you pass it on
+                because it helped, which is also the only honest reason to ask a
+                student to share anything. */}
+            <button
+              type="button" onClick={() => void share(item)}
+              className="ml-auto inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-bold text-stone-500 active:scale-95"
+            >
+              <Share2 className="h-3.5 w-3.5" />
+              {sharedId === item.id ? 'Copied' : 'Send to a friend'}
+            </button>
           </div>
 
           <div className="mt-1 flex items-center">
             <p className="text-[10px] text-stone-400">
-              {byline(item) ? `${byline(item)} · ` : ''}a new pick every day
+              {byline(item) ? `${byline(item)} · ` : ''}a new hint every day
             </p>
             {!item.isMine && (
               <ReportItem submissionId={item.id} onReported={() => setHidden((h) => new Set(h).add(item.id))} />
