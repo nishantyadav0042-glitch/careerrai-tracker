@@ -82,10 +82,16 @@ describe('no student is turned into a superstar', () => {
   it('the content still leads the screen', () => {
     // Today's Pick moved to the canonical Daily Pick card (21 Aug): it used to
     // render HERE as well, from the same featured_on stamp, so a student met
-    // the same question twice on one screen. The feed keeps its own label.
+    // the same question twice on one screen. The feed keeps its own label —
+    // renamed 31 Aug from "Student Insights" to "More hints", because the feed
+    // is hints-only now and no student ever wrote one of them. The rule under
+    // test is unchanged: the feed carries a label of its OWN, distinct from
+    // the pick's, so the two can never read as one stack.
     const s = src();
     expect(s).not.toContain("<SectionLabel>Today&apos;s Pick</SectionLabel>");
-    expect(s).toContain('<SectionLabel>Student Insights</SectionLabel>');
+    expect(s).toContain('<SectionLabel>More hints</SectionLabel>');
+    // And it must not claim peer authorship over content we wrote ourselves.
+    expect(s).not.toMatch(/from students preparing alongside you/);
     const card = readFileSync('src/components/community-vote-card.tsx', 'utf8');
     expect(card).toContain("Today&apos;s Pick");
   });
