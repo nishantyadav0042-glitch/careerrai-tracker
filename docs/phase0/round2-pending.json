@@ -363,6 +363,236 @@
      "reason": "no dedicated CAT speed or trap videos for standalone Lines & Angles; pacing is taught inside Triangles and Polygons"
     }
    ]
+  },
+  {
+   "topic": "Triangles",
+   "factory": 35,
+   "candidates": [
+    {
+     "level": "L1",
+     "id": "25P2O9r3AfM",
+     "title": "Triangles 1: Centroid Orthocenter Incenter Circumcenter",
+     "channel": "Rodha",
+     "dur": "32:53",
+     "time": "45-60 min"
+    },
+    {
+     "level": "L2",
+     "id": "9H2CftySPkI",
+     "title": "Geometry for CAT (Sides of a Triangle): Part 1",
+     "channel": "Takshzila",
+     "dur": "11:18",
+     "time": "20-30 min"
+    },
+    {
+     "level": "L3",
+     "id": "tcVXuTo00wk",
+     "title": "Geometry Practice 1: High Level Problems",
+     "channel": "Rodha",
+     "dur": "20:42",
+     "time": "40-50 min"
+    },
+    {
+     "level": "L4",
+     "gap": true,
+     "reason": "no standalone exam-ready Triangles video"
+    }
+   ]
+  },
+  {
+   "topic": "Quadrilaterals",
+   "factory": 36,
+   "candidates": [
+    {
+     "level": "L1",
+     "id": "TZadcVDti64",
+     "title": "Quadrilaterals 1 | Geometry for CAT 2026",
+     "channel": "Rodha",
+     "dur": "38:34",
+     "time": "55-70 min"
+    },
+    {
+     "level": "L2",
+     "id": "Dy4_ESXGjeY",
+     "title": "Quadrilaterals 3: Trapezium & Area Questions",
+     "channel": "Rodha",
+     "dur": "13:17",
+     "time": "25-35 min"
+    },
+    {
+     "level": "L3",
+     "id": "0h9-VSm6Hfo",
+     "title": "Quadrilaterals 2: Trapezium & Rhombus Properties",
+     "channel": "Rodha",
+     "dur": "22:09",
+     "time": "35-45 min"
+    },
+    {
+     "level": "L4",
+     "gap": true,
+     "reason": "no standalone shortcuts video; existing ones are generic marathons or sales pitches"
+    }
+   ]
+  },
+  {
+   "topic": "Circles",
+   "factory": 37,
+   "quality": "WEAK — every duration returned as NOT CONFIRMED",
+   "candidates": [
+    {
+     "level": "L1",
+     "id": "FjC3L4s3C2A",
+     "title": "Complete Geometry & Mensuration in One Video | Ronak Shah",
+     "channel": "Unacademy CAT",
+     "dur": "NOT CONFIRMED",
+     "time": "60-80 min",
+     "flag": "duration unconfirmed; title is a whole-geometry marathon, not Circles-specific"
+    },
+    {
+     "level": "L2",
+     "id": "M5K3uQ9jN5E",
+     "title": "Geometry (Circles) - Practice Questions",
+     "channel": "Rodha",
+     "dur": "NOT CONFIRMED",
+     "time": "45-60 min",
+     "flag": "duration unconfirmed"
+    },
+    {
+     "level": "L3",
+     "id": "mH5uU0K8s8w",
+     "title": "Circles - Advanced Questions for CAT",
+     "channel": "Takshzila Shikshak",
+     "dur": "NOT CONFIRMED",
+     "time": "50-70 min",
+     "flag": "duration unconfirmed"
+    },
+    {
+     "level": "L4",
+     "gap": true,
+     "reason": "none found"
+    }
+   ]
+  },
+  {
+   "topic": "Mensuration",
+   "factory": 38,
+   "note": "two runs supplied; L1, L3 and L4 identical across both, only L2 differs",
+   "candidates": [
+    {
+     "level": "L1",
+     "id": "HhtLt2JZKu4",
+     "title": "Mensuration 1: Prisms, Pyramids & Spheres",
+     "channel": "Rodha",
+     "dur": "24:47",
+     "time": "40-50 min",
+     "run": "A+B agree"
+    },
+    {
+     "level": "L2",
+     "id": "17lfsV7IbR0",
+     "title": "Mensuration 2-D | CAT & OMETs | Session 01 | Udit Saini",
+     "channel": "MBA Pathshala",
+     "dur": "58:22",
+     "time": "75-90 min",
+     "run": "A"
+    },
+    {
+     "level": "L2",
+     "id": "jQmPUysLjlg",
+     "title": "Mensuration 2: Cubes, Cuboids & Shortest Distance",
+     "channel": "Rodha",
+     "dur": "29:02",
+     "time": "40-50 min",
+     "run": "B"
+    },
+    {
+     "level": "L3",
+     "id": "ADkdD9aEhas",
+     "title": "Mensuration 4: Pyramids, Prisms & Max Sphere Radius",
+     "channel": "Rodha",
+     "dur": "23:52",
+     "time": "45-60 min",
+     "run": "A+B agree"
+    },
+    {
+     "level": "L4",
+     "id": "CQH4cGBNPMg",
+     "title": "Mensuration 5: Cone Ratio Method",
+     "channel": "Rodha",
+     "dur": "22:55",
+     "time": "40-50 min",
+     "run": "A+B agree"
+    }
+   ]
+  },
+  {
+   "topic": "Coordinate Geometry",
+   "factory": 39,
+   "note": "second run; round 1 gave a different, all-verified set",
+   "candidates": [
+    {
+     "level": "L1",
+     "id": "Fj-yZ7-t09s",
+     "title": "Coordinate Geometry for CAT | Basics, Formulas, Concepts",
+     "channel": "Rodha",
+     "dur": "1:35:12",
+     "time": "120-150 min",
+     "flag": "95 min — the longest single candidate in the whole corpus"
+    },
+    {
+     "level": "L2",
+     "gap": true,
+     "reason": "standalone easy-practice videos are promo-heavy livestreams or SSC/Banking lectures"
+    },
+    {
+     "level": "L3",
+     "id": "k-aC41P5cWg",
+     "title": "Coordinate Geometry Best Questions for CAT",
+     "channel": "MBA Pathshala",
+     "dur": "48:22",
+     "time": "75-90 min"
+    },
+    {
+     "level": "L4",
+     "gap": true,
+     "reason": "none found"
+    }
+   ]
+  },
+  {
+   "topic": "Permutation & Combination",
+   "factory": 40,
+   "quality": "WEAK — durations unconfirmed, half the ladder empty",
+   "candidates": [
+    {
+     "level": "L1",
+     "id": "Fj2F2o_gVqA",
+     "title": "Permutation and Combination - Part 1 | CAT 2022",
+     "channel": "Takshzila Shiksha",
+     "dur": "NOT CONFIRMED",
+     "time": "60-75 min",
+     "flag": "duration unconfirmed"
+    },
+    {
+     "level": "L2",
+     "id": "kYJvM9l2Uro",
+     "title": "Permutation and Combination - Level 1 Practice Questions",
+     "channel": "Elite's Grid",
+     "dur": "NOT CONFIRMED",
+     "time": "70-90 min",
+     "flag": "duration unconfirmed"
+    },
+    {
+     "level": "L3",
+     "gap": true,
+     "reason": "none found"
+    },
+    {
+     "level": "L4",
+     "gap": true,
+     "reason": "none found"
+    }
+   ]
   }
  ],
  "pending_verification": [
@@ -392,6 +622,28 @@
   "P-emknCdeZE",
   "vrtKzaspVjs",
   "GaEZEJbKLtY",
-  "rUI1bbCvk7E"
+  "rUI1bbCvk7E",
+  "TAHxPmmojNQ",
+  "gqYVcVjqW0k",
+  "zIrr1lkvyBY",
+  "-me6rKm0AcA",
+  "25P2O9r3AfM",
+  "9H2CftySPkI",
+  "tcVXuTo00wk",
+  "TZadcVDti64",
+  "Dy4_ESXGjeY",
+  "0h9-VSm6Hfo",
+  "FjC3L4s3C2A",
+  "M5K3uQ9jN5E",
+  "mH5uU0K8s8w",
+  "HhtLt2JZKu4",
+  "17lfsV7IbR0",
+  "jQmPUysLjlg",
+  "ADkdD9aEhas",
+  "CQH4cGBNPMg",
+  "Fj-yZ7-t09s",
+  "k-aC41P5cWg",
+  "Fj2F2o_gVqA",
+  "kYJvM9l2Uro"
  ]
 }
