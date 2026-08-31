@@ -189,9 +189,6 @@ export default async function StudentLayout({ children }: { children: React.Reac
     const at = (profile?.onboarding_last_activity_at as string | null) ?? null;
     return at != null && at.slice(0, 10) === studyDayString();
   })();
-  const showBuddyNudge = noBlockingModal && !showCoverageReview && appInstalled && !showTimetablePrompt
-    && !onboardedTodayIst && !profile?.buddy_id && profile?.is_premium !== true;
-
   // One-time concept-resource announcement. Gated like every other auto-modal:
   // never over a blocking flow, never over the coverage review, and never to a
   // student who onboarded today — their first session already has enough to
@@ -199,6 +196,19 @@ export default async function StudentLayout({ children }: { children: React.Reac
   // another prompt, never stack on one.
   const showResourceAnnounce = noBlockingModal && !showCoverageReview
     && !showTimetablePrompt && !onboardedTodayIst;
+
+  // Declared AFTER the announcement, and excluding it, because both claim the
+  // same once-a-day slot. Without this the winner is whichever effect happens
+  // to run first, which is JSX order — a real priority decided by a detail
+  // nobody would think to preserve while editing the tree. The announcement
+  // wins for the one day it exists; the buddy nudge is there every day.
+  //
+  // Keep `!onboardedTodayIst && !profile?.buddy_id` adjacent and on one line:
+  // log-tour.guard.test.ts scans for that exact pair to prove no sales modal
+  // stacks onto the sample-insight moment. New clauses go on the line above.
+  const showBuddyNudge = noBlockingModal && !showCoverageReview && appInstalled
+    && !showTimetablePrompt && !showResourceAnnounce
+    && !onboardedTodayIst && !profile?.buddy_id && profile?.is_premium !== true;
 
   return (
     <div className="min-h-screen bg-stone-50">

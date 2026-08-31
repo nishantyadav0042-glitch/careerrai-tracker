@@ -63,6 +63,15 @@ describe('the announcement cannot nag', () => {
     expect(code(ANNOUNCE)).toContain('claimDailyModal()');
   });
 
+  it('outranks the buddy nudge, which shares the same once-a-day slot', () => {
+    // Both call claimDailyModal(). Before this was explicit the winner was
+    // whichever effect ran first — JSX order — so a reorder of the tree would
+    // have silently swapped a real priority.
+    const s = code(LAYOUT);
+    expect(s).toMatch(/showBuddyNudge[\s\S]{0,240}!showResourceAnnounce/);
+    expect(s.indexOf('const showResourceAnnounce')).toBeLessThan(s.indexOf('const showBuddyNudge'));
+  });
+
   it('never fires over a blocking flow or on a student who onboarded today', () => {
     const s = code(LAYOUT);
     expect(s).toMatch(/showResourceAnnounce = noBlockingModal && !showCoverageReview/);
