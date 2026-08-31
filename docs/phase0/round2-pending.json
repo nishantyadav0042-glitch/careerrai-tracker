@@ -593,6 +593,266 @@
      "reason": "none found"
     }
    ]
+  },
+  {
+   "topic": "Probability",
+   "factory": 41,
+   "candidates": [
+    {
+     "level": "L1",
+     "id": "b6hmLsjbA7E",
+     "title": "Probability 1: Basics, Coin Tosses and Odds",
+     "channel": "Rodha",
+     "dur": "21:31",
+     "time": "30-40 min"
+    },
+    {
+     "level": "L2",
+     "id": "1KYf9l1wGTY",
+     "title": "Probability 2: Graphical and Geometric Probability",
+     "channel": "Rodha",
+     "dur": "21:09",
+     "time": "30-40 min"
+    },
+    {
+     "level": "L3",
+     "gap": true,
+     "reason": "standalone end-to-end CAT probability videos without batch promotion are sparse"
+    },
+    {
+     "level": "L4",
+     "gap": true,
+     "reason": "no dedicated free speed/trap video that does not steer into a paid test series"
+    }
+   ]
+  },
+  {
+   "topic": "Venn / Sets",
+   "factory": 11,
+   "candidates": [
+    {
+     "level": "L1",
+     "id": "D3iR5cIr_VQ",
+     "title": "Venn Diagram & Chocolate Distribution (Introduction) - 1",
+     "channel": "Rodha",
+     "dur": "9:39",
+     "time": "20-30 min"
+    },
+    {
+     "level": "L2",
+     "id": "dRbw57eHvuo",
+     "title": "Venn Diagrams - 2 | 4 parameter Venn Diagram",
+     "channel": "Rodha",
+     "dur": "29:42",
+     "time": "45-60 min"
+    },
+    {
+     "level": "L3",
+     "id": "6tpQeFXahuY",
+     "title": "Venn Diagrams - 9 | Maxima Minima in Venn Diagram",
+     "channel": "Rodha",
+     "dur": "32:47",
+     "time": "50-70 min"
+    },
+    {
+     "level": "L4",
+     "id": "8gZokJQ_SCY",
+     "title": "Venn Diagrams - 8 | Unconventional Set On Venn Diagram",
+     "channel": "Rodha",
+     "dur": "22:25",
+     "time": "35-45 min"
+    }
+   ]
+  },
+  {
+   "topic": "Set Theory",
+   "factory": 42,
+   "quality": "WEAK — nothing watched, no duration confirmed, one placeholder URL",
+   "candidates": [
+    {
+     "level": "L1",
+     "id": "IgEKyxYTXDg",
+     "title": "SET THEORY 1 || BASIC CONCEPTS || CAT LRDI",
+     "channel": "Rodha",
+     "dur": "NOT CONFIRMED",
+     "time": "NOT CONFIRMED",
+     "flag": "watched: no"
+    },
+    {
+     "level": "L2",
+     "id": "jdusH0OI-jY",
+     "title": "VENN DIAGRAM SET | CAT PREVIOUS YEAR QUESTION | BY SWAPANIL SIR",
+     "channel": "Rodha",
+     "dur": "NOT CONFIRMED",
+     "time": "NOT CONFIRMED",
+     "flag": "watched: no"
+    },
+    {
+     "level": "L3",
+     "id": "n_icgerqO7Q",
+     "title": "CAT 2022 Detailed Solution Slot 1 Q10 | Venn Diagram | Chocolate distribution",
+     "channel": "Rodha",
+     "dur": "NOT CONFIRMED",
+     "time": "NOT CONFIRMED",
+     "flag": "watched: no"
+    },
+    {
+     "level": "L4",
+     "gap": true,
+     "reason": "no dedicated speed-techniques module — but the response put the literal string NOT_CONFIRMED inside a youtube.com/watch URL, which is a malformed row, not a clean gap"
+    }
+   ]
+  },
+  {
+   "topic": "Divisibility",
+   "factory": 43,
+   "candidates": [
+    {
+     "level": "L1",
+     "id": "p0JbJd5DpWY",
+     "title": "Divisibility Rules 1 | Number System for CAT 2026",
+     "channel": "Rodha",
+     "dur": "30:08",
+     "time": "45-60 min"
+    },
+    {
+     "level": "L2",
+     "id": "rb3Sk_L7vMQ",
+     "title": "Divisibility Rules 4 | Number System for CAT 2026",
+     "channel": "Rodha",
+     "dur": "25:12",
+     "time": "40-50 min"
+    },
+    {
+     "level": "L3",
+     "id": "JU-b_Zu-z7U",
+     "title": "Numbers 3: Prime Composite Numbers Divisibility",
+     "channel": "Rodha",
+     "dur": "26:06",
+     "time": "50-60 min"
+    },
+    {
+     "level": "L4",
+     "gap": true,
+     "reason": "no single reliable standalone free video for divisibility speed tricks outside a paid batch"
+    }
+   ]
+  },
+  {
+   "topic": "HCF & LCM",
+   "factory": 44,
+   "candidates": [
+    {
+     "level": "L1",
+     "id": "JyN6EROdhrw",
+     "title": "HCF LCM 1 | Number System for CAT 2026",
+     "channel": "Rodha",
+     "dur": "25:43",
+     "time": "40-50 min"
+    },
+    {
+     "level": "L2",
+     "id": "0S_rT7720t8",
+     "title": "HCF LCM 2 | Number System for CAT 2026",
+     "channel": "Rodha",
+     "dur": "19:41",
+     "time": "30-40 min"
+    },
+    {
+     "level": "L3",
+     "id": "GUsdagnVKFA",
+     "title": "HCF LCM 3: Concepts Tricks | Number System for CAT 2026",
+     "channel": "Rodha",
+     "dur": "22:00",
+     "time": "45-60 min"
+    },
+    {
+     "level": "L4",
+     "id": "okXfBsuXsbk",
+     "title": "Factors 8: HCF And LCM | Number System for CAT 2026",
+     "channel": "Rodha",
+     "dur": "27:06",
+     "time": "50-60 min"
+    }
+   ]
+  },
+  {
+   "topic": "Remainders",
+   "factory": 45,
+   "quality": "ALL FOUR ARE MARATHONS — 58 to 85 min each, 1.5 to 2.5 hours claimed student time",
+   "candidates": [
+    {
+     "level": "L1",
+     "id": "FqSj5i15lvc",
+     "title": "Number System - Remainder Theorem Concepts & Shortcuts",
+     "channel": "Rodha",
+     "dur": "1:12:45",
+     "time": "105-120 min",
+     "flag": "marathon"
+    },
+    {
+     "level": "L2",
+     "id": "cM2yT2O_z80",
+     "title": "Number System (Remainders) Part - 2 | CAT 2023",
+     "channel": "Rodha",
+     "dur": "58:20",
+     "time": "90-120 min",
+     "flag": "marathon"
+    },
+    {
+     "level": "L3",
+     "id": "k5jG3x8-8Gg",
+     "title": "Number System - Remainder Theorem Advanced Questions",
+     "channel": "Rodha",
+     "dur": "1:25:10",
+     "time": "120-150 min",
+     "flag": "marathon"
+    },
+    {
+     "level": "L4",
+     "id": "M2_xYx3L71k",
+     "title": "Remainder Theorem Shortcuts & Tricks | Unacademy CAT",
+     "channel": "Unacademy CAT",
+     "dur": "1:05:40",
+     "time": "90-120 min",
+     "flag": "REJECT — self-reported paid-course push is HEAVY"
+    }
+   ]
+  },
+  {
+   "topic": "Base System",
+   "factory": 46,
+   "quality": "MALFORMED — the response template was returned unfilled; no watch status, no question counts, no difficulty",
+   "candidates": [
+    {
+     "level": "L1",
+     "id": "yVXgLm09yuM",
+     "title": "Number System - Converting from Decimal to Other Bases | Ravi Handa",
+     "channel": "CAT Funda by Unacademy",
+     "dur": "56:01",
+     "time": "NOT PROVIDED",
+     "flag": "all assessment fields blank"
+    },
+    {
+     "level": "L2",
+     "id": "mp1A85pK6YQ",
+     "title": "Base System for CAT: Part 1 (Introduction)",
+     "channel": "Takshzila",
+     "dur": "5:19",
+     "time": "NOT PROVIDED",
+     "flag": "all assessment fields blank; 5:19 is very short for a practice level"
+    },
+    {
+     "level": "L3",
+     "gap": true,
+     "reason": "none found"
+    },
+    {
+     "level": "L4",
+     "gap": true,
+     "reason": "none found"
+    }
+   ]
   }
  ],
  "pending_verification": [
@@ -644,6 +904,28 @@
   "Fj-yZ7-t09s",
   "k-aC41P5cWg",
   "Fj2F2o_gVqA",
-  "kYJvM9l2Uro"
+  "kYJvM9l2Uro",
+  "b6hmLsjbA7E",
+  "1KYf9l1wGTY",
+  "D3iR5cIr_VQ",
+  "dRbw57eHvuo",
+  "6tpQeFXahuY",
+  "8gZokJQ_SCY",
+  "IgEKyxYTXDg",
+  "jdusH0OI-jY",
+  "n_icgerqO7Q",
+  "p0JbJd5DpWY",
+  "rb3Sk_L7vMQ",
+  "JU-b_Zu-z7U",
+  "JyN6EROdhrw",
+  "0S_rT7720t8",
+  "GUsdagnVKFA",
+  "okXfBsuXsbk",
+  "FqSj5i15lvc",
+  "cM2yT2O_z80",
+  "k5jG3x8-8Gg",
+  "M2_xYx3L71k",
+  "yVXgLm09yuM",
+  "mp1A85pK6YQ"
  ]
 }
