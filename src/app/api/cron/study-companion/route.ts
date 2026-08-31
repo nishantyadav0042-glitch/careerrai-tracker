@@ -9,6 +9,7 @@ import {
   kickoffCopy, sparkCopy, windCopy, activationSlotCopy, reactivationSlotCopy,
   missedCheckInKickoffCopy,
   planMorningCopy, planOpenCopy, planProgressCopy, planLogCopy, classMorningCopy,
+  planMorningCopyWithLessonNews, RESOURCE_ANNOUNCE_DAY,
   type CompanionSlot, type SlotCopy,
 } from '@/lib/companion';
 import { computeTodaysPlan, type TodaysPlan } from '@/lib/routine-plan';
@@ -335,6 +336,13 @@ async function studyCompanionRun(slot: CompanionSlot): Promise<NextResponse> {
           if (plan.classTopics.includes(firstTopic)) {
             copy = classMorningCopy(firstName, firstTopic, planEstHours);
             reason = `Companion 09:30 — coaching class today (${firstTopic})`;
+          } else if (today === RESOURCE_ANNOUNCE_DAY) {
+            // One morning only, and it expires by date rather than by someone
+            // remembering to delete it. Same title as the ordinary plan
+            // preview — that title is what gets the app opened, and the
+            // in-app announcement explains the rest once they are inside.
+            copy = planMorningCopyWithLessonNews(firstName, firstTopic, secondTopic);
+            reason = `Companion 09:30 — plan preview + lesson-link announcement (topic: ${firstTopic})`;
           } else {
             copy = planMorningCopy(firstName, firstTopic, secondTopic, plan.totalCount, planEstHours);
             reason = `Companion 09:30 — plan preview (topic: ${firstTopic}${secondTopic ? ` → ${secondTopic}` : ''})`;

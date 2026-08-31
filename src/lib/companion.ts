@@ -160,6 +160,29 @@ export function planMorningCopy(firstName: string, firstTopic: string, secondTop
   };
 }
 
+/**
+ * The ONE morning the concept-resource layer is announced by push.
+ *
+ * Date-bounded so it expires by itself. The last announcement in this codebase
+ * kept shipping for eight days after the capability it described was deleted;
+ * an expiry that a human has to remember to remove is the same bug waiting to
+ * happen, so this one cannot outlive its day.
+ *
+ * The title is deliberately unchanged from planMorningCopy — that title is what
+ * makes a student open the app, and the news is worth nothing if they do not.
+ * The body carries the news instead, and stays the same length as the copy it
+ * replaces so nothing gets truncated on the lock screen.
+ */
+export const RESOURCE_ANNOUNCE_DAY = '2026-09-01';
+
+export function planMorningCopyWithLessonNews(firstName: string, firstTopic: string, secondTopic: string | null): SlotCopy {
+  return {
+    title: `${firstName}, today is ready`,
+    body: `${firstTopic}${secondTopic ? `, then ${secondTopic}` : ''}. New: topics you are starting now carry a free lesson link.`,
+    expectedAction: 'log_today',
+  };
+}
+
 // 17:00 — study window opens, on the first not-yet-done topic with its target.
 export function planOpenCopy(nextTopic: string, target: string | null, hoursToday: number): SlotCopy {
   return {

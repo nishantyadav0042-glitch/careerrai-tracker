@@ -13,11 +13,13 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { TOPIC_RESOURCES } from './topic-resources';
+import { planMorningCopy, planMorningCopyWithLessonNews, RESOURCE_ANNOUNCE_DAY } from './companion';
 import { resourceForTask } from './routine-engine';
 
 const SRC = join(__dirname, '..');
 const ANNOUNCE = join(SRC, 'components', 'resource-announce.tsx');
 const LAYOUT = join(SRC, 'app', 'student', 'layout.tsx');
+const CRON = join(SRC, 'app', 'api', 'cron', 'study-companion', 'route.ts');
 const read = (p: string) => readFileSync(p, 'utf8');
 const code = (p: string) =>
   read(p).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/\{\/\*[\s\S]*?\*\/\}/g, '');
@@ -78,5 +80,64 @@ describe('the announcement cannot nag', () => {
     const s = code(ANNOUNCE);
     expect(s).toContain("track('resource_announce_shown'");
     expect(s).toContain("track('resource_announce_dismissed'");
+  });
+});
+
+// ── The push half ───────────────────────────────────────────────────────────
+//
+// The in-app card only reaches a student who already opened the app. The
+// morning push is what gets them to open it. It is NOT a blast script: the
+// Notification OS is decision-first, so this rides the already-approved 09:30
+// companion decision and only changes that one morning's body.
+
+describe('the announcement push rides the approved morning decision', () => {
+  it('keeps the title that already earns opens', () => {
+    const plain = planMorningCopy('Aarav', 'Geometry', 'RC', 4, 2.5);
+    const news = planMorningCopyWithLessonNews('Aarav', 'Geometry', 'RC');
+    expect(news.title).toBe(plain.title);
+  });
+
+  it('keeps the same expected action, so dedup and attribution are unchanged', () => {
+    const plain = planMorningCopy('Aarav', 'Geometry', 'RC', 4, 2.5);
+    const news = planMorningCopyWithLessonNews('Aarav', 'Geometry', 'RC');
+    expect(news.expectedAction).toBe(plain.expectedAction);
+  });
+
+  it('still names the plan — the news is additive, not a replacement', () => {
+    const news = planMorningCopyWithLessonNews('Aarav', 'Geometry', 'RC');
+    expect(news.body).toContain('Geometry');
+    expect(news.body).toContain('RC');
+    const solo = planMorningCopyWithLessonNews('Aarav', 'Geometry', null);
+    expect(solo.body).toContain('Geometry');
+    expect(solo.body).not.toContain('then');
+  });
+
+  it('never promises a practice link in the push either', () => {
+    for (const second of ['RC', null]) {
+      const body = planMorningCopyWithLessonNews('Aarav', 'Geometry', second).body;
+      expect(body).not.toMatch(/practice|questions|solve/i);
+    }
+  });
+});
+
+describe('the announcement push expires by date, not by memory', () => {
+  it('is pinned to a single calendar day', () => {
+    expect(RESOURCE_ANNOUNCE_DAY).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('fires only on that day, behind the ordinary morning branch', () => {
+    // EvidenceAnnounce ran for eight days because nothing stopped it. A date
+    // equality check stops this one whether or not anyone remembers to.
+    const s = code(CRON);
+    expect(s).toContain('today === RESOURCE_ANNOUNCE_DAY');
+    expect(s.match(/planMorningCopyWithLessonNews\(/g)?.length).toBe(1);
+  });
+
+  it('does not displace the coaching-class morning, which is more specific', () => {
+    const s = code(CRON);
+    const classAt = s.indexOf('classMorningCopy(');
+    const newsAt = s.indexOf('planMorningCopyWithLessonNews(');
+    expect(classAt).toBeGreaterThan(-1);
+    expect(classAt).toBeLessThan(newsAt);
   });
 });

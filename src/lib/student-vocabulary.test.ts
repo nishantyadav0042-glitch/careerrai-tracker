@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   COMPANION_SLOTS, morningCopy, factCopy, openCopy, progressCopy, logCopy,
-  closeCopy, planMorningCopy, planOpenCopy, planProgressCopy, planLogCopy,
+  closeCopy, planMorningCopy, planMorningCopyWithLessonNews,
+  planOpenCopy, planProgressCopy, planLogCopy,
   kickoffCopy, missedCheckInKickoffCopy, sparkCopy, windCopy,
   activationSlotCopy, reactivationSlotCopy, companionTip, companionStrategy,
   type SlotCopy,
@@ -50,6 +51,8 @@ describe('student-facing notification copy never says "log"', () => {
     assertNoLog(logCopy('IIM Ahmedabad'), 'logCopy');
     assertNoLog(planMorningCopy('Aarav', 'Geometry', 'RC', 4, 2.5), 'planMorningCopy');
     assertNoLog(planMorningCopy('Aarav', 'Geometry', null, 1, 0), 'planMorningCopy(solo)');
+    assertNoLog(planMorningCopyWithLessonNews('Aarav', 'Geometry', 'RC'), 'planMorningCopyWithLessonNews');
+    assertNoLog(planMorningCopyWithLessonNews('Aarav', 'Geometry', null), 'planMorningCopyWithLessonNews(solo)');
     assertNoLog(planOpenCopy('Geometry', '20 questions', 2), 'planOpenCopy');
     assertNoLog(planOpenCopy('Geometry', null, 2), 'planOpenCopy(no target)');
     assertNoLog(planProgressCopy(2, 4, 'RC'), 'planProgressCopy');
@@ -152,6 +155,7 @@ describe('notifications report work done — they never chase', () => {
     assertNoChasing(closeCopy(23, 'QA'), 'closeCopy');
     assertNoChasing(closeCopy(0, 'QA'), 'closeCopy(no streak)');
     assertNoChasing(planMorningCopy('Riya', 'Percentages', 'RC', 3, 2), 'planMorningCopy');
+    assertNoChasing(planMorningCopyWithLessonNews('Riya', 'Percentages', 'RC'), 'planMorningCopyWithLessonNews');
     assertNoChasing(planOpenCopy('RC', '3 passages', 2), 'planOpenCopy');
     assertNoChasing(planProgressCopy(2, 3, 'RC'), 'planProgressCopy');
     assertNoChasing(planLogCopy('RC', 'IIM A'), 'planLogCopy');
