@@ -112,9 +112,11 @@ describe('resourceFor', () => {
   it('returns null for a topic we have nothing verified for', () => {
     // The overwhelmingly common case, and the card must render fine without a
     // resource. Absence is a normal state, never an error.
-    // Base System used to be the example here and now ships a concept video,
-    // so the example moved rather than the rule.
-    expect(resourceFor('Odd One Out', 'concept')).toBeNull();
+    // The example has moved twice as coverage grew — Base System, then Odd One
+    // Out. Hybrid DILR Sets is the one topic deliberately left uncovered: its
+    // previous primary was a Tables video serving two topics, and no genuine
+    // hybrid-set concept video has been found. Absence is the correct state.
+    expect(resourceFor('Hybrid DILR Sets', 'concept')).toBeNull();
     expect(resourceFor('not a real topic', 'concept')).toBeNull();
   });
 
@@ -221,6 +223,40 @@ describe('a video is the primary for at most one topic', () => {
           expect.fail(`${r.videoId} appears under both "${prior}" and "${topic}"`);
         }
         seen.set(r.videoId, topic);
+      }
+    }
+  });
+});
+
+describe('confirmPending is an honest, temporary marker', () => {
+  it('flags only rows that have not had the direct id lookup', () => {
+    // Search and lookup are both the platform, so neither can invent a video.
+    // The lookup catches a transcription slip on OUR side. Credits ran out
+    // mid-round, so these rows were hand-checked against the search response
+    // and flagged rather than silently shipped as fully confirmed.
+    const pending = Object.entries(TOPIC_RESOURCES)
+      .flatMap(([t, rs]) => rs.filter((r) => r.confirmPending).map((r) => `${t}/${r.intent}`));
+    expect(pending.sort()).toEqual([
+      'Caselets/concept', 'Caselets/worked_example',
+      'Odd One Out/concept', 'Odd One Out/worked_example',
+      'Para Jumbles/concept', 'Para Jumbles/worked_example',
+      'Progressions/concept', 'Progressions/worked_example',
+      'Ratio & Proportion/concept', 'Ratio & Proportion/worked_example',
+      'Vocabulary/concept',
+    ]);
+  });
+
+  it('holds every flagged row to the same data standard as a confirmed one', () => {
+    // Pending confirmation is not a licence to ship a weaker row: the id shape,
+    // the runtime, the longForm flag and the channel are all still asserted by
+    // the tests above. This one states it explicitly so the flag can never
+    // become a loophole.
+    for (const [topic, rs] of Object.entries(TOPIC_RESOURCES)) {
+      for (const r of rs.filter((x) => x.confirmPending)) {
+        expect(r.videoId, `${topic}/${r.intent}`).toMatch(/^[A-Za-z0-9_-]{11}$/);
+        expect(r.realMinutes, `${topic}/${r.intent}`).toBeGreaterThan(0);
+        expect(r.longForm === true, `${topic}/${r.intent}`).toBe(r.realMinutes > 45);
+        expect(r.channel.trim().length, `${topic}/${r.intent}`).toBeGreaterThan(0);
       }
     }
   });

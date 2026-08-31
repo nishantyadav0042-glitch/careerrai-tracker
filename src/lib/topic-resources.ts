@@ -73,6 +73,18 @@ export interface TopicResource {
   /** ISO date of the last successful metadata verification. */
   verifiedOn: string;
   /**
+   * Read from the platform's SEARCH response but not yet re-confirmed by a
+   * direct id lookup.
+   *
+   * The distinction is narrow and worth keeping honest about: search and lookup
+   * are both the platform, so neither can invent a video. What the redundant
+   * lookup catches is a transcription slip on OUR side when an id moves from a
+   * search result into this file. vidIQ credits ran out mid-round, so these
+   * rows were transcription-checked by hand against the search response
+   * instead. Clear the flag when the lookup runs.
+   */
+  confirmPending?: true;
+  /**
    * True when the video is longer than a single daily task block (45 min).
    *
    * This does NOT reject the resource — some topics have no shorter honest
@@ -87,6 +99,51 @@ export interface TopicResource {
 }
 
 export const TOPIC_RESOURCES: Record<string, TopicResource[]> = {
+  "Caselets": [
+    { intent: 'concept', videoId: 'Z3SWdERmAVE', realMinutes: 44, views: 19333, confirmPending: true,
+      channel: "BYJU'S Exam Prep: CAT & MBA", verifiedOn: '2026-08-31',
+      title: "CAT Caselets: Important CAT DILR Topic | CAT 2023 DILR Preparation" },
+    { intent: 'worked_example', videoId: 'kbKFCy5HA20', realMinutes: 100, longForm: true, views: 4911, confirmPending: true,
+      channel: "CAT Preparation - iQuanta", verifiedOn: '2026-08-31',
+      title: "CAT 2025 Preparation Playlist: LRDI Caselets - Day 33 (CAT Before CAT)" },
+  ],
+  "Odd One Out": [
+    { intent: 'concept', videoId: 'QJYT1UPEp3o', realMinutes: 27, views: 49423, confirmPending: true,
+      channel: "Unacademy CAT", verifiedOn: '2026-08-31',
+      title: "Crack Sentence Odd One Out with 100% Accuracy | CORE Method Explained" },
+    { intent: 'worked_example', videoId: '-8YPOWyt5v8', realMinutes: 69, longForm: true, views: 1223, confirmPending: true,
+      channel: "Rodha", verifiedOn: '2026-08-31',
+      title: "VARC for CAT 2026: Solve Odd Sentence Out Without Guessing | KD Sir" },
+  ],
+  "Para Jumbles": [
+    { intent: 'concept', videoId: 'UCjd5d-YZ40', realMinutes: 8, views: 96890, confirmPending: true,
+      channel: "Ananta Chhajer", verifiedOn: '2026-08-31',
+      title: "Trick to Solve Parajumbles in CAT | CAT Preparation" },
+    { intent: 'worked_example', videoId: 'jXBjJIp3U_A', realMinutes: 67, longForm: true, views: 9095, confirmPending: true,
+      channel: "CAT Preparation - iQuanta", verifiedOn: '2026-08-31',
+      title: "Best Approach to Solve Parajumbles in CAT | VARC Practice for CAT 2025" },
+  ],
+  "Progressions": [
+    { intent: 'concept', videoId: '6jk_4y3qEZg', realMinutes: 85, longForm: true, views: 134890, confirmPending: true,
+      channel: "MBA Wallah", verifiedOn: '2026-08-31',
+      title: "Sequence And Series (Arithmetic Progression) | Quant Modern Math 06" },
+    { intent: 'worked_example', videoId: 'YEckpCtPo54', realMinutes: 79, longForm: true, views: 159047, confirmPending: true,
+      channel: "MBA Pathshala", verifiedOn: '2026-08-31',
+      title: "Arithmetic Progression AP | Part-1 | CAT Preparation | Quantitative Ap" },
+  ],
+  "Ratio & Proportion": [
+    { intent: 'concept', videoId: 'Q4yXuv5g5nc', realMinutes: 21, views: 13728, confirmPending: true,
+      channel: "Cracku - MBA CAT Preparation", verifiedOn: '2026-08-31',
+      title: "Ratios for CAT Exam | CAT Arithmetic Basics, Concepts & Question Types" },
+    { intent: 'worked_example', videoId: 'J9ccMZAG01o', realMinutes: 28, views: 195565, confirmPending: true,
+      channel: "CAT Preparation - iQuanta", verifiedOn: '2026-08-31',
+      title: "Arithmetic for CAT Class 1 | Ratio and Proportion | Quantitative Aptit" },
+  ],
+  "Vocabulary": [
+    { intent: 'concept', videoId: 'Rhg1QRLnM8U', realMinutes: 47, longForm: true, views: 11564, confirmPending: true,
+      channel: "MBA Wallah", verifiedOn: '2026-08-31',
+      title: "VOCABULARY BUILDING - HOW TO READ FROM WORD POWER MADE EASY" },
+  ],
   "Arrangements": [
     { intent: 'concept', videoId: '4tI-h-GKWVk', realMinutes: 20, views: 845389,
       channel: "Rodha", verifiedOn: '2026-08-31',
