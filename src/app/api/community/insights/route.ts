@@ -143,14 +143,16 @@ export async function GET() {
     };
   };
 
-  // ONE authority for "today's pick" (21 Aug consolidation). Both featured
-  // kinds are returned from HERE, and the Daily Pick card renders them — the
-  // UI no longer selects the day's item through a second endpoint with its
-  // own universe. featured_on means placement; it does not create a second
-  // content system.
-  const pickQuestion = featured.find((r) => r.kind === 'question');
+  // ONE authority for "today's pick" (21 Aug consolidation), now serving ONE
+  // kind (founder, 31 Aug: "just keep daily hint only in daily pick — remove
+  // all the questions"). featured_on means placement; it does not create a
+  // second content system.
+  //
+  // `pickQuestion` is gone rather than nulled-and-passed: a field the client
+  // must remember to ignore is how the duplicate-render bug of 21 Aug happened
+  // in the first place.
   const pickTip = featured.find((r) => r.kind === 'tip');
-  const pickIds = new Set([pickQuestion?.id, pickTip?.id].filter(Boolean) as string[]);
+  const pickIds = new Set([pickTip?.id].filter(Boolean) as string[]);
 
   // The Top tab was a lie (hardening sprint, 21 Aug): the client sorted on a
   // delta map that is empty on load, so "Top" rendered the New order. The
@@ -162,6 +164,13 @@ export async function GET() {
   // DEDUPLICATION IS SERVER-SIDE, so no client can drift back into rendering
   // the same submission twice. Today's pick lives in the Daily Pick card; the
   // feed is everything else.
+  //
+  // The FEED still carries both kinds, deliberately. The founder's 31 Aug
+  // instruction was about the daily pick — the one thing the surface offers —
+  // not about the library of student contributions below it. 51 live questions
+  // are real content students can still browse; deleting them from view is a
+  // bigger product change than was asked for, and is one line to make here if
+  // he wants it.
   const feed = orderFeed(all.filter((r) => !pickIds.has(r.id)))
     .slice(0, FEED_PAGE_SIZE * 5) // room for "See more" paging client-side
     .map(withScore);
@@ -185,12 +194,12 @@ export async function GET() {
   // opened Daily Pick, 0 voted, and telling "got nothing" apart from "chose
   // not to" took an hour of SQL). Moved here from the retired ballot route —
   // this is now the one place that knows a student was handed nothing.
-  if (!pickQuestion && !pickTip && feed.length === 0) {
+  if (!pickTip && feed.length === 0) {
     console.warn(`[community/insights] EMPTY surface student=${user.id} day=${day} livePool=${all.length}`);
   }
 
   return NextResponse.json({
-    dailyPick: { question: shape(pickQuestion), tip: shape(pickTip) },
+    dailyPick: { tip: shape(pickTip) },
     feed,
     pageSize: FEED_PAGE_SIZE,
     myShare,

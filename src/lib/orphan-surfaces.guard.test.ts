@@ -50,6 +50,19 @@ const ROOT = process.cwd();
 // sample_debrief_viewed engagement event stays: it records history that really
 // happened.
 const KNOWN_ORPHANS: Record<string, string> = {
+  'src/components/daily-challenge-card.tsx':
+    'PARKED 31 Aug. Founder: "currently just keep daily hint only in daily ' +
+    'pick — remove all the questions." This card WAS the hero of Daily Pick; ' +
+    'daily-slot-card no longer imports it, so nothing mounts it. Deliberately ' +
+    'parked rather than deleted, and the distinction is load-bearing: the ' +
+    'daily_challenges table still holds 22 live rows scheduled through ' +
+    '5 Sep, /api/challenge/today and /api/challenge/attempt still work, and ' +
+    'daily-pick-timer.guard.test.ts still holds the whole timed-question ' +
+    'spec (own clock per question, fresh clock per remount, never blocks the ' +
+    'answer, density gate on "x% finished in time"). Deleting the card would ' +
+    'throw away a working, tested engine to satisfy a decision about which ' +
+    'card owns one slot. Remount it — do not rebuild it — if questions come ' +
+    'back to any surface.',
   'src/components/recommended-buddies.tsx':
     'PARKED 26 Aug when the profile storefront was removed (founder: My ' +
     'Profile is not a sales surface, one buddy pitch per student per day). ' +

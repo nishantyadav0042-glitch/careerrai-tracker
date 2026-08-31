@@ -20,8 +20,11 @@ describe('the community surface announces an empty state instead of staying sile
   it('logs when an authenticated student is handed nothing at all', () => {
     const route = readFileSync('src/app/api/community/insights/route.ts', 'utf8');
     expect(route).toContain('EMPTY surface');
-    // Must fire on the ACTUAL empty case: no pick of either kind, no feed.
-    expect(route).toMatch(/!pickQuestion && !pickTip && feed\.length === 0/);
+    // Must fire on the ACTUAL empty case: no hint, no feed. The question half
+    // of this condition went with the question kind (31 Aug) — there is only
+    // one pick now, so a surviving `!pickQuestion &&` would be a clause that
+    // can never be false, which is how a guard quietly stops guarding.
+    expect(route).toMatch(/!pickTip && feed\.length === 0/);
   });
 
   it('the log carries enough to diagnose without a database query', () => {

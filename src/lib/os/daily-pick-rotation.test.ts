@@ -11,10 +11,10 @@ import {
 // the original problem with more code.
 
 const ALL_AVAILABLE: PickAvailability = {
-  question: true, community: true, mirror: true, peer: true, reflection: true,
+  community: true, mirror: true, peer: true, reflection: true,
 };
 const none = (over: Partial<PickAvailability> = {}): PickAvailability => ({
-  question: false, community: false, mirror: false, peer: false, reflection: false, ...over,
+  community: false, mirror: false, peer: false, reflection: false, ...over,
 });
 
 describe('the day cannot be rerolled underneath the student', () => {
@@ -83,9 +83,10 @@ describe('it does not settle into one kind — the original failure', () => {
     }
     // Every kind must actually appear — a weight that never fires is a bug.
     for (const k of ALL_KINDS) expect(counts.get(k) ?? 0).toBeGreaterThan(0);
-    // Learning stays the dominant ask; this is a study app first.
+    // The mirror leads now: with the question kind removed (31 Aug), the
+    // heaviest remaining ask is the one built from the student's own data.
     const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
-    expect(top[0]).toBe('question');
+    expect(top[0]).toBe('mirror');
   });
 
   it('never serves one kind for a long run of consecutive days', () => {
@@ -110,11 +111,26 @@ describe('it does not settle into one kind — the original failure', () => {
     }
   });
 
-  it('weights are positive and learning outweighs every other single kind', () => {
+  it('weights are positive, and the mirror leads now that the question is gone', () => {
     for (const k of ALL_KINDS) expect(PICK_WEIGHTS[k]).toBeGreaterThan(0);
     for (const k of ALL_KINDS) {
-      if (k !== 'question') expect(PICK_WEIGHTS.question).toBeGreaterThan(PICK_WEIGHTS[k]);
+      if (k !== 'mirror') expect(PICK_WEIGHTS.mirror).toBeGreaterThan(PICK_WEIGHTS[k]);
     }
+  });
+
+  // The founder's 31 Aug instruction, asserted against the engine itself:
+  // 'question' must not be reachable as a kind by ANY availability input.
+  it('can never serve a question, whatever is available', () => {
+    const kinds = new Set<string>();
+    for (let d = 1; d <= 28; d++) {
+      const day = `2026-09-${String(d).padStart(2, '0')}`;
+      for (const student of ['s1', 's2', 's3', 's4', 's5']) {
+        const k = pickKindForDay(student, day, ALL_AVAILABLE);
+        if (k) kinds.add(k);
+      }
+    }
+    expect(kinds.has('question')).toBe(false);
+    expect(ALL_KINDS as string[]).not.toContain('question');
   });
 });
 

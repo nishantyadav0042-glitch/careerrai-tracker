@@ -30,9 +30,24 @@ import { dailyPickIndex } from '@/lib/community-pipeline';
 //     one thing forbidden everywhere in this codebase (Trust OS §2.1,
 //     Incident #7). Availability is an input, never an assumption.
 
+// ── NO QUESTIONS ON DAILY PICK (founder, 31 Aug) ────────────────────────────
+//
+// "Currently just keep daily hint only in daily pick — remove all the
+// questions." The 'question' kind is GONE from this engine, not merely
+// deprioritised, so there is no path by which a rotation can serve one again.
+//
+// This is the 13 Aug rule applied to new content, not a reversal of it. That
+// day the founder made the question the permanent hero because "2 different
+// screens are live… this mix of screen should not exist" — a student has to
+// know what they are opening BEFORE they open it. The predictability was the
+// point; the question was only what happened to be filling the slot. The hint
+// inherits the slot and the rule with it.
+//
+// Why the hint and not the question: this cohort is not studying yet. 626 of
+// 883 verified students have logged zero days. A timed MCQ asks a student who
+// has not opened a book to be tested; a hint gives them something and asks for
+// nothing. Retention first — you cannot quiz someone into starting.
 export type PickKind =
-  /** Solve one real CAT question. The Duolingo lesson equivalent. */
-  | 'question'
   /** Judge a peer's tip — the surface as it exists today. */
   | 'community'
   /** Something true about THIS student's own preparation. */
@@ -45,16 +60,18 @@ export type PickKind =
 /**
  * The rotation weights.
  *
- * Founder's shape (40 learning / 20 curiosity / 15 community / 15 expertise /
- * 10 reflection), mapped onto the kinds that can actually be built from data we
- * hold today. Learning stays dominant because the student came here to prepare,
- * and a curiosity engine that stops being a study app has lost the plot.
+ * Founder's shape (20 curiosity / 15 community / 15 expertise / 10 reflection),
+ * mapped onto the kinds that can actually be built from data we hold today.
+ * The 40-weight learning slot is gone with the question kind.
+ *
+ * These weights now decide only the FALLBACK days — the hint takes the slot
+ * whenever one exists (see the daily-slot route), so in practice this deck runs
+ * on days the hint shelf could not be filled at all.
  *
  * These are relative weights, not percentages — they are renormalised over
  * whatever is actually available, so removing a kind never leaves a dead slot.
  */
 export const PICK_WEIGHTS: Record<PickKind, number> = {
-  question: 40,
   mirror: 20,
   community: 15,
   peer: 15,
@@ -62,8 +79,6 @@ export const PICK_WEIGHTS: Record<PickKind, number> = {
 };
 
 export interface PickAvailability {
-  /** A real, unanswered question exists for this student. */
-  question: boolean;
   /** The voting pool has something they have not seen. */
   community: boolean;
   /** We hold enough of their own data to say something true about it. */
@@ -74,7 +89,7 @@ export interface PickAvailability {
   reflection: boolean;
 }
 
-export const ALL_KINDS: PickKind[] = ['question', 'mirror', 'community', 'peer', 'reflection'];
+export const ALL_KINDS: PickKind[] = ['mirror', 'community', 'peer', 'reflection'];
 
 /**
  * Which kind of pick this student gets today.
@@ -119,13 +134,14 @@ export function pickKindForDay(
  * This interleaving is load-bearing, not tidiness. dailyPickIndex is a rolling
  * hash of student+date, so two consecutive dates hash to two nearly consecutive
  * numbers — the low bits barely move. Against a blocked deck
- * (QQQQ…MMMM…CCCC…) that means index+1 per day, which lands in the SAME kind
- * for as long as that kind's block is wide: a student would have drawn
- * "question" roughly forty days running. The first draft did exactly that, and
- * the rotation test caught it — which is the whole point of asserting that the
- * surface changes across days rather than only that the maths is right.
+ * (MMMM…CCCC…PPPP…) that means index+1 per day, which lands in the SAME kind
+ * for as long as that kind's block is wide: a student would have drawn the
+ * heaviest kind for as many days running as it has weight. The first draft did
+ * exactly that, and the rotation test caught it — which is the whole point of
+ * asserting that the surface changes across days rather than only that the
+ * maths is right.
  *
- * Spreading the copies (question at slots 0, 2, 5, 7 … rather than 0–39) makes
+ * Spreading the copies (mirror at slots 0, 2, 5, 7 … rather than 0–19) makes
  * adjacent slots different kinds, so +1 per day is a genuinely different ask,
  * while the population-level distribution still matches the weights exactly.
  *
@@ -171,7 +187,6 @@ export function reflectionForDay(studentId: string, dayIso: string): string {
 
 /** Human label for the slot, so the screen names what it is offering. */
 export const KIND_LABEL: Record<PickKind, string> = {
-  question: "Today's question",
   mirror: 'Something we noticed',
   community: 'From another student',
   peer: 'Students like you',

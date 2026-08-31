@@ -45,12 +45,50 @@ describe('the share sheet asks for content and nothing else', () => {
 
   it('the send button is gated on content alone', () => {
     const s = code(SHEET);
-    const ready = s.slice(s.indexOf('const ready ='), s.indexOf('async function submit'));
+    const ready = s.slice(s.indexOf('const ready ='), s.indexOf('async function reconcile'));
+    // A photo, or enough text. `trimmed` is the trimmed questionText.
     expect(ready).toContain('image != null');
-    expect(ready).toContain('questionText');
+    expect(ready).toMatch(/trimmed\.length/);
+    // A LENGTH bound is still "content alone" — it is a fact about what they
+    // wrote. Classification metadata is not, and must never gate Send.
     for (const gate of ['section', 'topic', 'kind']) {
       expect(ready, `${gate} must not gate Send`).not.toContain(gate);
     }
+  });
+
+  // ADDED 31 Aug, and this is THE assertion for the 21 Aug incident: Send must
+  // go dead when the text exceeds the cap, or the sheet once again invites a
+  // share the server will refuse. The reachable case is not exotic — type 400
+  // characters, attach a photo, remove the photo: the cap tightens to 150 while
+  // the text stays 400.
+  //
+  // Asserted on the source, not by rendering: this suite runs in the `node`
+  // environment with no jsdom and no testing-library, so there is no way to
+  // mount the sheet and click Send. A shape assertion is weaker than a
+  // behavioural one and is chosen knowingly.
+  it('Send is blocked when the text exceeds the cap', () => {
+    const s = code(SHEET);
+    const ready = s.slice(s.indexOf('const ready ='), s.indexOf('async function reconcile'));
+    expect(ready, 'Send must not open on text the server will reject').toContain('overLimit');
+    const band = s.slice(s.indexOf('const textOnly ='), s.indexOf('async function reconcile'));
+    expect(band).toMatch(/overLimit\s*=\s*trimmed\.length\s*>\s*maxChars/);
+    // And the cap itself must depend on whether a photo is attached, since the
+    // two kinds carry different server bands.
+    expect(band).toMatch(/maxChars\s*=\s*textOnly\s*\?\s*MAX_TIP_CHARS\s*:\s*MAX_QUESTION_CHARS/);
+  });
+
+  // The 21 Aug incident was not the band, it was the client and the server
+  // disagreeing about which band applied. The sheet must therefore measure with
+  // the SERVER'S OWN constants, never a re-typed number.
+  it('the sheet imports its limits instead of re-typing them', () => {
+    const s = code(SHEET);
+    const imports = s.slice(0, s.indexOf('export'));
+    expect(imports).toContain('MIN_TIP_CHARS');
+    expect(imports).toContain('MAX_TIP_CHARS');
+    const band = s.slice(s.indexOf('const textOnly ='), s.indexOf('async function reconcile'));
+    // `length > 0` (is there any text at all) is fine; a NUMBERED bound is not.
+    expect(band, 'a hard-coded character bound will drift from the server')
+      .not.toMatch(/length\s*[<>]=?\s*[1-9]\d*/);
   });
 });
 

@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { track } from '@/lib/journey';
 import { CommunityVoteCard } from '@/components/community-vote-card';
-import { DailyChallengeCard } from '@/components/daily-challenge-card';
 
 // ── Today's ONE thing on Daily Pick ─────────────────────────────────────────
 //
@@ -14,7 +13,7 @@ import { DailyChallengeCard } from '@/components/daily-challenge-card';
 // The community kind delegates to the card that already exists — the rotation
 // changes WHEN voting is asked for, never how it works.
 
-type Kind = 'question' | 'community' | 'mirror' | 'peer' | 'reflection';
+type Kind = 'community' | 'mirror' | 'peer' | 'reflection';
 
 interface Slot {
   kind: Kind | null;
@@ -46,7 +45,7 @@ export function DailySlotCard() {
     return () => { cancelled = true; };
   }, []);
 
-  // ── One screen, every day (founder, 13 Aug) ─────────────────────────────
+  // ── One screen, every day (founder, 13 Aug; narrowed 31 Aug) ────────────
   //
   // The rotation used to hand a different CARD to the hero slot each day —
   // question, community ballot, mirror, peer stat, reflection — so Daily Pick
@@ -56,12 +55,14 @@ export function DailySlotCard() {
   //
   // It was built as a curiosity engine, and variety was the point. But the
   // variety cost the one thing a daily habit needs most: a student has to know
-  // what they are opening BEFORE they open it. A timed question every day is a
-  // reason to come back; a surprise format is a reason to bounce.
+  // what they are opening BEFORE they open it.
   //
-  // So the question always wins the hero slot when one exists. The other kinds
-  // are not deleted — they still render below when there is no question for
-  // the day, which keeps the rotation engine and its tests intact.
+  // 31 Aug: "just keep daily hint only in daily pick — remove all the
+  // questions." So the HINT always wins the hero slot when one exists, and the
+  // 'question' kind no longer exists at all — the timed challenge card is not
+  // imported here any more, and no rotation outcome can reach it. The other
+  // kinds are not deleted: they still render below when the hint shelf could
+  // not be filled, which keeps the rotation engine and its tests intact.
   // FIXED 21 Aug: a failed slot read used to silently swap the student onto
   // the community ballot — a different product with no hint anything broke,
   // and a blank page when the ballot was also empty. An outage is an outage:
@@ -77,16 +78,7 @@ export function DailySlotCard() {
     );
   }
   if (!slot) return null;
-  if (slot.kind === 'question') return <DailyChallengeCard />;
   if (slot.kind === 'community' || slot.kind === null) return <CommunityVoteCard />;
-  // The question slot renders the challenge system that ALREADY EXISTS rather
-  // than a second implementation of "a question a day". Founder, 12 Aug: do not
-  // build a duplicate of Daily Pick, and do not run both — pick one and remove
-  // the other. Daily Pick wins the surface (it owns the nav slot and the
-  // student's mental model); the challenge stack wins the engine (it already
-  // captures choice, correctness and seconds-taken, and already refuses to show
-  // a community split below 20 attempts). Neither is rebuilt; the rotation just
-  // decides which day each one gets.
   return (
     <div className="rounded-2xl border border-stone-200 bg-white p-4">
       <p className="text-[10.5px] font-bold uppercase tracking-widest text-indigo-500">{slot.label}</p>

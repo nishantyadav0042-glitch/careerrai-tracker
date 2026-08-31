@@ -5,7 +5,7 @@ import { X, HeartHandshake, Camera, Crop as CropIcon } from 'lucide-react';
 import ReactCrop, { type PercentCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 import { track } from '@/lib/journey';
-import { MAX_IMAGE_BYTES, MAX_QUESTION_CHARS } from '@/lib/community-pipeline';
+import { MAX_IMAGE_BYTES, MAX_QUESTION_CHARS, MIN_TIP_CHARS, MAX_TIP_CHARS } from '@/lib/community-pipeline';
 import { prepareImage } from '@/lib/image-downscale';
 
 // "Solve something tough. Challenge others." — exactly two inputs, minimum
@@ -115,10 +115,27 @@ export function CommunitySubmit({ onClose }: { onClose: () => void }) {
     }
   }
 
-  // The only requirement is that they said something. Everything else —
-  // question or tip, which section, which topic — is worked out behind the
-  // screen from the content itself.
-  const ready = image != null || questionText.trim().length >= 10;
+  // ── The client and the server must measure by the SAME band ─────────────
+  //
+  // This is the whole 21 Aug lesson, and it is why the server could be flipped
+  // back to the hint band on 31 Aug. Back then the sheet enabled Send at 10
+  // chars and allowed 600 while the server judged tips at 15–150, so it invited
+  // a share it then refused, with a message about a kind of thing the student
+  // was not writing. A client that can invite a rejected submission is the bug;
+  // which band is correct never was.
+  //
+  // TEXT-ONLY IS A HINT (the sheet asks for one), so it is measured at 15–150,
+  // imported from the server's own constants rather than re-typed. WITH A PHOTO
+  // the text is an optional caption on a question, so the wider band applies and
+  // an empty caption is fine.
+  const textOnly = image == null;
+  const trimmed = questionText.trim();
+  const maxChars = textOnly ? MAX_TIP_CHARS : MAX_QUESTION_CHARS;
+  const overLimit = trimmed.length > maxChars;
+  // Also covers the order-of-operations case: type 400 chars, attach a photo,
+  // then remove it. The cap tightens to 150 while the text is still 400, so
+  // Send has to go dead rather than post something the server will bounce.
+  const ready = !overLimit && (image != null || trimmed.length >= MIN_TIP_CHARS);
 
   /** Did this share actually land? null = we could not find out. */
   async function reconcile(): Promise<string | null> {
@@ -234,19 +251,38 @@ export function CommunitySubmit({ onClose }: { onClose: () => void }) {
             {/* ONE screen, no form (founder, 20 Aug). No tip/question toggle,
                 no Section dropdown, no Topic dropdown — classification happens
                 behind the screen, where it costs the student nothing. */}
-            <p className="mt-3 text-[16px] font-bold text-stone-900">Solve something tough. Challenge others.</p>
+            {/* Asks for a HINT now (31 Aug), matching both the button that
+                opens this sheet and the only thing Daily Pick serves. The old
+                copy asked for a question, which is how a student's hint used to
+                get filed as one. The photo route is still here and still means
+                "a question" — one sentence, no toggle, no dropdown. */}
+            <p className="mt-3 text-[16px] font-bold text-stone-900">Learnt something today? Pass it on.</p>
             <p className="mt-1 text-[12.5px] leading-relaxed text-stone-600">
-              Share a question that tested you — photo or text, whatever is easier. Nobody sees your name.
+              One line that made a topic click for you — it could be tomorrow&apos;s hint for everyone.
+              Got a tough question instead? Add a photo. Nobody sees your name.
             </p>
 
             <div className="mt-3 space-y-2">
               <textarea
                 value={questionText}
-                onChange={(e) => setQuestionText(e.target.value.slice(0, MAX_QUESTION_CHARS))}
+                onChange={(e) => setQuestionText(e.target.value.slice(0, maxChars))}
                 rows={3}
-                placeholder="Type the question that tested you — or just add a photo."
+                placeholder="One sharp idea that helped you — or add a photo of a question instead."
                 className="w-full rounded-xl border border-stone-200 px-3 py-2.5 text-[14px] text-stone-900"
               />
+              {/* The counter only appears once they start typing: a character
+                  limit shown over an empty box reads as a rule to obey before
+                  you have said anything. It turns amber only when Send is
+                  actually blocked, so it never scolds mid-sentence. */}
+              {trimmed.length > 0 && (
+                <p className={`text-right text-[11.5px] font-semibold ${
+                  overLimit || (textOnly && trimmed.length < MIN_TIP_CHARS) ? 'text-amber-700' : 'text-stone-400'
+                }`}>
+                  {textOnly && trimmed.length < MIN_TIP_CHARS
+                    ? `${MIN_TIP_CHARS - trimmed.length} more characters`
+                    : `${trimmed.length}/${maxChars}`}
+                </p>
+              )}
               <input
                 ref={fileInput}
                 type="file" accept="image/*" capture="environment"

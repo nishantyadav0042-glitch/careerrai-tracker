@@ -178,16 +178,25 @@ export function validateSubmission(
   // attaching a picture must not fall into the tip branch and be rejected for
   // having no text — the picture IS the content.
   //
-  // FIXED 21 Aug (hardening sprint): unhinted text used to default to 'tip',
-  // whose 15–150 char band silently disagreed with the client — the sheet
-  // enabled Send at 10 chars and allowed 600, so a student who typed a real
-  // 200-character question was told "Tips are 15–150 characters", an error
-  // about a thing they were not writing. The real client sends NO kind (the
-  // founder's rule: never ask). Unhinted text now validates under the
-  // question band (10–600); the safety screen — which actually reads the
-  // words — settles what it is at insert time. The tip band applies only
-  // when a caller EXPLICITLY says 'tip'.
-  const kind: 'tip' | 'question' = hasImageEarly ? 'question' : (hinted ?? 'question');
+  // 21 Aug: unhinted text defaulted to 'tip', whose 15–150 band silently
+  // disagreed with the client — the sheet enabled Send at 10 chars and allowed
+  // 600, so a student who typed a 200-character question was told "Tips are
+  // 15–150 characters", an error about a thing they were not writing. The fix
+  // then was to validate unhinted text under the question band (10–600).
+  //
+  // REVERSED 31 Aug, with the disagreement fixed properly this time. Daily Pick
+  // now serves a HINT and the share sheet asks for one, so text-only IS a hint
+  // and validates under the hint band. That fix only works because the client
+  // was changed in the same commit to enforce the identical 15–150 band with a
+  // live counter — the 21 Aug bug was never the band, it was the two sides
+  // disagreeing about which band applied.
+  //
+  // A PHOTO is still a question: a picture of a problem is a problem, and it
+  // keeps the 10–600 band for its optional caption. And the safety screen still
+  // has the final say on the STORED kind (see the submit route) — a student who
+  // types a genuine short doubt still lands in the feed as a question. This
+  // decides which band to measure by, not what the thing ultimately is.
+  const kind: 'tip' | 'question' = hasImageEarly ? 'question' : (hinted ?? 'tip');
   // Section is OPTIONAL (founder, 20 Aug): internal structure must not become
   // student friction. A student with a tough question in front of them should
   // not have to file it into our taxonomy first — the safety screen already
@@ -207,9 +216,9 @@ export function validateSubmission(
     const text = typeof body.tip === 'string' && body.tip.trim()
       ? body.tip.trim()
       : typeof body.text === 'string' ? body.text.trim() : '';
-    if (text.length === 0) return { ok: false, code: 'CONTENT_REQUIRED', error: 'Write your tip first' };
-    if (text.length < MIN_TIP_CHARS) return { ok: false, code: 'TEXT_TOO_SHORT', error: `Tips are ${MIN_TIP_CHARS}–${MAX_TIP_CHARS} characters — one sharp idea` };
-    if (text.length > MAX_TIP_CHARS) return { ok: false, code: 'TEXT_TOO_LONG', error: `Tips are ${MIN_TIP_CHARS}–${MAX_TIP_CHARS} characters — one sharp idea` };
+    if (text.length === 0) return { ok: false, code: 'CONTENT_REQUIRED', error: 'Write your hint first' };
+    if (text.length < MIN_TIP_CHARS) return { ok: false, code: 'TEXT_TOO_SHORT', error: `Hints are ${MIN_TIP_CHARS}–${MAX_TIP_CHARS} characters — one sharp idea` };
+    if (text.length > MAX_TIP_CHARS) return { ok: false, code: 'TEXT_TOO_LONG', error: `Hints are ${MIN_TIP_CHARS}–${MAX_TIP_CHARS} characters — one sharp idea` };
     return { ok: true, value: { kind, section: chosenSection, topic: topicOk ? (topic as string) : null, text, image: null, imageMime: null } };
   }
 

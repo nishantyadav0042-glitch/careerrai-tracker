@@ -3198,3 +3198,83 @@ Google no longer creates anything. It is a door onto an account that must alread
 **Lesson.** *A guard is not a defence until you have watched it refuse something. Both defences that failed here — the duplicate-account check and `isNewUser` — were correct rules behind conditions that could never be true, in a file whose own comments warned about exactly that. The repo had the lesson written down and shipped the bug anyway, because the lesson lived in a comment instead of a test.*
 
 **Second lesson.** *Ask what a column is EVIDENCE of, not what it contains. `profiles.phone` held a plausible number for 54 people who never verified anything and 92 people who typed it themselves. "Has a phone" and "we proved they hold this phone" are different facts, and a schema that cannot tell them apart will be read as the stronger one every time.*
+
+## Incident #63
+
+**Date:** 2026-08-31
+**Area:** Community / Daily Pick
+**Severity:** P1 (latent — found before it reached a student)
+
+### What was wrong
+
+`promoteDailyPick` (src/lib/daily-pick-runner.ts) stamps one winner per day by
+writing `featured_on = today` on the chosen submission. The write was guarded:
+
+```ts
+.update({ featured_on: today }).eq('id', id).is('featured_on', null)
+```
+
+That guard was added on 21 Aug for a real reason — two concurrent promoters
+could otherwise crown two different winners for one kind and permanently burn a
+submission's single featured day. First-writer-wins was correct. The predicate
+chosen to express it was not.
+
+`pickForKind` (src/lib/daily-pick.ts) has five rules, and rule 5 is explicit:
+*"The shelf cannot run dry: once every item has had its day, the one that held
+the slot longest ago comes back round."* A recycled item has `featured_on` SET,
+by definition. So on the first day the fresh shelf emptied, the picker would
+return a recycled id, `.is('featured_on', null)` would match zero rows, nothing
+would be written, and `getTodaysPick` would find no featured row. Daily Pick
+would render empty — not repeat, not degrade: blank — from that day onward, for
+every student, with no error logged anywhere.
+
+The recycle path had unit tests and they all passed. They tested `pickForKind`,
+which is pure and was correct. Nothing tested that the id it returned could
+actually be written.
+
+### Why it stayed hidden for ten days
+
+It needed the fresh shelf to hit zero, and it never had: 89 live submissions
+across two kinds against one pick per kind per day. The bug was one arithmetic
+condition away from firing and nothing in the system was watching that number.
+
+It surfaced only because the founder removed questions from Daily Pick on
+31 Aug. That collapsed the shelf to tips alone — 38 live, of which **34 had
+already been featured**. Four days of fresh stock. Checking the runway before
+shipping the change is what exposed it.
+
+### The fix
+
+```ts
+.or(`featured_on.is.null,featured_on.lt.${today}`)
+```
+
+Same concurrency property (a second promoter reads `featured_on = today` and
+matches zero rows), but a recycled row can now take the slot.
+
+Written as an `.or()` and NOT as `.neq('featured_on', today)`, which reads more
+naturally and would have been wrong in the opposite direction: PostgREST's
+not-equal drops NULL rows, so it would have excluded every never-featured item —
+the shelf would then only ever recycle and never serve anything fresh. This is
+the same NULL-comparison trap that nearly swept the App Store reviewer out of
+premium the previous night (`.eq('is_test_account', false)` dropping NULL
+flags), twenty-four hours apart, in unrelated code.
+
+### The lesson, with teeth
+
+**A pure function's correctness says nothing about whether its output can be
+persisted.** The selection rule and the write guard were authored three weeks
+apart, each defensible alone, and disagreed about which rows were legal. Tests
+covered the rule; nothing covered the seam.
+
+Encoded in `src/lib/daily-pick-is-a-hint.guard.test.ts` — "a recycled hint can
+still take the slot" — which asserts the write predicate directly (it is a
+PostgREST filter string, not behaviour an in-process fake reproduces
+faithfully): no is-null gate on `featured_on`, the today-exclusion still
+present, and no `.neq` on that column. All three were mutation-tested.
+
+Second, operational: the runway warning in the community-recycle cron now says
+`Shelf is dry: students are now seeing REPEATS of old hints` when fresh stock
+hits zero, so the condition that would have triggered this is visible in logs
+rather than inferred from a blank screen.
+

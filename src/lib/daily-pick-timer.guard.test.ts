@@ -112,20 +112,26 @@ describe('"x% finished in time" obeys the same density gate as everything else',
   });
 });
 
+// SUPERSEDED 31 Aug. These three used to assert that the QUESTION wins the
+// hero slot — the 13 Aug rule. The founder kept the rule and changed what
+// fills it: "currently just keep daily hint only in daily pick — remove all
+// the questions." So the assertions invert rather than disappear: the slot is
+// still owned by ONE predictable thing every day, and that thing is now the
+// hint. Everything above about the CLOCK still holds for the challenge system
+// itself, which is untouched — it simply no longer renders on Daily Pick.
 describe('one screen, every day', () => {
-  it('the question wins the hero slot whenever one exists', () => {
-    expect(readFileSync(ROUTE, 'utf8')).toContain("available.question\n    ? 'question'");
+  it('the hint wins the hero slot whenever one exists', () => {
+    expect(readFileSync(ROUTE, 'utf8')).toContain("available.community\n    ? 'community'");
   });
 
-  it('the card routes a question slot to the challenge, before any other kind', () => {
+  it('the card can no longer route any slot to the timed challenge', () => {
     const src = readFileSync(SLOT, 'utf8');
-    const question = src.indexOf("slot.kind === 'question'");
-    const community = src.indexOf("slot.kind === 'community'");
-    expect(question).toBeGreaterThan(-1);
-    expect(question).toBeLessThan(community);
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/.*$/gm, '$1');
+    expect(code).not.toContain("slot.kind === 'question'");
+    expect(code).toContain("slot.kind === 'community'");
   });
 
-  it('the rotation still runs when no question is scheduled', () => {
+  it('the rotation still runs when the hint shelf could not be filled', () => {
     // The other kinds are not deleted — deleting them would throw away a
     // working engine and its tests for a problem that was only ever about
     // which card owns the hero slot.

@@ -52,17 +52,22 @@ export default function CommunityPage() {
             type="button" onClick={() => setShare(true)}
             className="w-full rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-4 py-3 shadow-lg active:scale-[0.99]"
           >
-            {/* CHALLENGE, not doubt-desk (founder, 22 Aug). "Stuck on
-                something?" framed the student as the one with a problem, and
-                framed CareerRai as a help desk — the Doubtnut position, whose
-                own commercial fate argues against it. This says the opposite
-                thing about the same act: I found something hard, can you
-                crack it? Status motivation, not confession. Deliberately NOT
-                "challenge your competitors" — competitive energy without
-                turning peers into rivals. Still one line (13 Aug). */}
+            {/* RETARGETED 31 Aug, because the old CTA now collects what we no
+                longer show. "Solve something tough. Challenge others" asked for
+                QUESTIONS — and questions are exactly what the founder removed
+                from this surface, so leaving it would have kept filling a
+                shelf nobody reads and left students' submissions in limbo.
+                It asks for the one thing this screen now serves: a hint.
+
+                The 22 Aug rule survives the rewording and is why this is not
+                "stuck on something?" — that framed the student as the one with
+                a problem and CareerRai as a help desk (the Doubtnut position).
+                This still says the opposite about the same act: you worked
+                something out, pass it on. Status motivation, not confession.
+                Still one line (13 Aug). */}
             <span className="flex items-center justify-center gap-2 text-[13.5px] font-extrabold text-white">
               <HeartHandshake className="h-4 w-4 shrink-0" />
-              Solve something tough. Challenge others 📷
+              Learnt something today? Pass it on 💡
             </span>
           </button>
         </div>

@@ -182,8 +182,11 @@ describe('feed: a DB failure is never "Be the one who adds something"', () => {
   });
 
   it("today's pick is fetched by its stamp — found even OUTSIDE the newest-60 window", async () => {
+    // Fixture is a TIP since 31 Aug — the only kind that can hold the slot.
+    // The property under test is unchanged: found by its stamp, not by luck
+    // of falling inside the newest-60 slice.
     const mk = (id: string, featured: string | null) => ({
-      id, kind: 'question', payload: { text: id, section: 'QA' }, image_path: null,
+      id, kind: 'tip', payload: { text: id, section: 'QA' }, image_path: null,
       display_name: 'Aryan', student_id: 'someone-else', created_at: '2026-07-01', featured_on: featured, status: 'live',
     });
     currentAdmin = makeAdmin({
@@ -193,12 +196,14 @@ describe('feed: a DB failure is never "Be the one who adds something"', () => {
         : { data: [], error: null },
       'submission_votes.select': () => ({ data: [], error: null }),
     });
-    // Response shape is now dailyPick.{question,tip} — one authority serving
-    // both the Daily Pick card and the feed.
+    // Response shape is dailyPick.{tip} since 31 Aug — one authority serving
+    // one kind. The property under test is unchanged and still the point: the
+    // featured item is found by its STAMP, so a recycled hint older than the
+    // newest-60 slice still reaches the card.
     const res = await insightsGet();
     const { dailyPick } = await res.json();
-    expect(dailyPick.question).not.toBeNull();
-    expect(dailyPick.question.id).toBe('old-featured');
+    expect(dailyPick.tip).not.toBeNull();
+    expect(dailyPick.tip.id).toBe('old-featured');
   });
 });
 
@@ -217,11 +222,19 @@ describe('rotation: the same student, the same day, the same pick', () => {
     expect(src).toMatch(/\.lt\('created_at', studyDayStart\(now\)\.toISOString\(\)\)/);
   });
 
-  it('availability excludes items already holding today\'s top slot', async () => {
-    // The ballot excludes today's featured items; availability did not — so
-    // the rotation could promise a community slot that rendered empty.
+  it("availability asks for today's HINT, the exact thing the card renders", async () => {
+    // INVERTED 31 Aug, and this is the assertion that would have caught the
+    // bug. The old rule excluded today's featured item — ballot semantics,
+    // from when this slot handed over several things to vote on. The card now
+    // renders exactly ONE item: today's featured tip. Keeping the exclusion
+    // would have gated the hero on everything EXCEPT the item it shows, so on
+    // a day whose only unseen content was the hint itself the surface would
+    // have silently fallen through to a reflection prompt.
     const src = (await import('node:fs')).readFileSync('src/app/api/community/daily-slot/route.ts', 'utf8');
-    expect(src).toMatch(/featuredToday\.has\(s\.id\)/);
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/.*$/gm, '$1');
+    expect(code).not.toMatch(/featuredToday\.has\(s\.id\)/);
+    expect(code).toMatch(/\.eq\('kind', 'tip'\)/);
+    expect(code).toMatch(/\.eq\('featured_on', day\)/);
   });
 
   it('an unreadable availability read is a retryable 503, never a smaller rotation', async () => {
@@ -247,7 +260,11 @@ describe('deduplication is server-side, so no client can drift', () => {
     created_at: '2026-08-20', featured_on: featured, status: 'live',
   });
 
-  it("today's pick is removed from the feed — a student never meets it twice", async () => {
+  it("a featured QUESTION is never served as the day's pick any more", async () => {
+    // 31 Aug: questions are not promoted, so even a row still carrying an old
+    // featured_on stamp must not reappear as today's pick. It stays in the
+    // feed — the founder removed questions from the PICK, not from the library
+    // of student contributions below it.
     const today = '2026-08-21';
     currentAdmin = makeAdmin({
       'student_submissions.select': (call) =>
@@ -257,9 +274,10 @@ describe('deduplication is server-side, so no client can drift', () => {
       'submission_votes.select': () => ({ data: [], error: null }),
     });
     const json = await (await insightsGet()).json();
-    expect(json.dailyPick.question.id).toBe('picked-q');
+    expect(json.dailyPick.question).toBeUndefined();
+    expect(json.dailyPick.tip ?? null).toBeNull();
     const feedIds = json.feed.map((f: { id: string }) => f.id);
-    expect(feedIds).not.toContain('picked-q');
+    expect(feedIds).toContain('picked-q');
     expect(feedIds).toContain('other');
   });
 

@@ -24,9 +24,13 @@ vi.mock('@/lib/community-safety', () => ({
 }));
 
 import { POST, GET } from '@/app/api/community/submit/route';
+import { MIN_TIP_CHARS, MAX_TIP_CHARS } from '@/lib/community-pipeline';
 
 type Res = { data: unknown; error: { message: string; code?: string } | null; count?: number | null };
 type Handler = (call: number) => Res;
+
+/** Rows handed to .insert(), so a test can assert what was actually STORED. */
+const inserted: Record<string, unknown>[] = [];
 
 function makeAdmin(handlers: Record<string, Handler>) {
   const counts: Record<string, number> = {};
@@ -38,7 +42,13 @@ function makeAdmin(handlers: Record<string, Handler>) {
     const state = { op: 'select' };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const c: any = {};
-    for (const op of ['insert', 'update', 'upsert', 'delete']) c[op] = () => { state.op = op; return c; };
+    for (const op of ['insert', 'update', 'upsert', 'delete']) {
+      c[op] = (row?: unknown) => {
+        state.op = op;
+        if (op === 'insert' && row && typeof row === 'object') inserted.push(row as Record<string, unknown>);
+        return c;
+      };
+    }
     for (const m of ['select', 'eq', 'in', 'is', 'gte', 'order', 'limit', 'maybeSingle', 'single']) c[m] = () => c;
     c.then = (ok: (r: Res) => unknown) => Promise.resolve(resolve(`${table}.${state.op}`)).then(ok);
     return c;
@@ -66,27 +76,61 @@ beforeEach(() => {
   vi.clearAllMocks();
   safety.text.mockResolvedValue({ verdict: 'ok', section: 'QA', kind: 'question' });
   safety.image.mockResolvedValue({ verdict: 'ok', section: 'QA', coherence: 'coherent', quality: 'usable' });
+  inserted.length = 0;
   currentAdmin = makeAdmin(CLEAN);
 });
 
-describe('Part 8 — a typed question is never judged as a tip', () => {
-  it('a 200-character question with NO kind is accepted', async () => {
-    const res = await POST(post({ requestId: 'r1', text: 'Why is option B wrong here? '.repeat(8) }));
+// ── Part 8, REWRITTEN 31 Aug ────────────────────────────────────────────────
+//
+// These three used to assert that unhinted text is judged as a QUESTION. That
+// was the 21 Aug fix for a real failure: the sheet enabled Send at 10 chars and
+// allowed 600 while the server judged tips at 15–150, so it invited a share it
+// then refused, with a message about a kind of thing the student was not
+// writing.
+//
+// The founder's 31 Aug instruction — students must be able to add hints —
+// requires text-only to be a HINT, because only a tip can be promoted to the
+// daily slot. So the direction flips, but the property that actually mattered
+// does not: THE CLIENT MUST NEVER INVITE A SHARE THE SERVER WILL REFUSE, AND AN
+// ERROR MUST NAME THE THING THE STUDENT WAS ASKED FOR. The band is imported
+// from the same constants the sheet imports, so the two cannot drift again.
+describe('Part 8 — a student can contribute a hint', () => {
+  it('a one-line hint is STORED as a tip, so it can reach the daily slot', async () => {
+    // The screen returns null whenever it is unsure, which on a short hint is
+    // often. Null used to fall through to 'question' and the hint was lost.
+    safety.text.mockResolvedValue({ verdict: 'ok', section: 'QA', kind: null } as never);
+    const res = await POST(post({ requestId: 'h1', text: 'Take total work as the LCM of the days, not 1.' }));
     expect(res.status).toBe(200);
-    expect((await res.json()).published).toBe(true);
+    expect(inserted.at(-1)?.kind).toBe('tip');
   });
 
-  it('the 15–150 "tip" band never speaks to an unhinted share', async () => {
-    // Exactly the founder's case: real question, longer than a tip.
-    const res = await POST(post({ requestId: 'r2', text: 'A'.repeat(200) }));
+  it('a typed doubt the screen reads as a question still goes to the feed', async () => {
+    safety.text.mockResolvedValue({ verdict: 'ok', section: 'QA', kind: 'question' } as never);
+    const res = await POST(post({ requestId: 'h2', text: 'Why is option B wrong in this averages sum?' }));
     expect(res.status).toBe(200);
+    expect(inserted.at(-1)?.kind).toBe('question');
   });
 
-  it('the server floor matches the client Send-enable rule (10 chars)', async () => {
-    expect((await POST(post({ requestId: 'r3', text: 'A'.repeat(10) }))).status).toBe(200);
-    const short = await POST(post({ requestId: 'r4', text: 'too short' }));
+  it('the server floor is exactly the client Send-enable rule', async () => {
+    expect((await POST(post({ requestId: 'h3', text: 'A'.repeat(MIN_TIP_CHARS) }))).status).toBe(200);
+    const short = await POST(post({ requestId: 'h4', text: 'A'.repeat(MIN_TIP_CHARS - 1) }));
     expect(short.status).toBe(400);
-    expect((await short.json()).error).not.toMatch(/Tips are/);
+  });
+
+  it('the server ceiling is exactly the client cap, and says HINT when it refuses', async () => {
+    expect((await POST(post({ requestId: 'h5', text: 'A'.repeat(MAX_TIP_CHARS) }))).status).toBe(200);
+    const long = await POST(post({ requestId: 'h6', text: 'A'.repeat(MAX_TIP_CHARS + 1) }));
+    expect(long.status).toBe(400);
+    // The 21 Aug property, kept: the message names what they were asked for.
+    const { error } = await long.json();
+    expect(error).toMatch(/Hints are/);
+    expect(error).not.toMatch(/question/i);
+  });
+
+  it('a photo keeps the wide caption band — a picture of a problem is a question', async () => {
+    const res = await POST(post({ requestId: 'h7', ...IMG, text: 'A'.repeat(400) }));
+    expect(res.status).toBe(200);
+    expect(inserted.at(-1)?.kind).toBe('question');
   });
 });
 

@@ -70,8 +70,12 @@ export async function promoteDailyPick(admin: any, now: Date = new Date()): Prom
     votes.set(v.submission_id, t);
   }
 
+  // TIPS ONLY (founder, 31 Aug: "just keep daily hint only in daily pick —
+  // remove all the questions"). Question submissions stay in the table and keep
+  // their history; they are simply never promoted to a slot again, so nothing
+  // is deleted and the change is reversible by restoring this filter.
   const candidates: PickCandidate[] = submissions
-    .filter((s) => s.kind === 'question' || s.kind === 'tip')
+    .filter((s) => s.kind === 'tip')
     .map((s) => ({
       id: s.id,
       kind: s.kind as 'question' | 'tip',
@@ -81,14 +85,14 @@ export async function promoteDailyPick(admin: any, now: Date = new Date()): Prom
       featuredOn: s.featured_on,
     }));
 
-  const runway = {
-    question: runwayFor(candidates, 'question').freshItems,
-    tip: runwayFor(candidates, 'tip').freshItems,
-  };
-  const shortfall = {
-    question: runwayFor(candidates, 'question').shortfall,
-    tip: runwayFor(candidates, 'tip').shortfall,
-  };
+  // Runway is a TIPS-ONLY question now. `candidates` holds no questions at all,
+  // so asking runwayFor(..., 'question') would report 0 fresh and a 30-item
+  // shortfall every single day and fire the "under a month" warning forever on
+  // a kind we deliberately stopped serving. Reported as 0/0 instead: nothing
+  // pending, nothing owed.
+  const tipRunway = runwayFor(candidates, 'tip');
+  const runway = { question: 0, tip: tipRunway.freshItems };
+  const shortfall = { question: 0, tip: tipRunway.shortfall };
 
   // Already filled today? Then today's winners are settled — never restamp,
   // or an item that has been on top since 07:30 would be swapped out mid-day
@@ -96,11 +100,10 @@ export async function promoteDailyPick(admin: any, now: Date = new Date()): Prom
   const filledToday = new Set(
     submissions.filter((s) => s.featured_on === today).map((s) => s.kind),
   );
-  if (filledToday.has('question') && filledToday.has('tip')) {
-    const q = submissions.find((s) => s.featured_on === today && s.kind === 'question');
+  if (filledToday.has('tip')) {
     const t = submissions.find((s) => s.featured_on === today && s.kind === 'tip');
     return {
-      date: today, questionId: q?.id ?? null, questionReason: 'already_set',
+      date: today, questionId: null, questionReason: 'not_promoted',
       tipId: t?.id ?? null, tipReason: 'already_set',
       alreadyDone: true, runway, shortfall,
     };
@@ -116,22 +119,38 @@ export async function promoteDailyPick(admin: any, now: Date = new Date()): Prom
   // could crown two different winners for one kind, permanently spending a
   // submission's single featured day invisibly. The IS NULL guard makes the
   // write first-wins: the loser's update matches zero rows and nothing burns.
-  const stamp = async (id: string | null, kind: 'question' | 'tip') => {
+  //
+  // FIXED 31 Aug — THE RECYCLE STAMP COULD NEVER WRITE. The guard used to be
+  // an is-null filter on featured_on, true only for a NEVER-featured item.
+  // pickForKind deliberately returns a RECYCLED item once fresh stock is gone
+  // (daily-pick.ts rule 5), and a recycled item has featured_on set — so the
+  // update matched zero rows, nothing was stamped, and Daily Pick rendered
+  // empty from that day on. It had not bitten yet only because fresh stock had
+  // never actually run out. Going hint-only makes it imminent: 4 of 38 live
+  // tips have never been featured, so the shelf empties in four days.
+  //
+  // The guard's real intent was first-writer-wins for TODAY, not never-again.
+  // "featured_on is unset OR earlier than today" keeps that concurrency
+  // property exactly (a second promoter reads featured_on = today and matches
+  // zero rows) while letting a recycled item take the slot. Written as an or()
+  // filter rather than a not-equal one: PostgREST's not-equal drops NULL rows,
+  // which would have excluded every never-featured item — the same NULL trap
+  // that nearly swept the App Store reviewer out of premium last night.
+  const stamp = async (id: string | null, kind: 'tip') => {
     if (!id || filledToday.has(kind)) return;
     const { error } = await admin
       .from('student_submissions')
       .update({ featured_on: today })
       .eq('id', id)
-      .is('featured_on', null);
+      .or(`featured_on.is.null,featured_on.lt.${today}`);
     if (error) console.error('[daily-pick] stamp failed', kind, error.message);
   };
-  await stamp(pick.question.id, 'question');
   await stamp(pick.tip.id, 'tip');
 
   return {
     date: today,
-    questionId: pick.question.id,
-    questionReason: pick.question.reason,
+    questionId: null,
+    questionReason: 'not_promoted',
     tipId: pick.tip.id,
     tipReason: pick.tip.reason,
     alreadyDone: false,
@@ -152,7 +171,10 @@ export async function getTodaysPick(admin: any, now: Date = new Date()) {
   const rows = (data ?? []) as { id: string; kind: string }[];
   return {
     date: today,
-    question: rows.find((r) => r.kind === 'question') ?? null,
+    // Questions are never promoted any more (31 Aug). Kept as an explicit null
+    // rather than dropped so existing callers keep compiling and read the
+    // absence as a decision, not a missing field.
+    question: null,
     tip: rows.find((r) => r.kind === 'tip') ?? null,
   };
 }
