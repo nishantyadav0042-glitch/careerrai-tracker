@@ -1,0 +1,190 @@
+{
+ "generated": "2026-08-31T20:05+05:30",
+ "covers": "the three prompts of 46 that never returned an answer: #13 Sentence Completion, #14 Binary Logic, #29 Pipes & Cisterns",
+ "discovery": "vidIQ vidiq_youtube_search \u2014 ids come out of the platform index, so a fabricated id is structurally impossible.",
+ "verification": "vidIQ vidiq_get_videos_by_ids \u2014 all 11 ids confirmed by direct lookup. Title, channel, runtime, upload date and views are platform-read.",
+ "whatThisCannotSupply": [
+  "WATCHED FULLY",
+  "WORKED QUESTIONS SOLVED",
+  "REAL DIFFICULTY",
+  "PAID-COURSE PUSH",
+  "REAL STUDENT TIME",
+  "WHY THIS ONE"
+ ],
+ "howToGetThoseSix": "docs/phase0/PROMPT-TEMPLATE-V2.md \u2014 the rewritten prompt takes this verified list as INPUT and asks only for the six judgement fields.",
+ "totals": {
+  "slots": 12,
+  "filled": 11,
+  "gaps": 1
+ },
+ "topics": [
+  {
+   "topic": "Pipes & Cisterns",
+   "section": "QA / Arithmetic",
+   "unitOfPractice": "questions",
+   "originalPrompt": 29,
+   "candidates": [
+    {
+     "level": "L1",
+     "intent": "concept",
+     "videoId": "kwO4buoyWHg",
+     "title": "Pipes & Cistern | Arithmetic  Ep. 04 | The Game Begins | CAT 2025 Preparation",
+     "channel": "MBA Wallah",
+     "realMinutes": 78.1,
+     "publishedAt": "2025-06-14",
+     "views": 57279,
+     "levelProvisional": true,
+     "paidPushRisk": "description carries heavy course/batch promotion \u2014 needs a human watch to judge the video's real purpose"
+    },
+    {
+     "level": "L2",
+     "intent": "practice_easy",
+     "videoId": "x3SEYdBUGaA",
+     "title": "Pipe and Cisterns Problems Tricks | Pipe and Tanki Shortcuts and Tricks | DSSSB, CTET, Bank PO",
+     "channel": "Dear Sir",
+     "realMinutes": 19.8,
+     "publishedAt": "2018-09-17",
+     "views": 3475901,
+     "levelProvisional": true,
+     "note": "Framed for SSC/Bank/DSSSB, not CAT. Six worked questions are timestamped in the description, which is why it earns the slot; the difficulty is below CAT."
+    },
+    {
+     "level": "L3",
+     "intent": "practice_cat",
+     "videoId": "4deAkQmAB-c",
+     "title": "CAT Time & Work PYQs (2017\u20132025) | All Previous Year Questions with Solutions | CAT 2026 Quant Prep",
+     "channel": "CAT Preparation - iQuanta",
+     "realMinutes": 93.4,
+     "publishedAt": "2026-07-18",
+     "views": 4819,
+     "levelProvisional": true,
+     "paidPushRisk": "description carries heavy course/batch promotion \u2014 needs a human watch to judge the video's real purpose",
+     "lowReach": true,
+     "note": "PARTIAL TOPIC FIT. This is a Time & Work PYQ compilation (35 CAT questions, all timestamped) in which Pipes & Cisterns is one listed sub-topic, not the whole video."
+    },
+    {
+     "level": "L4",
+     "intent": "exam_ready",
+     "gap": true,
+     "reason": "NO GOOD VIDEO FOUND. The only candidate is MBA Wallah's 'Complete Arithmetic For CAT 2026' (KxuWgx08XgQ), 6h22m, with Pipes & Cisterns at 04:19:03. Rejected: storing realMinutes=382 against a pipes task would badly mislead the student, and a chapter inside a six-hour marathon is not one link to one thing. Pipes & Cisterns is taught almost everywhere as a sub-chapter of Time & Work, so a standalone exam-technique video for it may simply not exist."
+    }
+   ]
+  },
+  {
+   "topic": "Binary Logic",
+   "section": "LRDI",
+   "unitOfPractice": "sets",
+   "originalPrompt": 14,
+   "candidates": [
+    {
+     "level": "L1",
+     "intent": "concept",
+     "videoId": "z69ElNGKPFs",
+     "title": "Binary Logic / True Liar - Basic Concepts (English) l CAT 2021 l LRDI l CAT FUNDA l Ravi Handa",
+     "channel": "CAT Funda by Unacademy",
+     "realMinutes": 60.9,
+     "publishedAt": "2021-04-06",
+     "views": 3819,
+     "levelProvisional": true,
+     "paidPushRisk": "description carries heavy course/batch promotion \u2014 needs a human watch to judge the video's real purpose",
+     "lowReach": true
+    },
+    {
+     "level": "L2",
+     "intent": "practice_easy",
+     "videoId": "qmNtXHFjMOY",
+     "title": "SNAP 2022|| Binary Logic || Truth Liar - Basic Concepts l LRDI l Lokesh Agarwal",
+     "channel": "Lokesh Agarwal",
+     "realMinutes": 19.3,
+     "publishedAt": "2022-12-16",
+     "views": 7547,
+     "levelProvisional": true
+    },
+    {
+     "level": "L3",
+     "intent": "practice_cat",
+     "videoId": "EeJ25Wd2lH0",
+     "title": "Binary Logic - Truth tellers and Liars (Logical Reasoning) for CAT 2020",
+     "channel": "gofodu",
+     "realMinutes": 20.3,
+     "publishedAt": "2017-04-11",
+     "views": 65958,
+     "levelProvisional": true
+    },
+    {
+     "level": "L4",
+     "intent": "exam_ready",
+     "videoId": "hDmCcSwOHkU",
+     "title": "Binary Logic: Truth-Teller & Liar Questions | CAT 2026 LRDI Live Class",
+     "channel": "Bodhee Prep CAT Preparation",
+     "realMinutes": 70.3,
+     "publishedAt": "2026-06-14",
+     "views": 283,
+     "levelProvisional": true,
+     "lowReach": true,
+     "note": "283 views, published June 2026. Description promises shortcuts and common mistakes, which is the L4 shape; unverified."
+    }
+   ]
+  },
+  {
+   "topic": "Sentence Completion",
+   "section": "VARC / Verbal Ability",
+   "unitOfPractice": "questions",
+   "originalPrompt": 13,
+   "candidates": [
+    {
+     "level": "L1",
+     "intent": "concept",
+     "videoId": "e4Ec4KzqaME",
+     "title": "Rules To Crack Para Completion Questions In CAT VARC | CAT Exam Verbal Ability Strategy",
+     "channel": "CATKing",
+     "realMinutes": 7.7,
+     "publishedAt": "2024-11-08",
+     "views": 14080,
+     "levelProvisional": true,
+     "paidPushRisk": "description carries heavy course/batch promotion \u2014 needs a human watch to judge the video's real purpose",
+     "note": "Explicitly a 'demo session' for a paid course. Short (7:39) and rule-based, which suits L1, but the paid-push rule needs a human watch."
+    },
+    {
+     "level": "L2",
+     "intent": "practice_easy",
+     "videoId": "_K0ZbySSTzw",
+     "title": "VARC for CAT 2026 | Para Completion  | Lecture #06",
+     "channel": "ACE CAT",
+     "realMinutes": 28.2,
+     "publishedAt": "2026-07-02",
+     "views": 81,
+     "levelProvisional": true,
+     "paidPushRisk": "description carries heavy course/batch promotion \u2014 needs a human watch to judge the video's real purpose",
+     "lowReach": true,
+     "note": "81 views. Three questions timestamped. Quality entirely unverified."
+    },
+    {
+     "level": "L3",
+     "intent": "practice_cat",
+     "videoId": "IASiRw5W82g",
+     "title": "Crack 'Insert the Sentence' Questions in CAT 2025 | Best Tips + Live Practice with Amit Rohra Sir",
+     "channel": "Unacademy CAT",
+     "realMinutes": 54.0,
+     "publishedAt": "2025-06-20",
+     "views": 20307,
+     "levelProvisional": true,
+     "paidPushRisk": "description carries heavy course/batch promotion \u2014 needs a human watch to judge the video's real purpose"
+    },
+    {
+     "level": "L4",
+     "intent": "exam_ready",
+     "videoId": "wWkQilDaqEI",
+     "title": "CAT 2026 Verbal Ability One Shot | Insert the Sentence | Amit Sir",
+     "channel": "Unacademy CAT",
+     "realMinutes": 91.6,
+     "publishedAt": "2026-08-15",
+     "views": 2953,
+     "levelProvisional": true,
+     "paidPushRisk": "description carries heavy course/batch promotion \u2014 needs a human watch to judge the video's real purpose",
+     "lowReach": true
+    }
+   ]
+  }
+ ]
+}
