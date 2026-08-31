@@ -1,0 +1,82 @@
+/**
+ * ── An announcement may only promise what actually shipped ──────────────────
+ *
+ * EvidenceAnnounce (removed 22 Aug) told every student "log your correct
+ * answers" for eight days after the capture UI had been deleted. We advertised
+ * the one capability the product did not have, to the students who most needed
+ * it, and zero students ever logged a practice outcome.
+ *
+ * These tests are that lesson, made mechanical. They fail if the announcement
+ * starts promising the practice layer we deliberately have not built.
+ */
+import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { TOPIC_RESOURCES } from './topic-resources';
+import { resourceForTask } from './routine-engine';
+
+const SRC = join(__dirname, '..');
+const ANNOUNCE = join(SRC, 'components', 'resource-announce.tsx');
+const LAYOUT = join(SRC, 'app', 'student', 'layout.tsx');
+const read = (p: string) => readFileSync(p, 'utf8');
+const code = (p: string) =>
+  read(p).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/\{\/\*[\s\S]*?\*\/\}/g, '');
+
+describe('the announcement promises only what exists', () => {
+  it('the capability it describes is actually reachable', () => {
+    // The EvidenceAnnounce failure in one assertion: if no topic can produce a
+    // concept resource, this announcement must not ship.
+    const reachable = Object.keys(TOPIC_RESOURCES)
+      .filter((t) => resourceForTask(t, 'foundation') !== null);
+    expect(reachable.length, 'nothing to announce').toBeGreaterThan(0);
+  });
+
+  it('never promises a link on practice tasks', () => {
+    // Practice resources do not exist and no video will ever fill them. The
+    // copy must not imply otherwise.
+    const text = read(ANNOUNCE);
+    expect(text).toMatch(/Practice tasks don&rsquo;t have links yet/);
+    expect(text).not.toMatch(/practice questions here|solve \d+ questions here/i);
+  });
+
+  it('says the link is optional and changes nothing', () => {
+    const text = read(ANNOUNCE);
+    expect(text).toMatch(/optional/);
+    expect(text).toMatch(/changes nothing about your task/);
+  });
+
+  it('points at the feedback we actually read', () => {
+    expect(read(ANNOUNCE)).toMatch(/Not helpful/);
+  });
+});
+
+describe('the announcement cannot nag', () => {
+  it('shows once ever, not once a day', () => {
+    const s = code(ANNOUNCE);
+    expect(s).toContain('cr_resource_announce_v1');
+    expect(s).toContain('localStorage.setItem(SEEN_KEY');
+  });
+
+  it('takes the shared daily slot rather than stacking', () => {
+    expect(code(ANNOUNCE)).toContain('claimDailyModal()');
+  });
+
+  it('never fires over a blocking flow or on a student who onboarded today', () => {
+    const s = code(LAYOUT);
+    expect(s).toMatch(/showResourceAnnounce = noBlockingModal && !showCoverageReview/);
+    expect(s).toContain('!onboardedTodayIst');
+  });
+
+  it('is dismissible and gates nothing', () => {
+    const s = code(ANNOUNCE);
+    expect(s).toContain('Got it');
+    expect(s).not.toContain('complete-task');
+    expect(s).not.toContain('required');
+  });
+
+  it('records that it was seen and dismissed', () => {
+    const s = code(ANNOUNCE);
+    expect(s).toContain("track('resource_announce_shown'");
+    expect(s).toContain("track('resource_announce_dismissed'");
+  });
+});

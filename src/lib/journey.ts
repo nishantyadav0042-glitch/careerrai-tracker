@@ -375,7 +375,9 @@ export type EventName =
   // Enriches an existing resource_verdict with the student's reason. A SEPARATE
   // name on purpose: a reason is not a second opinion, and counting verdicts
   // must never double just because somebody told us why. Join on `verdictId`.
-  | 'resource_verdict_reason';
+  | 'resource_verdict_reason'
+  // The one-time in-app announcement for the concept-resource layer.
+  | 'resource_announce_shown' | 'resource_announce_dismissed';
 
 export function track(event: EventName, props: Record<string, unknown> = {}): void {
   try {

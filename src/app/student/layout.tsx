@@ -12,6 +12,7 @@ import { InstallPing } from '@/components/install-ping';
 import { StandaloneNotifAsk } from '@/components/standalone-notif-ask';
 import { getStudentProfile } from '@/lib/student-profile';
 import { DailyBuddyNudge } from '@/components/daily-buddy-nudge';
+import { ResourceAnnounce } from '@/components/resource-announce';
 import { InstallJourney } from '@/components/install-journey';
 import { PushHealer } from '@/components/push-healer';
 import { NotificationAttribution } from '@/components/notification-attribution';
@@ -191,6 +192,14 @@ export default async function StudentLayout({ children }: { children: React.Reac
   const showBuddyNudge = noBlockingModal && !showCoverageReview && appInstalled && !showTimetablePrompt
     && !onboardedTodayIst && !profile?.buddy_id && profile?.is_premium !== true;
 
+  // One-time concept-resource announcement. Gated like every other auto-modal:
+  // never over a blocking flow, never over the coverage review, and never to a
+  // student who onboarded today — their first session already has enough to
+  // meet. It also takes the shared once-a-day slot, so it can only ever replace
+  // another prompt, never stack on one.
+  const showResourceAnnounce = noBlockingModal && !showCoverageReview
+    && !showTimetablePrompt && !onboardedTodayIst;
+
   return (
     <div className="min-h-screen bg-stone-50">
       {/* serverPushDead: the send path flagged this student's subscription as
@@ -287,6 +296,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
           the students who most needed it. Zero real students have ever logged a
           practice outcome; POST /api/evidence has no client caller at all.
           The promise comes down until the capture goes back up. */}
+      {showResourceAnnounce && <ResourceAnnounce />}
       {showBuddyNudge && <DailyBuddyNudge fullName={profile?.full_name ?? undefined} />}
     </div>
   );
