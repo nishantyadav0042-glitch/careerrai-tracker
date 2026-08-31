@@ -68,6 +68,17 @@ describe('the Daily Pick surface cannot serve a question', () => {
     const src = read('app/api/community/insights/route.ts');
     expect(src).not.toMatch(/dailyPick:\s*\{[^}]*question:/);
   });
+
+  // The feed sits on the same tab, below the hint. It kept both kinds for a few
+  // hours on the argument that the questions were student contributions worth
+  // protecting — until the data said otherwise: all 50 are ours, written under
+  // the admin account, and in six weeks exactly one non-curated row had ever
+  // arrived (the founder's own test). The tab serves ONE kind now, top to
+  // bottom. Server-side, so no client can drift back.
+  it('the feed below the hint is tips-only', () => {
+    const src = read('app/api/community/insights/route.ts');
+    expect(src).toMatch(/orderFeed\(all\.filter\(\(r\) => r\.kind === 'tip'/);
+  });
 });
 
 // ── THE RECYCLE STAMP MUST BE ABLE TO WRITE ────────────────────────────────
