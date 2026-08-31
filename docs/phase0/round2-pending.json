@@ -1,0 +1,147 @@
+{
+ "received": "2026-08-31 round 2",
+ "verification": "PENDING — vidIQ disconnected at time of logging",
+ "topics": [
+  {
+   "topic": "Average",
+   "factory": 9,
+   "why_rerun": "round 1 returned the same video for L1 and L2",
+   "candidates": [
+    {
+     "level": "L1",
+     "id": "m6EGM_UtY-Q",
+     "title": "Averages for CAT: Part 1 (Basic Concepts, Tricks, Solved Examples)",
+     "channel": "Takshzila",
+     "dur": "14:39",
+     "time": "25-35 min"
+    },
+    {
+     "level": "L2",
+     "id": "MYud15DuP6s",
+     "title": "Averages for CAT: Part 2 (More Concepts and Solved Examples)",
+     "channel": "Takshzila",
+     "dur": "18:16",
+     "time": "30-45 min"
+    },
+    {
+     "level": "L3",
+     "id": "0xvx3q17jZs",
+     "title": "All CAT Questions from Averages | CAT 2017-2021 | Blitzkrieg",
+     "channel": "2IIM CAT Preparation",
+     "dur": "1:31:14",
+     "time": "100-120 min"
+    },
+    {
+     "level": "L4",
+     "id": "q-ZUkah-xys",
+     "title": "Averages 2: Group Changes | Arithmetic for CAT 2026",
+     "channel": "Rodha",
+     "dur": "30:37",
+     "time": "50-65 min"
+    }
+   ]
+  },
+  {
+   "topic": "Selection & Distribution",
+   "factory": 17,
+   "why_rerun": "round 1's L2 video did not exist",
+   "candidates": [
+    {
+     "level": "L1",
+     "id": "DcX3oOYVDh0",
+     "title": "Selections and Distribution Puzzles by Elites Grid | Best Approach",
+     "channel": "ELITES GRID - CAT PREP",
+     "dur": "12:25",
+     "time": "25-35 min"
+    },
+    {
+     "level": "L2",
+     "id": "d38v_cGG0Y0",
+     "title": "SELECTIONS & Distibutions | Conventional method | CAT LRDI",
+     "channel": "ELITES GRID - CAT PREP",
+     "dur": "13:01",
+     "time": "30-40 min"
+    },
+    {
+     "level": "L3",
+     "id": "TAHxPmmojNQ",
+     "title": "Selection and Distribution Based DILR ft.Dr.Shashank Prabhu | DILR Dangal Ep.7",
+     "channel": "TestPrep By InsideIIM",
+     "dur": "31:45",
+     "time": "45-60 min",
+     "already_verified": {
+      "real_duration": "31:45",
+      "real_channel": "TestPrep By InsideIIM",
+      "duration_match": true,
+      "channel_match": true
+     }
+    },
+    {
+     "level": "L4",
+     "id": "bIMpphNLj4o",
+     "title": "Selections & Distribution based LRDI for CAT | Smart approaches",
+     "channel": "ELITES GRID - CAT PREP",
+     "dur": "12:02",
+     "time": "25-35 min"
+    }
+   ]
+  },
+  {
+   "topic": "Hybrid DILR Sets",
+   "factory": 20,
+   "why_rerun": "round 1 invented all three filled levels",
+   "candidates": [
+    {
+     "level": "L1",
+     "id": "gqYVcVjqW0k",
+     "title": "Tabular Set || LR & DI Preparation for CAT",
+     "channel": "Rodha",
+     "dur": "21:38",
+     "time": "35-45 min",
+     "already_verified": {
+      "real_duration": "21:38",
+      "real_channel": "Rodha",
+      "duration_match": true,
+      "channel_match": true
+     }
+    },
+    {
+     "level": "L2",
+     "id": "e3MUWMNxkKo",
+     "title": "CAT Infinite DILR - Set 420 | Averaging out the IQ | Data Table",
+     "channel": "Aptitude Jab",
+     "dur": "12:15",
+     "time": "25-35 min"
+    },
+    {
+     "level": "L3",
+     "id": "Ky5lzMv_1ns",
+     "title": "CAT 2018 DILR Solutions | Slot 2 Set 8 | College Accreditation",
+     "channel": "Aptitude Jab",
+     "dur": "16:03",
+     "time": "30-40 min"
+    },
+    {
+     "level": "L4",
+     "id": "uC87E_QC_14",
+     "title": "LRDI for CAT | Bottle Neck approach",
+     "channel": "ELITES GRID - CAT PREP",
+     "dur": "10:33",
+     "time": "20-30 min"
+    }
+   ]
+  }
+ ],
+ "pending_verification": [
+  "m6EGM_UtY-Q",
+  "MYud15DuP6s",
+  "0xvx3q17jZs",
+  "q-ZUkah-xys",
+  "DcX3oOYVDh0",
+  "d38v_cGG0Y0",
+  "bIMpphNLj4o",
+  "e3MUWMNxkKo",
+  "Ky5lzMv_1ns",
+  "uC87E_QC_14"
+ ]
+}
