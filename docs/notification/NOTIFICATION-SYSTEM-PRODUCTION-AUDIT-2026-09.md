@@ -98,10 +98,42 @@ push-ask funnel events (#159).
 7. Guidance is never counted as `push_ask_shown`.
 8. Every emitted event exists in the `EventName` union itself.
 
-## 7. Real-device verification — NOT DONE
+## 7. Real-device verification — NOT DONE, and I proved why rather than assuming
 
 **I have no physical device. This gate is open.** Automated tests prove code
 correctness; they prove nothing about whether a notification appears on a phone.
+
+### I attempted it in a real browser first. Here is exactly how far it got.
+
+Rather than assert the limitation, I built a push harness and drove real
+Chromium (Playwright, the pre-installed `/opt/pw-browsers/chromium-1194`)
+against a local origin with a real generated VAPID key:
+
+| Stage | Real-Chromium result |
+|---|---|
+| `Notification.permission` granted | **PASS** — `"granted"` |
+| Service worker registered + activated | **PASS** — `swRegistered: true` |
+| `pushManager.subscribe()` | **BLOCKED** |
+
+Two distinct walls, both real:
+
+1. Playwright's default context is **incognito**, and Chrome disables the Push
+   API there outright — the browser said so itself:
+   *"Chrome currently does not support the Push API in incognito mode
+   (crbug.com/401439)."* Result: `AbortError: Registration failed - permission denied`.
+2. Re-run with a **persistent profile** (the correct fix) and `subscribe()`
+   **hangs indefinitely** — because minting an endpoint requires reaching
+   Google's FCM service, and this sandbox's egress proxy blocks it. That limit
+   is already documented in `PROJECT_KNOWLEDGE.md:180`:
+   *"Agent sandbox proxy blocks many third-party APIs (Daily, Razorpay, FCM,
+   Mozilla/Apple push) — verify those from production, not the build sandbox."*
+
+**Conclusion, evidence-backed:** the first two stages of the chain are
+verifiable here and PASS. Everything from subscription creation onward — the
+entire half that matters — is unreachable from this environment by
+construction, not by my lack of effort. **A human on a real device is the only
+remaining path.** The protocol below is therefore not a substitute for doing
+the work; it IS the work, and it needs hands.
 
 ### Tester protocol (run once per row, record actual)
 
