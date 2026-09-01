@@ -34,16 +34,52 @@ export interface RealStudent {
   onboarding_completed: boolean | null;
 }
 
+// ── PostgREST returns AT MOST 1000 ROWS. Read this before adding a select. ──
+//
+// 2 Sep 2026: the Command Centre read "Students 1000" at 21:52 and again at
+// 02:34 while every other tile moved. It was not a plateau — there were 1,027
+// real students and the 28th page never existed. Supabase caps every response
+// at `max-rows` (1000), the caller did `.select()` with no range, and the tile
+// rendered `students.length`. A truncation is indistinguishable from a round
+// number, which is exactly why it sat there looking like a real figure.
+//
+// Worse than the tile: this list is the BASE POPULATION. `getLoggedToday`,
+// `getSalesReadyToCall` and the Founder Inbox all filter against it, so the
+// students past the cap were invisible to every card that derives from it —
+// they could log, ask for a mentor, or go cold and never appear.
+//
+// Per SCALE-CONTRACT the count must equal the records behind it, at 1,027 and
+// at 100,000. So paginate; never let a page limit decide a number.
+// `orderBy` MUST name a column that is unique in the result set. It is a
+// required argument, not a default: `student_engagement` has no `id` column,
+// so a hardcoded 'id' would have thrown on the sales-ready query.
+async function selectAllRows<T>(buildQuery: () => any, orderBy: string, pageSize = 1000): Promise<T[]> {
+  const out: T[] = [];
+  for (let from = 0; ; from += pageSize) {
+    // ORDER BY a unique column is REQUIRED, not cosmetic: without a total
+    // order Postgres may return rows in a different sequence per page, so
+    // range pagination would silently duplicate some rows and drop others.
+    const { data, error } = await buildQuery().order(orderBy, { ascending: true })
+      .range(from, from + pageSize - 1);
+    // Throw rather than return a short list. A partial population that looks
+    // complete is the bug this function exists to prevent — a loud failure is
+    // strictly better than a quietly wrong count.
+    if (error) throw new Error(`selectAllRows failed at offset ${from}: ${error.message}`);
+    const batch = (data ?? []) as T[];
+    out.push(...batch);
+    if (batch.length < pageSize) return out;
+  }
+}
+
 // One fetch of the base population, reused by the filters below within a
 // request. Every card derives from this exact set.
 export async function getRealStudents(admin: any): Promise<RealStudent[]> {
-  const { data } = await admin
+  return selectAllRows<RealStudent>(() => admin
     .from('profiles')
     .select('id, full_name, phone, onboarding_completed')
     .eq('role', 'student')
     .not('is_test_account', 'is', true)
-    .not('is_demo', 'is', true);
-  return (data ?? []) as RealStudent[];
+    .not('is_demo', 'is', true), 'id');
 }
 
 export interface LoggedTodayRow extends RealStudent {
@@ -168,11 +204,13 @@ export interface SalesReadyRow extends RealStudent {
 export async function getSalesReadyToCall(admin: any, students?: RealStudent[]): Promise<SalesReadyRow[]> {
   const base = students ?? (await getRealStudents(admin));
   const byId = new Map(base.map((s) => [s.id, s]));
-  const { data: rows } = await admin
+  // Was `.limit(1000)` — an explicit cap that matched the implicit one, so at
+  // 796 flagged students today it looks fine and silently truncates the day it
+  // passes 1000. Paginated for the same reason as the base population.
+  const rows = await selectAllRows<any>(() => admin
     .from('student_engagement')
     .select('student_id, buddy_cta_clicks, mock_opened, signed_up_at')
-    .eq('sales_ready', true)
-    .limit(1000);
+    .eq('sales_ready', true), 'student_id');
   const flagged = (rows ?? []).map((r: any) => r.student_id as string).filter((id: string) => byId.has(id));
   if (flagged.length === 0) return [];
   const { data: worked } = await admin
@@ -190,7 +228,12 @@ export async function getSalesReadyToCall(admin: any, students?: RealStudent[]):
   ]);
   const premiumIds = new Set((profs ?? []).filter((p: any) => p.is_premium === true).map((p: any) => p.id as string));
   const streakById = new Map((streaks ?? []).map((s: any) => [s.student_id, s]));
-  const doorById = new Map((doors ?? []).map((d: any) => [d.student_id as string, d.door as 'history' | 'intent']));
+  // Annotated explicitly: the tuple literal widens to (string | 'history' |
+  // 'intent')[], so without this the Map infers a value type of {} and
+  // mentorDoor stops matching SalesReadyRow. Previously this was masked
+  // because `rows` was untyped and the whole result collapsed to any.
+  const doorById = new Map<string, 'history' | 'intent'>(
+    (doors ?? []).map((d: any) => [d.student_id as string, d.door as 'history' | 'intent']));
   return (rows ?? [])
     .filter((r: any) => byId.has(r.student_id) && !premiumIds.has(r.student_id))
     .map((r: any) => {
@@ -229,7 +272,9 @@ export interface WantsBuddyRow {
 // buddy_id IS NULL AND not premium, real students only. Sorted hottest:
 // unlock taps → live momentum streak → freshest activity → newest signup.
 export async function getWantsBuddy(admin: any): Promise<WantsBuddyRow[]> {
-  const { data: students } = await admin
+  // Paginated: 507 today, and this hits the same 1000-row wall the Students
+  // tile hit as the base grows.
+  const students = await selectAllRows<any>(() => admin
     .from('profiles')
     .select('id, full_name, phone, created_at, app_installed')
     .eq('role', 'student')
@@ -237,7 +282,7 @@ export async function getWantsBuddy(admin: any): Promise<WantsBuddyRow[]> {
     .is('buddy_id', null)
     .not('is_premium', 'is', true)
     .not('is_test_account', 'is', true)
-    .not('is_demo', 'is', true);
+    .not('is_demo', 'is', true), 'id');
   const ids = (students ?? []).map((s: any) => s.id as string);
   if (ids.length === 0) return [];
   const [{ data: eng }, { data: streaks }, { data: doors }] = await Promise.all([
@@ -245,9 +290,14 @@ export async function getWantsBuddy(admin: any): Promise<WantsBuddyRow[]> {
     admin.from('streak_data').select('student_id, current_streak, last_log_date, shields').in('student_id', ids),
     admin.from('mentor_grants').select('student_id, door').in('student_id', ids),
   ]);
-  const engById = new Map((eng ?? []).map((e: any) => [e.student_id as string, (e.buddy_cta_clicks as number | null) ?? 0]));
-  const streakById = new Map((streaks ?? []).map((s: any) => [s.student_id as string, s]));
-  const doorById = new Map((doors ?? []).map((d: any) => [d.student_id as string, d.door as 'history' | 'intent']));
+  // Explicit value types for the same reason as getSalesReadyToCall: the tuple
+  // literals widen, and until `students` was typed the whole result collapsed
+  // to any and hid it.
+  const engById = new Map<string, number>(
+    (eng ?? []).map((e: any) => [e.student_id as string, (e.buddy_cta_clicks as number | null) ?? 0]));
+  const streakById = new Map<string, any>((streaks ?? []).map((s: any) => [s.student_id as string, s]));
+  const doorById = new Map<string, 'history' | 'intent'>(
+    (doors ?? []).map((d: any) => [d.student_id as string, d.door as 'history' | 'intent']));
   return (students ?? [])
     .map((s: any) => {
       const st = streakById.get(s.id) as any;
