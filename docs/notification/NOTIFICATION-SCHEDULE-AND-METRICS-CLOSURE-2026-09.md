@@ -260,3 +260,98 @@ history reconciling. Logging it here so it is not quietly dropped.
 - ✅ "UNKNOWN" — accepted, window elapsed, nothing came back
 - ✅ **"Push Reachability"** — the canonical business metric, and the only one
   that belongs in a business conversation
+
+---
+
+## ITEM 3 — Android engagement, investigated
+
+Asked: why do only ~53 of ~381 Android installed-active students open the app
+daily? Tested rather than assumed, because the answer decides whether any
+further notification work is justified.
+
+### Reachability by platform (installed-active, 2 Sep)
+
+| `install_source` | students | push-reachable | reach % | seen in last 24h |
+|---|---:|---:|---:|---:|
+| `browser` (Android web/PWA) | 335 | 105 | 31.3% | 37 |
+| `pwa` (Android installed) | 77 | 30 | 39.0% | 8 |
+| `ios` | 205 | **3** | **1.5%** | 26 |
+| null | 3 | 1 | — | 0 |
+
+iOS at 3 of 205 is the App Store WKWebView wrapper, already proven and not
+reopened here. **Non-iOS: 136 of 415 = 32.8% reachable, ~10.8% daily-active** —
+consistent with the founder's ~14% figure.
+
+### Where the Android loss actually is
+
+By `push_context` (written only when a subscription is registered):
+
+| context | installed-active | reachable | reach % |
+|---|---:|---:|---:|
+| `standalone` | 182 | 128 | **70.3%** |
+| `browser` | 24 | 10 | 41.7% |
+| `twa` | 1 | 1 | 100% |
+| **null (never subscribed)** | **413** | **0** | **0%** |
+
+**Once an Android student reaches the installed-app surface and is asked, 70%
+subscribe.** The funnel does not leak at permission and does not leak at
+delivery. It leaks at ACQUISITION: 413 of 620 installed-active students — 67% —
+never entered it at all. This corroborates the earlier telemetry (22 prompted →
+16 subscribed, 73%, zero failures) that overturned my own "Android funnel loses
+half" framing.
+
+### Does push reach explain engagement? Largely NO
+
+Logging rates among installed-active students, by whether push can reach them:
+
+| cohort | students | logged 7d | logged 30d |
+|---|---:|---:|---:|
+| reachable (push live) | 139 | 23 (**16.5%**) | 65 (46.8%) |
+| not reachable | 481 | 40 (**8.3%**) | 135 (28.1%) |
+
+Reachable students log at roughly twice the rate. **This is correlation, and it
+is heavily self-selected** — a student who installs, opens, and accepts a
+permission prompt is already the engaged kind. It is not evidence that push
+causes logging, and must not be quoted as such.
+
+Even taken at face value it bounds the upside: doubling reachability from 22.4%
+to ~45% would move weekly loggers from ~63 to ~86 of 620. Real, worth having,
+**not** the difference between 53/381 and a healthy daily-active number.
+
+**Conclusion: the Android engagement problem is not a notification problem.**
+Delivery works, permission conversion works, the crons fire on time. Only 16.5%
+of students we *can* reach perfectly log in a week. More push machinery does not
+fix that, and building it would be treating a product-engagement problem as an
+infrastructure one. This is the evidence for freezing notification work, not a
+reason to continue it.
+
+---
+
+## VERDICT: **NO-SHIP**
+
+Gated on exactly one thing: **the physical-device protocol has not been
+executed.** It requires a human with a real Android handset and a real iPhone;
+it cannot be run from this environment (the sandbox proxy blocks FCM, so
+`pushManager.subscribe()` hangs — a browser-automation result here would be
+meaningless, not reassuring). The protocol is written and ready in
+`docs/notification/TESTER-PROTOCOL-REAL-DEVICE.md`. **Gate status: BLOCKED, not
+passed.**
+
+Everything else is closed. Nothing in this session's findings changed the
+engineering picture in a way that argues for more building — the Android
+investigation argues the opposite.
+
+### Residual risks, stated
+
+1. **No device has been observed rendering a notification.** Every green signal
+   is server-side or beacon-side. `received_at` proves a worker ran, never that
+   a human saw a tray.
+2. **~30% of provider-accepted sends never confirm arrival** (3,103 rows).
+   UNKNOWN — could be unobserved `showNotification`, failed beacons, or real
+   loss. The real-device test is what distinguishes these.
+3. **`notification-reach-watch` has never executed.** Deployed 1 Sep, first fire
+   due 2 Sep 08:30 IST. Written, guarded, and unverified in production.
+4. **~45 students unaccounted for** in the ever-subscribed vs now-reachable
+   reconciliation. Preserved, not forced.
+5. **205 iOS students are structurally unreachable** until a native APNs build
+   ships — which needs Xcode, an Apple `.p8`, and App Store review. Unchanged.
