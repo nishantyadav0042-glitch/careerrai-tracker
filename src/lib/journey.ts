@@ -302,6 +302,12 @@ export type EventName =
   // `shown` and `skipped` are emitted at most once per outcome per mount —
   // evaluate() re-runs on every foreground, and an app switched to and from
   // ten times must not write ten rows.
+  // A surface that cannot receive a push is not automatically a dead end.
+  // `push_setup_guidance_shown` is the students we now GUIDE rather than skip
+  // — the App Store wrapper cohort (206 on 1 Sep) who previously got silence.
+  // Deliberately a separate name from push_ask_shown: no permission prompt is
+  // involved, so counting it as an ask would inflate the acquisition funnel.
+  | 'push_setup_guidance_shown'
   | 'push_ask_shown' | 'push_ask_skipped' | 'push_ask_later'
   | 'push_ask_blocked' | 'push_ask_dismissed' | 'push_ask_failed'
   | 'shield_intro_shown'

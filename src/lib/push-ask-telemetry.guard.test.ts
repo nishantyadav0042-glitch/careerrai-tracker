@@ -31,19 +31,28 @@ function evaluateBody(): string {
 }
 
 describe('every path out of the push ask is counted', () => {
-  it('every early return reports a skip reason', () => {
+  it('every early return reports an outcome — none is silent', () => {
+    // INTENT (unchanged since 1 Sep): no path may leave evaluate() without
+    // saying what happened. Widened from 'skipped' only, because a surface
+    // that cannot receive but HAS a remedy is now reported as 'guided'
+    // instead — a different outcome, still not silence.
     const body = evaluateBody();
     const returns = body.match(/return;/g)?.length ?? 0;
-    const reported = body.match(/report\('skipped',/g)?.length ?? 0;
+    const reported = (body.match(/report\('skipped',/g)?.length ?? 0)
+                   + (body.match(/report\('guided',/g)?.length ?? 0);
     expect(returns, 'no early returns found').toBeGreaterThan(0);
     expect(reported, 'an early return leaves evaluate() without reporting why').toBe(returns);
   });
 
   it('names each distinct reason, so the cohorts stay separable', () => {
-    const body = evaluateBody();
-    for (const why of ['not_standalone', 'ios_wrapper', 'unsupported', 'already_granted']) {
-      expect(body, `missing skip reason: ${why}`).toContain(`'${why}'`);
+    // INTENT unchanged. The reasons moved into the capability AUTHORITY when
+    // the inline isStandalone()/isIOS() pair was removed, so the guard now
+    // reads them there — a stronger position, since the union is typed.
+    const authority = read(join(__dirname, 'push-capability.ts'));
+    for (const why of ['not_standalone', 'ios_wrapper', 'unsupported']) {
+      expect(authority, `missing block reason: ${why}`).toContain(`'${why}'`);
     }
+    expect(evaluateBody(), 'already_granted is decided in the component').toContain("'already_granted'");
   });
 
   it('reports the ask when it actually renders', () => {
@@ -116,7 +125,12 @@ describe('the blocked student has a way out', () => {
   });
 
   it('swaps the primary action instead of leaving the dead one', () => {
-    expect(code(ASK)).toContain('onClick={blocked ? recheck : enable}');
+    // INTENT unchanged: a BLOCKED student must never get the button that
+    // cannot work. The expression grew a guidance branch in front, so assert
+    // the blocked->recheck mapping rather than the exact former string.
+    const s = code(ASK);
+    expect(s).toMatch(/onClick=\{[^}]*blocked \? recheck : enable\}/);
+    expect(s, 'blocked must not fall through to enable()').not.toMatch(/onClick=\{blocked \? enable/);
   });
 
   it('gives steps the student can actually follow', () => {
