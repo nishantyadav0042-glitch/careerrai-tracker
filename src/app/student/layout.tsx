@@ -10,6 +10,7 @@ import { getChatUnreadCount, getNotifUnreadCount } from '@/lib/chat-unread';
 import PostSignupSequence from '@/components/post-signup-sequence';
 import { InstallPing } from '@/components/install-ping';
 import { StandaloneNotifAsk } from '@/components/standalone-notif-ask';
+import { ReopenAppNudge } from '@/components/reopen-app-nudge';
 import { getStudentProfile } from '@/lib/student-profile';
 import { DailyBuddyNudge } from '@/components/daily-buddy-nudge';
 import { ResourceAnnounce } from '@/components/resource-announce';
@@ -260,6 +261,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
             <NotificationBell userId={user.id} initialUnreadCount={notifUnread} />
           </div>
         </div>
+        {noBlockingModal && !showCoverageReview && <ReopenAppNudge appInstalled={appInstalled} />}
         {children}
       </div>
       <StudentBottomNav chatUnread={chatUnread} />
