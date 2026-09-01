@@ -234,3 +234,78 @@ at 00:00 IST on 2 Sep, by date, not by anyone remembering.
 - **Reach is 25 students on a given day, not 974.** Routines generate when a
   student opens the app. The announcement is what changes that number, and
   whether it does is question (a) above.
+
+---
+
+## 8. Launch morning results — 1 Sep 2026, measured at 08:21 IST
+
+Every check in section 5 was run. **The launch worked end to end.**
+
+### The push fired, on every cadence
+
+| ist_day | decided | pushed | opened_app |
+|---|---|---|---|
+| 2026-09-01 | 862 | 148 | 0 |
+
+Exactly one row, as required. Those numbers are **identical to the day's total
+`companion_kickoff` volume** (862 decided / 148 pushed) — so the announcement
+was carried by *every* kickoff decision, in all three cadences, rather than by
+the small active minority. That was the point of applying it after the cadence
+branches, and it is now confirmed in production rather than argued from code.
+
+For comparison, 31 Aug kickoff was 860 decided / 151 pushed. Volume did not
+move: no new send was created, exactly as designed.
+
+### The copy landed correctly
+
+> **Yash, new topics now come with a lesson**
+> A topic you have not started yet now carries one free lesson link. Optional,
+> and it changes nothing about your plan.
+
+`expected_action` is `log_today`, preserved from the underlying activation
+decision, so this morning stays comparable to every other morning. The reason
+string reads `Activation cadence · kickoff · never logged · 89d to CAT ·
+lesson-link announcement` — the carrying decision is still legible, which is
+what makes query (e) work.
+
+### Students used it, and the loop closed
+
+| event | n | students |
+|---|---|---|
+| resource_shown | 9 | 2 |
+| resource_opened | 2 | 2 |
+| resource_announce_shown | 1 | 1 |
+| resource_announce_dismissed | 1 | 1 |
+| resource_verdict | 1 | 1 |
+
+Only two students by 08:21 — expected this early. But the full sequence ran on
+a real student, in order:
+
+- `07:54:14` announcement shown (day-38 student)
+- `07:54:54` opened the Para Summary concept link (Rodha)
+- `07:55:07` verdict: **`helped`**
+
+**That is the first outcome signal this product has ever collected on a
+learning resource.** A separate student at 06:31 opened an Editorial Reading
+link without seeing the announcement card at all — the link layer works
+independently of the announcement, which is correct.
+
+### No errors
+
+Vercel reported no runtime errors on the deploy.
+
+### One thing checked and cleared, not a defect
+
+`notifications.link_url` is null on every row — but on every notification type,
+going back before this change (0 of 1,722 kickoffs, 0 of 1,725 sparks). The
+destination is carried in `data.url` (`/student/tracker?log=1`) and passed
+straight to the push payload, so deep-linking works. `link_url` is an unused
+legacy column. No action.
+
+### Still owed
+
+- **The P1 check:** this must NOT fire again. Query (e) must still return a
+  single row after 2 Sep. The date guard is tested, but the production
+  confirmation is cheap and this is the one failure mode with a named severity.
+- Hybrid DILR Sets, and the 11 `confirmPending` confirmations — both blocked on
+  vidIQ credits renewing 30 Sep.
