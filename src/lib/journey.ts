@@ -289,7 +289,22 @@ export type EventName =
   | 'pay_redirect'
   | 'pay_order_created' | 'pay_order_failed' | 'pay_script_failed'
   | 'pay_success_callback'
-  | 'push_enabled' | 'shield_intro_shown'
+  | 'push_enabled'
+  // ── The push ask, instrumented (1 Sep) ──────────────────────────────────
+  //
+  // Until now StandaloneNotifAsk tracked ONLY success (`push_enabled`), so a
+  // student who never saw the ask and a student who saw it and tapped Later
+  // were indistinguishable in the data. Production on 1 Sep: 996 students,
+  // 156 reachable by push, 692 with the app installed — and no way to tell
+  // where the other 536 fall out. `push_ask_skipped.why` is the important
+  // one: it separates "we never asked" from "they said no".
+  //
+  // `shown` and `skipped` are emitted at most once per outcome per mount —
+  // evaluate() re-runs on every foreground, and an app switched to and from
+  // ten times must not write ten rows.
+  | 'push_ask_shown' | 'push_ask_skipped' | 'push_ask_later'
+  | 'push_ask_blocked' | 'push_ask_dismissed' | 'push_ask_failed'
+  | 'shield_intro_shown'
   | 'buddy_plan_click' | 'buddy_unlock_open'
   // Independence Day campaign (12 Aug): one funnel, measured end to end —
   // card seen → clicked → offer page → checkout (pay_* above carries the rest).

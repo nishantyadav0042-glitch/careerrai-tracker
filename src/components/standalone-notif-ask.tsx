@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { track, detectDisplayMode } from '@/lib/journey';
 import { BellRing } from 'lucide-react';
 import { setNotifAskVisible as setAskVisible, NOTIF_ASK_SETTLED_EVENT } from '@/lib/first-run-events';
@@ -47,9 +47,21 @@ export function StandaloneNotifAsk({ pushEnabled, serverSubDead = false }: { pus
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const reconnect = pushEnabled && serverSubDead;
+  // evaluate() re-runs on every foreground, so the same outcome would other-
+  // wise be written once per app switch. Only a CHANGE is worth a row.
+  const lastOutcome = useRef<string | null>(null);
 
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect -- capability detection must run client-side after mount */
+    // Emit once per distinct outcome. `why` is the whole point of this
+    // instrumentation: it is what separates "never asked" from "said no".
+    const report = (outcome: string, why?: string) => {
+      if (lastOutcome.current === outcome) return;
+      lastOutcome.current = outcome;
+      if (outcome === 'shown') track('push_ask_shown', { reconnect, context: detectDisplayMode() });
+      else track('push_ask_skipped', { why, context: detectDisplayMode() });
+    };
+
     if (pushEnabled && !serverSubDead) { setAskVisible(false); setShow(false); return; }
 
     // Show whenever notifications aren't on yet — this is JOB #1 in the app,
@@ -58,12 +70,13 @@ export function StandaloneNotifAsk({ pushEnabled, serverSubDead = false }: { pus
     // until it's done. Every early-return marks the ask as settled (it isn't
     // going to cover the screen), so the tour can proceed.
     const evaluate = () => {
-      if (!isStandalone()) { setAskVisible(false); return; }
-      if (isIOS()) { setAskVisible(false); return; } // web push is a no-op in the iOS wrapper — don't prompt
-      if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) { setAskVisible(false); return; }
-      if (Notification.permission === 'granted') { setAskVisible(false); return; } // subscribed; server flag will catch up
+      if (!isStandalone()) { setAskVisible(false); report('skipped', 'not_standalone'); return; }
+      if (isIOS()) { setAskVisible(false); report('skipped', 'ios_wrapper'); return; } // web push is a no-op in the iOS wrapper — don't prompt
+      if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) { setAskVisible(false); report('skipped', 'unsupported'); return; }
+      if (Notification.permission === 'granted') { setAskVisible(false); report('skipped', 'already_granted'); return; } // subscribed; server flag will catch up
       setAskVisible(true);
       setShow(true);
+      report('shown');
     };
     evaluate();
 
@@ -75,7 +88,9 @@ export function StandaloneNotifAsk({ pushEnabled, serverSubDead = false }: { pus
       document.removeEventListener('visibilitychange', onVisible);
     };
     /* eslint-enable react-hooks/set-state-in-effect */
-  }, [pushEnabled, serverSubDead]);
+    // `reconnect` is derived from the other two, so listing it re-runs nothing
+    // extra — it just keeps the dependency list honest.
+  }, [pushEnabled, serverSubDead, reconnect]);
 
   if (!show) return null;
 
@@ -89,8 +104,10 @@ export function StandaloneNotifAsk({ pushEnabled, serverSubDead = false }: { pus
         // the overlay up). 'default' = they dismissed the prompt — hide for now;
         // it comes back on the next app open. Neither is persisted.
         if (permission === 'denied') {
+          track('push_ask_blocked', { context: detectDisplayMode() });
           setErr('Blocked by the phone — enable notifications for CareerRai in Settings.');
         } else {
+          track('push_ask_dismissed', { context: detectDisplayMode() });
           setAskVisible(false);
           setShow(false);
         }
@@ -114,7 +131,14 @@ export function StandaloneNotifAsk({ pushEnabled, serverSubDead = false }: { pus
       void fetch('/api/push/welcome', { method: 'POST' }).catch(() => {});
       // Full reload so every server-rendered gate sees push=true and clears.
       window.location.reload();
-    } catch {
+    } catch (e) {
+      // Our own messages ('no key', 'subscribe failed: …') or a browser
+      // DOMException name. Neither carries anything student-identifying;
+      // capped anyway so a long native message cannot bloat a row.
+      track('push_ask_failed', {
+        reason: (e instanceof Error ? e.message : 'unknown').slice(0, 80),
+        context: detectDisplayMode(),
+      });
       setErr("Couldn't switch on — try again in a moment.");
     } finally {
       setBusy(false);
@@ -123,6 +147,9 @@ export function StandaloneNotifAsk({ pushEnabled, serverSubDead = false }: { pus
 
   function later() {
     // Hide for now only — no persistence, so it returns on the next app open.
+    // Tracked because a student who repeatedly taps Later is telling us the
+    // copy is not landing, which looks identical to "never asked" without it.
+    track('push_ask_later', { reconnect, context: detectDisplayMode() });
     setAskVisible(false);
     setShow(false);
   }
