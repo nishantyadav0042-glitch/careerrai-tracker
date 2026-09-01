@@ -50,6 +50,10 @@ const OPERATIONAL_ALERT_CALLERS: Record<string, string> = {
   'src/app/api/cron/metric-snapshot/route.ts': 'mission-control alerts to ops',
   'src/app/api/cron/push-recovery/route.ts': 'the day\'s WhatsApp-recovery worklist to ops',
   'src/app/api/cron/daily-reminder/route.ts': 'run summary to ops after the student sends',
+  // Ops-facing by construction: it names a BROKEN FUNNEL STAGE to whoever
+  // maintains the system, and sends nothing to any student. It exists because
+  // the 10 Aug iOS acquisition collapse went unnoticed for three weeks.
+  'src/app/api/cron/notification-reach-watch/route.ts': 'reach-funnel anomaly alert to ops',
 };
 
 function stripComments(src: string): string {
