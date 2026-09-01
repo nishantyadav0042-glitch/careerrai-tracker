@@ -8,10 +8,19 @@
  * standing cost of never shipping that to a student.
  */
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { TOPIC_RESOURCES, resourceFor, resourceCoverage, type ResourceIntent } from './topic-resources';
 import { KNOWLEDGE_GRAPH } from './topics-constants';
 
 const ALL_UNITS = new Set(KNOWLEDGE_GRAPH.flatMap((s) => s.groups).flatMap((g) => g.units));
+
+// The platform ledger — see scripts/verify-resources.mjs, which is the only
+// thing allowed to write it. Read here, never fetched, so the suite stays
+// offline and deterministic.
+const LEDGER = JSON.parse(readFileSync('docs/phase0/VERIFIED-IDS.json', 'utf8')) as {
+  videos: Record<string, { minutes: number; channel: string; title: string }>;
+};
+
 
 // Units modern CAT does not test as question types. Grammar was dropped from
 // the exam after 2014; the rest are tested only inside Reading Comprehension.
@@ -229,28 +238,28 @@ describe('a video is the primary for at most one topic', () => {
 });
 
 describe('confirmPending is an honest, temporary marker', () => {
-  it('flags only rows that have not had the direct id lookup', () => {
-    // Search and lookup are both the platform, so neither can invent a video.
-    // The lookup catches a transcription slip on OUR side. Credits ran out
-    // mid-round, so these rows were hand-checked against the search response
-    // and flagged rather than silently shipped as fully confirmed.
+  it('is empty, because the direct id lookup has now been run for every row', () => {
+    // The flag meant "taken from a search response, not yet re-checked by a
+    // direct id lookup" — vidIQ credits ran out mid-round, so eleven rows were
+    // hand-checked against the search response instead.
+    //
+    // scripts/verify-resources.mjs does that lookup for every row on a free
+    // YouTube Data API quota, and its output is asserted below. So the flag has
+    // been discharged rather than abandoned: the check it was waiting for now
+    // runs on every test run, for every row, not just these eleven.
+    //
+    // The field stays on the interface. If a future round ever adds a row ahead
+    // of the lookup again, it has somewhere honest to say so — and the test
+    // below will fail until the lookup is run.
     const pending = Object.entries(TOPIC_RESOURCES)
       .flatMap(([t, rs]) => rs.filter((r) => r.confirmPending).map((r) => `${t}/${r.intent}`));
-    expect(pending.sort()).toEqual([
-      'Caselets/concept', 'Caselets/worked_example',
-      'Odd One Out/concept', 'Odd One Out/worked_example',
-      'Para Jumbles/concept', 'Para Jumbles/worked_example',
-      'Progressions/concept', 'Progressions/worked_example',
-      'Ratio & Proportion/concept', 'Ratio & Proportion/worked_example',
-      'Vocabulary/concept',
-    ]);
+    expect(pending).toEqual([]);
   });
 
   it('holds every flagged row to the same data standard as a confirmed one', () => {
-    // Pending confirmation is not a licence to ship a weaker row: the id shape,
-    // the runtime, the longForm flag and the channel are all still asserted by
-    // the tests above. This one states it explicitly so the flag can never
-    // become a loophole.
+    // Pending confirmation is not a licence to ship a weaker row. Vacuous while
+    // nothing is flagged, and that is the point: it stays armed for the next
+    // row that needs the flag.
     for (const [topic, rs] of Object.entries(TOPIC_RESOURCES)) {
       for (const r of rs.filter((x) => x.confirmPending)) {
         expect(r.videoId, `${topic}/${r.intent}`).toMatch(/^[A-Za-z0-9_-]{11}$/);
@@ -258,6 +267,80 @@ describe('confirmPending is an honest, temporary marker', () => {
         expect(r.longForm === true, `${topic}/${r.intent}`).toBe(r.realMinutes > 45);
         expect(r.channel.trim().length, `${topic}/${r.intent}`).toBeGreaterThan(0);
       }
+    }
+  });
+});
+
+describe('topic-resources: nothing ships that the platform has not confirmed', () => {
+  const rows = Object.entries(TOPIC_RESOURCES).flatMap(([t, rs]) => rs.map((r) => [t, r] as const));
+
+  it('has a platform record for every live video id', () => {
+    const unverified = rows
+      .filter(([, r]) => !(r.videoId in LEDGER.videos))
+      .map(([t, r]) => `${t}/${r.intent} (${r.videoId})`);
+    expect(
+      unverified,
+      'run scripts/verify-resources.mjs — if the API returns nothing for an id, it does not exist',
+    ).toEqual([]);
+  });
+
+  it('stores the runtime the platform reports, not a claimed one', () => {
+    for (const [topic, r] of rows) {
+      const truth = LEDGER.videos[r.videoId];
+      if (!truth) continue;
+      expect(r.realMinutes, `${topic}/${r.intent} (${r.videoId})`).toBe(truth.minutes);
+    }
+  });
+
+  it('credits the channel the platform reports', () => {
+    for (const [topic, r] of rows) {
+      const truth = LEDGER.videos[r.videoId];
+      if (!truth) continue;
+      expect(r.channel, `${topic}/${r.intent} (${r.videoId})`).toBe(truth.channel);
+    }
+  });
+
+  it('keeps no ledger entry for a video that is no longer live', () => {
+    const liveIds = new Set(rows.map(([, r]) => r.videoId));
+    const orphans = Object.keys(LEDGER.videos).filter((id) => !liveIds.has(id));
+    expect(orphans, 're-run scripts/verify-resources.mjs to prune these').toEqual([]);
+  });
+
+  it('has no row still waiting on a direct id lookup', () => {
+    // confirmPending marked rows taken from a search response when vidIQ ran
+    // out of credits. The ledger IS that lookup, so the flag has no remaining
+    // meaning — and leaving it would let a future row wear it indefinitely.
+    const pending = rows.filter(([, r]) => r.confirmPending).map(([t, r]) => `${t} (${r.videoId})`);
+    expect(pending, 'the ledger performs this lookup — clear the flag').toEqual([]);
+  });
+});
+
+// ── A student is told what language the lesson is in, before they tap ─────
+//
+// YouTube's defaultAudioLanguage cannot be used for this: it returns `zxx`
+// ("no linguistic content") for lectures that plainly have speech, and `en`
+// for videos taught entirely in Hindi. Every value here was established by
+// reading the transcript, and the evidence file records that.
+describe('topic-resources: the teaching language is recorded, not guessed', () => {
+  const LANGS = JSON.parse(readFileSync('docs/phase0/RESOURCE-LANGUAGES.json', 'utf8')) as {
+    languages: Record<string, 'en' | 'hi'>;
+    _unresolved: Record<string, string>;
+  };
+  const rows = Object.entries(TOPIC_RESOURCES).flatMap(([t, rs]) => rs.map((r) => [t, r] as const));
+
+  it('only claims a language it has transcript evidence for', () => {
+    const unbacked = rows
+      .filter(([, r]) => r.language !== undefined && LANGS.languages[r.videoId] !== r.language)
+      .map(([t, r]) => `${t} (${r.videoId})`);
+    expect(unbacked, 'read the transcript and record it, or leave the row unlabelled').toEqual([]);
+  });
+
+  it('leaves a row unlabelled rather than guessing, and says which', () => {
+    // Absence is a legitimate state. What is not legitimate is an unlabelled
+    // row nobody has accounted for, so every one must be named in the file.
+    const unlabelled = rows.filter(([, r]) => r.language === undefined).map(([, r]) => r.videoId);
+    for (const id of unlabelled) {
+      expect(LANGS._unresolved[id], `${id} is unlabelled but not recorded as unresolved`).toBeTruthy();
     }
   });
 });
