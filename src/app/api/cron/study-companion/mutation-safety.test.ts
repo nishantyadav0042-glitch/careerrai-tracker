@@ -78,7 +78,13 @@ vi.mock('@/lib/supabase/admin', () => ({
   }),
 }));
 
-async function run(slot = 'morning') {
+// 'kickoff', not 'morning'. These cases exercise the job's mutation safety
+// under an ordinary slot; the slot was incidental when this was written.
+// 'morning' was retired on 27 Jul 2026 and the route now answers 410 for it
+// (see RETIRED_COMPANION_SLOTS), which would short-circuit every case here
+// before any of the behaviour under test ran. 'kickoff' is live and is also
+// in `needsCoverage`, so the code path these tests cover is unchanged.
+async function run(slot = 'kickoff') {
   const { POST } = await import('./route');
   // The route reads `request.nextUrl.searchParams`, which is a NextRequest
   // property — a plain Request has no `nextUrl`, so the first harness threw
