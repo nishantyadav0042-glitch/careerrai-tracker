@@ -232,7 +232,13 @@ export function TimetableUpload({ onClose, kind = 'weekly' }: {
     onClose('saved');
   }
 
-  const mapped = blocks.filter((b) => b.topic).length;
+  // Same definition of "matched" the admin OCR dashboard uses
+  // (app/api/timetable/parse/route.ts) — a chapter match ("Algebra") counts
+  // here too, not just a precise leaf topic. Before this, a coaching sheet
+  // read as chapters could show "6 matched" to the student here while the
+  // admin screen logged 9/10 for that same upload — same word, two different
+  // numbers for the same event, which is worse than either number alone.
+  const mapped = blocks.filter((b) => b.topic || b.chapter).length;
 
   return (
     <div className="fixed inset-0 z-[80] flex items-end justify-center bg-stone-900/60 backdrop-blur-sm sm:items-center">

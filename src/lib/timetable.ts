@@ -1,5 +1,5 @@
 import { VERBAL_TOPICS, LRDI_TOPICS, QUANT_TOPICS } from '@/lib/topics-constants';
-import { resolveTopic, resolveActivity } from '@/lib/coaching-vocab';
+import { resolveChapter, resolveTopic, resolveActivity } from '@/lib/coaching-vocab';
 
 // Coaching timetable: shared types + the ONLY place that decides what counts as
 // a valid extracted block.
@@ -51,6 +51,20 @@ export interface TimetableBlock {
   day: number | null;
   date: string | null;
   dayIndex: number | null;
+  /**
+   * The QA chapter a coaching named when no leaf topic is identifiable —
+   * "Algebra", "Arithmetic", "Geometry", "Number System", "Modern Math".
+   *
+   * Carried BESIDE topic, never as one. Coachings teach at this level while
+   * every one of our topics is a leaf beneath it, so a sheet reading "Algebra
+   * - JP Sir" used to resolve to nothing and be counted unreadable. Expanding
+   * it into its six units instead would over-claim: one Algebra class is not
+   * Logarithms AND Progressions AND Functions, and timetable topics flow into
+   * topic_coverage, so that lie would corrupt the revision schedule. Coverage
+   * therefore reads `topic` only; this field exists so an honest partial read
+   * stops being reported as a failure.
+   */
+  chapter?: string | null;
   /** null on all-day entries ("Whole Day", "Practice Session"). */
   start: string | null;
   end: string | null;
@@ -133,7 +147,11 @@ export function sanitizeBlocks(raw: unknown): TimetableBlock[] {
       ? topicRaw
       : (resolveTopic(topicRaw) ?? resolveTopic(labelRaw));
 
-    const label = labelRaw || topic || section || 'Class';
+    // Only when no leaf topic was identified: a precise topic always wins, and
+    // a block never carries both.
+    const chapter = topic ? null : (resolveChapter(topicRaw) ?? resolveChapter(labelRaw));
+
+    const label = labelRaw || topic || chapter || section || 'Class';
 
     // Minutes: printed value wins; a start-end pair implies one; else null.
     let minutes: number | null = null;
@@ -146,7 +164,7 @@ export function sanitizeBlocks(raw: unknown): TimetableBlock[] {
       const span = (eh * 60 + em) - (sh * 60 + sm);
       minutes = span > 0 ? span : span + 24 * 60; // 22:00-00:00 runs overnight
     }
-    out.push({ day, date, dayIndex, start, end, allDay, section, topic, label, minutes });
+    out.push({ day, date, dayIndex, start, end, allDay, section, topic, chapter, label, minutes });
   }
 
   // Chronological where we can be: real dates first, then Day N, then weekday.
