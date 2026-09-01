@@ -115,14 +115,21 @@ Production `cron_runs`, read 2 Sep 2026. `cron_runs` is a complete record: all
 | builder recovery | `builder-recovery` | every 30 min, 09:30–21:00 | 1 Sep 21:01 | ✅ healthy — 336/336 in 14d |
 | push death/recovery | `push-recovery` | 10:30 daily | 1 Sep 10:30 | ✅ healthy |
 | daily heartbeat | `daily-heartbeat` | 21:00 daily | 1 Sep 21:01 | ✅ healthy |
-| reach watch | `notification-reach-watch` | 08:30 daily | **never run** | ⚠️ deployed 1 Sep; **first fire due 2 Sep 08:30** |
+| reach watch | `notification-reach-watch` | 08:30 daily | — | ⏳ **NOT YET EXECUTED — first scheduled run pending** (08:30 IST 2 Sep) |
 
 ### Other schedule facts established
 
-- **42 crons declared, 41 have run.** The only one that has not is
-  `notification-reach-watch`, deployed yesterday and not yet due. That is
-  expected, not a defect — but it is also **unverified**, and is called out as a
-  residual risk rather than assumed good.
+- **42 crons declared, 41 have run.** The 42nd is `notification-reach-watch`,
+  deployed 1 Sep with its first scheduled execution at 08:30 IST on 2 Sep. As of
+  this reading (01:11 IST, 2 Sep) that time is **7h19m in the future**, so its
+  status is **NOT YET EXECUTED — first scheduled run pending**. This is not a
+  failure and is not described as one. It is also not yet evidence of anything.
+
+  **After its first scheduled execution, verify all five:** (1) it executes;
+  (2) it writes a `cron_runs` row; (3) its production query runs without error;
+  (4) it does not false-positive on today's healthy data; (5) it correctly
+  detects the historical 10-Aug collapse scenario when that shape is replayed
+  against it.
 - **All 42 answer GET.** Incidents #55/#56 were caused by cron routes exporting
   only `POST` (Vercel invokes with GET → 405 → handler never ran → no
   `cron_runs` row). `cron-get-export.guard.test.ts` passes on all 42.
@@ -171,6 +178,86 @@ comparable:
 | **Provider-accepted → confirmed arrival** | **70.1%** |
 | *(the circular figure, for contrast)* | *97.1%* |
 
+### CANONICAL TRANSPORT METRIC — frozen
+
+> **Provider-accepted → service-worker receipt.**
+> Never "delivery", never "visible delivery", never "notification display".
+
+```sql
+-- CANONICAL TRANSPORT METRIC. Frozen 2 Sep 2026.
+select
+  count(*)                                                as provider_accepted_swept,
+  count(*) filter (where received_at is not null)         as service_worker_receipt,
+  count(*) filter (where clicked_at is not null)          as clicked,
+  count(*) filter (where received_at is not null
+                      or clicked_at is not null)          as confirmed_arrival,
+  round(100.0 * count(*) filter (where received_at is not null
+                                    or clicked_at is not null)
+        / nullif(count(*), 0), 1)                         as confirmed_arrival_pct
+from notifications
+where pushed_at is not null
+  and send_status in ('provider_accepted', 'unknown')
+  and pushed_at < now() - interval '48 hours';
+```
+
+**Reading, 2 Sep 2026 01:11 IST:** 11,119 swept · 7,781 SW receipt · 83 clicked ·
+**7,789 confirmed arrival = 70.1%**.
+
+**1 — What qualifies a row for the denominator.** Three conditions, all required:
+`pushed_at IS NOT NULL` (a send was actually attempted, so in-app-only rows can
+never dilute it); `send_status IN ('provider_accepted','unknown')` (the provider
+returned 2xx — these are the only two labels a provider-accepted row can ever
+hold); and `pushed_at < now() - 48h`. Rows before 16 Aug 2026 carry
+`send_status = NULL` because the column did not exist; they are **excluded**,
+which is why this metric covers the instrumented era only and is not comparable
+to pre-16-Aug figures.
+
+**2 — What "fully swept" means.** `push-recovery` runs daily at 10:30 IST and can
+only restamp rows whose `pushed_at` is older than the 48h `CONFIRMATION_WINDOW_MS`.
+A row younger than 48h may still read `provider_accepted` **merely because the
+sweep has not reached it yet**. Including such rows would count not-yet-judged
+sends as successes and inflate the number. The `pushed_at < now() - 48h` clause
+restricts the denominator to rows whose label is already settled.
+
+**3 — Why these rows are never removed or relabelled out.** The only status
+transition that exists is `provider_accepted → unknown`, and **both labels are
+inside the denominator**. No row can leave the set. The transition moves a row
+between two members of the same union; it cannot shrink it. A late receipt or
+tap arriving after the stamp moves the row from unconfirmed to confirmed in the
+**numerator** (`resolveDeliveryState` treats arrival evidence as outranking
+`send_status`, permanently — `delivery-state.ts:31`) while leaving the
+denominator untouched.
+
+**4 — How `unknown` is generated.** `closeOutUnconfirmed()` in
+`api/cron/push-recovery/route.ts:158`, as one set-based UPDATE with predicate:
+`send_status = 'provider_accepted'` AND `received_at IS NULL` AND
+`clicked_at IS NULL` AND `pushed_at IS NOT NULL` AND `pushed_at < now() - 48h`.
+It is an **admission that we stopped waiting**, not a verdict about the device.
+
+**5 — Why this metric cannot be improved artificially.** The numerator is
+`received_at IS NOT NULL OR clicked_at IS NOT NULL` — both stamped **only by
+device-side evidence** (the service-worker beacon; a real tap). No server-side
+status write touches the numerator. PushHealer and the relabelling sweep can
+only move rows between `provider_accepted` and `unknown`, and since the
+denominator is their union, **every such write is a no-op on this ratio**. The
+number can rise only if more devices actually come back. That is precisely the
+property the discarded 92% figure lacked: it used `provider_accepted` alone as
+its denominator, so every sweep mechanically raised it.
+
+**`unknown` is NOT `lost`.** A row in the 3,330-row shortfall (11,119 − 7,789)
+is consistent with an unobserved `showNotification`, a beacon that failed to
+send, a device that never woke the worker, or genuine non-delivery. **We cannot
+distinguish these, and no server-side measurement can.** Only the physical-device
+test can. It is recorded as UNKNOWN and must never be reported as lost —
+nor as delivered.
+
+The two unconfirmed counts in this document are both correct and are not the
+same quantity: **3,103** rows carry the `unknown` label, while the unconfirmed
+shortfall is **3,330** (11,119 − 7,789). The 227-row difference is rows that
+have passed 48h unconfirmed but that the daily 10:30 IST sweep has not yet
+relabelled. They sit in the denominator either way, which is the point of
+defining it as the union — the sweep's timing cannot move the ratio.
+
 **~30% of provider-accepted pushes never confirm arrival.** That is not proven
 to be lost delivery — an unobserved `showNotification`, a beacon that failed, a
 device that never woke the worker all land here identically — but it is
@@ -204,15 +291,48 @@ where role = 'student'
 
 **Reading, 2 Sep 2026: 139 / 620 = 22.4%.**
 
-Definitional choices, stated so they are not re-litigated:
-- **Denominator is installed-active**, not all 1,028 profiles. A student who
-  never installed or has been gone 30 days is a *growth* problem, not a
-  *reachability* problem, and mixing them hides both.
-- **`push_subscription IS NOT NULL` is the numerator.** `push.ts` nulls it on a
-  terminal 410/404, so the column is the live truth about whether a send can even
-  be attempted. It requires no delivery inference at all.
-- Of the 481 unreachable: **413 never subscribed**, **68 had a subscription die**.
-  Those two need different fixes and must never be merged into one number.
+**This is the ONLY headline business metric.** Nothing else in this repo may be
+presented as "reachability" in a business conversation.
+
+**Exact denominator — installed-active (620).** `profiles` rows satisfying all
+three: `role = 'student'` (excludes staff, buddies, admin accounts);
+`app_installed IS TRUE` (the student completed an install — a browser-tab
+visitor is not in scope); `last_seen_at >= now() - interval '30 days'`. Not all
+1,028 profiles: a student who never installed, or has been gone a month, is a
+*growth* problem, not a *reachability* problem, and mixing them hides both. The
+30-day window is part of the definition — changing it changes the metric.
+
+**Exact endpoint qualification — live endpoint (139).**
+`push_subscription IS NOT NULL`. This column holds the stored `PushSubscription`
+JSON and `push.ts:158` **nulls it on a terminal 410/404** (`push_died_at` is
+stamped in the same write). So a non-null value means exactly: *the server holds
+an endpoint it is still permitted to attempt a send to.* It is a **live
+endpoint**, deliberately not a verified one, and it requires no delivery
+inference whatsoever.
+
+Of the 481 unreachable: **68 had a subscription die** (`push_died_at` set) and
+**413 have no push context at all** — the unexposed/unclassified population
+described under Item 3. Those two need different fixes and must never be merged.
+
+### The diagnostic ladder — six distinct things, NOT interchangeable
+
+Each rung answers a strictly narrower question than the one above it. Quoting any
+rung as a substitute for another is the exact error that produced "92% delivery".
+
+| # | Rung | Definition | Reading (2 Sep 01:11 IST) |
+|---|---|---|---|
+| 1 | **Live endpoint** | `push_subscription IS NOT NULL` — **CANONICAL** | **139 / 620 = 22.4%** |
+| 2 | Verified endpoint | live **and** `push_verified_at IS NOT NULL` | 138 |
+| 3 | Provider accepted | provider returned 2xx, fully swept | 11,119 rows |
+| 4 | Service-worker receipt | `received_at` — the SW push handler ran | 7,781 rows |
+| 5 | **Visible OS notification** | a human's tray actually rendered it | **NOT INSTRUMENTED — UNMEASURABLE server-side** |
+| 6 | Click | `clicked_at` — a real tap | 83 rows · 66 students /30d |
+
+Rung 5 is the one that matters to a student and **we cannot measure it at all**.
+`sw.js` fires the receipt beacon *in parallel* with `showNotification()` and never
+observes its result, so rung 4 can never be promoted to rung 5 by any amount of
+server-side work. **This is the entire reason the physical-device gate exists**,
+and why no volume of green server metrics can substitute for it.
 
 ### Diagnostic metrics — kept, and kept separate
 
@@ -222,8 +342,8 @@ reported as "delivery".
 | Metric | Definition | Reading (2 Sep) |
 |---|---|---|
 | Provider acceptance | send returned 2xx from FCM/APNs | 0 failures on attempted sends, 30d |
-| Provider-accepted → SW receipt | `received_at` set = SW handler ran | **70.1%** (honest denominator) |
-| Confirmed-arrival shortfall | accepted, 48h passed, no receipt/tap | **3,103 rows — UNKNOWN, not "lost"** |
+| Provider-accepted → SW receipt | `received_at` set = SW handler ran | 7,781 / 11,119 = **70.0%** |
+| Confirmed-arrival shortfall | accepted, 48h passed, no receipt/tap | **3,330 rows — UNKNOWN, never "lost"** |
 | Tap-through | `clicked_at` set | 66 students, 30d |
 | Subscription mortality | `push_died_at` set | 68 students |
 
@@ -293,12 +413,28 @@ By `push_context` (written only when a subscription is registered):
 | `twa` | 1 | 1 | 100% |
 | **null (never subscribed)** | **413** | **0** | **0%** |
 
-**Once an Android student reaches the installed-app surface and is asked, 70%
-subscribe.** The funnel does not leak at permission and does not leak at
-delivery. It leaks at ACQUISITION: 413 of 620 installed-active students — 67% —
-never entered it at all. This corroborates the earlier telemetry (22 prompted →
-16 subscribed, 73%, zero failures) that overturned my own "Android funnel loses
-half" framing.
+**The currently measured Android bottleneck is exposure to the notification
+acquisition flow, not conversion after the prompt is shown.**
+
+What the evidence actually supports, and nothing further:
+
+- **128/182 = 70.3%** subscribe after reaching the installed-app notification
+  context.
+- **16/22 = 72.7%** in the newer direct-prompt telemetry.
+- **Zero** observed OS blocks, dismissals, or subscription failures in the newer
+  sample.
+
+Two independent samples agree on conversion, and both overturn my own earlier
+"Android funnel loses half" framing.
+
+**The 413 students with no `push_context` are NOT proven to be acquisition
+failures.** `push_context` is written only at subscription time, so its absence
+records that we have no observation — not that a prompt was shown and lost, and
+not that the student refused. They are an **unexposed / unclassified
+population** and stay that way until telemetry establishes exactly why they
+never entered the funnel. Any split of that 413 into causes would be invention.
+
+**No Android push work is justified by this evidence, and none was built.**
 
 ### Does push reach explain engagement? Largely NO
 
@@ -318,12 +454,14 @@ Even taken at face value it bounds the upside: doubling reachability from 22.4%
 to ~45% would move weekly loggers from ~63 to ~86 of 620. Real, worth having,
 **not** the difference between 53/381 and a healthy daily-active number.
 
-**Conclusion: the Android engagement problem is not a notification problem.**
-Delivery works, permission conversion works, the crons fire on time. Only 16.5%
-of students we *can* reach perfectly log in a week. More push machinery does not
-fix that, and building it would be treating a product-engagement problem as an
-infrastructure one. This is the evidence for freezing notification work, not a
-reason to continue it.
+**Conclusion: notification work on Android is FROZEN here.** The crons fire on
+time, provider acceptance is clean, and post-prompt conversion is ~70–73% in two
+independent samples. Only 16.5% of students we can already reach perfectly log
+in a week — and that gap is a **separate product-engagement investigation**,
+deliberately NOT folded into the notification P0. Correlation is observed;
+**causality is not established, and push is not claimed to cause the
+difference.** Building more push machinery would be treating a product problem
+as an infrastructure one.
 
 ---
 
@@ -337,20 +475,36 @@ meaningless, not reassuring). The protocol is written and ready in
 `docs/notification/TESTER-PROTOCOL-REAL-DEVICE.md`. **Gate status: BLOCKED, not
 passed.**
 
-Everything else is closed. Nothing in this session's findings changed the
-engineering picture in a way that argues for more building — the Android
-investigation argues the opposite.
+Everything else is closed. **The audit is closed with it** — no further broad
+auditing, no new notification architecture, no speculative Android push changes,
+no resurrection of retired crons, no metric inflation, and no "tests passed
+therefore fixed". Nothing found in this session argues for more building; the
+Android investigation argues the opposite.
+
+**The critical path to be observed by a human tester:**
+iPhone → Safari → careerrai.in → Add to Home Screen → **open from the Home
+Screen icon** → permission prompt → Allow → subscription created → controlled
+test push → **an actual visible OS notification** → tap → correct destination.
+Execute the Android physical path too where a handset is available.
+
+**If it passes:** SHIP, with the observed evidence recorded.
+**If it fails:** the exact failing stage is named and **only that stage is
+fixed** — no redesign around it.
 
 ### Residual risks, stated
 
 1. **No device has been observed rendering a notification.** Every green signal
    is server-side or beacon-side. `received_at` proves a worker ran, never that
    a human saw a tray.
-2. **~30% of provider-accepted sends never confirm arrival** (3,103 rows).
-   UNKNOWN — could be unobserved `showNotification`, failed beacons, or real
-   loss. The real-device test is what distinguishes these.
-3. **`notification-reach-watch` has never executed.** Deployed 1 Sep, first fire
-   due 2 Sep 08:30 IST. Written, guarded, and unverified in production.
+2. **~30% of provider-accepted sends never confirm arrival** (3,330 rows).
+   **UNKNOWN, not lost.** Consistent with an unobserved `showNotification`, a
+   failed beacon, a device that never woke the worker, or genuine non-delivery —
+   and no server-side measurement can separate these. The real-device test is
+   what distinguishes them.
+3. **`notification-reach-watch`: NOT YET EXECUTED — first scheduled run pending**
+   (08:30 IST, 2 Sep). Written and guarded; carries no production evidence yet.
+   Not a failure — simply not yet due. The five verification checks above are
+   owed once it fires.
 4. **~45 students unaccounted for** in the ever-subscribed vs now-reachable
    reconciliation. Preserved, not forced.
 5. **205 iOS students are structurally unreachable** until a native APNs build
