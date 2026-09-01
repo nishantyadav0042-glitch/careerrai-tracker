@@ -1,4 +1,4 @@
-import { VERBAL_TOPICS, LRDI_TOPICS, QUANT_TOPICS } from '@/lib/topics-constants';
+import { VERBAL_TOPICS, LRDI_TOPICS, QUANT_TOPICS, QA_GROUPS } from '@/lib/topics-constants';
 import type { TargetKind } from '@/lib/timetable';
 
 // Sourced from topics-constants, NOT from lib/timetable — timetable imports
@@ -151,6 +151,61 @@ export function resolveTopic(raw: string): string | null {
   for (const c of candidates) {
     if (c.length >= 4 && key.includes(c)) {
       return TOPIC_ALIASES[c] ?? EXACT_TOPIC.get(c) ?? null;
+    }
+  }
+  return null;
+}
+
+// ── THE CHAPTER A COACHING ACTUALLY TEACHES ─────────────────────────────────
+//
+// 1 Sep. Every one of our 46 topics is a LEAF: "Linear Equations", "Circles",
+// "Remainders". Coaching institutes schedule at the CHAPTER above them —
+// "Algebra", "Arithmetic", "Geometry", "Number System" — and not one of those
+// words existed anywhere in the taxonomy, as a topic or an alias.
+//
+// So a sheet reading "Algebra - JP Sir 5:30-7:30" was read correctly by the
+// model, which then obeyed its instruction never to invent a topic and
+// returned null. We counted that as a match failure. Measured against real
+// production labels: 0 of 14 genuine topic rows resolved.
+//
+// The chapters are NOT new vocabulary. QA_GROUPS has grouped these exact
+// units since the Blueprint was built, and its own comment says it is "never
+// a second taxonomy — same strings, grouped". This reads that existing
+// grouping; it invents nothing.
+//
+// WHY A CHAPTER IS NOT A TOPIC. It is tempting to expand "Algebra" into its
+// six units and mark them all covered. That would be a lie: one Algebra class
+// is not Logarithms AND Progressions AND Functions. Timetable topics flow
+// into topic_coverage, so an over-claim there would corrupt the revision
+// schedule for every student who uploads a sheet. A chapter is therefore
+// carried BESIDE the topic, never as one — coverage stays leaf-only and
+// honest, while the block stops being counted as unreadable.
+const CHAPTER_BY_KEY = new Map<string, string>();
+for (const g of QA_GROUPS) CHAPTER_BY_KEY.set(normalizeKey(g.label), g.label);
+// What coachings actually print for the same chapters.
+for (const [alias, chapter] of Object.entries({
+  'number systems': 'Number System', numbers: 'Number System', 'no system': 'Number System',
+  arithmetic: 'Arithmetic', 'modern maths': 'Modern Math', 'modern mathematics': 'Modern Math',
+  algebra: 'Algebra', geometry: 'Geometry', 'mensuration and geometry': 'Geometry',
+} as Record<string, string>)) CHAPTER_BY_KEY.set(normalizeKey(alias), chapter);
+
+/**
+ * The QA chapter a coaching's words name, or null.
+ *
+ * Deliberately WORD-BOUNDED, not substring: "Arithmetic Workshop 3" and
+ * "Algebra\nRevision-JP Sir" must resolve, while a teacher's name or a room
+ * code that merely contains the letters must not. A wrong chapter is worse
+ * than none — it files a class under the wrong part of a student's plan.
+ */
+export function resolveChapter(raw: string): string | null {
+  const key = normalizeKey(raw);
+  if (!key) return null;
+  const direct = CHAPTER_BY_KEY.get(key);
+  if (direct) return direct;
+  for (const [alias, chapter] of CHAPTER_BY_KEY) {
+    if (alias.length < 5) continue;
+    if (new RegExp(`(^|[^a-z])${alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^a-z]|$)`).test(key)) {
+      return chapter;
     }
   }
   return null;

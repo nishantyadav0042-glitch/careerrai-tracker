@@ -179,7 +179,7 @@ export async function POST(request: NextRequest) {
 
   admin.from('student_events').insert({
     user_id: user.id, event: 'timetable_parsed',
-    props: { blocks: blocks.length, targets: targets.length, mediaType, mapped: blocks.filter((b) => b.topic).length },
+    props: { blocks: blocks.length, targets: targets.length, mediaType, mapped: blocks.filter((b) => b.topic || b.chapter).length },
     path: null,
   }).then(({ error }) => { if (error) console.error('[timetable] event log failed', error.message); });
 
