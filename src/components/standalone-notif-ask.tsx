@@ -46,6 +46,10 @@ export function StandaloneNotifAsk({ pushEnabled, serverSubDead = false }: { pus
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // The OS has already refused. Distinct from "not asked yet": requestPermission()
+  // returns 'denied' instantly forever, so the normal CTA is a dead button and
+  // the student can tap it all day. Production, 1 Sep: one student tapped 14 times.
+  const [blocked, setBlocked] = useState(false);
   const reconnect = pushEnabled && serverSubDead;
   // evaluate() re-runs on every foreground, so the same outcome would other-
   // wise be written once per app switch. Only a CHANGE is worth a row.
@@ -74,9 +78,15 @@ export function StandaloneNotifAsk({ pushEnabled, serverSubDead = false }: { pus
       if (isIOS()) { setAskVisible(false); report('skipped', 'ios_wrapper'); return; } // web push is a no-op in the iOS wrapper — don't prompt
       if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) { setAskVisible(false); report('skipped', 'unsupported'); return; }
       if (Notification.permission === 'granted') { setAskVisible(false); report('skipped', 'already_granted'); return; } // subscribed; server flag will catch up
+      // Still shown when blocked — the founder's rule is that this returns on
+      // every app open until notifications are actually on, and a blocked
+      // student HAS an unresolved state with a real fix. What changes is the
+      // panel: instructions they can act on, never a button that cannot work.
+      const denied = Notification.permission === 'denied';
+      setBlocked(denied);
       setAskVisible(true);
       setShow(true);
-      report('shown');
+      if (!denied) report('shown');
     };
     evaluate();
 
@@ -92,7 +102,70 @@ export function StandaloneNotifAsk({ pushEnabled, serverSubDead = false }: { pus
     // extra — it just keeps the dependency list honest.
   }, [pushEnabled, serverSubDead, reconnect]);
 
+  // The ONE place this event is emitted. Keyed on the state flip rather than
+  // the tap, so it counts students who are blocked, not how many times they
+  // tried — the raw tap count was 14 for a single student.
+  useEffect(() => {
+    if (blocked) track('push_ask_blocked', { context: detectDisplayMode() });
+  }, [blocked]);
+
+  // The ONE place a failure is recorded. Both entry points into the subscribe
+  // flow funnel through it, so the event keeps a single call site.
+  function reportFailure(e: unknown) {
+    // Our own messages ('no key', 'subscribe failed: …') or a browser
+    // DOMException name. Neither carries anything student-identifying;
+    // capped anyway so a long native message cannot bloat a row.
+    track('push_ask_failed', {
+      reason: (e instanceof Error ? e.message : 'unknown').slice(0, 80),
+      context: detectDisplayMode(),
+    });
+    setErr("Couldn't switch on — try again in a moment.");
+  }
+
   if (!show) return null;
+
+  // Everything after the permission is granted. Shared by the first grant and
+  // by a student who fixed it in phone settings and came back.
+  async function subscribeNow() {
+    const keyRes = await fetch('/api/push/vapid-public-key', { cache: 'no-store' });
+    const { key: publicKey } = keyRes.ok ? await keyRes.json() : { key: null };
+    if (!publicKey) throw new Error('no key');
+    await navigator.serviceWorker.register('/sw.js');
+    const reg = await navigator.serviceWorker.ready;
+    // Reuse a healthy sub, rotate only if the key changed — never the blind
+    // unsubscribe()+subscribe() that stranded endpoints (21 July fix).
+    const sub = await getLiveSubscription(reg, publicKey);
+    const { ok, reason } = await persistSubscription(sub, detectDisplayMode());
+    if (!ok) throw new Error(`subscribe failed: ${reason}`);
+    track('push_enabled', { context: detectDisplayMode(), source: 'standalone_ask' });
+    // Verification loop: prove the brand-new subscription delivers end to end.
+    // Fire-and-forget — the reload below shouldn't wait on it, and the beacon
+    // stamps push_verified_at when the device receives it.
+    void fetch('/api/push/welcome', { method: 'POST' }).catch(() => {});
+    // Full reload so every server-rendered gate sees push=true and clears.
+    window.location.reload();
+  }
+
+  // The blocked student's real action: they changed it in phone settings, we
+  // re-read. Deliberately does NOT call requestPermission() — once denied that
+  // resolves to 'denied' instantly and forever, which is what made the original
+  // button a dead end.
+  async function recheck() {
+    setBusy(true);
+    setErr(null);
+    try {
+      if (Notification.permission !== 'granted') {
+        setErr('Still blocked. Turn notifications on for CareerRai in your phone settings, then tap again.');
+        return;
+      }
+      setBlocked(false);
+      await subscribeNow();
+    } catch (e) {
+      reportFailure(e);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function enable() {
     setBusy(true);
@@ -100,46 +173,22 @@ export function StandaloneNotifAsk({ pushEnabled, serverSubDead = false }: { pus
     try {
       const permission = await Notification.requestPermission();
       if (permission !== 'granted') {
-        // 'denied' = blocked at OS level (tell them to fix it in Settings, keep
-        // the overlay up). 'default' = they dismissed the prompt — hide for now;
-        // it comes back on the next app open. Neither is persisted.
+        // 'denied' = blocked at OS level. Flip to the blocked panel rather than
+        // leaving the same dead button on screen — the event is emitted from
+        // that state flip, once, not once per tap. 'default' = they dismissed
+        // the OS prompt; hide for now, it comes back on the next app open.
         if (permission === 'denied') {
-          track('push_ask_blocked', { context: detectDisplayMode() });
-          setErr('Blocked by the phone — enable notifications for CareerRai in Settings.');
+          setBlocked(true);
         } else {
           track('push_ask_dismissed', { context: detectDisplayMode() });
           setAskVisible(false);
           setShow(false);
         }
-        setBusy(false);
         return;
       }
-      const keyRes = await fetch('/api/push/vapid-public-key', { cache: 'no-store' });
-      const { key: publicKey } = keyRes.ok ? await keyRes.json() : { key: null };
-      if (!publicKey) throw new Error('no key');
-      await navigator.serviceWorker.register('/sw.js');
-      const reg = await navigator.serviceWorker.ready;
-      // Reuse a healthy sub, rotate only if the key changed — never the blind
-      // unsubscribe()+subscribe() that stranded endpoints (21 July fix).
-      const sub = await getLiveSubscription(reg, publicKey);
-      const { ok, reason } = await persistSubscription(sub, detectDisplayMode());
-      if (!ok) throw new Error(`subscribe failed: ${reason}`);
-      track('push_enabled', { context: detectDisplayMode(), source: 'standalone_ask' });
-      // Verification loop: prove the brand-new subscription delivers end to end.
-      // Fire-and-forget — the reload below shouldn't wait on it, and the beacon
-      // stamps push_verified_at when the device receives it.
-      void fetch('/api/push/welcome', { method: 'POST' }).catch(() => {});
-      // Full reload so every server-rendered gate sees push=true and clears.
-      window.location.reload();
+      await subscribeNow();
     } catch (e) {
-      // Our own messages ('no key', 'subscribe failed: …') or a browser
-      // DOMException name. Neither carries anything student-identifying;
-      // capped anyway so a long native message cannot bloat a row.
-      track('push_ask_failed', {
-        reason: (e instanceof Error ? e.message : 'unknown').slice(0, 80),
-        context: detectDisplayMode(),
-      });
-      setErr("Couldn't switch on — try again in a moment.");
+      reportFailure(e);
     } finally {
       setBusy(false);
     }
@@ -167,26 +216,53 @@ export function StandaloneNotifAsk({ pushEnabled, serverSubDead = false }: { pus
         </div>
         <div>
           <p className="mb-1 text-[11px] font-bold uppercase tracking-widest text-orange-500">
-            {reconnect ? 'Your reminders got disconnected' : 'The last step of your setup'}
+            {blocked ? 'Blocked by your phone' : reconnect ? 'Your reminders got disconnected' : 'The last step of your setup'}
           </p>
           <h1 className="text-2xl font-bold leading-snug text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
-            {reconnect ? <>Your daily plan stopped<br />reaching you.</> : <>Your plan works only<br />if it reaches you.</>}
+            {blocked
+              ? <>This one has to be<br />done in Settings.</>
+              : reconnect ? <>Your daily plan stopped<br />reaching you.</> : <>Your plan works only<br />if it reaches you.</>}
           </h1>
           <p className="mt-2 text-sm leading-relaxed text-stone-500">
-            {reconnect
+            {blocked
+              ? 'Your phone has blocked notifications for CareerRai, and an app can’t undo that from the inside — only you can, and it takes about ten seconds.'
+              : reconnect
               ? 'Your phone switched off CareerRai’s notifications, so your daily plan and reminders have gone quiet. One tap reconnects them.'
               : 'Students who keep reminders on stay consistent — today’s plan, revision alerts, and gentle nudges. Switch on your notifications so they actually reach you.'}
           </p>
         </div>
+
+        {/* Real steps, because there is no web API that can open the OS
+            notification settings for us. A button that pretended to would be
+            the same promise-without-a-capability that got EvidenceAnnounce
+            deleted — so we tell them exactly where it is instead. */}
+        {blocked && (
+          <ol className="mx-auto space-y-2 text-left text-[13px] leading-relaxed text-stone-600">
+            {[
+              <>Press and hold the <strong className="text-stone-800">CareerRai</strong> icon on your home screen.</>,
+              <>Tap <strong className="text-stone-800">App info</strong> (the ⓘ), then <strong className="text-stone-800">Notifications</strong>.</>,
+              <>Turn notifications <strong className="text-stone-800">on</strong>, then come back here.</>,
+            ].map((step, i) => (
+              <li key={i} className="flex gap-2.5">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-stone-900 text-[10px] font-bold text-white">{i + 1}</span>
+                <span>{step}</span>
+              </li>
+            ))}
+          </ol>
+        )}
         {err && <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{err}</p>}
         <div className="space-y-2">
+          {/* Once the OS has denied, requestPermission() resolves to 'denied'
+              instantly and forever. Offering it again is the dead end this
+              replaces: the blocked student gets a re-READ instead, which is an
+              action that can actually succeed once they've been to Settings. */}
           <button
             type="button"
             disabled={busy}
-            onClick={enable}
+            onClick={blocked ? recheck : enable}
             className="w-full rounded-2xl bg-stone-900 py-4 text-sm font-semibold text-white transition-all hover:bg-stone-800 active:scale-[0.98] disabled:opacity-60"
           >
-            {busy ? 'Switching on…' : 'Switch on notifications →'}
+            {busy ? 'Checking…' : blocked ? 'I’ve turned it on — check again' : 'Switch on notifications →'}
           </button>
           <button type="button" disabled={busy} onClick={later} className="w-full py-2.5 text-xs font-medium text-stone-400 hover:text-stone-600">
             Later

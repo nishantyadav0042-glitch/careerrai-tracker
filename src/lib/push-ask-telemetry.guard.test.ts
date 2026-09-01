@@ -93,3 +93,55 @@ describe('the instrumentation cannot flood or leak', () => {
     }
   });
 });
+
+// ── A blocked student must never face a button that cannot work ─────────────
+//
+// Production, 1 Sep: `push_ask_blocked` fired 14 times for ONE student. Those
+// were 14 taps. Once the OS has denied permission, requestPermission() resolves
+// to 'denied' instantly and forever, so the primary CTA could never succeed —
+// and the overlay stayed up offering it, with no other way forward.
+
+describe('the blocked student has a way out', () => {
+  it('detects the denial up front rather than only after a tap', () => {
+    expect(code(ASK)).toMatch(/Notification\.permission === 'denied'/);
+  });
+
+  it('does not re-ask the OS once it has refused', () => {
+    // The dead end itself: recheck() must RE-READ the permission, never
+    // request it again.
+    const s = code(ASK);
+    const recheck = s.slice(s.indexOf('async function recheck()'), s.indexOf('async function enable()'));
+    expect(recheck, 'recheck() must exist').toContain('Notification.permission');
+    expect(recheck, 'recheck() must not call requestPermission').not.toContain('requestPermission');
+  });
+
+  it('swaps the primary action instead of leaving the dead one', () => {
+    expect(code(ASK)).toContain('onClick={blocked ? recheck : enable}');
+  });
+
+  it('gives steps the student can actually follow', () => {
+    // There is no web API that can open OS notification settings, so a button
+    // claiming to would be a promise without a capability — the failure that
+    // got EvidenceAnnounce deleted. Instructions are the honest substitute.
+    const s = read(ASK);
+    expect(s).toMatch(/App info/);
+    expect(s).toMatch(/Notifications/);
+    expect(s).toMatch(/can.t undo that from the inside|has to be[\s\S]{0,40}done in Settings/);
+  });
+
+  it('counts blocked students, not their taps', () => {
+    // Emitted from the state flip, so tapping ten times is still one row.
+    const s = code(ASK);
+    expect(s).toMatch(/useEffect\(\(\) => \{\s*if \(blocked\) track\('push_ask_blocked'/);
+    expect(s).toMatch(/\}, \[blocked\]\);/);
+  });
+
+  it('still returns on every app open — the founder rule is not weakened', () => {
+    // A blocked student has an unresolved state with a real fix, so the ask
+    // still shows. What changed is the panel, not the cadence.
+    const s = code(ASK);
+    const ev = s.slice(s.indexOf('const evaluate = () => {'), s.indexOf('\n    };', s.indexOf('const evaluate = () => {')));
+    expect(ev).toContain('setBlocked(denied)');
+    expect(ev, 'a denial must not become a silent skip').not.toMatch(/denied[\s\S]{0,80}report\('skipped'/);
+  });
+});
