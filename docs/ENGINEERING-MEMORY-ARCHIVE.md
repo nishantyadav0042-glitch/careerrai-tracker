@@ -3278,3 +3278,89 @@ Second, operational: the runway warning in the community-recycle cron now says
 hits zero, so the condition that would have triggered this is visible in logs
 rather than inferred from a blank screen.
 
+
+---
+
+## Incident #64
+
+**Date:** 2026-09-01
+**Area:** Diagnostics / Notification reachability
+**Severity:** P1 (no student harmed — two wrong diagnoses, one nearly acted on)
+
+### What was wrong
+
+Two separate sessions, hours apart, independently concluded from the same field
+that ~630-704 students "were never prompted" for push permission. Neither
+conclusion was supported. The field cannot carry that meaning.
+
+`notif_prefs.push_prompted` is written in exactly one place —
+`persistDismissal` in `src/components/push-gate.tsx` — and only **on decline**.
+`push-gate.tsx` renders in exactly one layout:
+`src/app/buddy/(dashboard)/layout.tsx`, the buddy/staff surface. The student
+ask, `src/components/standalone-notif-ask.tsx`, contains **zero** references to
+it; `grep -c push_prompted` returns 0. The student layout says so out loud:
+*"The old browser PushGate asks are gone."*
+
+So for a student the flag is never written under any circumstance — prompted or
+not, shown or not, declined or not. Its absence is not evidence of anything.
+Across the entire database only 36 profiles carry it, and those are staff plus
+pre-July legacy.
+
+The trap is baited by a second fact: `notif_prefs` has a DATABASE DEFAULT of
+`{"push": false, ...}`, so **every profile is born looking like a refusal**
+(`src/lib/notification-health.ts:15`). A reader who joins "push is false" to
+"no prompt flag" gets a number that looks like a measurement of refusal or of
+silence, and is neither.
+
+### Why it kept happening
+
+This was already known. `src/app/admin/notification-health/page.tsx` records a
+15 Aug rename made for precisely this reason: *"'opted out' used to mean the
+database DEFAULT (push:false from birth), not a real refusal — checked against
+production, only 9.7% of that bucket ever saw an actual prompt."* The knowledge
+existed in a UI copy string and in a comment in `notification-health.ts`.
+
+Neither location is where an investigator looks. Both sessions started where
+any competent investigator starts — the database — and the database schema
+carries no hint that the column means something narrower than its name.
+
+**A lesson that lives only in prose gets re-learned by whoever queries first.**
+
+### What it cost
+
+Nothing shipped. Both diagnoses were caught before any code changed. The cost
+was investigative: two sessions spent effort deriving a number that was never
+real, and one of them nearly presented it to the founder as fact.
+
+### The prevention
+
+The real fix is not a warning, it is a signal that actually exists. PR #159
+(merged to main 1 Sep, live in production) instruments every path out of the
+student ask, with no behaviour change:
+
+| event | meaning |
+|---|---|
+| `push_ask_shown` | the overlay actually rendered |
+| `push_ask_skipped` | it did not, with `why` |
+| `push_ask_later` / `_blocked` / `_dismissed` / `_failed` | outcomes after it rendered |
+
+`push_ask_skipped.why` is the answer to the question both sessions were asking:
+`not_standalone` (browser tab — asked only inside the installed app, by design),
+`ios_wrapper` (the App Store WKWebView cannot receive web push at all),
+`unsupported`, `already_granted`.
+
+```sql
+select props->>'why' as why, count(*) as n, count(distinct user_id) as students
+from student_events where event = 'push_ask_skipped' group by 1 order by students desc;
+```
+
+`src/lib/push-ask-telemetry.guard.test.ts` holds the property that would rot
+silently: every early return in `evaluate()` must report a reason. Verified to
+fail when one is removed.
+
+**Rule this leaves behind:** before inferring a population from the ABSENCE of
+a flag, find the line that writes it and confirm that line can run for the
+population you are counting. A default value is not a decision, and an unwritten
+flag is not a "no". This is the same failure class as Incident #61 — a query
+that excluded the very rows that carried the answer, then three confident wrong
+diagnoses on top of it.
