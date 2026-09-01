@@ -137,8 +137,39 @@ describe('the onboarding mapping exists in exactly one place', () => {
     // The authority cannot know this — only the caller knows which profile it
     // is holding. Incident #42: a guard in the caller is not a guard in the
     // callee, so the callers are asserted, not trusted.
+    // ── THIS ASSERTION ALSO USED TO DEMAND A BUG ─────────────────────────
+    //
+    // It required the OTP gate to read `(isStub || !existing)` — isStub being
+    // "full_name is still the trigger's 'New User' placeholder". That is a
+    // proxy for brand-new, and this route overwrites full_name with a real
+    // name (or the literal 'Student') on the FIRST verification. So isStub is
+    // false from the second verification onward, and the draft could only ever
+    // be applied once. A student whose first application did not finish —
+    // applyOnboarding deliberately leaves onboarding_completed false when the
+    // coverage upsert fails — could never have their answers applied again,
+    // while the student layout kept sending them back through /start because
+    // it gates on onboarding_completed. An infinite loop on the only student
+    // door, and this guard held it in place.
+    //
+    // Both doors are now asserted on the same fact the layout uses, which is
+    // the point: "may I apply this draft" and "will this student be sent back
+    // through onboarding" must be ONE fact, not two proxies that can disagree.
     const otp = read(OTP_ROUTE);
-    expect(otp).toMatch(/if\s*\(\s*\(\s*isStub\s*\|\|\s*!existing\s*\)[\s\S]{0,120}?applyOnboarding/);
+    const otpAt = otp.indexOf('applyOnboarding(admin');
+    expect(otpAt, 'the OTP door no longer applies a draft').toBeGreaterThan(-1);
+
+    const otpGuard = otp.slice(Math.max(0, otpAt - 200), otpAt);
+    expect(otpGuard,
+      'the OTP door applies a draft without checking onboarding_completed — a '
+      + 'student interrupted mid-signup can never recover, and a completed '
+      + "student's profile could be overwritten by a stale funnel answer")
+      .toMatch(/onboarding_completed\s*!==\s*true/);
+
+    // And the column has to be READ, or the check above compares undefined to
+    // true and lets every student through — the same silent pass the Google
+    // door is asserted against below.
+    expect(otp, 'onboarding_completed is never selected, so the OTP guard reads undefined')
+      .toMatch(/\.select\([^)]*onboarding_completed/);
 
     // ── THIS ASSERTION USED TO DEMAND THE BUG ────────────────────────────
     //
