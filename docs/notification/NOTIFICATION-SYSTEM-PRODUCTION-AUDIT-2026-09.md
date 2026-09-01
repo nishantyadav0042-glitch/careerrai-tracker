@@ -180,3 +180,46 @@ by the founder's own §27 gate until §7 is executed by a human on real hardware
 ---
 
 *No claim in this document rests on a passing test suite.*
+
+
+---
+
+## 11. CORRECTION (1 Sep, 23:45 IST) — Android is not an acquisition problem
+
+The earlier framing in this and the reach audit — *"the Android acquisition
+funnel loses about half"* — is **wrong as a description of the funnel**, and the
+telemetry shipped this morning disproves it. Recorded here rather than quietly
+amended.
+
+**Android, first ~14 hours of real funnel data:**
+
+| Stage | Students |
+|---|---|
+| Opened the app at all | 53 |
+| Opened it **installed** (the only surface asked) | 38 |
+| — already had a working endpoint (correctly not asked) | 21 |
+| **Prompt shown** | **22** |
+| **Subscribed** | **16 — 73% conversion** |
+| Tapped Later | 8 |
+| OS blocked / dismissed / subscribe failed | **0 / 0 / 0** |
+| Never asked, no endpoint (unexplained) | 7 |
+
+**When the prompt is shown, 73% of Android students subscribe, and not one
+failure occurred at any step.** There is no conversion leak to fix.
+
+The 373 → 125 historical gap is therefore **not** a broken funnel. It is the
+accumulated result of a low daily open rate: **53 of 381** Android
+installed-active students opened the app today (~14%). Reach grows only as fast
+as students open the app.
+
+**Consequence for the plan: do not change the Android permission flow.** It
+works. Adding education copy or re-prompting would be optimising a stage that
+converts at 73%, and would risk the fatigue rules for no measured gain. The
+remaining 7 "unexplained silent" students are ~18% of installed opens and are
+most likely in a blocking flow (onboarding / post-signup), where the ask is
+correctly suppressed — that is an inference, not proven.
+
+**PROVEN:** 73% conversion when asked; zero failures at every step.
+**INFERRED:** the 7 silent students are in blocking flows.
+**UNKNOWN:** why any individual student does not open the app — that is a
+retention question, not a notification one.
