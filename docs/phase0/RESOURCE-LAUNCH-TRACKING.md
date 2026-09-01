@@ -309,3 +309,99 @@ legacy column. No action.
   confirmation is cheap and this is the one failure mode with a named severity.
 - Hybrid DILR Sets, and the 11 `confirmPending` confirmations — both blocked on
   vidIQ credits renewing 30 Sep.
+
+---
+
+## 9. Day 1 — 1 Sep 2026, measured 21:00 IST
+
+### The announcement more than doubled daily active students
+
+| | 31 Aug | 1 Sep |
+|---|---|---|
+| Students who generated a routine | 25 | **59** |
+
+That is the clearest result of the day, and it is the number the announcement
+was for.
+
+### The resource layer
+
+| event | events | students |
+|---|---|---|
+| `resource_shown` | 779 | **56** |
+| `resource_opened` | 21 | **14** |
+| `resource_verdict` | 4 | 3 |
+| `resource_announce_shown` | 14 | 12 |
+| `resource_announce_dismissed` | 12 | 11 |
+
+**Do not read 21/779 as the open rate.** `resource_shown` counts one impression
+per resource per component mount, and a student remounts it on every navigation
+back to the plan — median 8 impressions per student, max 72. The honest
+student-level number is **14 of 56 students opened a link, ~25%.** Any ratio
+built on the raw event counts will understate it by an order of magnitude.
+
+### The four verdicts
+
+| topic | verdict |
+|---|---|
+| Para Summary | **helped** |
+| Editorial Reading | okay |
+| Percentages | did_not |
+| Selection & Distribution | not_opened |
+
+No reasons were given behind the `did_not` — the reason picker is optional and
+that student skipped it.
+
+**Nothing is actionable at n=4.** Per the 0B plan this is 7–14 days of
+observation before any video is replaced. One negative verdict on Percentages
+is noise, not a signal; it becomes one if it repeats.
+
+### Not broken
+
+`resource_shown` is non-zero and spread across 56 students, so the read-time
+projection is working in production for the whole active cohort, not just the
+handful seen this morning.
+
+---
+
+## 10. The push-ask telemetry answered in hours, not days
+
+Shipped 09:35 IST the same day. By 21:00 it had already settled the question
+that two separate investigations had guessed at:
+
+| signal | events | students |
+|---|---|---|
+| `push_ask_shown` | 25 | **18** |
+| `push_enabled` (converted) | 13 | **13** |
+| `push_ask_later` | 10 | 5 |
+| `push_ask_blocked` | 14 | **1** |
+| `push_ask_skipped` · `not_standalone` | 19 | 11 |
+| `push_ask_skipped` · `ios_wrapper` | 15 | 11 |
+| `push_ask_skipped` · `already_granted` | 1 | 1 |
+
+**The ask converts. 18 students saw it, 13 turned notifications on.** The
+problem was never persuasion — it is reach. `not_standalone` and `ios_wrapper`
+are each suppressing the prompt for ~11 students in a single day, and the iOS
+cohort can never be reached by web push at all.
+
+This is exactly what Engineering Memory #64 says could not be inferred from
+`notif_prefs.push_prompted`, and it took six hours of real data instead of an
+argument.
+
+### One student is stuck, and the UI gives them no way out
+
+`push_ask_blocked` fired **14 times for one student**. Reading the code, that
+is 14 taps: on `Notification.permission === 'denied'` the overlay deliberately
+stays up with *"Blocked by the phone — enable notifications for CareerRai in
+Settings"*, and the only other control is Later. A student whose OS has already
+blocked notifications can tap Switch on forever and nothing will ever happen.
+
+Two things follow, neither urgent at n=1 but both real:
+
+1. **A student-facing dead end.** The copy names the fix but the app cannot
+   perform it, and there is no deep link to the OS notification settings.
+2. **`push_ask_blocked` counts taps, not students.** The per-student count is
+   still correct; the raw event count is not a population. Same reading error
+   the impression counts invite above.
+
+Not fixed tonight — it is one student, and a UI change to the permission flow
+deserves a decision rather than a reflex.
