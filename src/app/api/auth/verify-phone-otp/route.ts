@@ -83,7 +83,10 @@ export async function POST(request: NextRequest) {
 
     const { data: existing } = await admin
       .from('profiles')
-      .select('id, password_set, role, full_name, email')
+      // onboarding_completed decides whether the /start draft may still be
+      // applied. It is read HERE because the gate below needs the fact, not a
+      // proxy for it — see the comment at that gate.
+      .select('id, password_set, role, full_name, email, onboarding_completed')
       .eq('id', data.user.id)
       .maybeSingle();
 
@@ -295,12 +298,45 @@ export async function POST(request: NextRequest) {
     // has to produce an identical student, and the only way to guarantee that
     // is for both doors to run the same code rather than two copies of it.
     //
-    // The isStub/!existing guard stays HERE because only this route knows
-    // whether the account it just touched already existed. Incident #42 is the
-    // reason that is stated rather than assumed: a guard in the caller is not a
-    // guard in the callee, so onboarding-authority.guard.test.ts asserts every
-    // caller carries it instead of trusting this comment.
-    if ((isStub || !existing) && role === 'student' && onboarding) {
+    // ── GATED ON onboarding_completed, NOT ON "DOES THIS PROFILE LOOK NEW" ───
+    //
+    // This gate used to read `(isStub || !existing)`, where isStub means the
+    // profile still carries the trigger's 'New User' placeholder. That is a
+    // proxy for "brand new", and it is wrong in a way that traps a student
+    // permanently.
+    //
+    // After ANY successful verification this route writes a real full_name —
+    // their own, or the literal 'Student'. Neither is empty and neither is
+    // 'New User', so isStub is false from the second verification onward. The
+    // draft could therefore only ever be applied ONCE, on the very first
+    // attempt. If that attempt did not finish — applyOnboarding explicitly
+    // leaves onboarding_completed false when the coverage upsert fails, and a
+    // dropped connection or closed tab does the same — the answers could never
+    // be applied again. The student layout gates on onboarding_completed, so it
+    // sent them back through /start; they answered everything again, verified
+    // again, and landed on this same false branch. An infinite onboarding loop
+    // with no way out, on the only door students have.
+    //
+    // 23 students are sitting in exactly that state in production right now:
+    // onboarding_completed false, full_name real, so unreachable by the old
+    // gate. None had returned yet, which is the only reason it had not fired.
+    //
+    // lib/onboarding-apply's header already states the rule — "the test of
+    // 'unfinished' is onboarding_completed, NOT 'we just inserted this row'" —
+    // and /auth/callback was fixed to follow it. This door was not. Same bug,
+    // same file's advice, one door missed.
+    //
+    // onboarding_completed is also exactly what the student layout gates on, so
+    // "may I apply this draft" and "will this student be sent back through
+    // onboarding" are now one fact instead of two proxies that can disagree.
+    // Undefined when no profile row exists yet, which correctly reads as
+    // not-completed.
+    //
+    // The guard stays HERE because only this route knows which profile it is
+    // holding (Incident #42: a guard in the caller is not a guard in the
+    // callee), and onboarding-authority.guard.test.ts asserts it rather than
+    // trusting this comment.
+    if (existing?.onboarding_completed !== true && role === 'student' && onboarding) {
       await applyOnboarding(admin, data.user.id, onboarding);
     }
 
