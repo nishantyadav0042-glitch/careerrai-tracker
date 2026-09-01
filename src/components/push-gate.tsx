@@ -4,18 +4,12 @@ import { track, detectDisplayMode } from '@/lib/journey';
 import { useRouter } from 'next/navigation';
 import { Bell, Check, Loader2 } from 'lucide-react';
 import { getLiveSubscription, persistSubscription } from '@/lib/push-client';
+import { pushCapabilityFrom, readSurfaceSignals } from '@/lib/push-capability';
 
-function isIOS(): boolean {
-  if (typeof navigator === 'undefined') return false;
-  return /iPad|iPhone|iPod/.test(navigator.userAgent);
-}
-function isStandalone(): boolean {
-  if (typeof window === 'undefined') return false;
-  return (
-    window.matchMedia('(display-mode: standalone)').matches ||
-    ('standalone' in window.navigator && (window.navigator as { standalone?: boolean }).standalone === true)
-  );
-}
+// isIOS()/isStandalone() removed 1 Sep — they were the third and second copies
+// of a rule that now lives in lib/push-capability.ts, THE authority. One of the
+// three copies (standalone-notif-ask) carried a defect the others did not.
+
 
 type Phase = 'intro' | 'working' | 'blocked' | 'ios' | 'unsupported' | 'done';
 
@@ -82,10 +76,8 @@ export function PushGate({ mode, notifPrefs }: PushGateProps) {
 
   // Inside the INSTALLED app the notification ask is StandaloneNotifAsk
   // ("our job #1"), not these browser gates — never stack both.
-  if (typeof window !== 'undefined' && (window.matchMedia?.('(display-mode: standalone)').matches
-    || ('standalone' in window.navigator && (window.navigator as { standalone?: boolean }).standalone === true))) {
-    return null;
-  }
+  const sig = typeof window !== 'undefined' ? readSurfaceSignals() : null;
+  if (sig?.standalone) return null;
 
   function dismiss() {
     router.refresh();
@@ -111,7 +103,10 @@ export function PushGate({ mode, notifPrefs }: PushGateProps) {
     setPhase('working');
     setError(null);
 
-    if (isIOS() && !isStandalone()) { setPhase('ios'); return; }
+    // Same population as the old `isIOS() && !isStandalone()`: an iPhone that
+    // is not in an installed surface, whether that is Safari or the App Store
+    // wrapper. The authority names them apart; both need the same remedy.
+    if (pushCapabilityFrom(readSurfaceSignals()!).remedy === 'add_to_home_screen') { setPhase('ios'); return; }
     const supported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
     if (!supported) { setPhase('unsupported'); return; }
     if (Notification.permission === 'denied') { setPhase('blocked'); return; }

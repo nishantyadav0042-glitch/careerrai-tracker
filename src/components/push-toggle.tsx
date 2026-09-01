@@ -3,19 +3,13 @@ import { useState, useEffect } from 'react';
 import { track, detectDisplayMode } from '@/lib/journey';
 import { Bell, BellOff, Check, X, Loader2 } from 'lucide-react';
 import { getLiveSubscription, persistSubscription } from '@/lib/push-client';
+import { pushCapabilityFrom, readSurfaceSignals } from '@/lib/push-capability';
 import { PUSH_REPAIR_COPY } from '@/lib/push-state';
 
-function isIOS(): boolean {
-  if (typeof navigator === 'undefined') return false;
-  return /iPad|iPhone|iPod/.test(navigator.userAgent);
-}
-function isStandalone(): boolean {
-  if (typeof window === 'undefined') return false;
-  return (
-    window.matchMedia('(display-mode: standalone)').matches ||
-    ('standalone' in window.navigator && (window.navigator as { standalone?: boolean }).standalone === true)
-  );
-}
+// isIOS()/isStandalone() removed 1 Sep — they were the third and second copies
+// of a rule that now lives in lib/push-capability.ts, THE authority. One of the
+// three copies (standalone-notif-ask) carried a defect the others did not.
+
 
 // The `vapidKey` prop is ignored on purpose: the public key is ALWAYS fetched
 // from /api/push/vapid-public-key so it matches the private key the server signs
@@ -77,7 +71,8 @@ export function PushToggle({
     /* eslint-disable react-hooks/set-state-in-effect -- browser-capability detection must run client-side after mount */
     const ok = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
     // iOS only exposes the Push API to an INSTALLED PWA (Add to Home Screen).
-    if (isIOS() && !isStandalone()) {
+    // Was `isIOS() && !isStandalone()` — same population, one authority now.
+    if (pushCapabilityFrom(readSurfaceSignals()!).remedy === 'add_to_home_screen') {
       setIosNeedsInstall(true);
       setSupported(false);
       return;

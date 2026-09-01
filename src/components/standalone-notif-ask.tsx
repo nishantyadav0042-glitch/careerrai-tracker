@@ -5,6 +5,7 @@ import { track, detectDisplayMode } from '@/lib/journey';
 import { BellRing } from 'lucide-react';
 import { setNotifAskVisible as setAskVisible, NOTIF_ASK_SETTLED_EVENT } from '@/lib/first-run-events';
 import { getLiveSubscription, persistSubscription } from '@/lib/push-client';
+import { pushCapabilityFrom, readSurfaceSignals, type PushCapability } from '@/lib/push-capability';
 
 // Founder order (21 July): the notification ask is JOB #1 in the installed
 // app — it fires BEFORE the app tour (the tour and the buddy pitch both wait
@@ -23,19 +24,11 @@ export { NOTIF_ASK_SETTLED_EVENT };
 // every foreground (visibilitychange), not just on mount: an iOS PWA that's
 // still resident is only foregrounded when reopened, never remounted, so a
 // mount-only check would silently never fire again. Gone only once granted.
-function isStandalone(): boolean {
-  return window.matchMedia?.('(display-mode: standalone)').matches
-    || ('standalone' in window.navigator && (window.navigator as { standalone?: boolean }).standalone === true);
-}
-
-// iOS in a WKWebView wrapper (our App Store build) cannot deliver web push, so a
-// "turn on notifications" prompt there is a dead-end — hide it on iOS. (Android
-// TWA push works, so Android standalone still gets it.)
-function isIOS(): boolean {
-  const ua = navigator.userAgent || '';
-  return /iPad|iPhone|iPod/.test(ua)
-    || (navigator.platform === 'MacIntel' && (navigator.maxTouchPoints ?? 0) > 1);
-}
+// isStandalone()/isIOS() used to live here as a local pair. They are now in
+// lib/push-capability.ts — THE single authority — because the same pair was
+// duplicated in push-healer and push-toggle, and the blanket iOS check here
+// was silently skipping the iOS Home Screen PWA, the only iOS surface that
+// can actually receive a push.
 
 // serverSubDead (21 July audit): the server holds NO live subscription for
 // this student even though their prefs say push is on — their OS revoked the
@@ -50,6 +43,9 @@ export function StandaloneNotifAsk({ pushEnabled, serverSubDead = false }: { pus
   // returns 'denied' instantly forever, so the normal CTA is a dead button and
   // the student can tap it all day. Production, 1 Sep: one student tapped 14 times.
   const [blocked, setBlocked] = useState(false);
+  // Non-null when this surface cannot receive a push but the student CAN do
+  // something about it. Drives the guidance panel instead of silence.
+  const [cannot, setCannot] = useState<PushCapability | null>(null);
   const reconnect = pushEnabled && serverSubDead;
   // evaluate() re-runs on every foreground, so the same outcome would other-
   // wise be written once per app switch. Only a CHANGE is worth a row.
@@ -63,6 +59,7 @@ export function StandaloneNotifAsk({ pushEnabled, serverSubDead = false }: { pus
       if (lastOutcome.current === outcome) return;
       lastOutcome.current = outcome;
       if (outcome === 'shown') track('push_ask_shown', { reconnect, context: detectDisplayMode() });
+      else if (outcome === 'guided') track('push_setup_guidance_shown', { why, context: detectDisplayMode() });
       else track('push_ask_skipped', { why, context: detectDisplayMode() });
     };
 
@@ -74,9 +71,22 @@ export function StandaloneNotifAsk({ pushEnabled, serverSubDead = false }: { pus
     // until it's done. Every early-return marks the ask as settled (it isn't
     // going to cover the screen), so the tour can proceed.
     const evaluate = () => {
-      if (!isStandalone()) { setAskVisible(false); report('skipped', 'not_standalone'); return; }
-      if (isIOS()) { setAskVisible(false); report('skipped', 'ios_wrapper'); return; } // web push is a no-op in the iOS wrapper — don't prompt
-      if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) { setAskVisible(false); report('skipped', 'unsupported'); return; }
+      const signals = readSurfaceSignals();
+      if (!signals) { setAskVisible(false); report('skipped', 'unsupported'); return; }
+      const cap = pushCapabilityFrom(signals);
+
+      if (!cap.canReceive) {
+        // A surface that cannot receive is NOT automatically a dead end. Where
+        // a remedy exists we show it — this is the 206 App Store students who
+        // previously got silence, and the tab students who got nothing.
+        if (cap.remedy === 'none') { setAskVisible(false); setCannot(null); report('skipped', cap.reason!); return; }
+        setCannot(cap);
+        setAskVisible(true);
+        setShow(true);
+        report('guided', cap.reason);
+        return;
+      }
+      setCannot(null);
       if (Notification.permission === 'granted') { setAskVisible(false); report('skipped', 'already_granted'); return; } // subscribed; server flag will catch up
       // Still shown when blocked — the founder's rule is that this returns on
       // every app open until notifications are actually on, and a blocked
@@ -216,15 +226,22 @@ export function StandaloneNotifAsk({ pushEnabled, serverSubDead = false }: { pus
         </div>
         <div>
           <p className="mb-1 text-[11px] font-bold uppercase tracking-widest text-orange-500">
-            {blocked ? 'Blocked by your phone' : reconnect ? 'Your reminders got disconnected' : 'The last step of your setup'}
+            {cannot ? 'One quick setup step' : blocked ? 'Blocked by your phone' : reconnect ? 'Your reminders got disconnected' : 'The last step of your setup'}
           </p>
           <h1 className="text-2xl font-bold leading-snug text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
-            {blocked
+            {cannot
+              ? <>Reminders come from<br />the Home Screen app.</>
+              : blocked
               ? <>This one has to be<br />done in Settings.</>
               : reconnect ? <>Your daily plan stopped<br />reaching you.</> : <>Your plan works only<br />if it reaches you.</>}
           </h1>
           <p className="mt-2 text-sm leading-relaxed text-stone-500">
-            {blocked
+            {cannot
+              // Deliberately says nothing about WKWebView, Web Push or service
+              // workers. The student does not need our architecture; they need
+              // to know this takes 20 seconds and why it is worth it.
+              ? 'This version of CareerRai can’t send reminders. The Home Screen version can — it’s the same app, same login, same plan, and it takes about 20 seconds to add.'
+              : blocked
               ? 'Your phone has blocked notifications for CareerRai, and an app can’t undo that from the inside — only you can, and it takes about ten seconds.'
               : reconnect
               ? 'Your phone switched off CareerRai’s notifications, so your daily plan and reminders have gone quiet. One tap reconnects them.'
@@ -236,6 +253,28 @@ export function StandaloneNotifAsk({ pushEnabled, serverSubDead = false }: { pus
             notification settings for us. A button that pretended to would be
             the same promise-without-a-capability that got EvidenceAnnounce
             deleted — so we tell them exactly where it is instead. */}
+        {cannot && (
+          <ol className="mx-auto space-y-2 text-left text-[13px] leading-relaxed text-stone-600">
+            {(cannot.remedy === 'add_to_home_screen'
+              ? [
+                  <>Open <strong className="text-stone-800">careerrai.in</strong> in <strong className="text-stone-800">Safari</strong>.</>,
+                  <>Tap the <strong className="text-stone-800">Share</strong> button, then <strong className="text-stone-800">Add to Home Screen</strong>.</>,
+                  <>Open CareerRai from your Home Screen — it will ask about reminders there.</>,
+                ]
+              : [
+                  <>Open the browser menu and choose <strong className="text-stone-800">Install app</strong> (or <strong className="text-stone-800">Add to Home screen</strong>).</>,
+                  <>Open CareerRai from your home screen.</>,
+                  <>It will ask about reminders there.</>,
+                ]
+            ).map((step, i) => (
+              <li key={i} className="flex gap-2.5">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-stone-900 text-[10px] font-bold text-white">{i + 1}</span>
+                <span>{step}</span>
+              </li>
+            ))}
+          </ol>
+        )}
+
         {blocked && (
           <ol className="mx-auto space-y-2 text-left text-[13px] leading-relaxed text-stone-600">
             {[
@@ -259,10 +298,10 @@ export function StandaloneNotifAsk({ pushEnabled, serverSubDead = false }: { pus
           <button
             type="button"
             disabled={busy}
-            onClick={blocked ? recheck : enable}
+            onClick={cannot ? later : blocked ? recheck : enable}
             className="w-full rounded-2xl bg-stone-900 py-4 text-sm font-semibold text-white transition-all hover:bg-stone-800 active:scale-[0.98] disabled:opacity-60"
           >
-            {busy ? 'Checking…' : blocked ? 'I’ve turned it on — check again' : 'Switch on notifications →'}
+            {busy ? 'Checking…' : cannot ? 'Got it' : blocked ? 'I’ve turned it on — check again' : 'Switch on notifications →'}
           </button>
           <button type="button" disabled={busy} onClick={later} className="w-full py-2.5 text-xs font-medium text-stone-400 hover:text-stone-600">
             Later
