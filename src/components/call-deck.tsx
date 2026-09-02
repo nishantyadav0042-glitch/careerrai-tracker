@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { REASON_CATEGORIES, REASON_LABEL, reasonNeedsVerbatim,
   type ReasonCategory } from '@/lib/intervention-taxonomy';
-import { MessageCircle, PhoneCall, PhoneOff, ChevronDown } from 'lucide-react';
+import { MessageCircle, PhoneCall, PhoneOff, ChevronDown, UserRound } from 'lucide-react';
 import type { CallLead } from '@/lib/call-queue';
 
 const TIER: Record<string, string> = { hot: 'bg-rose-50 text-rose-700', warm: 'bg-amber-50 text-amber-800', cool: 'bg-stone-100 text-stone-500' };
@@ -113,6 +113,13 @@ export function CallDeck({ queue }: { queue: CallLead[] }) {
           <div className="px-4 pt-3">
             <div className="flex items-center justify-between gap-2">
               <a href={`/sales/student/${lead.studentId}`} className="truncate text-[15px] font-bold text-stone-900 hover:underline">{lead.name}</a>
+              {/* Founder, 2 Sep: a Profile button beside every student, not a
+                  name that happens to be a link. The counsellor should never
+                  have to know that the name is clickable. */}
+              <a href={`/sales/student/${lead.studentId}`}
+                className="inline-flex shrink-0 items-center gap-1 rounded-full border border-stone-300 bg-white px-2 py-0.5 text-[10px] font-bold text-stone-700 hover:border-stone-500">
+                <UserRound className="h-3 w-3" /> Profile
+              </a>
               <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${DUE_CLS[lead.dueReason]}`}>{lead.dueLabel}</span>
               {/* WHICH GOAL THIS CALL IS FOR (§4). The counsellor must know
                   before they open their mouth whether they are here to get a

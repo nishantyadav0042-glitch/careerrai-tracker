@@ -215,7 +215,12 @@ describe('nothing else in the repo can fire a cron route', () => {
         if (name.isDirectory()) { walk(p); continue; }
         if (!/\.(ts|tsx)$/.test(name.name) || /\.test\./.test(name.name)) continue;
         if (p.startsWith(CRON_DIR)) continue;
-        if (/['"`]\/api\/cron\//.test(strip(readFileSync(p, 'utf8')))) hits.push(p);
+        // Reading the run LOG by path (`cron_runs.cron_path = '/api/cron/x'`)
+        // is observation, not firing — the founder's control tower shows a
+        // cron's last outcome that way (2 Sep 2026). Everything else that
+        // names a cron path outside the cron directory is a firer.
+        const src = strip(readFileSync(p, 'utf8')).replace(/'cron_path',\s*'\/api\/cron\/[^']*'/g, '');
+        if (/['"`]\/api\/cron\//.test(src)) hits.push(p);
       }
     };
     walk('src');

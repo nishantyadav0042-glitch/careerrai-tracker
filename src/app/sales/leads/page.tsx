@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { UserRound } from 'lucide-react';
 import { requireSales } from '@/lib/admin-auth';
 import { cn } from '@/lib/utils';
 import { getRepPortfolio } from '@/lib/sales-portfolio';
@@ -59,6 +60,11 @@ export default async function MyLeadsPage({ searchParams }: { searchParams: Prom
             <Link key={l.studentId} href={`/sales/student/${l.studentId}`} className="block rounded-2xl border border-stone-200 bg-white p-3.5 hover:border-stone-400">
               <div className="flex items-center justify-between gap-2">
                 <span className="truncate text-[15px] font-bold text-stone-900">{l.name}</span>
+                {/* Founder, 2 Sep: the whole card opens the profile; this chip
+                    says so, because an affordance the rep cannot see is not one. */}
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-stone-300 bg-white px-2 py-0.5 text-[10px] font-bold text-stone-700">
+                  <UserRound className="h-3 w-3" /> Profile
+                </span>
                 <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold',
                   l.status === 'interested' ? 'bg-amber-50 text-amber-800' : l.status === 'follow_up' ? 'bg-sky-50 text-sky-700' : l.status === 'converted' ? 'bg-emerald-50 text-emerald-700' : l.status === 'not_interested' ? 'bg-stone-100 text-stone-500' : 'bg-stone-100 text-stone-600')}>
                   {STATUS_LABEL[l.status] ?? l.status}

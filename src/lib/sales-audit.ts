@@ -55,7 +55,7 @@ export type SalesAuditAction = (typeof SALES_AUDIT_ACTIONS)[number];
  * exists to answer, and a sentence cannot be queried.
  */
 export async function auditSales(
-  actorId: string,
+  actorId: string | null,
   action: SalesAuditAction,
   target: { type: 'lead' | 'vendor_event' | 'followup' | 'system' | 'rep'; id: string | null },
   detail: { before?: unknown; after?: unknown; reason?: string; count?: number } = {},

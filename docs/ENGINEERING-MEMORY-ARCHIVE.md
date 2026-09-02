@@ -3365,7 +3365,7 @@ flag is not a "no". This is the same failure class as Incident #61 — a query
 that excluded the very rows that carried the answer, then three confident wrong
 diagnoses on top of it.
 
-## Incident #64
+## Incident #65
 
 **Date:** 2026-09-02
 **Area:** Operator surfaces + crons (every population read)
@@ -3475,3 +3475,86 @@ Second: the fix existed in the codebase for two weeks (`analytics/page.tsx`)
 as a local workaround with a good comment. A lesson that stays in one file is
 a lesson the next file will not have.
 
+## Incident #66
+
+**Date:** 2026-09-02
+**Area:** Sales OS — lead intake (the book, not the queue)
+**Severity:** P1 (founder visibility / conversion) — no student harmed, every new student invisible to sales
+
+### What the founder saw
+
+"Are new students being added to the salesmen's lists daily?" — asked as a
+question, because there was nowhere to look. Both counsellors had been
+working the same 62 students each since 29 Aug.
+
+### What was wrong
+
+Three things, and the first hid the other two.
+
+1. **The book was a one-time load.** `lead_outreach` held 124 rows, all
+   written by `/api/admin/enrol-book` on 29 Aug, and nothing had touched it
+   since (`updated_at` 29 Aug ×123, 30 Aug ×1). 916 real students had never
+   been in any book; 172 of them signed up in the previous seven days; 855 of
+   them were free and reachable. The base grew by ~20 a day and the book grew
+   by zero. The Phase 2A architecture had designed the intake engine and
+   deliberately deferred it (2B-3) until capacity visibility and SLA truth
+   existed — both had existed for days, and nobody had come back for the
+   engine.
+2. **The SLA clock had never started.** All 124 rows had `assigned_at` NULL
+   (enrol-book leaves it NULL on purpose, and it was the only door ever used),
+   so every first-contact SLA read as 'unknown' — which is honest, and which
+   also means speed-to-lead had never been measured for a single student.
+3. **The daily fuse could not bind.** `getTeamCapacity` passed `newToday: 0`
+   with a comment saying it was not instrumented; the capacity panel showed
+   "New today —". Nothing recorded when a student entered a book, so
+   `max_new_per_day` — the safety fuse of Amendment 3 — was a number on a
+   config row and nothing else.
+
+### How far it went
+
+Every student who signed up after 29 Aug (roughly 200 by 2 Sep) was invisible
+to both counsellors. The calling list looked full because 123 of the 124
+were still 'not_contacted', so the frozen book did not read as frozen from
+inside `/sales`.
+
+### Why nothing caught it
+
+The tower reported `newLeadsToday` from `profiles.created_at` — new STUDENTS,
+not new LEADS — so the number the founder read as "leads coming in" measured
+signups. No surface reported "students not in any book", and no cron_runs row
+existed for an intake because there was no intake. A pipeline that has never
+run leaves the same blank as one that ran and found nothing (the same shape
+as #55/#56).
+
+### The fix
+
+- `lib/lead-intake.ts` — the engine, as designed in 2A §5: every real, free
+  student with a phone and no lead row, newest first, dealt across active
+  configured seats by largest-remainder apportionment (ties by rep id, equal
+  seats alternate), fused by `max_new_per_day − newToday` and
+  `MAX_PORTFOLIO_PER_SEAT`, written with ON CONFLICT DO NOTHING, one
+  `sales_activity` row per student carrying the sentence that explains it,
+  one audit row per run, kill switch `SALES_INTAKE_ENABLED`. Reads fail
+  closed. `/api/cron/lead-intake` at 14:30 IST; `/api/admin/lead-intake` for
+  the founder's "Run today's intake now".
+- Migration `20260902a`: `lead_outreach.enrolled_at` (backfilled for the 124),
+  so "new today" is measured and the fuse binds; `sales_activity` may carry
+  an engine assignment with no human actor.
+- `assigned_at` is stamped only for a signup younger than 24 hours. Backlog
+  enrolments keep the clock NULL — the enrol-book reasoning, made a rule.
+- Tower: "Daily intake · today Anshul +x · Neelam +y · last run … ·
+  N still waiting"; never-ran is shown as never-ran.
+- Guards: `lead-intake.test.ts` (determinism, proportionality, fuse, newest
+  first), `lead-intake/mutation-safety.test.ts` (every source fails closed,
+  kill switch, idempotent second run, concurrent claim reported honestly,
+  2,500-student paging).
+
+### The lesson, with teeth
+
+A manual load that is never repeated LOOKS like a pipeline for exactly as
+long as the first load lasts. When a founder asks "is X happening daily?",
+the answer must be readable from a screen, not derived from a query: every
+recurring job gets a "last run / never ran" line on the surface whose numbers
+depend on it. And a ceiling that nothing measures is not a ceiling — the
+capacity panel had said so in its own words ("not instrumented") for nine
+days.

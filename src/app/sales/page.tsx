@@ -121,8 +121,9 @@ export default async function SalesCallsPage() {
         </div>
       )}
 
-      {/* Phase 2B-1: the rep's own workload, one line. Nothing here changes
-          how leads reach them — claiming is still manual and unchanged. */}
+      {/* Phase 2B-1: the rep's own workload, one line. New students reach
+          their book through the daily intake (lib/lead-intake.ts); this line
+          shows the live work that book currently holds. */}
       {mine?.configured && (
         <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-[12px]">
           <span className="font-bold text-stone-800">

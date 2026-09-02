@@ -123,7 +123,7 @@ export async function loadPeerRows(admin: Admin, now: Date = new Date()): Promis
     // Paged, not `.limit(PEER_BASE_CAP)`: PostgREST applies its own max-rows
     // (1000) AFTER a client limit, so the old 5,000 cap could never be reached
     // and the "base hit the cap" warning below could never fire — the base was
-    // silently 1,000 from the day the roster passed it (Incident #64).
+    // silently 1,000 from the day the roster passed it (Incident #65).
     fetchAll(() => admin
       .from('profiles')
       .select('id, attempt_year, study_target_hours, self_reported_weakest_section, syllabus_target_date')),

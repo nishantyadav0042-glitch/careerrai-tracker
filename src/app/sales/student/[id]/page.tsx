@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { requireSales } from '@/lib/admin-auth';
-import { ArrowLeft, Phone, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Phone, CheckCircle2, UserRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getSalesConversionView } from '@/lib/sales-conversion';
 import { canAccessLead, loadStaffDirectory, resolveLeadOwner, salesPrincipal } from '@/lib/sales-authz';
@@ -78,6 +78,27 @@ export default async function ConvertPage({ params }: { params: Promise<{ id: st
           </div>
         </div>
         {(v.isPremium || v.hasBuddy) && <p className="mt-2 rounded-lg bg-emerald-50 px-3 py-1.5 text-[12px] font-semibold text-emerald-800">Already {v.isPremium ? 'premium' : 'has a buddy'} — no sales ask needed.</p>}
+      </div>
+
+      {/* PROFILE (founder, 2 Sep): the plain facts before any judgement. Each
+          line is something the student told us or the platform observed; a
+          field they never filled is absent, never defaulted. */}
+      <div className="mt-3 rounded-2xl border border-stone-200 bg-white p-4">
+        <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-stone-400">
+          <UserRound className="h-3.5 w-3.5" /> Profile
+        </p>
+        {v.profile.length === 0 ? (
+          <p className="text-[12.5px] text-stone-500">{v.firstName} has not filled in their profile yet — only the phone number is known.</p>
+        ) : (
+          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[12.5px]">
+            {v.profile.map((f) => (
+              <div key={f.label} className="contents">
+                <dt className="text-stone-400">{f.label}</dt>
+                <dd className="font-semibold text-stone-800">{f.value}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
       </div>
 
       {/* WHY THIS STUDENT IS HERE — the same verdict the queue card shows, so

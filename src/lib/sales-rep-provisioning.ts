@@ -24,7 +24,9 @@ import type { RepCapacity } from '@/lib/sales-capacity';
 //
 // WHAT THIS IS NOT: an allocator. It never chooses who gets a lead. It answers
 // "how many may this rep be given right now", and the founder still decides the
-// split — Phase 2B-2 allocation automation remains unbuilt, deliberately.
+// split of LIVE WORK. Book intake — new students entering a seat's book every
+// day — is automated since 2 Sep 2026 (Phase 2B-3, lib/lead-intake.ts) and
+// reads its ceilings from here.
 
 /**
  * The fields that must be STATED, never inherited, when an account becomes
@@ -164,10 +166,9 @@ export const REFUSAL_COPY: Record<AllocationRefusal, string> = {
  * belongs to. Refusing to give a part-timer a lead in the morning would make
  * part-time mean "worse rep" instead of "different hours".
  *
- * The daily fuse is applied PER DISTRIBUTION, not per day, and says so: there
- * is no assigned_at column yet (2B-2), so how many leads a rep already
- * received today is genuinely unmeasurable. Capping each hand-out at the fuse
- * is the strongest honest reading of it — and it is a cap, never a claim.
+ * The daily fuse binds on what the rep already received today: since 2 Sep
+ * 2026 every door into a book stamps lead_outreach.enrolled_at, and
+ * getTeamCapacity counts it into `available` before this function sees it.
  */
 export function repAllocationLimit(cap: RepCapacity, nowMs: number = Date.now()): AllocationLimit {
   if (cap.readFailed) return { ok: false, max: 0, reason: 'READ_FAILED' };

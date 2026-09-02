@@ -128,7 +128,7 @@ describe('getRecoveryQueue — Installment 3 Batch 15: the specific worklist, no
     return {
       from(table: string) {
         if (table === 'profiles') {
-          // getRecoveryQueue reads the roster through fetchAll (Incident #64),
+          // getRecoveryQueue reads the roster through fetchAll (Incident #65),
           // which orders and pages with .range(from, to). The fake must honour
           // the window or it would hand back every row on every page.
           let rng: [number, number] | null = null;

@@ -107,7 +107,7 @@ export function rowsOrEmpty<T>(s: Source<T[]>): T[] {
 /**
  * Read a WHOLE POPULATION through the truth boundary.
  *
- * Incident #64 (2 Sep 2026): an unbounded `.select()` is capped by PostgREST
+ * Incident #65 (2 Sep 2026): an unbounded `.select()` is capped by PostgREST
  * at max-rows (1000) with no error, so `readRows` over "all students" was a
  * VALUE of the first thousand — the 36 real students past the cap were
  * silently absent from every cron that iterated the roster. A capped read is

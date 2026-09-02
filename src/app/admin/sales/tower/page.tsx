@@ -163,6 +163,37 @@ export default async function SalesControlTower() {
 
       {/* L3 — DISTRIBUTION */}
       <h2 className="mt-6 text-[11px] font-bold uppercase tracking-widest text-stone-400">Level 3 · Lead distribution</h2>
+      {/* THE DAILY INTAKE (founder, 2 Sep). "Are new students being added to
+          their lists daily?" must be answerable from this line, every day,
+          without asking a counsellor. Never-ran is shown as never-ran. */}
+      <div className="mt-2 rounded-xl border border-stone-200 bg-white p-3 text-[12px]">
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          <span className="font-bold text-stone-900">Daily intake</span>
+          {t.intake.enrolledToday === null ? (
+            <span className="font-semibold text-rose-700">could not read today&apos;s intake — not zero</span>
+          ) : t.intake.enrolledToday.length === 0 ? (
+            <span className="text-stone-600">no student has entered a book today yet</span>
+          ) : (
+            <span className="text-stone-700">
+              today {t.intake.enrolledToday.map((e) => `${e.name.split(' ')[0]} +${e.count}`).join(' · ')}
+            </span>
+          )}
+        </div>
+        <p className="mt-1 text-[11px] text-stone-500">
+          {t.intake.lastRun === null ? (
+            <span className="font-semibold text-rose-700">The intake engine has never run.</span>
+          ) : (
+            <>
+              Last run {new Date(t.intake.lastRun.at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' })}
+              {' · '}<span className={t.intake.lastRun.ok ? 'font-semibold text-emerald-700' : 'font-semibold text-rose-700'}>{t.intake.lastRun.state}</span>
+              {' · '}{t.intake.lastRun.enrolled} enrolled
+              {t.intake.lastRun.waiting !== null && <> · {t.intake.lastRun.waiting} still waiting for a seat</>}
+              {t.intake.lastRun.error && <> · {t.intake.lastRun.error}</>}
+            </>
+          )}
+          {' · '}runs 2:30 PM IST · <Link href="/admin/sales/capacity" className="underline">run now / new-per-day caps</Link>
+        </p>
+      </div>
       <AssignPanel
         reps={(t.reps ?? []).map((r) => {
           const cap = capById.get(r.id);

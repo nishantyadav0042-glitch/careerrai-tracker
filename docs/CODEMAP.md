@@ -202,6 +202,12 @@ refund processed ─▶ settleRefund()      ── stamps refunded_at ───�
   minutes (`work_days` + hours), never wall clock: a lead handed over at 21:30
   is due next working evening. `assigned_at` / `first_contact_at` on
   `lead_outreach` are the two clocks; **NULL means unknown, never "on time"**.
+- **`lib/lead-intake.ts`** — the daily intake (Incident #66). New free
+  students with a phone enter a book every day at 14:30 IST, newest first,
+  dealt across configured seats, fused by `max_new_per_day` (measured from
+  `lead_outreach.enrolled_at`) — responsibility, never live work. ON CONFLICT
+  DO NOTHING, explanation on every row, kill switch `SALES_INTAKE_ENABLED`.
+  *Guards: `lead-intake.test.ts`, `lead-intake/mutation-safety.test.ts`.*
 - **`lib/sales-board.ts`** — one counsellor's day: open promises bucketed
   overdue/today/upcoming (from `sales_followup`) plus who is still waiting for a
   first call. `promises: null` survives to the renderer — a failed read must
@@ -301,7 +307,7 @@ and most have a guard test that fails the build if violated.
    Source-typed lift `readAllRows` in `lib/truth/source.ts`.
    *Guard: `population-cap.guard.test.ts` — a shrink-only baseline of the
    files still unmigrated; a NEW unbounded read fails the build.*
-   (Incident #64)
+   (Incident #65)
 
 ---
 

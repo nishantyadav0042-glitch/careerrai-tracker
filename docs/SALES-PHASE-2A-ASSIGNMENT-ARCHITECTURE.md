@@ -570,7 +570,7 @@ cron emitting Exceptions.
 *Accept:* time-to-first-contact measurable per lead and per rep; breaches
 visible; no lead moved automatically.
 
-**Phase 2B-3 — The engine.**
+**Phase 2B-3 — The engine.** *(BUILT 2 Sep 2026 as the daily BOOK intake, `lib/lead-intake.ts`, Incident #66. Deliberate departure from §5: it runs once a day and enrols into books, the founder's 29 Aug ruling that the system manages the portfolio and the queue manages today's work; it does not distribute live work.)*
 Assignment cron + guarded write + audit + kill switch.
 *Accept:* deterministic (same inputs ⇒ same allocation, proven by test);
 **concurrent-run test proves no double assignment**; every assignment carries

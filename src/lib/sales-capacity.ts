@@ -294,7 +294,7 @@ export async function getTeamCapacity(admin: any, nowMs: number = Date.now()): P
   for (const chunk of chunkIds(repIds)) {
     const { data, error } = await admin
       .from('lead_outreach')
-      .select('student_id, owner_id, status, next_action_at')
+      .select('student_id, owner_id, status, next_action_at, enrolled_at')
       .in('owner_id', chunk);
     if (error) {
       console.error('[capacity] owned-lead read failed:', error.message);
@@ -334,10 +334,18 @@ export async function getTeamCapacity(admin: any, nowMs: number = Date.now()): P
   const todayIst = new Date(nowMs).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
   const itemsByRep = new Map<string, WorkItem[]>();
   const dormantByRep = new Map<string, number>();
+  // NEW TODAY — instrumented since 2 Sep 2026 (migration 20260902a). Every
+  // door that puts a student in a book stamps lead_outreach.enrolled_at, so
+  // the daily fuse (max_new_per_day) finally counts something real.
+  const dayStartIso = new Date(`${todayIst}T00:00:00+05:30`).toISOString();
+  const newTodayByRep = new Map<string, number>();
 
   for (const o of owned) {
     const sid = o.student_id as string;
     const rep = o.owner_id as string;
+    if (o.enrolled_at && (o.enrolled_at as string) >= dayStartIso) {
+      newTodayByRep.set(rep, (newTodayByRep.get(rep) ?? 0) + 1);
+    }
     const e = taps.get(sid);
     // classifyLane is THE lane authority; capacity consumes its verdict and
     // never re-implements a predicate of its own.
@@ -367,22 +375,21 @@ export async function getTeamCapacity(admin: any, nowMs: number = Date.now()): P
     const activeNow = activeUnits(workItems);
     const capacity = cfg ? capacityOf(cfg, nowMs) : null;
     const inWindow = cfg ? inWorkingWindow(cfg, nowMs) : false;
+    const newToday = readFailed ? 0 : (newTodayByRep.get(r.id) ?? 0);
     const binding: BindingReason = readFailed
       ? 'READ_FAILED'
       : bindingReason({
           configured: cfg != null, cfg, nowMs, capacity: capacity ?? 0, activeNow,
-          // The daily fuse cannot bind in this phase because newToday is not
-          // instrumented; passing 0 keeps it out of the way rather than
-          // inventing a constraint we cannot measure.
-          maxNewPerDay: cfg?.maxNewPerDay ?? 0, newToday: 0,
+          maxNewPerDay: cfg?.maxNewPerDay ?? 0, newToday,
         });
     return {
       repId: r.id, name: r.full_name ?? r.email ?? 'Staff', configured: cfg != null, config: cfg,
       capacity, activeNow,
       available: !readFailed && cfg && capacity != null
-        ? assignableNow({ capacity, activeNow, maxNewPerDay: cfg.maxNewPerDay, newToday: 0, inWindow })
+        ? assignableNow({ capacity, activeNow, maxNewPerDay: cfg.maxNewPerDay, newToday, inWindow })
         : 0,
-      newToday: null,   // NOT INSTRUMENTED until 2B-2 adds assigned_at
+      // A failed read is null, never 0 — "we could not look" is not "nobody came".
+      newToday: readFailed ? null : newToday,
       overflow: !readFailed && capacity != null ? overflowOf(activeNow, capacity) : 0,
       inWindow, binding, workItems,
       dormantCount: readFailed ? 0 : (dormantByRep.get(r.id) ?? 0),

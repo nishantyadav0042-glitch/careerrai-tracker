@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-// ── Incident #64 — no unbounded read of a table that can exceed 1,000 rows ──
+// ── Incident #65 — no unbounded read of a table that can exceed 1,000 rows ──
 //
 // 2 Sep 2026. The Command Center said STUDENTS 1000 for three days while 1,036
 // real students existed. PostgREST caps every response at max-rows (Supabase
@@ -65,7 +65,10 @@ const BOUNDED = [
   ".eq('id'", ".eq('student_id'", ".eq('user_id'", '.head', '.rpc(',
 ];
 const WRITES = ['.insert(', '.update(', '.delete(', '.upsert('];
-const WRAPPERS = ['fetchAll(', 'readAllRows<', 'readAllRows(', 'readRowsForIds'];
+// Both the bare and the typed call shape of each wrapper: `fetchAll<T>(` is
+// the same wrapper as `fetchAll(`, and the first version of this list only
+// knew the latter (caught 2 Sep, when a typed call was flagged as unbounded).
+const WRAPPERS = ['fetchAll(', 'fetchAll<', 'readAllRows<', 'readAllRows(', 'readRowsForIds'];
 
 /**
  * Files that still hold an unbounded population read, as of the migration on
@@ -180,7 +183,7 @@ export function unboundedReads(): Map<string, number> {
   return found;
 }
 
-describe('Incident #64 — no unbounded read of a population-scaled table', () => {
+describe('Incident #65 — no unbounded read of a population-scaled table', () => {
   it('finds the pattern at all (the guard is not vacuous)', () => {
     expect(unboundedReads().size).toBeGreaterThan(0);
   });

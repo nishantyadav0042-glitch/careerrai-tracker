@@ -212,20 +212,25 @@ describe('Phase 2B-1 is observation only — nothing here can move a student', (
   });
 
   it('only columns that exist are selected from lead_outreach', () => {
-    // The columns lead_outreach actually has in this phase. assigned_at and
-    // first_contact_sla_due arrive in 2B-2 and must not be referenced before.
+    // The columns lead_outreach actually has. enrolled_at arrived with the
+    // daily intake (20260902a); a column that is not in this list is a read
+    // that will fail in production and render every rep as "0 active work".
     const select = CAP.match(/\.select\('([^']*)'\)\s*\n?\s*\.in\('owner_id'/)?.[1] ?? '';
     expect(select.length).toBeGreaterThan(0);
     for (const col of select.split(',').map((s) => s.trim())) {
-      expect(['student_id', 'owner_id', 'status', 'next_action_at'], `unknown column ${col}`).toContain(col);
+      expect(['student_id', 'owner_id', 'status', 'next_action_at', 'enrolled_at'], `unknown column ${col}`).toContain(col);
     }
   });
 
   it('an unmeasurable number renders as not-instrumented, never as 0', () => {
-    // Nothing records when a lead was claimed in this phase, so "new leads
-    // today" is unknowable. A 0 there would tell the founder a rep took no
-    // leads when the truth is that nothing counts them.
-    expect(CAP).toMatch(/newToday: null/);
+    // Until 2 Sep 2026 nothing recorded when a lead entered a book, so "new
+    // today" was unknowable and rendered as null. It is measured now
+    // (lead_outreach.enrolled_at, migration 20260902a) — and the one case
+    // that is still unknowable, a failed read, must still be null: a 0 there
+    // would tell the founder a rep took no leads when the truth is that we
+    // could not look.
+    expect(CAP).toMatch(/newToday: readFailed \? null : newToday/);
+    expect(CAP).toContain('enrolled_at');
   });
 
   it('capacity is read from the owned book, never from the whole roster', () => {
