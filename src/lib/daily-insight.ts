@@ -15,7 +15,7 @@ import { studyDayString } from './study-day';
 //   3. HIGH-WEIGHTAGE topics untouched — where the marks actually are.
 //   4. REVISION overdue — a finished topic quietly fading.
 //   5. CONSISTENCY praise — logged density worth naming.
-//   6. Progress fallback — coverage moving, keep feeding the plan.
+//   6. Progress family — coverage moving, told four ways, rotated like the rest.
 // Every number in every sentence comes from the student's own rows. Rules
 // detect; no model in the loop.
 //
@@ -31,9 +31,12 @@ import { studyDayString } from './study-day';
 // all of this.
 //
 // REPEAT SUPPRESSION (founder, 20 Aug, Q3=A): a shown insight (same kind +
-// subject) stays quiet for 7 days — daily_insight_shown remembers, both the
-// tracker card and the 5 PM push consult it, and 'progress' is the exempt
-// fallback so a quiet week still gets a gentle line.
+// subject) stays quiet for 7 days — daily_insight_shown remembers, and both
+// the tracker card and the 5 PM push consult it. Since 2 Sep the fallback is
+// no longer exempt: it is a FAMILY of lines suppressed like everything else,
+// and only "every member already shown this week" returns the first one
+// regardless (see rule 6 below), so a quiet week still gets a gentle line
+// without getting the SAME line.
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -42,7 +45,8 @@ export interface DailyInsight {
   title: string;
   text: string;
   /** What the insight is about (topic or section) — the suppression key's
-   *  second half. Empty for student-wide kinds (consistency, progress). */
+   *  second half. Empty for the student-wide 'consistency' kind; for
+   *  'progress' it names WHICH member of the fallback family this is. */
   subject?: string;
 }
 
@@ -152,10 +156,12 @@ export async function computeDailyInsight(
   opts?: { suppressedKeys?: Set<string> }
 ): Promise<DailyInsight | null> {
   // A candidate the student saw in the last 7 days steps aside for the next
-  // rule. 'progress' is exempt: it is the fallback, not an observation.
+  // rule. No kind is exempt any more — the fallback used to be, and that
+  // exemption was the last remaining source of consecutive-day repeats (see
+  // rule 6). Its single last resort lives inside rule 6 itself.
   const suppressed = opts?.suppressedKeys ?? new Set<string>();
   const unlessSuppressed = (i: DailyInsight): DailyInsight | null =>
-    i.kind !== 'progress' && suppressed.has(insightKey(i)) ? null : i;
+    suppressed.has(insightKey(i)) ? null : i;
   const fourteenDaysAgo = new Date(Date.now() - 14 * 86_400_000).toISOString().split('T')[0];
   const [{ data: reports }, { data: routines }, { data: completions }, topicMemory] = await Promise.all([
     admin.from('daily_reports').select('report_date').eq('student_id', studentId).gte('report_date', fourteenDaysAgo),
@@ -287,12 +293,58 @@ export async function computeDailyInsight(
     if (r) return r;
   }
 
-  // 6 — Progress fallback: coverage moving.
+  // 6 — THE FALLBACK FAMILY: coverage moving, told four different ways.
+  //
+  // Founder, 2 Sep: the insight must change every day — "not the same one
+  // for five days". Production after Incident #37 (28 Aug → 2 Sep): every
+  // observation rule above rotated cleanly, 0 consecutive repeats across 132
+  // sends. The ONLY repeats left — 7 of 27 sends, 5 students — were this
+  // fallback, because it was exempt from suppression and its one sentence
+  // reads topic_coverage, which does not move on a quiet day. One exempt
+  // static line is a repeat by construction.
+  //
+  // So the fallback is a small family, each member keyed and suppressed
+  // exactly like an observation, and every number in every member is the
+  // student's own row. The first unsuppressed member is today's line — a
+  // student on the fallback all week sees four different sentences. ONLY when
+  // every member has been shown this week does the first return regardless:
+  // that single last resort is the whole of the old exemption now, and it is
+  // what keeps a quiet week from blanking the card. `weightage` orders the
+  // "next" candidate and is never rendered (the 20 Aug language contract).
   const finished = topicMemory.filter((t) => isCovered(t.status)).length;
   const remaining = topicMemory.length - finished;
-  return {
-    kind: 'progress',
-    title: '📈 Your map is filling in',
-    text: oneLine(`${finished} topics done, ${remaining} to go. Keep feeding the plan.`),
-  };
+  const openBySection: Record<string, number> = {};
+  for (const t of topicMemory) {
+    if (isCovered(t.status)) continue;
+    const sec = TOPIC_METADATA[t.topic]?.section;
+    if (sec) openBySection[sec] = (openBySection[sec] ?? 0) + 1;
+  }
+  const thinnest = Object.entries(openBySection).sort((a, b) => b[1] - a[1])[0];
+  const nextTopic = topicMemory
+    .filter((t) => t.status === 'not_started')
+    .sort((a, b) => (TOPIC_METADATA[b.topic]?.weightage ?? 0) - (TOPIC_METADATA[a.topic]?.weightage ?? 0))[0];
+
+  const family: DailyInsight[] = [
+    {
+      kind: 'progress', subject: 'map',
+      title: '📈 Your map is filling in',
+      text: oneLine(`${finished} topics done, ${remaining} to go. Keep feeding the plan.`),
+    },
+    {
+      kind: 'progress', subject: 'days',
+      title: '📅 Your last two weeks',
+      text: oneLine(`${loggedDays} of the last 14 days logged. Every log sharpens tomorrow's plan.`),
+    },
+    ...(thinnest ? [{
+      kind: 'progress' as const, subject: `section:${thinnest[0]}`,
+      title: '🧭 Where your map is thinnest',
+      text: oneLine(`${thinnest[0]}: ${thinnest[1]} topics still open. The plan feeds them one at a time.`),
+    }] : []),
+    ...(nextTopic ? [{
+      kind: 'progress' as const, subject: `next:${nextTopic.topic}`,
+      title: '➡️ Next on your map',
+      text: oneLine(`${nextTopic.topic} is next in ${TOPIC_METADATA[nextTopic.topic]?.section ?? 'your plan'}. 20 minutes opens it.`),
+    }] : []),
+  ];
+  return family.find((i) => !suppressed.has(insightKey(i))) ?? family[0];
 }
