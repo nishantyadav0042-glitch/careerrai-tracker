@@ -290,6 +290,18 @@ and most have a guard test that fails the build if violated.
    *Guards: `task-resource-surface.guard.test.ts` (the surface),
    `topic-resources.guard.test.ts` (the data — nine researched videos did not
    exist, twenty-two runtimes were wrong, three channels were misattributed).*
+10. **A population is read paged, never whole.** PostgREST caps every
+   response at `max-rows` (Supabase default 1000) and returns the first
+   thousand rows of an unbounded select with NO error; a client `.limit(N)`
+   at or above the cap does not help, because max-rows is applied after it.
+   The Command Center said STUDENTS 1000 for three days while 1,036 existed,
+   and seven tables were already silently truncated. Any read of a table
+   that can exceed a thousand rows goes through `lib/supabase/fetch-all.ts`
+   (`fetchAll`, ordered pages, short-page termination, loud ceiling) or its
+   Source-typed lift `readAllRows` in `lib/truth/source.ts`.
+   *Guard: `population-cap.guard.test.ts` — a shrink-only baseline of the
+   files still unmigrated; a NEW unbounded read fails the build.*
+   (Incident #64)
 
 ---
 

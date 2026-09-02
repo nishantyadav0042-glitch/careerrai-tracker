@@ -383,7 +383,7 @@ premium-on so reviewers see the paid surface without touching payments.
 
 ## 8. The failure patterns this codebase has already paid for
 
-These are the recurring *classes* behind the 11 incidents — the things a new
+These are the recurring *classes* behind the logged incidents — the things a new
 engineer will otherwise re-discover expensively. Full entries:
 `docs/ENGINEERING-MEMORY.md`.
 
@@ -415,6 +415,14 @@ engineer will otherwise re-discover expensively. Full entries:
    navigations, wrappers gating loads on reachability checks) converts
    transient failures into permanent ones.** Let the platform fail; it does it
    better.
+8. **A read that "worked" can still be a sample.** PostgREST caps every
+   response at 1,000 rows and returns the first thousand of an unbounded
+   select with no error and no warning; `.limit(20000)` does not lift it.
+   The student tile sat at 1000 for three days while 1,036 students existed,
+   and the events, notifications and coverage tables had been reporting a
+   thousand-row sample for weeks (Incident #64). A population is read only
+   through `fetchAll` / `readAllRows`; `population-cap.guard.test.ts` refuses
+   a new unbounded read.
 
 ---
 
