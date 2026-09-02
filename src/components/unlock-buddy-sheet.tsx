@@ -313,6 +313,67 @@ export function BuddyBuyButtons({ fullName, sticky = false }: { fullName?: strin
   );
 }
 
+// ── The two subscription rungs, rendered DIRECTLY on the Buddy screen ────────
+//
+// Founder, 2 Sep 2026: "three prices on My Buddy" — the session, the monthly
+// plan, and till CAT, ascending (no figure is written here on purpose: the
+// price-authority guard reads even comments, and lib/plans is the only place
+// a rupee amount may appear). The 14 Aug screen kept one till-CAT line and
+// left the monthly plan one tap away
+// inside the sheet; a price a student has to open a sheet to discover is, to
+// that student, a price that does not exist. This renders both subscriptions
+// in ascending order under the single-session card, through the same
+// useBuddyCheckout path as every other surface — one checkout, no second copy
+// of Razorpay, no rupee amount stated here (every figure is lib/plans).
+export function BuddyPlanLadder({ fullName }: { fullName?: string }) {
+  const { pay, busy, message, callMe, setCallMe } = useBuddyCheckout();
+  const tap = (plan: PlanId) => pay(plan, fullName);
+
+  return (
+    <div className="space-y-2">
+      <PlanCta
+        analytics="buy_monthly_ladder"
+        onClick={() => tap('monthly')}
+        disabled={busy !== null}
+        className="block w-full rounded-2xl border border-stone-200 bg-white px-4 py-3.5 text-left transition-colors hover:border-stone-400 disabled:opacity-60"
+      >
+        <div className="flex items-center justify-between">
+          <span className="text-[14px] font-bold text-stone-900">Go deeper — 1 month</span>
+          <span className="flex items-baseline gap-1.5">
+            <span className="text-xl font-extrabold text-stone-900">{busy === 'monthly' ? 'Starting…' : PLANS.monthly.display}</span>
+            {busy !== 'monthly' && <span className="text-xs text-stone-400 line-through">{PLANS.monthly.listDisplay}</span>}
+          </span>
+        </div>
+        <p className="mt-0.5 text-[11.5px] text-stone-500">Month to month · you decide again in 30 days</p>
+      </PlanCta>
+
+      <PlanCta
+        analytics="buy_tillcat_ladder"
+        onClick={() => tap('tillcat')}
+        disabled={busy !== null}
+        className="block w-full rounded-2xl bg-stone-900 px-4 py-3.5 text-left text-white transition-transform active:scale-[0.99] disabled:opacity-60"
+      >
+        <div className="flex items-center justify-between">
+          <span className="text-[14px] font-bold">Till CAT — full support</span>
+          <span className="rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">Best value</span>
+        </div>
+        <div className="mt-1 flex items-baseline gap-2">
+          <span className="text-2xl font-extrabold">{busy === 'tillcat' ? 'Starting…' : PLANS.tillcat.display}</span>
+          {busy !== 'tillcat' && <span className="text-xs text-stone-400 line-through">{PLANS.tillcat.listDisplay}</span>}
+          {busy !== 'tillcat' && <span className="text-[11px] font-semibold text-emerald-400">save {TILLCAT_SAVING}</span>}
+        </div>
+        <p className="mt-1 text-[12px] text-stone-300">Your buddy all the way to exam day · about {TILLCAT_PER_DAY}/day</p>
+      </PlanCta>
+
+      <p className="text-center text-[11px] text-stone-400">
+        No auto-debit, ever · full refund in your first month if you&apos;ve logged 20+ study days
+      </p>
+      {message && <p className="text-center text-xs font-medium text-stone-700">{message}</p>}
+      {callMe && <CallMeModal onClose={() => setCallMe(false)} />}
+    </div>
+  );
+}
+
 // Legacy button → sheet flow, still used by the recommended-buddies and daily
 // nudge surfaces. Opens the loud two-option sheet; taps pay through the same
 // shared checkout path.
