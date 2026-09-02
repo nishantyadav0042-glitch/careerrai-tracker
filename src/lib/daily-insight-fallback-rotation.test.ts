@@ -111,6 +111,38 @@ describe('a student with nothing new to observe still gets a DIFFERENT line each
   });
 });
 
+describe('day 0: a brand-new student gets an insight, and never a guilt line', () => {
+  // Founder, 2 Sep: "2 din rule hata do" — the Home card was invisible until
+  // the second log. The onboarding coverage matrix is real data on day 0.
+  const dayZero = (suppressed: string[], routines: unknown[] = []) =>
+    computeDailyInsight(
+      adminWith({ daily_reports: [], daily_routines: routines, routine_task_completions: [] }),
+      'stu-new',
+      { isRepeater: false, isWorkingProfessional: false },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      { topicMemory: TOPIC_MEMORY as any },
+      { suppressedKeys: new Set(suppressed) },
+    );
+
+  it('REGRESSION: zero logged days no longer returns null', async () => {
+    expect(await dayZero([])).not.toBeNull();
+  });
+
+  it('the "days logged" member does not exist at zero — "0 of 14 logged" is guilt, not insight', async () => {
+    const i = await dayZero(['progress:map']);
+    expect(insightKey(i!)).toBe('progress:section:VARC');
+  });
+
+  it("a plan served today and untouched is NOT 'a pattern in your week'", async () => {
+    // Four QA tasks served, none done, no logs yet: the avoidance rule would
+    // have fired on day 0 — the exact false observation the old door-level
+    // gate was (accidentally) preventing. It is now gated where it belongs.
+    const served = [{ routine_date: day(0), tasks: [1, 2, 3, 4].map((n) => ({ id: `t${n}`, section: 'QA', topic: null })) }];
+    const i = await dayZero([], served);
+    expect(i!.kind).not.toBe('avoidance');
+  });
+});
+
 describe('every member of the family honours the language contract', () => {
   // The 20 Aug rules that daily-insight-honesty.guard.test.ts pins for the
   // observation rules apply to the fallback family too: the student's own

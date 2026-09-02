@@ -171,7 +171,13 @@ export async function computeDailyInsight(
   ]);
 
   const loggedDays = new Set((reports ?? []).map((r: any) => r.report_date as string)).size;
-  if (loggedDays < 2) return null; // patterns need at least a little history
+  // NO "two logged days" gate any more (founder, 2 Sep: "2 din rule hata do").
+  // It returned null for every student below two logs, so a brand-new
+  // student's Home showed no insight at all — the exact screen where the
+  // 21 Jul brief wanted VALUE first ("where you lack as of today"). The
+  // coverage matrix from onboarding is real data on day 0: the core-topic
+  // rule and the fallback family both read it. What still needs history is
+  // gated per rule below, not at the door.
 
   // (routine_date, task_id) → {topic, section} from the served routines.
   //
@@ -228,7 +234,10 @@ export async function computeDailyInsight(
   }
 
   // 2 — AVOIDANCE: a section served ≥3 tasks with <1/3 done, while another gets finished.
-  const avoided = Object.keys(served)
+  // "A pattern in your week" needs a week: with fewer than two logged days a
+  // plan served today and not yet touched is not avoidance, it is day one.
+  // This is where the old door-level gate actually belonged.
+  const avoided = loggedDays < 2 ? undefined : Object.keys(served)
     .filter((s) => served[s] >= 3 && (doneBySec[s] ?? 0) / served[s] < 0.34)
     .sort((a, b) => (doneBySec[a] ?? 0) / served[a] - (doneBySec[b] ?? 0) / served[b])[0];
   if (avoided) {
@@ -330,11 +339,14 @@ export async function computeDailyInsight(
       title: '📈 Your map is filling in',
       text: oneLine(`${finished} topics done, ${remaining} to go. Keep feeding the plan.`),
     },
-    {
-      kind: 'progress', subject: 'days',
+    // "0 of the last 14 days logged" is guilt, not an insight (confidence
+    // doctrine: never guilt) — the member simply does not exist until there
+    // is a log to count.
+    ...(loggedDays > 0 ? [{
+      kind: 'progress' as const, subject: 'days',
       title: '📅 Your last two weeks',
       text: oneLine(`${loggedDays} of the last 14 days logged. Every log sharpens tomorrow's plan.`),
-    },
+    }] : []),
     ...(thinnest ? [{
       kind: 'progress' as const, subject: `section:${thinnest[0]}`,
       title: '🧭 Where your map is thinnest',
