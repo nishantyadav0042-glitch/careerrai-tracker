@@ -8,6 +8,7 @@ import {
 } from '@/lib/os/people-filter';
 import { priorityMeta } from '@/lib/os/student-priority';
 
+import { fetchAll } from '@/lib/supabase/fetch-all';
 export const dynamic = 'force-dynamic';
 
 // PEOPLE — one screen, combinable filters, priority-sorted, no scrolling.
@@ -40,14 +41,14 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
   const filter = parseFilter(await searchParams);
 
   const [{ data: students }, { data: paidRows }, { data: pendRows }, { data: failRows }, { data: recentLogs }, { data: planRows }] = await Promise.all([
-    admin.from('profiles')
+    fetchAll(() => admin.from('profiles')
       .select('id, full_name, phone, is_premium, buddy_id, subscription_status, wants_mentor')
-      .eq('role', 'student').not('is_test_account', 'is', true).not('is_demo', 'is', true),
-    admin.from('student_payments').select('student_id').eq('status', 'paid'),
-    admin.from('student_payments').select('student_id').eq('status', 'created').gte('created_at', new Date(now - 14 * 86_400_000).toISOString()),
-    admin.from('student_payments').select('student_id').eq('status', 'failed').gte('created_at', new Date(now - 30 * 86_400_000).toISOString()),
-    admin.from('daily_reports').select('student_id, report_date').gte('report_date', new Date(now - 30 * 86_400_000).toISOString().slice(0, 10)),
-    admin.from('daily_routines').select('student_id').limit(20000),
+      .eq('role', 'student').not('is_test_account', 'is', true).not('is_demo', 'is', true)),
+    fetchAll(() => admin.from('student_payments').select('student_id').eq('status', 'paid')),
+    fetchAll(() => admin.from('student_payments').select('student_id').eq('status', 'created').gte('created_at', new Date(now - 14 * 86_400_000).toISOString())),
+    fetchAll(() => admin.from('student_payments').select('student_id').eq('status', 'failed').gte('created_at', new Date(now - 30 * 86_400_000).toISOString())),
+    fetchAll(() => admin.from('daily_reports').select('student_id, report_date').gte('report_date', new Date(now - 30 * 86_400_000).toISOString().slice(0, 10))),
+    fetchAll(() => admin.from('daily_routines').select('student_id')),
   ]);
 
   const paidBy = new Set((paidRows ?? []).map((r: { student_id: string }) => r.student_id));

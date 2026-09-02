@@ -8,6 +8,7 @@ import { resolveCatExamDate } from '@/lib/routine-engine';
 import { reconcileWeek } from '@/lib/plan-extension';
 import { withCronTracking } from '@/lib/cron-run-tracker';
 
+import { fetchAll } from '@/lib/supabase/fetch-all';
 // Every invocation of this route walks the whole student roster. Vercel's
 // default ceiling was never a decision anyone made here — it was simply
 // inherited, and when it is reached the invocation is killed mid-loop and the
@@ -57,12 +58,12 @@ async function weeklyPlanReconcileRun(): Promise<NextResponse> {
   const now = new Date();
   const week = lastWeekIST(now);
 
-  const { data: students, error } = await admin
+  const { data: students, error } = await fetchAll(() => admin
     .from('profiles')
     .select('id, full_name, study_target_hours, weekend_hours_available, syllabus_target_date, attempt_year, created_at, notif_prefs')
     .eq('role', 'student')
     .not('is_demo', 'is', true)  // test accounts stay IN: this cron IS the student experience (founder tests as a student); demo accounts are shared logins and stay out
-    .not('syllabus_target_date', 'is', null);
+    .not('syllabus_target_date', 'is', null));
 
   if (error) {
     console.error('[weekly-reconcile]', error.message);

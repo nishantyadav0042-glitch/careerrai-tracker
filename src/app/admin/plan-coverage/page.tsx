@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { requireAdmin } from '@/lib/admin-auth';
 import { assessPlanCoverage, planCoverageExceptions, CONCENTRATION_LIMIT, MIN_DAYS_TO_JUDGE, type PlannedSlot, type PlanCoverageRow } from '@/lib/os/plan-coverage';
 
+import { fetchAll } from '@/lib/supabase/fetch-all';
 export const dynamic = 'force-dynamic';
 
 // Plan Coverage — the report that would have caught the Percentages loop on
@@ -28,11 +29,11 @@ export default async function PlanCoveragePage() {
   const { admin } = await requireAdmin();
 
   const [{ data: profiles }, { data: routines }, { data: coverage }] = await Promise.all([
-    admin.from('profiles')
+    fetchAll(() => admin.from('profiles')
       .select('id, full_name, syllabus_target_date, is_test_account, is_demo')
-      .eq('role', 'student'),
-    admin.from('daily_routines').select('student_id, routine_date, tasks'),
-    admin.from('topic_coverage').select('student_id, status'),
+      .eq('role', 'student')),
+    fetchAll(() => admin.from('daily_routines').select('student_id, routine_date, tasks')),
+    fetchAll(() => admin.from('topic_coverage').select('student_id, status')),
   ]);
 
   const real = (profiles ?? []).filter((p) => !p.is_test_account && !p.is_demo);

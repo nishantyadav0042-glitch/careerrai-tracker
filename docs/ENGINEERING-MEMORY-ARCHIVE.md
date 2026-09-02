@@ -3364,3 +3364,114 @@ population you are counting. A default value is not a decision, and an unwritten
 flag is not a "no". This is the same failure class as Incident #61 — a query
 that excluded the very rows that carried the answer, then three confident wrong
 diagnoses on top of it.
+
+## Incident #64
+
+**Date:** 2026-09-02
+**Area:** Operator surfaces + crons (every population read)
+**Severity:** P0 (student correctness) / P1 (founder visibility)
+
+### What the founder saw
+
+Three screenshots of the Command Center, a day apart: STUDENTS **1000**, then
+**1000**, then **1000** — while "Studied today" moved 21 → 5 → 16 and
+"Sales-ready" moved 796 → 811 → 803. Every other number breathed. That one did
+not. Production held 1,036 real students (1,058 profiles).
+
+### What was wrong
+
+`getRealStudents` in `lib/admin-filters.ts` — the single source every
+dashboard card derives from, by design ("the count is literally
+`list.length`") — was an unbounded `.select()`:
+
+```ts
+admin.from('profiles').select(...).eq('role','student').not(...).not(...)
+```
+
+PostgREST caps every response at `max-rows` (Supabase default **1000**). It
+returns the first thousand rows and **no error** — no exception, no header
+the client surfaces, nothing in the logs. The page counted what it was given.
+The roster crossed 1,000 real students on or about 26 Aug; from that day the
+tile was a constant.
+
+A client-side `.limit(20000)` (the People page's `daily_routines` read) does
+not help: max-rows is applied **after** the client limit.
+
+### How far it went
+
+The sweep found **134 unbounded reads** of population-scaled tables across
+`app/admin`, `app/api/admin`, `app/api/cron`, `app/sales` and `lib`. Row
+counts read from production on 2 Sep:
+
+| table | rows | read unbounded by |
+|---|---|---|
+| student_events | 237,605 | launch-metrics, mission-queue, capability-health, daily-pick-stats, log-yesterday-reminder |
+| notifications | 100,586 | momentum, mission-queue, notification-health, daily-heartbeat, daily-insight, launch-metrics |
+| topic_coverage | 50,102 | lis-health |
+| funnel_events | 18,901 | growth page |
+| decision_log | 4,162 | compute-dna, dna route |
+| daily_routines | 1,920 | plan-coverage, people page (`.limit(20000)`) |
+| profiles | 1,058 | 60 sites |
+| student_dna | 1,038 | compute-dna, analytics, dna route |
+
+So this was never one tile. The launch metrics, the LIS health score, the
+growth funnel, the notification survival curves and the Student DNA cohort
+view were each computing over a thousand-row sample and presenting it as the
+population — for weeks in some cases.
+
+The student-facing half: every cron that iterates "all students" — compute-dna,
+daily-heartbeat, daily-insight, log-yesterday-reminder, weekly-plan-reconcile,
+check-red-flags, decision-engine, study-companion, nishant-weekly,
+weekly-digest, whatsapp-backfill — read the first 1,000 and skipped the rest.
+Which 36 were skipped follows Postgres heap order, not signup date: it is not
+even the same 36 from one day to the next. A student could be reminded on
+Monday and silently not on Tuesday.
+
+### Why nothing caught it
+
+- The truth boundary (Incident #55, 23 Aug) makes a **failed** read
+  irreducible from an empty one. A capped read is neither — it is a
+  successful VALUE of the wrong population. The boundary did exactly what it
+  was built for and could not see this.
+- `population-read.guard` (B3b gate 1) pins population-scaled reads that feed
+  a **mutation** through `.in(ids)` — the 24 KB request failure. This is the
+  other direction: not too many ids going out, too few rows coming back.
+- One page had already learned the lesson: `admin/analytics/page.tsx` pages
+  `student_events` with `.order().range()` and a loud ceiling, with a comment
+  saying why. The lesson lived in one file and never became a primitive.
+
+### The fix
+
+1. **`lib/supabase/fetch-all.ts`** — the one sanctioned population read.
+   Takes a thunk (a PostgREST builder is mutable and must be rebuilt per
+   page), orders explicitly (`id` by default; `student_id` where that is the
+   key), pages until a **short page proves the end**, and refuses — returns an
+   error, not a shorter array — past 200 pages. Null data with no error is an
+   error, same rule as the truth boundary. Returns `{ data, error }` so a call
+   site changes by one wrapper and nothing downstream.
+2. **`readAllRows`** in `lib/truth/source.ts` — the same, lifted into
+   `Source<T[]>`, for crons that must not act on a partial picture. `readRows`
+   keeps its contract for key-bounded reads.
+3. **88 reads migrated** across 32 files — every founder-visible surface and
+   every roster-iterating cron, plus the student-facing peer-cohort base.
+4. **`lib/truth/population-cap.guard.test.ts`** — lists the 21 tables by
+   evidence, scans the operator/cron tree for an unbounded read of any of
+   them, and holds a **shrink-only** baseline of the 43 files still carrying
+   one (small tables today, bounded subsets). A new file fails the build; a
+   migrated file left in the list fails the build. Mutation-tested: unwrapping
+   the roster, adding `.limit(1000)` to it, adding a fresh unbounded read, and
+   migrating a listed file without delisting it all fail; dropping the order,
+   returning a partial set on error, and truncating silently at the ceiling
+   all fail the helper's tests.
+
+### The lesson, with teeth
+
+**A read that returns the wrong population is not a failed read, and every
+mechanism we had was built to catch failed reads.** The dangerous case is
+the one that succeeds. The only defence is structural: a table that can
+exceed the cap is read through the paging primitive or the build fails.
+
+Second: the fix existed in the codebase for two weeks (`analytics/page.tsx`)
+as a local workaround with a good comment. A lesson that stays in one file is
+a lesson the next file will not have.
+

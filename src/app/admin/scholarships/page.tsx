@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { requireAdmin } from '@/lib/admin-auth';
 import { AdminScholarshipsClient, type StudentOption, type ScholarshipRow } from './admin-scholarships-client';
 
+import { fetchAll } from '@/lib/supabase/fetch-all';
 interface ProfileRow {
   id: string;
   full_name: string | null;
@@ -34,10 +35,10 @@ export default async function AdminScholarshipsPage() {
 
   // Scholarships live behind RLS with no policies — only the service-role
   // admin client can read them.
-  const { data: profiles } = await admin
+  const { data: profiles } = await fetchAll(() => admin
     .from('profiles')
     .select('id, full_name, email, subscription_status')
-    .eq('role', 'student');
+    .eq('role', 'student'));
   const studentRows = (profiles ?? []) as ProfileRow[];
 
   const { data: scholarshipData } = await admin

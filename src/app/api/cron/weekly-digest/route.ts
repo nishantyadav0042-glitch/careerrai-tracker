@@ -5,7 +5,7 @@ import { computeSummary } from '@/lib/analytics';
 import { sendBuddyWeeklyDigest } from '@/lib/email';
 import { authorizedCron } from '@/lib/cron-auth';
 import { withCronTracking } from '@/lib/cron-run-tracker';
-import { readRows, isUnavailable, type Source } from '@/lib/truth/source';
+import { readRows, isUnavailable, type Source, readAllRows } from '@/lib/truth/source';
 import { readRowsForIds } from '@/lib/truth/batch';
 
 // ── B3b #6 — read safety ONLY ──────────────────────────────────────────────
@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
     const [buddiesSource, studentsSource] = await Promise.all([
       readRows<DigestBuddy>('profiles(buddies)', () =>
         admin.from('profiles').select('id, full_name, email, notif_prefs').eq('role', 'buddy')),
-      readRows<DigestStudent>('profiles(students)', () =>
+      readAllRows<DigestStudent>('profiles(students)', () =>
         admin.from('profiles').select('id, full_name, buddy_id').eq('role', 'student')),
     ]);
     if (isUnavailable(buddiesSource)) return digestSourceDead(`profiles(buddies): ${buddiesSource.reason}`);

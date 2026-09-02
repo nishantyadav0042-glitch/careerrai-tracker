@@ -9,7 +9,7 @@ import {
 } from '@/lib/decision-engine';
 import { computeStudentState, dispatch, BUDGET_ACTIVE, BUDGET_RECOVERY, type ExpectedAction } from '@/lib/notification-os';
 import { withCronTracking } from '@/lib/cron-run-tracker';
-import { readRows, isUnavailable, type Source } from '@/lib/truth/source';
+import { readRows, isUnavailable, type Source, readAllRows } from '@/lib/truth/source';
 import { readRowsForIds } from '@/lib/truth/batch';
 
 // ── B3b #5 — read safety ONLY ──────────────────────────────────────────────
@@ -120,7 +120,7 @@ async function decisionEngineRun(): Promise<NextResponse> {
     Object.entries(TOPIC_METADATA).map(([topic, meta]) => [topic, meta.revisionFrequencyDays])
   );
 
-  const studentsSource = await readRows<EngineStudent>('profiles(students)', () =>
+  const studentsSource = await readAllRows<EngineStudent>('profiles(students)', () =>
     admin
       .from('profiles')
       .select('id, notif_prefs, is_repeater, is_working_professional, created_at, onboarding_completed')

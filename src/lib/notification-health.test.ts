@@ -128,9 +128,15 @@ describe('getRecoveryQueue — Installment 3 Batch 15: the specific worklist, no
     return {
       from(table: string) {
         if (table === 'profiles') {
+          // getRecoveryQueue reads the roster through fetchAll (Incident #64),
+          // which orders and pages with .range(from, to). The fake must honour
+          // the window or it would hand back every row on every page.
+          let rng: [number, number] | null = null;
           const q = {
-            select: () => q, eq: () => q, not: () => q, is: () => q,
-            then: (resolve: (v: { data: unknown }) => void) => resolve({ data: opts.profiles }),
+            select: () => q, eq: () => q, not: () => q, is: () => q, order: () => q,
+            range: (from: number, to: number) => { rng = [from, to]; return q; },
+            then: (resolve: (v: { data: unknown; error: null }) => void) =>
+              resolve({ data: rng ? opts.profiles.slice(rng[0], rng[1] + 1) : opts.profiles, error: null }),
           };
           return q;
         }

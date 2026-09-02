@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getNotificationHealth, getReliabilityMetrics } from '@/lib/notification-health';
 
+import { fetchAll } from '@/lib/supabase/fetch-all';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 // CareerRai Mission Control — one live instrument, not a report. The founder's
@@ -67,10 +68,10 @@ export interface AgeCohort { label: string; total: number; alive: number; pct: n
 
 export async function computeAgeCohorts(admin?: any): Promise<AgeCohort[]> {
   const db = admin ?? createAdminClient();
-  const { data } = await db.from('profiles')
+  const { data } = await fetchAll(() => db.from('profiles')
     .select('push_subscription, push_subscribed_at')
     .eq('role', 'student').not('is_test_account', 'is', true).not('is_demo', 'is', true)
-    .not('push_subscribed_at', 'is', null);
+    .not('push_subscribed_at', 'is', null));
   const now = Date.now();
   const DAY = 86_400_000;
   const buckets: { label: string; lo: number; hi: number }[] = [

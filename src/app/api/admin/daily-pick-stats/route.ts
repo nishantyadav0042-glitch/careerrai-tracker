@@ -2,6 +2,7 @@ import { requireAdminCtx as requireAdmin } from '@/lib/require-admin';
 import { NextResponse } from 'next/server';
 import { tallySubmission } from '@/lib/community-pipeline';
 
+import { fetchAll } from '@/lib/supabase/fetch-all';
 export const maxDuration = 60;
 
 // The founder dashboard numbers for Daily Pick — the one screen that decides
@@ -96,8 +97,8 @@ export async function GET() {
 
   // ── Retention: voters vs non-voters (needs a week of life to mean much) ──
   const everVoters = new Set((votes ?? []).map((v) => v.student_id as string));
-  const { data: active7 } = await admin.from('student_events')
-    .select('user_id').gte('created_at', since7d).eq('event', 'app_open');
+  const { data: active7 } = await fetchAll(() => admin.from('student_events')
+    .select('user_id').gte('created_at', since7d).eq('event', 'app_open'));
   const active7Set = new Set((active7 ?? []).map((e) => e.user_id as string));
   const votersActive = [...everVoters].filter((v) => active7Set.has(v)).length;
 

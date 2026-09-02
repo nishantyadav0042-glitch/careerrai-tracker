@@ -6,6 +6,7 @@ import { getKindTimeline } from '@/lib/os/timeline';
 import { CopyDraftButton, MarkContactedButton } from './row-actions';
 import Link from 'next/link';
 
+import { fetchAll } from '@/lib/supabase/fetch-all';
 // ── LOG BREAKERS — the founder's retention-research queue ───────────────────
 //
 // Not an analytics dashboard. A worklist: every student who logged at least
@@ -35,8 +36,8 @@ export default async function LogBreakersPage({ searchParams }: {
   const today = studyDayString();
 
   const [{ data: reports }, { data: streaks }, contacts] = await Promise.all([
-    admin.from('daily_reports').select('student_id, report_date'),
-    admin.from('streak_data').select('student_id, current_streak, longest_streak, last_log_date, shields'),
+    fetchAll(() => admin.from('daily_reports').select('student_id, report_date')),
+    fetchAll(() => admin.from('streak_data').select('student_id, current_streak, longest_streak, last_log_date, shields')),
     getKindTimeline(admin, 'founder_contact'),
   ]);
 

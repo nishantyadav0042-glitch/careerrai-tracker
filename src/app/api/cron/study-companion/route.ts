@@ -16,7 +16,7 @@ import { computeTodaysPlan, type TodaysPlan } from '@/lib/routine-plan';
 import { resolveFocusSections } from '@/lib/focus-sections';
 import { getLogDateString } from '@/lib/streak-utils';
 import { withCronTracking } from '@/lib/cron-run-tracker';
-import { readRows, isUnavailable, type Source } from '@/lib/truth/source';
+import { readRows, isUnavailable, type Source, readAllRows } from '@/lib/truth/source';
 import { readRowsForIds } from '@/lib/truth/batch';
 
 // ── B3b migration #2 — read safety ONLY ────────────────────────────────────
@@ -136,7 +136,7 @@ async function studyCompanionRun(slot: CompanionSlot): Promise<NextResponse> {
   // Was `{ data: students }` unguarded: an unavailable roster fell through
   // `!students?.length` and the slot reported `{ sent: 0 }` — indistinguishable
   // from a slot where nobody was eligible.
-  const studentsSource = await readRows<CompanionStudent>('profiles(students)', () =>
+  const studentsSource = await readAllRows<CompanionStudent>('profiles(students)', () =>
     admin
       .from('profiles')
       .select('id, full_name, notif_prefs, created_at, is_working_professional, self_reported_weakest_section, self_reported_weak_topic, study_target_hours, hours_available, weekend_hours_available, dream_colleges')

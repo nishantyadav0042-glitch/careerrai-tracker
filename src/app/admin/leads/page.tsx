@@ -5,6 +5,7 @@ import { waMessages, waNumber, leadState } from '@/lib/wa-messages';
 import { dreamCollegeLabel } from '@/lib/notification-os';
 import { WorkspaceShell } from '@/components/admin/workspace-shell';
 
+import { fetchAll } from '@/lib/supabase/fetch-all';
 // Build a wa.me link with the SUGGESTED outreach message pre-typed, chosen from
 // the lead's state (no app → install nudge, installed-but-no-notifs → turn on
 // reminders, engaged → keep going). One tap opens WhatsApp ready to send.
@@ -62,16 +63,14 @@ export default async function LeadsPage() {
   // founder testing never pollutes the real pipeline. Toggle it per-lead on
   // the detail page.
   const [{ data: students }, { data: buddies }] = await Promise.all([
-    admin.from('profiles')
+    fetchAll(() => admin.from('profiles')
       .select('id, full_name, phone, created_at, onboarding_completed, onboarding_step_reached, post_signup_done, app_installed, notif_prefs, pain_points, wants_mentor, buddy_id, syllabus_target_date, dream_colleges')
       .eq('role', 'student')
-      .eq('is_test_account', false)
-      .order('created_at', { ascending: false }),
-    admin.from('profiles')
+      .eq('is_test_account', false), { orderBy: 'created_at', ascending: false }),
+    fetchAll(() => admin.from('profiles')
       .select('id, full_name, phone, created_at, college, cat_percentile, app_installed, notif_prefs')
       .eq('role', 'buddy')
-      .eq('is_test_account', false)
-      .order('created_at', { ascending: false }),
+      .eq('is_test_account', false), { orderBy: 'created_at', ascending: false }),
   ]);
 
   return (
