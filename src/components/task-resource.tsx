@@ -42,6 +42,7 @@ export interface TaskResource {
   title: string;
   channel: string;
   realMinutes: number;
+  language?: 'en' | 'hi';
   /** Longer than a daily task block. We still link it — it is the best
    *  explanation available for that topic — but we say so, because the plan
    *  above it is asking for thirty minutes, not seventy-eight. */
@@ -165,6 +166,13 @@ export function TaskResource({
           {/* Provenance and cost, before the tap, every time. */}
           <span className="mt-0.5 block text-[11px] text-stone-500">
             {resource.channel} on YouTube · {resource.realMinutes} min
+            {/* Said before the tap, and only when it is not the default.
+                Twenty-one of the live videos are taught in Hindi while
+                YouTube's own language field claims otherwise, so a student
+                could land on a Hindi lecture with no warning. Hindi is often
+                the better lesson for our students; being surprised by it is
+                the part that is not. */}
+            {resource.language === 'hi' && ' · in Hindi'}
           </span>
           {/* The one sentence that keeps a 78-minute lecture from reading as a
               78-minute instruction. The task's target is unchanged and always
