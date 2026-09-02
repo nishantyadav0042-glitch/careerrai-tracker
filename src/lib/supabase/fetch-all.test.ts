@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { fetchAll, PAGE_SIZE, MAX_PAGES } from './fetch-all';
 
-// ── Incident #64: a population read must never be silently shortened ────────
+// ── Incident #65: a population read must never be silently shortened ────────
 //
 // The Command Center showed STUDENTS 1000 for three days while 1,036 existed.
 // PostgREST caps an unbounded select at max-rows (1000) and reports nothing.

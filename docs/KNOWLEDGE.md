@@ -420,7 +420,7 @@ engineer will otherwise re-discover expensively. Full entries:
    select with no error and no warning; `.limit(20000)` does not lift it.
    The student tile sat at 1000 for three days while 1,036 students existed,
    and the events, notifications and coverage tables had been reporting a
-   thousand-row sample for weeks (Incident #64). A population is read only
+   thousand-row sample for weeks (Incident #65). A population is read only
    through `fetchAll` / `readAllRows`; `population-cap.guard.test.ts` refuses
    a new unbounded read.
 

@@ -1,4 +1,5 @@
 import { loadStaffDirectory, type StaffDirectory } from '@/lib/sales-authz';
+import { fetchAll } from '@/lib/supabase/fetch-all';
 import { bucketFor, listOpenFollowups } from '@/lib/sales-followup';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -91,6 +92,57 @@ export interface TowerData {
   /** True when a per-rep conversion rate would be statistically indefensible. */
   conversionRateSuppressed: boolean;
   paidTotal: number | null;
+  /** The daily intake (lib/lead-intake): did new students enter books today? */
+  intake: IntakeView;
+}
+
+export interface IntakeView {
+  /** Students who entered a book today (IST), per seat. null = could not read. */
+  enrolledToday: { repId: string; name: string; count: number }[] | null;
+  /** The engine's last run, from cron_runs. null = it has never run — which
+   *  is itself the fact the founder most needs to see. */
+  lastRun: { at: string; ok: boolean; state: string; enrolled: number; waiting: number | null; error: string | null } | null;
+}
+
+/** Bounded: today's intake is at most Σ max_new_per_day, and the last run is one row. */
+export async function readIntake(admin: any, dayStart: string, staff: StaffDirectory | null): Promise<IntakeView> {
+  const nameOf = (id: string) => staff?.labelById.get(id) ?? 'Staff';
+  let enrolledToday: IntakeView['enrolledToday'] = null;
+  try {
+    const { data, error } = await fetchAll<{ owner_id: string | null }>(
+      () => admin.from('lead_outreach').select('owner_id').gte('enrolled_at', dayStart).not('owner_id', 'is', null),
+      { orderBy: 'student_id' });
+    if (error || !data) console.error('[tower] intake read failed:', error?.message);
+    else {
+      const by = new Map<string, number>();
+      for (const r of data) if (r.owner_id) by.set(r.owner_id, (by.get(r.owner_id) ?? 0) + 1);
+      enrolledToday = [...by.entries()].map(([repId, count]) => ({ repId, name: nameOf(repId), count }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+    }
+  } catch (e) { console.error('[tower] intake read threw:', e); }
+
+  let lastRun: IntakeView['lastRun'] = null;
+  try {
+    const { data, error } = await admin.from('cron_runs')
+      .select('started_at, completed_at, result, fatal_error')
+      .eq('cron_path', '/api/cron/lead-intake')
+      .order('started_at', { ascending: false }).limit(1).maybeSingle();
+    if (error) console.error('[tower] intake last-run read failed:', error.message);
+    else if (data) {
+      const r = (data.result ?? {}) as any;
+      const enrolled = Array.isArray(r.enrolled) ? r.enrolled.reduce((s: number, e: any) => s + (Number(e.landed) || 0), 0) : 0;
+      lastRun = {
+        at: data.started_at,
+        ok: !data.fatal_error && r.ok === true,
+        state: data.fatal_error ? 'CRASHED' : (typeof r.state === 'string' ? r.state : data.completed_at ? 'UNKNOWN' : 'RUNNING'),
+        enrolled,
+        waiting: typeof r.waiting === 'number' ? r.waiting : null,
+        error: data.fatal_error ?? (typeof r.error === 'string' ? r.error : null),
+      };
+    }
+  } catch (e) { console.error('[tower] intake last-run read threw:', e); }
+
+  return { enrolledToday, lastRun };
 }
 
 async function safeCount(admin: any, table: string, build: (q: any) => any): Promise<number | null> {
@@ -126,6 +178,8 @@ export async function buildTower(admin: any): Promise<TowerData> {
     safeCount(admin, 'student_payments', (q) => q.eq('status', 'paid')),
     listOpenFollowups(admin, { limit: 2000 }),
   ]);
+
+  const intake = await readIntake(admin, dayStart, staff);
 
   const followupCounts = openFollowups === null ? null : (() => {
     const c = { overdue: 0, today: 0, upcoming: 0 };
@@ -239,5 +293,6 @@ export async function buildTower(admin: any): Promise<TowerData> {
     // a decimal point and no meaning, and the founder explicitly refused it.
     conversionRateSuppressed: paidTotal === null || paidTotal < MIN_PAID_FOR_RATES,
     paidTotal,
+    intake,
   };
 }

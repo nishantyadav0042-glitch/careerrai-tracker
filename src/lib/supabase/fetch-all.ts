@@ -1,6 +1,6 @@
 // ── fetchAll: the only sanctioned way to read a whole population ────────────
 //
-// 2 Sep 2026, Incident #64. The Command Center said STUDENTS 1000 for three
+// 2 Sep 2026, Incident #65. The Command Center said STUDENTS 1000 for three
 // days while 1,036 real students existed. Nothing was wrong with the count:
 // PostgREST caps every response at `max-rows` (Supabase default 1000) and
 // returns the first thousand rows of an unbounded `.select()` WITHOUT an

@@ -3,14 +3,15 @@ import { WorkspaceShell } from '@/components/admin/workspace-shell';
 import { getTeamCapacity } from '@/lib/sales-capacity';
 import { CapacityPanel } from './capacity-panel';
 import { NewRepForm } from './new-rep-form';
+import { IntakeNowButton } from './intake-now-button';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Sales capacity · CareerRai' };
 
-// Phase 2B-1 — capacity VISIBILITY. Deliberately no automation: nothing on
-// this screen or behind it assigns, reassigns, or moves a student. It exists
-// so the working-set model can be watched against real production data before
-// any machine is given permission to act on it.
+// Phase 2B-1 — capacity VISIBILITY, and since 2 Sep 2026 the one place the
+// founder can run the daily intake by hand (Phase 2B-3, lib/lead-intake.ts).
+// Nothing on this screen moves LIVE WORK: the intake enrols students into a
+// book; the queue still decides today's opportunities against capacity.
 
 export default async function SalesCapacityPage() {
   const { admin } = await requireAdmin();
@@ -52,9 +53,11 @@ export default async function SalesCapacityPage() {
           </>
         )}
         <p className="mt-2 rounded-lg bg-stone-50 px-3 py-2 text-[11.5px] text-stone-600">
-          <strong>Observation only.</strong> No automatic assignment exists yet. Every lead is still claimed manually
-          from the shared pool, exactly as before this screen was added.
+          <strong>Daily intake, 2:30 PM IST.</strong> Every new free student with a phone enters a book that day,
+          newest first, split across the active seats and never more than a seat&apos;s new-per-day cap. That is
+          responsibility, not work: the calling list still picks today&apos;s opportunities within capacity.
         </p>
+        <IntakeNowButton />
       </div>
 
       <NewRepForm />

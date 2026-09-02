@@ -1,7 +1,12 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 
+/**
+ * `adminId` null = the platform itself acted (a scheduled engine with no human
+ * behind it). Added 2 Sep 2026 for the daily lead intake; the metadata names
+ * the engine so the row still says who did it.
+ */
 export async function logAdminAction(
-  adminId: string,
+  adminId: string | null,
   action: string,
   targetType: string,
   targetId: string | null,
