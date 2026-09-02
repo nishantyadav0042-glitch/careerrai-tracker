@@ -3,6 +3,7 @@ import { catExamDate } from '@/lib/routine-engine';
 import { getLogDateString, MS_PER_DAY } from '@/lib/streak-utils';
 import type { PeerRow } from './peer-cohort';
 
+import { fetchAll } from '@/lib/supabase/fetch-all';
 type Admin = any;
 
 // ── Turning the database into the shape the peer engine reasons about ───────
@@ -119,14 +120,17 @@ export async function loadPeerRows(admin: Admin, now: Date = new Date()): Promis
   const since = new Date(now.getTime() - LOOKBACK_DAYS * MS_PER_DAY).toISOString().slice(0, 10);
 
   const [{ data: profiles }, { data: logs }] = await Promise.all([
-    admin
+    // Paged, not `.limit(PEER_BASE_CAP)`: PostgREST applies its own max-rows
+    // (1000) AFTER a client limit, so the old 5,000 cap could never be reached
+    // and the "base hit the cap" warning below could never fire — the base was
+    // silently 1,000 from the day the roster passed it (Incident #64).
+    fetchAll(() => admin
       .from('profiles')
-      .select('id, attempt_year, study_target_hours, self_reported_weakest_section, syllabus_target_date')
-      .limit(PEER_BASE_CAP),
-    admin
+      .select('id, attempt_year, study_target_hours, self_reported_weakest_section, syllabus_target_date')),
+    fetchAll(() => admin
       .from('daily_reports')
       .select('student_id, report_date, study_duration, topics_covered')
-      .gte('report_date', since),
+      .gte('report_date', since)),
   ]);
 
   if ((profiles ?? []).length >= PEER_BASE_CAP) {

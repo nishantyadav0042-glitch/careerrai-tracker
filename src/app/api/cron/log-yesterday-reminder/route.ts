@@ -5,6 +5,7 @@ import { dispatch, BUDGET_RECOVERY } from '@/lib/notification-os';
 import { getLogDateString } from '@/lib/streak-utils';
 import { withCronTracking } from '@/lib/cron-run-tracker';
 
+import { fetchAll } from '@/lib/supabase/fetch-all';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
@@ -46,21 +47,21 @@ async function logYesterdayReminderRun(): Promise<NextResponse> {
   const yEnd = `${today}T00:00:00+05:30`;
 
   const [{ data: students }, { data: openedRows }, { data: loggedRows }] = await Promise.all([
-    admin.from('profiles')
+    fetchAll(() => admin.from('profiles')
       .select('id, full_name, notif_prefs')
       .eq('role', 'student')
       // demo accounts are shared logins; test accounts stay in (the founder
       // tests as a student), same stance as daily-heartbeat.
       .not('is_demo', 'is', true)
       // Only students we can actually reach at 8 AM — a live push subscription.
-      .not('push_subscription', 'is', null),
-    admin.from('student_events')
+      .not('push_subscription', 'is', null)),
+    fetchAll(() => admin.from('student_events')
       .select('user_id')
       .eq('event', 'app_open')
-      .gte('created_at', yStart).lt('created_at', yEnd),
-    admin.from('daily_reports')
+      .gte('created_at', yStart).lt('created_at', yEnd)),
+    fetchAll(() => admin.from('daily_reports')
       .select('student_id')
-      .eq('report_date', yesterday),
+      .eq('report_date', yesterday)),
   ]);
 
   const openedYesterday = new Set((openedRows ?? []).map((r) => r.user_id as string));

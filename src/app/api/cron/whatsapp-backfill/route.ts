@@ -5,6 +5,7 @@ import { authorizedCron } from '@/lib/cron-auth';
 import { WHATSAPP_GROUP_URL } from '@/components/onboarding/whatsapp-optin';
 import { withCronTracking } from '@/lib/cron-run-tracker';
 
+import { fetchAll } from '@/lib/supabase/fetch-all';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
@@ -54,13 +55,13 @@ export async function POST(request: NextRequest) {
 async function whatsappBackfillRun(): Promise<NextResponse> {
   const admin = createAdminClient();
 
-  const { data: students } = await admin
+  const { data: students } = await fetchAll(() => admin
     .from('profiles')
     .select('id, notif_prefs')
     .eq('role', 'student')
     .not('is_test_account', 'is', true)
     .not('is_demo', 'is', true)
-    .lt('created_at', WHATSAPP_SCREEN_SHIPPED_AT);
+    .lt('created_at', WHATSAPP_SCREEN_SHIPPED_AT));
 
   if (!students?.length) return NextResponse.json({ ok: true, eligible: 0, sent: 0 });
 

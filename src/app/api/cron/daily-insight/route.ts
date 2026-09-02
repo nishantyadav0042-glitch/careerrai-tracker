@@ -5,6 +5,7 @@ import { computeDailyInsight, loadSuppressedInsightKeys, recordInsightShown } fr
 import { dispatch, outcomeWroteRow } from '@/lib/notification-os';
 import { withCronTracking } from '@/lib/cron-run-tracker';
 
+import { fetchAll } from '@/lib/supabase/fetch-all';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
@@ -27,14 +28,14 @@ async function dailyInsightRun(): Promise<NextResponse> {
     new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) + 'T00:00:00+05:30';
 
   const [{ data: students }, { data: sentToday }, { data: reports }] = await Promise.all([
-    admin
+    fetchAll(() => admin
       .from('profiles')
       .select('id, full_name, notif_prefs, is_repeater, is_working_professional')
       .eq('role', 'student')
       .eq('onboarding_completed', true)
-      .not('is_demo', 'is', true),  // test accounts stay IN: this cron IS the student experience (founder tests as a student); demo accounts are shared logins and stay out
-    admin.from('notifications').select('user_id').eq('type', 'daily_insight').gte('created_at', todayStart),
-    admin.from('daily_reports').select('student_id, report_date'),
+      .not('is_demo', 'is', true)),  // test accounts stay IN: this cron IS the student experience (founder tests as a student); demo accounts are shared logins and stay out
+    fetchAll(() => admin.from('notifications').select('user_id').eq('type', 'daily_insight').gte('created_at', todayStart)),
+    fetchAll(() => admin.from('daily_reports').select('student_id, report_date')),
   ]);
 
   const alreadySent = new Set((sentToday ?? []).map((n) => n.user_id as string));

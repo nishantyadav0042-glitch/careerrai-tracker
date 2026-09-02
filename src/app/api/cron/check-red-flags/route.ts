@@ -8,7 +8,7 @@ import { withCronTracking } from '@/lib/cron-run-tracker';
 import type { DailyReport } from '@/types';
 import { trailingWindow } from '@/lib/facts/window';
 import { getLogDateString } from '@/lib/streak-utils';
-import { readRows, isUnavailable } from '@/lib/truth/source';
+import { readRows, isUnavailable, readAllRows } from '@/lib/truth/source';
 import { readRowsForIds } from '@/lib/truth/batch';
 import { gateOnSource } from '@/lib/truth/mutation-gate';
 
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
     // Was `{ data: students }` with no error check. An unavailable roster then
     // fell through `!students?.length` and the job answered `{ flagged: 0 }` —
     // indistinguishable from "nobody is at risk today".
-    const studentsSource = await readRows<StudentRow>('profiles(students)', () =>
+    const studentsSource = await readAllRows<StudentRow>('profiles(students)', () =>
       admin.from('profiles').select('id, full_name, buddy_id').eq('role', 'student'));
     if (isUnavailable(studentsSource)) {
       console.error('[check-red-flags] roster unavailable — nobody was flagged, nobody was emailed',

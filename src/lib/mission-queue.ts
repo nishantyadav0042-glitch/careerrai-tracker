@@ -4,6 +4,7 @@ import { SITE_URL } from '@/lib/site';
 import { resolveCatExamDate } from '@/lib/routine-engine';
 import { SESSION_PRICE_PAISE } from '@/lib/session-credit';
 
+import { fetchAll } from '@/lib/supabase/fetch-all';
 /** The one price a message may quote, from the module that charges it. */
 const SESSION_RS = SESSION_PRICE_PAISE / 100;
 
@@ -159,16 +160,16 @@ export async function buildMissionQueue(admin?: any, limit = 40): Promise<Missio
     { data: students }, { data: streaks }, { data: eng }, { data: recentEvents },
     { data: notifs }, { data: outreach }, { data: payAttempts }, { data: sessionReqs },
   ] = await Promise.all([
-    db.from('profiles').select('id, full_name, phone, email, onboarding_completed, app_installed, is_premium, buddy_id, notif_prefs, push_subscription')
-      .eq('role', 'student').not('is_test_account', 'is', true).not('is_demo', 'is', true),
-    db.from('streak_data').select('student_id, last_log_date'),
-    db.from('student_engagement').select('student_id, buddy_cta_clicks, mock_opened'),
+    fetchAll(() => db.from('profiles').select('id, full_name, phone, email, onboarding_completed, app_installed, is_premium, buddy_id, notif_prefs, push_subscription')
+      .eq('role', 'student').not('is_test_account', 'is', true).not('is_demo', 'is', true)),
+    fetchAll(() => db.from('streak_data').select('student_id, last_log_date')),
+    fetchAll(() => db.from('student_engagement').select('student_id, buddy_cta_clicks, mock_opened'), { orderBy: 'student_id' }),
     // 7 days, not "since midnight". The old query asked for events since IST
     // midnight, so opening this page at 1:38 AM looked at a 1.6-hour window and
     // essentially nobody counted as active — the intent boost never fired.
-    db.from('student_events').select('user_id, session_id, event, created_at').gte('created_at', since7d),
-    db.from('notifications').select('user_id, clicked_at').not('pushed_at', 'is', null).gte('pushed_at', since7d),
-    db.from('founder_outreach').select('student_id, objective, action, snoozed_until, created_at').gte('created_at', sinceCooldown),
+    fetchAll(() => db.from('student_events').select('user_id, session_id, event, created_at').gte('created_at', since7d)),
+    fetchAll(() => db.from('notifications').select('user_id, clicked_at').not('pushed_at', 'is', null).gte('pushed_at', since7d)),
+    fetchAll(() => db.from('founder_outreach').select('student_id, objective, action, snoozed_until, created_at').gte('created_at', sinceCooldown)),
     // Someone who reached checkout and did not complete is the strongest
     // signal in the whole product — they tried to give us money.
     //
@@ -180,9 +181,9 @@ export async function buildMissionQueue(admin?: any, limit = 40): Promise<Missio
     // paid and asked for the money back. Surfacing them as the product's
     // strongest buying signal would send the founder to chase the one person
     // who has already said no with their wallet.
-    db.from('student_payments').select('student_id, status, created_at')
-      .not('status', 'in', '("paid","refunded")').gte('created_at', since30d),
-    db.from('session_requests').select('student_id, created_at').gte('created_at', since30d),
+    fetchAll(() => db.from('student_payments').select('student_id, status, created_at')
+      .not('status', 'in', '("paid","refunded")').gte('created_at', since30d)),
+    fetchAll(() => db.from('session_requests').select('student_id, created_at').gte('created_at', since30d)),
   ]);
 
   const lastLogById = new Map((streaks ?? []).map((s: any) => [s.student_id, s.last_log_date]));

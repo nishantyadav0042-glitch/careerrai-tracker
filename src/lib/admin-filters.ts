@@ -2,6 +2,7 @@ import { getLogDateString, liveStreak, momentumStreak, daysSinceLastLog, MS_PER_
 import { GOING_COLD_DAYS } from '@/lib/os/people-filter';
 import { CALL_OUTCOMES } from '@/lib/sales-disposition';
 
+import { fetchAll } from '@/lib/supabase/fetch-all';
 // ── The dashboard's single source of truth ───────────────────────────────────
 //
 // Founder rule (20 July): every dashboard card is ONE precise filter. The
@@ -37,12 +38,12 @@ export interface RealStudent {
 // One fetch of the base population, reused by the filters below within a
 // request. Every card derives from this exact set.
 export async function getRealStudents(admin: any): Promise<RealStudent[]> {
-  const { data } = await admin
+  const { data } = await fetchAll(() => admin
     .from('profiles')
     .select('id, full_name, phone, onboarding_completed')
     .eq('role', 'student')
     .not('is_test_account', 'is', true)
-    .not('is_demo', 'is', true);
+    .not('is_demo', 'is', true));
   return (data ?? []) as RealStudent[];
 }
 
@@ -56,8 +57,8 @@ export async function getLoggedToday(admin: any, students?: RealStudent[]): Prom
   const base = students ?? (await getRealStudents(admin));
   const byId = new Map(base.map((s) => [s.id, s]));
   const [{ data: reports }, { data: streaks }] = await Promise.all([
-    admin.from('daily_reports').select('student_id, created_at').eq('report_date', logDay).order('created_at', { ascending: false }),
-    admin.from('streak_data').select('student_id, current_streak, last_log_date'),
+    fetchAll(() => admin.from('daily_reports').select('student_id, created_at').eq('report_date', logDay), { orderBy: 'created_at', ascending: false }),
+    fetchAll(() => admin.from('streak_data').select('student_id, current_streak, last_log_date')),
   ]);
   const streakById = new Map((streaks ?? []).map((s: any) => [s.student_id, s]));
   const seen = new Set<string>();
@@ -86,7 +87,7 @@ export interface LiveStreakRow extends RealStudent {
 export async function getStreaksAlive(admin: any, students?: RealStudent[]): Promise<LiveStreakRow[]> {
   const base = students ?? (await getRealStudents(admin));
   const byId = new Map(base.map((s) => [s.id, s]));
-  const { data: streaks } = await admin.from('streak_data').select('student_id, current_streak, last_log_date, shields');
+  const { data: streaks } = await fetchAll(() => admin.from('streak_data').select('student_id, current_streak, last_log_date, shields'));
   const rows: LiveStreakRow[] = [];
   for (const st of streaks ?? []) {
     const s = byId.get(st.student_id as string);
@@ -113,8 +114,8 @@ export async function getRemindToLog(admin: any, students?: RealStudent[]): Prom
   const logDay = getLogDateString();
   const base = students ?? (await getRealStudents(admin));
   const [{ data: todayLogs }, { data: streaks }] = await Promise.all([
-    admin.from('daily_reports').select('student_id').eq('report_date', logDay),
-    admin.from('streak_data').select('student_id, last_log_date'),
+    fetchAll(() => admin.from('daily_reports').select('student_id').eq('report_date', logDay)),
+    fetchAll(() => admin.from('streak_data').select('student_id, last_log_date')),
   ]);
   const loggedIds = new Set((todayLogs ?? []).map((r: any) => r.student_id as string));
   const lastById = new Map<string, string | null>((streaks ?? []).map((s: any) => [s.student_id as string, (s.last_log_date as string | null) ?? null]));
@@ -133,7 +134,7 @@ export interface GoingColdRow extends RealStudent {
 export async function getGoingCold(admin: any, students?: RealStudent[]): Promise<GoingColdRow[]> {
   const base = students ?? (await getRealStudents(admin));
   const byId = new Map(base.map((s) => [s.id, s]));
-  const { data: streaks } = await admin.from('streak_data').select('student_id, last_log_date');
+  const { data: streaks } = await fetchAll(() => admin.from('streak_data').select('student_id, last_log_date'));
   const rows: GoingColdRow[] = [];
   for (const st of streaks ?? []) {
     const s = byId.get(st.student_id as string);
@@ -168,11 +169,10 @@ export interface SalesReadyRow extends RealStudent {
 export async function getSalesReadyToCall(admin: any, students?: RealStudent[]): Promise<SalesReadyRow[]> {
   const base = students ?? (await getRealStudents(admin));
   const byId = new Map(base.map((s) => [s.id, s]));
-  const { data: rows } = await admin
+  const { data: rows } = await fetchAll(() => admin
     .from('student_engagement')
     .select('student_id, buddy_cta_clicks, mock_opened, signed_up_at')
-    .eq('sales_ready', true)
-    .limit(1000);
+    .eq('sales_ready', true), { orderBy: 'student_id' });
   const flagged = (rows ?? []).map((r: any) => r.student_id as string).filter((id: string) => byId.has(id));
   if (flagged.length === 0) return [];
   const { data: worked } = await admin
@@ -189,11 +189,11 @@ export async function getSalesReadyToCall(admin: any, students?: RealStudent[]):
     admin.from('mentor_grants').select('student_id, door').in('student_id', ids),
   ]);
   const premiumIds = new Set((profs ?? []).filter((p: any) => p.is_premium === true).map((p: any) => p.id as string));
-  const streakById = new Map((streaks ?? []).map((s: any) => [s.student_id, s]));
-  const doorById = new Map((doors ?? []).map((d: any) => [d.student_id as string, d.door as 'history' | 'intent']));
+  const streakById = new Map<string, any>((streaks ?? []).map((s: any) => [s.student_id as string, s]));
+  const doorById = new Map<string, 'history' | 'intent'>((doors ?? []).map((d: any) => [d.student_id as string, d.door as 'history' | 'intent']));
   return (rows ?? [])
     .filter((r: any) => byId.has(r.student_id) && !premiumIds.has(r.student_id))
-    .map((r: any) => {
+    .map((r: any): SalesReadyRow => {
       const s = byId.get(r.student_id)!;
       const st = streakById.get(r.student_id) as any;
       return {
@@ -229,7 +229,7 @@ export interface WantsBuddyRow {
 // buddy_id IS NULL AND not premium, real students only. Sorted hottest:
 // unlock taps → live momentum streak → freshest activity → newest signup.
 export async function getWantsBuddy(admin: any): Promise<WantsBuddyRow[]> {
-  const { data: students } = await admin
+  const { data: students } = await fetchAll(() => admin
     .from('profiles')
     .select('id, full_name, phone, created_at, app_installed')
     .eq('role', 'student')
@@ -237,7 +237,7 @@ export async function getWantsBuddy(admin: any): Promise<WantsBuddyRow[]> {
     .is('buddy_id', null)
     .not('is_premium', 'is', true)
     .not('is_test_account', 'is', true)
-    .not('is_demo', 'is', true);
+    .not('is_demo', 'is', true));
   const ids = (students ?? []).map((s: any) => s.id as string);
   if (ids.length === 0) return [];
   const [{ data: eng }, { data: streaks }, { data: doors }] = await Promise.all([
@@ -245,11 +245,11 @@ export async function getWantsBuddy(admin: any): Promise<WantsBuddyRow[]> {
     admin.from('streak_data').select('student_id, current_streak, last_log_date, shields').in('student_id', ids),
     admin.from('mentor_grants').select('student_id, door').in('student_id', ids),
   ]);
-  const engById = new Map((eng ?? []).map((e: any) => [e.student_id as string, (e.buddy_cta_clicks as number | null) ?? 0]));
-  const streakById = new Map((streaks ?? []).map((s: any) => [s.student_id as string, s]));
-  const doorById = new Map((doors ?? []).map((d: any) => [d.student_id as string, d.door as 'history' | 'intent']));
+  const engById = new Map<string, number>((eng ?? []).map((e: any) => [e.student_id as string, (e.buddy_cta_clicks as number | null) ?? 0]));
+  const streakById = new Map<string, any>((streaks ?? []).map((s: any) => [s.student_id as string, s]));
+  const doorById = new Map<string, 'history' | 'intent'>((doors ?? []).map((d: any) => [d.student_id as string, d.door as 'history' | 'intent']));
   return (students ?? [])
-    .map((s: any) => {
+    .map((s: any): WantsBuddyRow => {
       const st = streakById.get(s.id) as any;
       return {
         id: s.id as string,

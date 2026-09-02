@@ -11,6 +11,7 @@ import type { ConstraintKey } from '@/lib/constraint-engine';
 import type { Blocker } from '@/lib/mission-engine';
 import { dayWasStudied, durationIsUnknown } from '@/lib/check-in';
 
+import { fetchAll } from '@/lib/supabase/fetch-all';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 // LIS Health — the founder's readout that the Learning Intelligence System is
@@ -77,15 +78,15 @@ export async function getLisHealth(admin: any): Promise<LisHealth> {
   const twentyAgo = new Date(now - 20 * DAY).toISOString().slice(0, 10);
 
   const [{ data: students }, { data: reports }, { data: routines }, { data: completions }, { data: coverage }, { data: debriefs }, { data: streaks }] = await Promise.all([
-    admin.from('profiles')
+    fetchAll(() => admin.from('profiles')
       .select('id, full_name, study_target_hours, hours_available, baseline_varc, baseline_dilr, baseline_qa, target_percentile, biggest_blocker, attempt_year, current_stage, is_repeater, is_working_professional')
-      .eq('role', 'student').not('is_test_account', 'is', true).not('is_demo', 'is', true),
-    admin.from('daily_reports').select('student_id, report_date, study_duration, plan_fit, mock_taken, day_outcome, study_duration_source').gte('report_date', windowStart),
-    admin.from('daily_routines').select('student_id, routine_date, tasks').gte('routine_date', windowStart),
-    admin.from('routine_task_completions').select('student_id, routine_date, task_id, confidence').gte('routine_date', windowStart),
-    admin.from('topic_coverage').select('student_id, status'),
-    admin.from('mock_debriefs').select('student_id, taken_on'),
-    admin.from('streak_data').select('student_id, last_log_date'),
+      .eq('role', 'student').not('is_test_account', 'is', true).not('is_demo', 'is', true)),
+    fetchAll(() => admin.from('daily_reports').select('student_id, report_date, study_duration, plan_fit, mock_taken, day_outcome, study_duration_source').gte('report_date', windowStart)),
+    fetchAll(() => admin.from('daily_routines').select('student_id, routine_date, tasks').gte('routine_date', windowStart)),
+    fetchAll(() => admin.from('routine_task_completions').select('student_id, routine_date, task_id, confidence').gte('routine_date', windowStart)),
+    fetchAll(() => admin.from('topic_coverage').select('student_id, status')),
+    fetchAll(() => admin.from('mock_debriefs').select('student_id, taken_on')),
+    fetchAll(() => admin.from('streak_data').select('student_id, last_log_date')),
   ]);
 
   const reportsBy = groupBy(reports, (r: any) => r.student_id);

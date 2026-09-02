@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { studyDayStart } from '@/lib/study-day';
 
+import { fetchAll } from '@/lib/supabase/fetch-all';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 // The Notification Health Engine (co-founder's ask, 21 July): the backend used
@@ -108,12 +109,12 @@ export async function getNotificationHealth(admin?: any): Promise<{
   byState: Record<NotifHealthState, number>;
 }> {
   const db = admin ?? createAdminClient();
-  const { data } = await db
+  const { data } = await fetchAll(() => db
     .from('profiles')
     .select('id, full_name, phone, notif_prefs, push_subscription, push_context, push_verified_at, push_subscribed_at, push_died_at')
     .eq('role', 'student')
     .not('is_test_account', 'is', true)
-    .not('is_demo', 'is', true);
+    .not('is_demo', 'is', true));
 
   // Per-request "now" is correct for a live ops view.
   const now = Date.now();
@@ -177,14 +178,14 @@ export interface RecoveryQueueEntry {
 
 export async function getRecoveryQueue(admin?: any): Promise<RecoveryQueueEntry[]> {
   const db = admin ?? createAdminClient();
-  const { data: students } = await db
+  const { data: students } = await fetchAll(() => db
     .from('profiles')
     .select('id, full_name, push_died_at, push_recovery_attempted_at, push_recovery_last_error')
     .eq('role', 'student')
     .not('is_test_account', 'is', true)
     .not('is_demo', 'is', true)
     .eq('notif_prefs->>push', 'true')
-    .is('push_subscription', null);
+    .is('push_subscription', null));
 
   if (!students?.length) return [];
   const ids = students.map((s: any) => s.id);
@@ -268,15 +269,15 @@ export async function getReliabilityMetrics(admin?: any): Promise<ReliabilityMet
   const dayStart = studyDayStart().toISOString();
 
   const [{ data: subs }, { data: pushedToday }, { data: deaths }] = await Promise.all([
-    db.from('profiles')
+    fetchAll(() => db.from('profiles')
       .select('push_subscription, push_subscribed_at')
       .eq('role', 'student').not('is_test_account', 'is', true).not('is_demo', 'is', true)
-      .not('push_subscribed_at', 'is', null),
-    db.from('notifications').select('pushed_at, received_at, clicked_at').not('pushed_at', 'is', null).gte('pushed_at', dayStart),
+      .not('push_subscribed_at', 'is', null)),
+    fetchAll(() => db.from('notifications').select('pushed_at, received_at, clicked_at').not('pushed_at', 'is', null).gte('pushed_at', dayStart)),
     // push_subscribed_at, NOT created_at — see the comparison below.
-    db.from('profiles').select('created_at, push_subscribed_at, push_died_at')
+    fetchAll(() => db.from('profiles').select('created_at, push_subscribed_at, push_died_at')
       .eq('role', 'student').not('is_test_account', 'is', true).not('is_demo', 'is', true)
-      .not('push_died_at', 'is', null).gte('push_died_at', new Date(now - 7 * 86_400_000).toISOString()),
+      .not('push_died_at', 'is', null).gte('push_died_at', new Date(now - 7 * 86_400_000).toISOString())),
   ]);
 
   const survival: SurvivalPoint[] = [7, 14, 28].map((ageDays) => {

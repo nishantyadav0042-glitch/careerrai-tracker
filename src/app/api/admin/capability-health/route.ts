@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAdminCtx } from '@/lib/require-admin';
 import { studyDayString } from '@/lib/study-day';
 
+import { fetchAll } from '@/lib/supabase/fetch-all';
 export const maxDuration = 60;
 
 // The morning screen.
@@ -48,10 +49,10 @@ export async function GET() {
 
   const [{ data: inv, error }, { data: opens }, { data: logs }, { data: students }] = await Promise.all([
     admin.rpc('business_invariants'),
-    admin.from('student_events').select('user_id')
-      .eq('event', 'app_open').gte('created_at', `${today}T00:00:00+05:30`),
-    admin.from('daily_reports').select('student_id').eq('report_date', today),
-    admin.from('profiles').select('id, is_test_account').eq('role', 'student'),
+    fetchAll(() => admin.from('student_events').select('user_id')
+      .eq('event', 'app_open').gte('created_at', `${today}T00:00:00+05:30`)),
+    fetchAll(() => admin.from('daily_reports').select('student_id').eq('report_date', today)),
+    fetchAll(() => admin.from('profiles').select('id, is_test_account').eq('role', 'student')),
   ]);
   const runtimeMs = Date.now() - startedAt;
 

@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { momentumStreak, daysSinceLastLog } from '@/lib/streak-utils';
 
+import { fetchAll } from '@/lib/supabase/fetch-all';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 // Student Momentum Score — the ONE central variable (founder + CEO framing,
@@ -104,12 +105,12 @@ async function loadSignals(admin: any): Promise<Map<string, MomentumSignals & { 
   const since14 = new Date(Date.now() - 14 * 86_400_000).toISOString().slice(0, 10);
   const since7 = new Date(Date.now() - 7 * 86_400_000).toISOString();
   const [{ data: students }, { data: reports }, { data: streaks }, { data: notifs }, { data: eng }] = await Promise.all([
-    admin.from('profiles').select('id, full_name, phone, is_premium, buddy_id, push_subscription')
-      .eq('role', 'student').not('is_test_account', 'is', true).not('is_demo', 'is', true),
-    admin.from('daily_reports').select('student_id, report_date').gte('report_date', since14),
-    admin.from('streak_data').select('student_id, current_streak, last_log_date, shields'),
-    admin.from('notifications').select('user_id, pushed_at, clicked_at').not('pushed_at', 'is', null).gte('pushed_at', since7),
-    admin.from('student_engagement').select('student_id, buddy_cta_clicks, mock_opened'),
+    fetchAll(() => admin.from('profiles').select('id, full_name, phone, is_premium, buddy_id, push_subscription')
+      .eq('role', 'student').not('is_test_account', 'is', true).not('is_demo', 'is', true)),
+    fetchAll(() => admin.from('daily_reports').select('student_id, report_date').gte('report_date', since14)),
+    fetchAll(() => admin.from('streak_data').select('student_id, current_streak, last_log_date, shields')),
+    fetchAll(() => admin.from('notifications').select('user_id, pushed_at, clicked_at').not('pushed_at', 'is', null).gte('pushed_at', since7)),
+    fetchAll(() => admin.from('student_engagement').select('student_id, buddy_cta_clicks, mock_opened'), { orderBy: 'student_id' }),
   ]);
 
   const active14 = new Map<string, Set<string>>();

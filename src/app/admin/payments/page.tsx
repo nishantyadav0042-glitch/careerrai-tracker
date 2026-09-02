@@ -3,6 +3,7 @@ import { requireAdmin } from '@/lib/admin-auth';
 import { PLANS, isPlanId } from '@/lib/plans';
 import { AdminPaymentsClient, type IncomingRow, type OutgoingRow, type RefundRow } from './admin-payments-client';
 
+import { fetchAll } from '@/lib/supabase/fetch-all';
 function currentPeriod() {
   // 'YYYY-MM' in IST
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }).slice(0, 7);
@@ -12,19 +13,18 @@ export default async function AdminPaymentsPage() {
   // Local JWT verification — middleware already paid the network auth hop.
   const { admin } = await requireAdmin();
 
-  const { data: profiles } = await admin
+  const { data: profiles } = await fetchAll(() => admin
     .from('profiles')
-    .select('id, role, full_name, buddy_id, subscription_status, subscription_plan, subscription_renews_at, agreed_monthly_payout');
+    .select('id, role, full_name, buddy_id, subscription_status, subscription_plan, subscription_renews_at, agreed_monthly_payout'));
   const all = profiles ?? [];
   const students = all.filter((p) => p.role === 'student');
   const buddies = all.filter((p) => p.role === 'buddy');
 
   // Last successful payment per student
-  const { data: paidRows } = await admin
+  const { data: paidRows } = await fetchAll(() => admin
     .from('student_payments')
     .select('student_id, amount, paid_at')
-    .eq('status', 'paid')
-    .order('paid_at', { ascending: false });
+    .eq('status', 'paid'), { orderBy: 'paid_at', ascending: false });
   const lastPaid = new Map<string, { amount: number; paid_at: string | null }>();
   for (const r of paidRows ?? []) {
     if (!lastPaid.has(r.student_id)) lastPaid.set(r.student_id, { amount: r.amount, paid_at: r.paid_at });

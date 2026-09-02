@@ -64,12 +64,16 @@ vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: () => ({
     from(table: string) {
       const m: Mode = mode[table] ?? 'ok';
+      // Paging: fetchAll asks for .range(from, to) per page; a fake that ignores
+      // it would hand back the whole roster on every page and never terminate.
+      let rng: [number, number] | null = null;
+      const page = <T,>(rows: T[]) => (rng ? rows.slice(rng[0], rng[1] + 1) : rows);
       const answer = () => {
         if (m === 'throw') throw new Error(`${table} exploded`);
         if (m === 'error') return Promise.resolve({ data: null, error: { message: `${table} timeout` } });
         // The weekly-plan-reconcile shape: null data, NO error.
         if (m === 'null-no-error') return Promise.resolve({ data: null, error: null });
-        if (table === 'profiles') return Promise.resolve({ data: studentRows(population), error: null });
+        if (table === 'profiles') return Promise.resolve({ data: page(studentRows(population)), error: null });
         // daily_reports returns NOTHING — a genuinely quiet cohort. This is the
         // case that MUST still alert, so the guard cannot pass by never acting.
         return Promise.resolve({ data: [], error: null });
@@ -78,6 +82,7 @@ vi.mock('@/lib/supabase/admin', () => ({
       for (const k of ['select', 'eq', 'gte', 'lte', 'in', 'contains', 'limit', 'order']) {
         chain[k] = () => chain;
       }
+      chain.range = (from: number, to: number) => { rng = [from, to]; return chain; };
       chain.insert = insert;
       chain.maybeSingle = answer;
       // Awaiting the builder resolves it — that is how the route consumes it.

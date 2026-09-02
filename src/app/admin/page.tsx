@@ -5,6 +5,7 @@ import { findSacredFailures } from '@/lib/os/sacred-guard';
 import { getRealStudents, getLoggedToday, getSalesReadyToCall, getWantsBuddy } from '@/lib/admin-filters';
 import { CheckCircle2, ArrowRight, AlertOctagon, AlertTriangle, Circle, ShieldAlert, Phone } from 'lucide-react';
 
+import { fetchAll } from '@/lib/supabase/fetch-all';
 // Always render live — a cached inbox showing work that is already cleared, or
 // hiding work that just appeared, is worse than no inbox.
 export const dynamic = 'force-dynamic';
@@ -57,9 +58,9 @@ export default async function CommandCenterPage() {
     getSalesReadyToCall(admin, students),
     getWantsBuddy(admin),
     // Distinct students who logged YESTERDAY — the "studied yesterday" number.
-    admin.from('daily_reports').select('student_id').eq('report_date', istDay(1)),
+    fetchAll(() => admin.from('daily_reports').select('student_id').eq('report_date', istDay(1))),
     // Distinct students who logged in the last 7 days — active this week.
-    admin.from('daily_reports').select('student_id').gte('report_date', istDay(7)),
+    fetchAll(() => admin.from('daily_reports').select('student_id').gte('report_date', istDay(7))),
   ]);
   const yesterdayCount = new Set((activeYesterday.data ?? []).map((r: { student_id: string }) => r.student_id)).size;
   const weekCount = new Set((activeWeek.data ?? []).map((r: { student_id: string }) => r.student_id)).size;
