@@ -119,6 +119,10 @@ describe('/sales on day one', () => {
       connectedToday: 0, dueNow: 0, totalOpen: 1,
     });
     const html = await render(SalesCallsPage() as any);
+    // Founder, 2 Sep: a Profile button beside every student on the calling
+    // list, opening the full profile — not a name that happens to be a link.
+    expect(html).toContain('Profile');
+    expect(html).toContain('href="/sales/student/s1"');
     expect(html).toContain('1 in your queue');
     expect(html).not.toContain('No one to call right now');
   });

@@ -1,4 +1,5 @@
 import { getStudentMomentum } from '@/lib/momentum';
+import { profileFacts, type ProfileFact } from '@/lib/sales-profile-facts';
 import { computeTopicMemory } from '@/lib/prep-memory-data';
 import { TOPIC_METADATA } from '@/lib/topics-constants';
 import { bandMeta } from '@/lib/momentum';
@@ -82,6 +83,9 @@ export interface ConversionView {
   lane: LaneVerdict | null;
   /** What the student said their problem was, in their own words, at signup. */
   painPoints: string[];
+  /** The plain facts of the profile (lib/sales-profile-facts) — who this
+   *  person is, before any judgement about them. Founder, 2 Sep. */
+  profile: ProfileFact[];
 }
 
 
@@ -100,7 +104,7 @@ export async function getSalesConversionView(admin: any, id: string): Promise<Co
     // The baseline + self-report columns are here because the SHARED focus
     // chain needs them (C1) — sales must not answer "what is this student
     // weak at" from a narrower input set than the student's own planner uses.
-    admin.from('profiles').select('id, created_at, full_name, phone, is_premium, buddy_id, is_repeater, is_working_professional, push_subscription, pain_points, baseline_varc, baseline_dilr, baseline_qa, self_reported_weakest_section, self_reported_strongest_section').eq('id', id).single(),
+    admin.from('profiles').select('id, created_at, full_name, phone, is_premium, buddy_id, is_repeater, is_working_professional, push_subscription, pain_points, baseline_varc, baseline_dilr, baseline_qa, self_reported_weakest_section, self_reported_strongest_section, email, exam_target, attempt_year, attempt_number, category, college, course_year, work_ex_months, coaching_enrolled, hours_available, weekend_hours_available, study_target_hours, study_window, study_windows, target_percentile, dream_colleges, starting_percentile, last_year_percentile, previous_percentile, signup_source, attr_channel, app_installed, current_stage, biggest_blocker, success_goal, self_reported_weak_topic, onboarding_completed').eq('id', id).single(),
     getStudentMomentum(admin, id),
     admin.from('student_engagement').select('buddy_cta_clicks, mock_opened, intent_door_at, buddy_cta_last_at').eq('student_id', id).maybeSingle(),
     admin.from('sales_activity').select('created_at, actor_id, activity_type, channel, provenance, status, note').eq('student_id', id).order('created_at', { ascending: false }).limit(20),
@@ -262,6 +266,7 @@ export async function getSalesConversionView(admin: any, id: string): Promise<Co
   return {
     studentId: id, name: p.full_name ?? 'Student', firstName: first, phone: p.phone ?? null, waNumber: waNumber(p.phone ?? null),
     isPremium: p.is_premium === true, hasBuddy: p.buddy_id != null,
+    profile: profileFacts(p),
     convScore: conv, tier, momentumLabel: bandMeta(momentum.band).label, momentumScore: momentum.score,
     reachable, lastActivity: dsl == null ? 'never logged' : dsl === 0 ? 'logged today' : `${dsl}d since last study`,
     symptoms,
