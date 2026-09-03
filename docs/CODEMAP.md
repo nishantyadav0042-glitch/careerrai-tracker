@@ -208,6 +208,14 @@ refund processed ─▶ settleRefund()      ── stamps refunded_at ───�
   `lead_outreach.enrolled_at`) — responsibility, never live work. ON CONFLICT
   DO NOTHING, explanation on every row, kill switch `SALES_INTAKE_ENABLED`.
   *Guards: `lead-intake.test.ts`, `lead-intake/mutation-safety.test.ts`.*
+- **`lib/sales-day.ts`** — the 50–70 day (founder, 2 Sep 2026; rule in
+  `docs/SALES-DAILY-DAY.md`). `call-queue.ts` decides WHO and WHY (lanes:
+  promises, money, buddy, new, attention, retention, rotation); `assembleDay`
+  decides HOW MANY — signals first, per-lane ceilings, rotation through
+  everyone silent 21 days with a floor of 15, channel per card. `messaged` is
+  a real outcome (`sales-disposition.ts`); `sales-messages.ts` writes the
+  one-tap WhatsApp by lane and journey stage. *Guards: `sales-day.test.ts`,
+  `sales-messages.test.ts`, the queue doctrine tests.*
 - **`lib/sales-board.ts`** — one counsellor's day: open promises bucketed
   overdue/today/upcoming (from `sales_followup`) plus who is still waiting for a
   first call. `promises: null` survives to the renderer — a failed read must

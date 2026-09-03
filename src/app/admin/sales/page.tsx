@@ -29,6 +29,10 @@ export default async function AdminSalesPage() {
   // R3: oversight is now requested EXPLICITLY by role. It used to be granted by
   // omitting the argument — the same "absence means everything" shape that let a
   // rep with no email inherit this frame on /sales.
+  // The founder's own first name signs any one-tap message sent from the
+  // oversight deck — never a counsellor's.
+  const { data: me } = await admin.from('profiles').select('full_name').eq('id', user.id).maybeSingle();
+  const repFirstName = (String(me?.full_name ?? '').trim().split(' ')[0]) || 'CareerRai';
   const { queue, connectedToday, dueNow, totalOpen } = await buildCallQueue(admin, {
     id: user.id,
     role: 'admin',
@@ -68,7 +72,7 @@ export default async function AdminSalesPage() {
             No one to call right now. Callbacks and fresh leads roll in through the day.
           </AdminEmpty>
         ) : (
-          <CallDeck queue={queue} />
+          <CallDeck queue={queue} repFirstName={repFirstName} />
         )}
       </div>
     </WorkspaceShell>

@@ -2,15 +2,18 @@
 import { useState } from 'react';
 import { REASON_CATEGORIES, REASON_LABEL, reasonNeedsVerbatim,
   type ReasonCategory } from '@/lib/intervention-taxonomy';
-import { MessageCircle, PhoneCall, PhoneOff, ChevronDown, UserRound } from 'lucide-react';
+import { MessageCircle, PhoneCall, PhoneOff, ChevronDown, UserRound, Send } from 'lucide-react';
 import type { CallLead } from '@/lib/call-queue';
+import { SECTION_ORDER, SECTION_LABEL, type DaySection } from '@/lib/sales-day';
+import { messageFor, JOURNEY_LABEL } from '@/lib/sales-messages';
 
 const TIER: Record<string, string> = { hot: 'bg-rose-50 text-rose-700', warm: 'bg-amber-50 text-amber-800', cool: 'bg-stone-100 text-stone-500' };
 const DUE_CLS: Record<string, string> = {
   callback: 'bg-sky-600 text-white', retry: 'bg-orange-500 text-white', followup: 'bg-amber-500 text-white',
   going_cold: 'bg-rose-600 text-white', broken_streak: 'bg-violet-600 text-white',
   new_never_logged: 'bg-teal-600 text-white', conversion: 'bg-emerald-600 text-white',
-  fresh: 'bg-stone-200 text-stone-600',
+  attention: 'bg-indigo-600 text-white',
+  fresh: 'bg-stone-200 text-stone-600', rotation: 'bg-stone-300 text-stone-700',
 };
 const OUTCOMES: { key: string; label: string; cls: string }[] = [
   { key: 'interested', label: 'Interested', cls: 'bg-amber-500 text-white' },
@@ -34,7 +37,7 @@ function defaultCallback(): string {
   return `${ist.getUTCFullYear()}-${p(ist.getUTCMonth() + 1)}-${p(ist.getUTCDate())}T18:00`;
 }
 
-export function CallDeck({ queue }: { queue: CallLead[] }) {
+export function CallDeck({ queue, repFirstName }: { queue: CallLead[]; repFirstName: string }) {
   const [list, setList] = useState(queue);
   const [done, setDone] = useState(0);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -105,10 +108,17 @@ export function CallDeck({ queue }: { queue: CallLead[] }) {
     );
   }
 
-  return (
-    <div className="space-y-3">
-      <p className="px-1 text-center text-xs font-semibold text-stone-500">{done} handled this session · {list.length} in your queue</p>
-      {list.map((lead) => (
+  // THE DAY IN SECTIONS (founder, 2 Sep): promises, money, buddy interest,
+  // new arrivals, attention, slipping, rotation — in that order, each with its
+  // count, so the mix is visible and a counsellor never works only one kind.
+  const bySection = new Map<DaySection, CallLead[]>();
+  for (const lead of list) {
+    const key = (lead.section ?? 'rotation') as DaySection;
+    if (!bySection.has(key)) bySection.set(key, []);
+    bySection.get(key)!.push(lead);
+  }
+
+  const card = (lead: CallLead) => (
         <div key={lead.studentId} className="overflow-hidden rounded-2xl border border-stone-200 bg-white">
           <div className="px-4 pt-3">
             <div className="flex items-center justify-between gap-2">
@@ -131,11 +141,25 @@ export function CallDeck({ queue }: { queue: CallLead[] }) {
                 {lead.objectiveSecondary ? ` + ${lead.objectiveSecondary}` : ''}
               </span>
             </div>
-            <div className="mt-0.5 flex items-center gap-2">
+            <div className="mt-0.5 flex flex-wrap items-center gap-2">
               <p className="text-xs text-stone-500">{lead.phone ?? 'no phone'}</p>
               <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${TIER[lead.tier]}`}>{lead.tier.toUpperCase()}</span>
               <span className="text-[11px] text-stone-400">momentum {lead.momentumScore}</span>
+              {/* CHANNEL (founder, 2 Sep): half the day is a message. The card
+                  says which, so the counsellor never has to decide. */}
+              <span className={`rounded px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wide ${
+                lead.channel === 'message' ? 'bg-amber-100 text-amber-800' : 'bg-stone-900 text-white'}`}>
+                {lead.channel === 'message' ? 'Message first' : 'Call'}
+              </span>
             </div>
+            {/* THE JOURNEY (founder, 2 Sep): install → notifications → daily
+                log. One stage, one next step — nothing beyond it. */}
+            {lead.journey && (
+              <p className="mt-1 text-[11px] text-stone-500">
+                <span className="font-semibold text-stone-700">{JOURNEY_LABEL[lead.journey]}</span>
+                {lead.nextStep ? <> · next: {lead.nextStep}</> : null}
+              </p>
+            )}
             {/* WHY THIS STUDENT IS HERE (founder, 24 Aug): the lane's trigger
                 with real numbers, then the recommended move. This block is
                 what makes the card intelligence, not a phone list. */}
@@ -177,11 +201,20 @@ export function CallDeck({ queue }: { queue: CallLead[] }) {
               </a>
             )}
             {lead.waNumber && (
-              <a href={`https://wa.me/${lead.waNumber}`} target="_blank" rel="noopener noreferrer"
-                className="flex items-center justify-center gap-1 bg-[#25d366] px-3 py-3 text-[12px] font-bold text-[#04331c] active:scale-95">
-                <MessageCircle className="h-4 w-4" /> WA
+              <a href={`https://wa.me/${lead.waNumber}?text=${encodeURIComponent(messageFor({
+                  firstName: lead.firstName, repFirstName, lane: lead.dueReason, stage: lead.journey ?? null, daysSilent: lead.daysSilent ?? null,
+                }))}`}
+                target="_blank" rel="noopener noreferrer"
+                className={`flex items-center justify-center gap-1 bg-[#25d366] px-3 py-3 text-[12px] font-bold text-[#04331c] active:scale-95 ${lead.channel === 'message' ? 'flex-1' : ''}`}>
+                <MessageCircle className="h-4 w-4" /> {lead.channel === 'message' ? 'Message' : 'WA'}
               </a>
             )}
+            {/* ONE TAP AFTER SENDING. A message is a touch the day must
+                record (2 Sep): it starts the cooldown and counts as worked. */}
+            <button onClick={() => void dispose(lead, 'messaged', '')} disabled={inFlight[lead.studentId]}
+              className="flex items-center justify-center gap-1 bg-white px-3 py-3 text-[12px] font-semibold text-amber-800 active:scale-95 disabled:opacity-50">
+              <Send className="h-4 w-4" /> Messaged
+            </button>
             <button onClick={() => void dispose(lead, 'no_answer', '')} disabled={inFlight[lead.studentId]} className="flex items-center justify-center gap-1 bg-white px-3 py-3 text-[12px] font-semibold text-orange-600 active:bg-orange-50 disabled:opacity-40" title="Didn't pick up">
               <PhoneOff className="h-4 w-4" /> No answer
             </button>
@@ -194,6 +227,18 @@ export function CallDeck({ queue }: { queue: CallLead[] }) {
           ) : null}
           {openId === lead.studentId && <Disposition lead={lead} onDispose={dispose} />}
         </div>
+  );
+
+  return (
+    <div className="space-y-3">
+      <p className="px-1 text-center text-xs font-semibold text-stone-500">{done} handled this session · {list.length} in your queue</p>
+      {SECTION_ORDER.filter((k) => (bySection.get(k)?.length ?? 0) > 0).map((k) => (
+        <section key={k} className="space-y-3">
+          <h2 className="flex items-baseline gap-2 px-1 pt-1 text-[11px] font-bold uppercase tracking-widest text-stone-400">
+            {SECTION_LABEL[k]} <span className="text-stone-500">{bySection.get(k)!.length}</span>
+          </h2>
+          {bySection.get(k)!.map(card)}
+        </section>
       ))}
     </div>
   );

@@ -39,6 +39,10 @@ export type SalesObjective = 'retention' | 'conversion';
  */
 const RETENTION_LANES: ReadonlySet<string> = new Set<DueReason>([
   'going_cold', 'broken_streak', 'new_never_logged',
+  // Attention (2 Sep 2026): opened the app and did not log, or tapped a
+  // notification. The student reached for the product and stopped short of
+  // studying — activation work, which is retention.
+  'attention',
 ]);
 
 /** The lanes that exist because the student showed commercial intent. */

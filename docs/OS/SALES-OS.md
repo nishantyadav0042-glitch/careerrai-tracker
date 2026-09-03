@@ -190,11 +190,24 @@ robotic calls to the same person.
 
 ---
 
-## 5. Sizing: a recommendation, never a quota
+## 5. Sizing: the system owes the day, the counsellor owes the outcomes
 
-**There is no call quota. There is no mandatory student count.** 70–100 is a
-recommended daily opportunity window, not a target, and it is never a component
-of pay or performance.
+*Amended 2 Sep 2026 on the founder's word ("take charge… keep a range 50–70
+daily"; the design and the reasons are in `docs/SALES-DAILY-DAY.md`).*
+
+**The system owes each counsellor a full day: 50 to 70 named students, each
+with a true printed reason and a channel.** The counsellor owes conversations
+and outcomes, never a count. The number is what the platform must supply, not
+what a person is judged on — it is never a component of pay or performance,
+and a day the book cannot fill is reported short, never padded.
+
+**Rotation is a lane with a reason, not padding.** A student nobody has spoken
+to in 21 days is due a touch, oldest first; the card says so in words
+("last spoken to 24 days ago — nothing since"). Signals fill the day first;
+rotation fills the rest, with a floor so the silent book always moves.
+
+The rest of this section, written before the amendment, stands where it does
+not conflict:
 
 | Actionable today | The queue shows |
 |---|---|
@@ -434,8 +447,11 @@ Until there is enough data for that comparison, retention impact is reported as
 A change that does any of these violates this contract, however well-intentioned:
 
 1. Making a P5 telemetry number into a target, a quota, a KPI or an input to pay.
-2. Introducing a call quota or a mandatory daily student count.
-3. Padding the queue with low-value students to reach a number.
+2. Judging a counsellor on a count. (*Amended 2 Sep 2026:* the 50–70 day is
+   what the SYSTEM must supply — §5 — never what the counsellor must hit.)
+3. Dealing a student with no true printed reason. (*Amended 2 Sep 2026:*
+   rotation's reason — "nobody has spoken to them in N days" — is true and
+   printed; a card without one is padding and is forbidden.)
 4. Letting a typed status override the payment ledger as conversion truth.
 5. Merging `no_answer` with `not_interested`, or `not_contacted` with rejection.
 6. Letting a promised follow-up date live only in free text.

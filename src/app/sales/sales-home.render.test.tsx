@@ -115,8 +115,12 @@ describe('/sales on day one', () => {
         action: 'Introduction call — learn where they are in prep',
         status: 'not_contacted', noAnswerCount: 0, buddyTaps: 0,
         objective: 'retention', objectiveSecondary: null, lastInteraction: null,
+        section: 'rotation', channel: 'call', journey: 'not_logging',
+        nextStep: 'One logged study task tonight', daysSilent: null,
       } satisfies CallLead],
       connectedToday: 0, dueNow: 0, totalOpen: 1,
+      counts: { given: { promises: 0, money: 0, buddy: 0, new: 0, attention: 0, retention: 0, rotation: 1 }, heldBack: 0, rotationPool: 1 },
+      band: { floor: 50, ceiling: 70 },
     });
     const html = await render(SalesCallsPage() as any);
     // Founder, 2 Sep: a Profile button beside every student on the calling

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { SECTION_ORDER, SECTION_LABEL } from '@/lib/sales-day';
 import { requireAdmin } from '@/lib/admin-auth';
 import { cn } from '@/lib/utils';
 import { WorkspaceShell } from '@/components/admin/workspace-shell';
@@ -153,6 +154,60 @@ export default async function SalesControlTower() {
       <p className="mt-2 text-[11px] text-stone-500">
         <strong>Claimed</strong> and <strong>confirmed</strong> are deliberately separate columns and are never added
         together. A rep typing &ldquo;called&rdquo; is operational information; it is not evidence that a call happened.
+      </p>
+
+      {/* COVERAGE (founder, 2 Sep): "are we tracking the old students?" must be
+          readable here every day. Book, touched in 21 days, never touched, and
+          today's day by section — every number derived from rows. */}
+      <h3 className="mt-4 text-[11px] font-bold uppercase tracking-widest text-stone-400">Coverage · is every student being tracked?</h3>
+      {t.coverage.reps === null ? (
+        <div className="mt-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-800">
+          NOT AVAILABLE — could not read coverage ({t.coverage.failed}). Not zero.
+        </div>
+      ) : t.coverage.reps.length === 0 ? (
+        <div className="mt-2 rounded-xl border border-stone-200 bg-white p-4 text-sm text-stone-500">No book exists yet.</div>
+      ) : (
+        <div className="mt-2 overflow-x-auto rounded-xl border border-stone-200 bg-white">
+          <table className="w-full min-w-[760px] text-[12px]">
+            <thead className="bg-stone-50 text-[10px] uppercase tracking-wide text-stone-500">
+              <tr>
+                <th className="p-2 text-left">Rep</th>
+                <th className="p-2 text-right">Book</th>
+                <th className="p-2 text-right" title="Any call or message in the last 21 days.">Touched · 21d</th>
+                <th className="p-2 text-right" title="Nobody has ever called or messaged them.">Never touched</th>
+                <th className="p-2 text-left">Given today</th>
+                <th className="p-2 text-right">Worked</th>
+                <th className="p-2 text-right">Called</th>
+                <th className="p-2 text-right">Messaged</th>
+              </tr>
+            </thead>
+            <tbody>
+              {t.coverage.reps.map((c) => {
+                const given = SECTION_ORDER.reduce((s, k) => s + c.givenToday[k], 0);
+                const pct = c.book > 0 ? Math.round((c.touched21d / c.book) * 100) : null;
+                return (
+                  <tr key={c.repId} className="border-t border-stone-100">
+                    <td className="p-2 font-semibold text-stone-800">{c.name}</td>
+                    <td className="p-2 text-right tabular-nums">{c.book}</td>
+                    <td className="p-2 text-right tabular-nums">{c.touched21d}{pct !== null && <span className="text-stone-400"> · {pct}%</span>}</td>
+                    <td className={cn('p-2 text-right tabular-nums', c.neverTouched > 0 && 'font-bold text-rose-600')}>{c.neverTouched}</td>
+                    <td className="p-2 text-[11px] text-stone-600">
+                      {given === 0 ? <span className="text-stone-400">nothing dealt yet today</span>
+                        : <><span className="font-bold text-stone-800">{given}</span> · {SECTION_ORDER.filter((k) => c.givenToday[k] > 0).map((k) => `${SECTION_LABEL[k]} ${c.givenToday[k]}`).join(' · ')}</>}
+                    </td>
+                    <td className="p-2 text-right tabular-nums">{c.workedToday}</td>
+                    <td className="p-2 text-right tabular-nums">{c.calledToday}</td>
+                    <td className="p-2 text-right tabular-nums">{c.messagedToday}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="mt-1 text-[11px] text-stone-500">
+        The day is 50–70 per counsellor, dealt from 4 AM IST: signals first, then rotation through everyone untouched for 21 days.
+        &ldquo;Given&rdquo; is what the system offered; &ldquo;worked&rdquo; is a logged outcome, never a tap.
       </p>
       {t.conversionRateSuppressed && (
         <p className="mt-1 text-[11px] font-semibold text-stone-600">

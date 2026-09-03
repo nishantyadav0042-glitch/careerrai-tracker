@@ -8,9 +8,9 @@ export const maxDuration = 300;
 
 // The daily lead intake — see lib/lead-intake.ts for the whole rule.
 //
-// Scheduled at 09:00 UTC (14:30 IST), half an hour before both part-time
-// seats start their 15:00–21:00 window, so the day's new students are in the
-// book when the counsellors sit down. Idempotent by construction: a second run
+// Scheduled at 22:30 UTC (04:00 IST) — founder, 2 Sep: the day is dealt from
+// 4 AM, when the previous Indian day is complete, so the list a counsellor
+// opens at 3 PM is the one that was settled before anyone woke. Idempotent by construction: a second run
 // in the same day finds the fuse spent and the pool already owned, and writes
 // nothing. Vercel Cron invokes with GET (Incidents #55/#56).
 

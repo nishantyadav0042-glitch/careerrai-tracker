@@ -3,6 +3,7 @@ import { salesPrincipal } from '@/lib/sales-authz';
 import { cn } from '@/lib/utils';
 import { buildCallQueue } from '@/lib/call-queue';
 import { CallDeck } from '@/components/call-deck';
+import { SECTION_ORDER, SECTION_LABEL } from '@/lib/sales-day';
 import { getTeamCapacity, BINDING_LABEL } from '@/lib/sales-capacity';
 import { MyOutcomes } from '@/components/sales/my-outcomes';
 import { interventionPicture, type LedgerRow } from '@/lib/student-success-mis';
@@ -35,7 +36,7 @@ export default async function SalesCallsPage() {
   // counsellor's face every morning. The checkpoint replaces it with coverage
   // of what mattered — SALES-OS.md §0, activity is P5 and must not read as the
   // measure of a day.
-  const [{ queue, dueNow }, team, myLedger] = await Promise.all([
+  const [{ queue, dueNow, counts }, team, myLedger, me] = await Promise.all([
     buildCallQueue(admin, principal),
     getTeamCapacity(admin),
     admin.from('intervention_ledger')
@@ -43,7 +44,10 @@ export default async function SalesCallsPage() {
       .eq('rep_id', user.id)
       .gte('occurred_at', since30)
       .limit(2000),
+    // The counsellor's first name signs every one-tap message.
+    admin.from('profiles').select('full_name').eq('id', user.id).maybeSingle(),
   ]);
+  const repFirstName = (String(me?.data?.full_name ?? '').trim().split(' ')[0]) || 'CareerRai';
 
   // CHECKED: a failed read must not render as "you helped nobody". Null means
   // the strip reports nothing rather than a demoralising fabricated zero.
@@ -102,8 +106,16 @@ export default async function SalesCallsPage() {
           </div>
         )}
         <p className="mt-1.5 text-sm text-teal-100">
-          Highest priority first. Read the brief, call, log the outcome.
+          Highest priority first. Read the brief, call or message, log the outcome.
         </p>
+        {/* WHAT THE DAY IS MADE OF (founder, 2 Sep): the mix, by section, so a
+            counsellor can see at a glance that today is not only sales calls. */}
+        {counts && queue.length > 0 && (
+          <p className="mt-1.5 text-[12px] text-teal-100">
+            {SECTION_ORDER.filter((k) => counts.given[k] > 0)
+              .map((k) => `${SECTION_LABEL[k]} ${counts.given[k]}`).join(' · ')}
+          </p>
+        )}
         <div className={cn('mt-3 rounded-xl px-3 py-2 text-[13px] font-semibold', primeTime ? 'bg-emerald-400/20 text-emerald-100' : 'bg-white/10 text-teal-100')}>
           {primeTime ? '🟢 Prime calling hours (6–9 PM) — best pickup. Push hard now.' : '⏰ Best pickup is 6–9 PM. Work the due callbacks and top leads first.'}
         </div>
@@ -148,7 +160,7 @@ export default async function SalesCallsPage() {
             No one to call right now. Callbacks and fresh leads roll in through the day — check back this evening.
           </div>
         ) : (
-          <CallDeck queue={queue} />
+          <CallDeck queue={queue} repFirstName={repFirstName} />
         )}
       </div>
     </div>

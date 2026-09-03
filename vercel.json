@@ -90,7 +90,7 @@
     },
 {
       "path": "/api/cron/lead-intake",
-      "schedule": "0 9 * * *"
+      "schedule": "30 22 * * *"
     },
     {
       "path": "/api/cron/outcome-sweep",

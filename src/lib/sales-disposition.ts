@@ -27,8 +27,13 @@
  *  status writable instead of leaving a rep no honest way to record it. */
 export const CONNECTED_OUTCOMES = ['interested', 'callback', 'converted', 'not_interested', 'dnd'] as const;
 
-/** Everything a rep can report about a call attempt. */
-export const CALL_OUTCOMES = [...CONNECTED_OUTCOMES, 'no_answer'] as const;
+/** Everything a rep can report about an attempt. `messaged` (2 Sep 2026):
+ *  a WhatsApp message was sent and nobody has answered yet. Not a connected
+ *  outcome — no human spoke — so no feedback is demanded, but it IS a touch:
+ *  it sets last_attempt_at, starts the 7-day cooldown and counts as worked.
+ *  Without it, twenty messages a day left no trace and the rotation could not
+ *  count them. */
+export const CALL_OUTCOMES = [...CONNECTED_OUTCOMES, 'no_answer', 'messaged'] as const;
 export type CallOutcome = (typeof CALL_OUTCOMES)[number];
 
 /** Every value lead_outreach.status may hold. Mirrors the DB CHECK — see the
@@ -42,6 +47,7 @@ export const LEAD_STATUSES = [
   'not_interested',
   'no_answer',
   'dnd',
+  'messaged',
 ] as const;
 export type LeadStatus = (typeof LEAD_STATUSES)[number];
 
@@ -155,6 +161,14 @@ export function planDisposition(
   }
   if (outcome === 'interested') {
     return { status: 'interested', nextActionAt: istFutureIso(nowMs, 2, 11, 0), callbackAt: null, noAnswerCount: 0 };
+  }
+  if (outcome === 'messaged') {
+    // No clock. A message is answered by the STUDENT'S next move, not by a
+    // scheduled call: if they open the app they come back through the
+    // attention lane; if they stay silent, rotation brings them back after
+    // ROTATION_SILENT_DAYS. Scheduling a call after every message would
+    // double the day. The miss count is untouched — nobody failed to answer.
+    return { status: 'messaged', nextActionAt: null, callbackAt: null, noAnswerCount: prevMisses };
   }
   if (outcome === 'no_answer') {
     const misses = prevMisses + 1;

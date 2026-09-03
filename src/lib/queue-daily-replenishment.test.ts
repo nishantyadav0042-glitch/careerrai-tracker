@@ -145,8 +145,13 @@ describe('replenishment is signal-driven, never quota-driven', () => {
     const got = ids(queue);
     expect(got, 'a new student needs no cron to become eligible').toContain('s100');
     expect(got).toContain('s114');
-    // 40 carried + 15 new = 55 eligible, under the cap, so all of them show.
-    expect(queue.length).toBe(55);
+    // CHANGED 2 Sep 2026 (SALES-OS.md §5, the 50–70 day). 55 never-contacted
+    // students are all ROTATION — there is no signal among them — and a day
+    // made only of rotation is the floor, fifty. The other five are not lost:
+    // still owned, still eligible, dealt tomorrow. Signals earn the room above
+    // the floor; rotation is steady.
+    expect(queue.length).toBe(50);
+    expect(new Set(got).size).toBe(50);
   });
 
   it('a follow-up coming due re-enters by itself', async () => {

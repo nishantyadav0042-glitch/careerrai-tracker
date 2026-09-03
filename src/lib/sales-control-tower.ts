@@ -1,4 +1,6 @@
 import { loadStaffDirectory, type StaffDirectory } from '@/lib/sales-authz';
+import { SECTION_OF, type DaySection } from '@/lib/sales-day';
+import { ROTATION_SILENT_DAYS } from '@/lib/os/scale-config';
 import { fetchAll } from '@/lib/supabase/fetch-all';
 import { bucketFor, listOpenFollowups } from '@/lib/sales-followup';
 
@@ -94,6 +96,87 @@ export interface TowerData {
   paidTotal: number | null;
   /** The daily intake (lib/lead-intake): did new students enter books today? */
   intake: IntakeView;
+  /** Coverage of the book (founder, 2 Sep): is every student being tracked? */
+  coverage: CoverageView;
+}
+
+/** Closed for sales — never counted in a book that needs tracking. */
+const CLOSED: ReadonlySet<string> = new Set(['converted', 'not_interested', 'dnd']);
+
+export interface RepCoverage {
+  repId: string;
+  name: string;
+  /** Owned and not closed. */
+  book: number;
+  /** Touched (any call or message) in the last ROTATION_SILENT_DAYS. */
+  touched21d: number;
+  /** Never touched by anyone, ever. */
+  neverTouched: number;
+  /** Today's offer by section, from sales_opportunity (what the system gave). */
+  givenToday: Record<DaySection, number>;
+  workedToday: number;
+  calledToday: number;
+  messagedToday: number;
+}
+
+export interface CoverageView {
+  reps: RepCoverage[] | null;
+  /** Rows the coverage was read from — null means a read failed and nothing above is a number. */
+  failed: string | null;
+}
+
+/**
+ * Coverage — the one number the 50–70 day exists for. Reads the OWNED book
+ * (bounded by the team's books), today's activity and today's offer; every
+ * count is derived from rows and none is self-reported.
+ */
+export async function readCoverage(admin: any, staff: StaffDirectory | null, dayStart: string, todayIst: string, nowMs: number): Promise<CoverageView> {
+  const nameOf = (id: string) => staff?.labelById.get(id) ?? 'Staff';
+  const empty = (): Record<DaySection, number> => ({ promises: 0, money: 0, buddy: 0, new: 0, attention: 0, retention: 0, rotation: 0 });
+  try {
+    const book = await fetchAll<{ owner_id: string | null; status: string | null; last_attempt_at: string | null }>(
+      () => admin.from('lead_outreach').select('owner_id, status, last_attempt_at').not('owner_id', 'is', null),
+      { orderBy: 'student_id' });
+    if (book.error || !book.data) return { reps: null, failed: `lead_outreach: ${book.error?.message ?? 'no data'}` };
+    const acts = await fetchAll<{ actor_id: string | null; activity_type: string | null }>(
+      () => admin.from('sales_activity').select('actor_id, activity_type').gte('created_at', dayStart).in('activity_type', ['call', 'whatsapp']),
+      { orderBy: 'id' });
+    if (acts.error || !acts.data) return { reps: null, failed: `sales_activity: ${acts.error?.message ?? 'no data'}` };
+    const offers = await fetchAll<{ rep_id: string; lane: string; worked_at: string | null }>(
+      () => admin.from('sales_opportunity').select('rep_id, lane, worked_at').eq('ist_day', todayIst),
+      { orderBy: 'id' });
+    if (offers.error || !offers.data) return { reps: null, failed: `sales_opportunity: ${offers.error?.message ?? 'no data'}` };
+
+    const by = new Map<string, RepCoverage>();
+    const get = (id: string) => {
+      if (!by.has(id)) by.set(id, { repId: id, name: nameOf(id), book: 0, touched21d: 0, neverTouched: 0, givenToday: empty(), workedToday: 0, calledToday: 0, messagedToday: 0 });
+      return by.get(id)!;
+    };
+    const cutoff = nowMs - ROTATION_SILENT_DAYS * 86_400_000;
+    for (const r of book.data) {
+      if (!r.owner_id) continue;
+      if (r.status && CLOSED.has(r.status)) continue;
+      const c = get(r.owner_id);
+      c.book++;
+      if (!r.last_attempt_at) c.neverTouched++;
+      else if (Date.parse(r.last_attempt_at) >= cutoff) c.touched21d++;
+    }
+    for (const a of acts.data) {
+      if (!a.actor_id || !by.has(a.actor_id)) continue;
+      if (a.activity_type === 'whatsapp') get(a.actor_id).messagedToday++;
+      else get(a.actor_id).calledToday++;
+    }
+    for (const o of offers.data) {
+      if (!by.has(o.rep_id)) continue;
+      const c = get(o.rep_id);
+      const section = (SECTION_OF as Record<string, DaySection>)[o.lane] ?? 'rotation';
+      c.givenToday[section]++;
+      if (o.worked_at) c.workedToday++;
+    }
+    return { reps: [...by.values()].sort((a, b) => a.name.localeCompare(b.name)), failed: null };
+  } catch (e) {
+    return { reps: null, failed: e instanceof Error ? e.message : 'threw' };
+  }
 }
 
 export interface IntakeView {
@@ -180,6 +263,7 @@ export async function buildTower(admin: any): Promise<TowerData> {
   ]);
 
   const intake = await readIntake(admin, dayStart, staff);
+  const coverage = await readCoverage(admin, staff, dayStart, istToday, now);
 
   const followupCounts = openFollowups === null ? null : (() => {
     const c = { overdue: 0, today: 0, upcoming: 0 };
@@ -294,5 +378,6 @@ export async function buildTower(admin: any): Promise<TowerData> {
     conversionRateSuppressed: paidTotal === null || paidTotal < MIN_PAID_FOR_RATES,
     paidTotal,
     intake,
+    coverage,
   };
 }

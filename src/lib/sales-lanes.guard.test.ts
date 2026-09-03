@@ -118,8 +118,13 @@ describe('queue-level wiring (source-pinned)', () => {
   });
 
   it('the never-logged flood is capped so one lane cannot eat the whole day', () => {
-    expect(SRC).toMatch(/LANE_CAPS/);
-    expect(SRC).toMatch(/new_never_logged: 25/);
+    // Since 2 Sep 2026 the ceilings live in lib/sales-day (NEW_ARRIVAL_CEILING,
+    // ATTENTION_CEILING) and the queue hands its ranked candidates to
+    // assembleDay, which is proven on its own in sales-day.test.ts.
+    expect(SRC).toMatch(/assembleDay\(/);
+    const day = readFileSync('src/lib/sales-day.ts', 'utf8');
+    expect(day).toMatch(/new_never_logged: NEW_ARRIVAL_CEILING/);
+    expect(day).toMatch(/attention: ATTENTION_CEILING/);
   });
 
   it('the deck renders the explanation, not just the label', () => {
