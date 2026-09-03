@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { codeOnly } from './test-support/code-only';
 import { readFileSync } from 'node:fs';
 
 // ── We never take money for a session nobody can hold ───────────────────────
@@ -92,28 +93,51 @@ describe('the card refuses honestly rather than failing at checkout', () => {
   });
 });
 
-describe('the conversion screen: weakness → person → price, nothing else', () => {
+describe('the conversion screen: weakness → person → three prices, nothing else', () => {
   // Founder, 14 Aug: keep only the student's weakness, the buddy profile with
-  // why-this-buddy, and ₹299 book now. The old hub (fear hero, USP stack, two
-  // price cards) is retired from the route; this pins the replacement's shape
-  // so it cannot quietly re-grow.
+  // why-this-buddy, and the session. Founder, 2 Sep: ALL THREE prices on this
+  // screen — ₹399, ₹999, ₹2,599, ascending. The monthly plan reachable only
+  // inside a sheet was, to a student, a price that did not exist. The old hub
+  // (fear hero, USP stack) stays retired; this pins the shape so it can
+  // neither quietly re-grow nor quietly lose a rung again.
   const SCREEN = 'src/components/buddy/buddy-conversion-screen.tsx';
+  const SHEET = 'src/components/unlock-buddy-sheet.tsx';
+  const ladderSrc = () => {
+    const sheet = readFileSync(SHEET, 'utf8');
+    return sheet.slice(sheet.indexOf('export function BuddyPlanLadder'), sheet.indexOf('export function UnlockBuddyButton'));
+  };
 
-  it('diagnosis → red strip → person → price → till-CAT, in that order', () => {
+  it('diagnosis → red strip → person → session → subscription ladder, in that order', () => {
     const s = readFileSync(SCREEN, 'utf8');
     const diagnosis = s.indexOf('your weak spots');
     const red = s.indexOf('bg-red-600');
     const person = s.indexOf('Your IIM Buddy');
     const price = s.indexOf('<BookSessionCard');
-    // Anchored on the CTA itself, not a hardcoded price. Pinning '₹2,999'
-    // here is part of how the card drifted out of step with lib/plans while
-    // the campaign page quoted ₹2,499.
-    const tillcat = s.indexOf('till CAT —');
+    // Anchored on the components, never on a rupee figure. Pinning '₹2,999'
+    // here is part of how this card once drifted out of step with lib/plans.
+    const ladder = s.indexOf('<BuddyPlanLadder');
     expect(diagnosis).toBeGreaterThan(-1);
     expect(red).toBeGreaterThan(diagnosis);
     expect(person).toBeGreaterThan(red);
     expect(price).toBeGreaterThan(person);
-    expect(tillcat).toBeGreaterThan(price);
+    expect(ladder).toBeGreaterThan(price);
+  });
+
+  it('all three prices are on the screen, ascending, every one from the authority', () => {
+    const s = readFileSync(SCREEN, 'utf8');
+    expect(s, '₹399 — the session card, which fetches availability first').toContain('<BookSessionCard');
+    expect(s, '₹999 and ₹2,599 — the ladder').toContain('<BuddyPlanLadder');
+    const l = ladderSrc();
+    expect(l).toContain("tap('monthly')");
+    expect(l).toContain("tap('tillcat')");
+    expect(l).toContain('PLANS.monthly.display');
+    expect(l).toContain('PLANS.tillcat.display');
+    expect(l.indexOf("tap('monthly')"), 'ascending: monthly before till-CAT').toBeLessThan(l.indexOf("tap('tillcat')"));
+    // Neither file states a rupee amount in CODE — lib/plans is the only
+    // place. Comments are stripped first: a sentence explaining the rule must
+    // not be what trips it.
+    expect(codeOnly(s)).not.toMatch(/₹\s?\d/);
+    expect(codeOnly(l)).not.toMatch(/₹\s?\d/);
   });
 
   it('every diagnosis bullet is a pointer with the student\'s own stat', () => {
@@ -125,23 +149,22 @@ describe('the conversion screen: weakness → person → price, nothing else', (
     expect(s).not.toContain('Nobody is reviewing your preparation');
   });
 
-  it('the Till-CAT plan is one line, not the price-card stack', () => {
+  it('the fear hero and the sales-page hero layout stay retired', () => {
     const s = readFileSync(SCREEN, 'utf8');
-    expect(s).toContain('till CAT —');
-    // The price comes from the plan authority, never a literal — the literal
-    // is what let this card say ₹2,999 while /offer said ₹2,499.
-    expect(s).toContain('PLANS.tillcat.display');
-    // ...but the big subscription price cards do not come back.
+    expect(s).not.toContain('LockedBuddyHub');
+    // BuddyBuyButtons is the /sales-page layout (till-CAT hero first). This
+    // screen's ladder is its own, ascending component — not that one.
     expect(s).not.toContain('BuddyBuyButtons');
   });
 
-  it('the Till-CAT line opens a LIVE purchase path', () => {
-    // It pointed at /offer — the Independence Day campaign, which closes
+  it('the subscriptions open a LIVE purchase path through the one shared checkout', () => {
+    // It once pointed at /offer — the Independence Day campaign, which closes
     // itself after 15 Aug — so the main upsell led to "This offer has closed"
-    // with nothing to buy.
+    // with nothing to buy. The ladder pays via useBuddyCheckout, the same hook
+    // the sheet and the sales page use: one Razorpay path, not a second copy.
     const s = readFileSync(SCREEN, 'utf8');
     expect(s).not.toMatch(/href="\/offer"/);
-    expect(s).toContain('UnlockBuddyButton');
+    expect(ladderSrc()).toContain('useBuddyCheckout()');
   });
 
   it('the red strip is ONE sourced line and nothing after it', () => {

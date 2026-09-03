@@ -465,12 +465,14 @@ export default async function DailyTrackerPage() {
   // last 7 days steps aside for the next candidate, so the card is a fresh
   // noticing rather than the same sentence every morning. Recording the show
   // is fire-and-forget — a failed write must never blank the home screen.
-  const dailyInsight = (logs ?? []).length >= 2
-    ? await (async () => {
-        const suppressedKeys = await loadSuppressedInsightKeys(admin, user.id).catch(() => new Set<string>());
-        return computeDailyInsight(admin, user.id, archetype, { topicMemory }, { suppressedKeys });
-      })().catch(() => null)
-    : null;
+  // From day 0 (founder, 2 Sep: "2 din rule hata do"). The old `>= 2 logged
+  // days` gate here meant a new student's Home carried no insight at all —
+  // the one screen the 21 Jul brief wanted to open with VALUE. The engine
+  // decides per rule what needs history; this page no longer pre-empts it.
+  const dailyInsight = await (async () => {
+    const suppressedKeys = await loadSuppressedInsightKeys(admin, user.id).catch(() => new Set<string>());
+    return computeDailyInsight(admin, user.id, archetype, { topicMemory }, { suppressedKeys });
+  })().catch(() => null);
   if (dailyInsight) void recordInsightShown(admin, user.id, dailyInsight).catch(() => {});
 
   // LAST WEEK, finished and fixed. A closed calendar week is deterministic,
