@@ -1,7 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { mayActivatePayment, activatePaidOrder } from './activate-payment';
 import { vi } from 'vitest';
+
+// dispatch() (session_booked's real transport, added 3 Sep) makes its OWN
+// real admin client via createAdminClient() — it never accepts the fake
+// client these tests pass to activatePaidOrder, so it cannot be satisfied by
+// making that fake more capable. Stubbed here exactly like every other
+// activation side effect this file isn't testing.
+vi.mock('@/lib/notification-os', () => ({ dispatch: vi.fn(async () => 'sent') }));
+
+import { mayActivatePayment, activatePaidOrder } from './activate-payment';
 
 // ── A REFUND IS FINAL ───────────────────────────────────────────────────────
 //
