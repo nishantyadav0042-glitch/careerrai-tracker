@@ -5,6 +5,8 @@ import { cn } from '@/lib/utils';
 import { WorkspaceShell } from '@/components/admin/workspace-shell';
 import { buildTower, renderMetric, type Metric } from '@/lib/sales-control-tower';
 import { AssignPanel } from './assign-panel';
+import { TeamYesterday } from '@/components/admin/team-yesterday';
+import { teamYesterday } from '@/lib/sales-yesterday';
 import { getTeamCapacity } from '@/lib/sales-capacity';
 import { repAllocationLimit, EMPLOYMENT_LABEL, REFUSAL_COPY } from '@/lib/sales-rep-provisioning';
 
@@ -55,6 +57,7 @@ function MetricCard({ m }: { m: Metric }) {
 export default async function SalesControlTower() {
   const { user, admin } = await requireAdmin();
   const t = await buildTower(admin);
+  const yesterdayTeam = await teamYesterday(admin);
   // Same authority the distribute route enforces with — the preview and the
   // refusal must be computed from one function, or the founder is shown a
   // split the server will reject.
@@ -82,6 +85,13 @@ export default async function SalesControlTower() {
           NOT AVAILABLE — DATA QUALITY FAILURE. The CRM tables could not be read, so nothing below is trustworthy.
         </div>
       )}
+
+      {/* Founder order, 3 Sep: both reps' yesterday, compiled from the same
+          per-rep function each rep sees herself. Sits above the levels because
+          it is the one thing the founder asked to read daily. */}
+      <div className="mt-4">
+        <TeamYesterday t={yesterdayTeam} />
+      </div>
 
       {/* L1 — TODAY */}
       <h2 className="mt-4 text-[11px] font-bold uppercase tracking-widest text-stone-400">Level 1 · Today</h2>

@@ -307,6 +307,15 @@ Interested · Not interested · DND · Unqualified · Converted.
 **Remark** — short free text, and only where it carries something a structured
 field cannot: *"Student said busy till Monday. Wants strategy discussion after."*
 
+> **Amendment, 3 Sep 2026 (founder order):** a remark in the rep's own words is
+> **mandatory** on every connected outcome (interested, callback, converted,
+> not interested, DND) **and on every sent message** — "a message was sent"
+> without what it said is not a record. `no_answer` keeps its truthful
+> auto-note ("Did not pick up"): there is nothing to say about a call nobody
+> answered, and extorting text there is how junk remarks are bred. Enforced
+> server-side in `/api/sales/log`; the junk-remark risk the original wording
+> feared is managed by the daily snapshot review, not by dropping the record.
+
 **Follow-up** — if the student names a time, the counsellor sets it and forgets
 it. A date that lives only inside remark text does not exist. This is binding: a
 promised date **must** create a `sales_followup` row, never a note.
