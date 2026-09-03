@@ -133,7 +133,7 @@ export async function POST(request: NextRequest) {
   }
 
   const { data: cur } = await admin.from('lead_outreach')
-    .select('no_answer_count, first_contact_at').eq('student_id', studentId).maybeSingle();
+    .select('no_answer_count, first_contact_at, status, next_action_at, callback_at').eq('student_id', studentId).maybeSingle();
   const prevMisses = (cur?.no_answer_count as number | null) ?? 0;
 
   // ── A CLAIMED CONVERSION IS NOT A CONVERSION (Incident #52) ──────────────
@@ -161,12 +161,24 @@ export async function POST(request: NextRequest) {
   const effectiveOutcome: CallOutcome =
     convertedClaim && convertedClaim.status === 'interested' ? 'interested' : outcome;
 
-  const plan = planDisposition(effectiveOutcome, {
+  let plan = planDisposition(effectiveOutcome, {
     prevMisses,
     hot: hot === true,
     callbackAtLocal: typeof callbackAt === 'string' ? callbackAt : null,
     nowMs: Date.now(),
   });
+  // A MESSAGE NEVER DOWNGRADES A LIVE STATE (2 Sep 2026). A student who said
+  // "interested" or asked for a callback keeps that status and its clock; the
+  // message is recorded as a touch in history and on last_attempt_at only.
+  const LIVE = new Set(['interested', 'follow_up', 'no_answer']);
+  if (outcome === 'messaged' && cur?.status && LIVE.has(cur.status as string)) {
+    plan = {
+      status: cur.status as typeof plan.status,
+      nextActionAt: (cur.next_action_at as string | null) ?? null,
+      callbackAt: (cur.callback_at as string | null) ?? null,
+      noAnswerCount: prevMisses,
+    };
+  }
 
   const now = new Date().toISOString();
 
@@ -199,13 +211,14 @@ export async function POST(request: NextRequest) {
   const { data: activity, error: historyError } = await admin.from('sales_activity').insert({
     student_id: studentId,
     actor_id: principal.id,
-    activity_type: 'call',
-    channel: 'phone',
+    // A WhatsApp message is its own channel and activity (2 Sep 2026).
+    activity_type: outcome === 'messaged' ? 'whatsapp' : 'call',
+    channel: outcome === 'messaged' ? 'whatsapp' : 'phone',
     // The honest default. Nothing in this system independently observes that a
     // call took place — no call id, no duration, no recording.
     provenance: 'self_reported',
     status: outcome,
-    note: noteText || (outcome === 'no_answer' ? 'Did not pick up' : null),
+    note: noteText || (outcome === 'no_answer' ? 'Did not pick up' : outcome === 'messaged' ? 'Sent a WhatsApp message' : null),
     callback_at: plan.callbackAt,
   }).select('id').single();
   if (historyError) {
@@ -259,7 +272,7 @@ export async function POST(request: NextRequest) {
       studentId,
       repId: principal.id,
       activityId: activity?.id as number | undefined,
-      channel: channel === 'whatsapp' ? 'whatsapp' : 'phone',
+      channel: outcome === 'messaged' || channel === 'whatsapp' ? 'whatsapp' : 'phone',
       // Derived from the lane the rep was working, so it stays consistent
       // across reps and is one fewer field to fill.
       interventionType: interventionTypeForLane(snapshot.lane),

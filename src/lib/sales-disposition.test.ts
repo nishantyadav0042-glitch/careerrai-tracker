@@ -39,9 +39,9 @@ describe('vocabulary', () => {
 // (written before the dialer existed) rejected it.
 describe('code and database share ONE status vocabulary', () => {
   it('the CHECK constraint in the migration lists exactly LEAD_STATUSES', () => {
-    // 20260824b supersedes 20260820a: it re-creates the same constraint with
-    // 'dnd' added. The guard always reads the NEWEST definition of the CHECK.
-    const sql = readFileSync('supabase/migrations/20260824b_dnd_status.sql', 'utf8');
+    // 20260903a supersedes 20260824b: it re-creates the same constraint with
+    // 'messaged' added. The guard always reads the NEWEST definition of the CHECK.
+    const sql = readFileSync('supabase/migrations/20260903a_messaged_outcome.sql', 'utf8');
     const checkBlock = sql.match(/check \(status in \(([\s\S]*?)\)\)/i);
     expect(checkBlock).not.toBeNull();
     const dbValues = [...checkBlock![1].matchAll(/'([a-z_]+)'/g)].map((m) => m[1]).sort();
@@ -96,6 +96,17 @@ describe('planDisposition — the cadence engine', () => {
     const p = planDisposition('no_answer', { prevMisses: 3, hot: false, nowMs: NOW });
     expect(p.noAnswerCount).toBe(4);
     expect(p.nextActionAt).toBe('2026-08-23T12:30:00.000Z'); // 23 Aug 18:00 IST
+  });
+
+  it('messaged → status messaged, no clock, misses untouched (2 Sep 2026)', () => {
+    // A message is answered by the student's next move, not a scheduled
+    // call: attention brings them back if they open the app, rotation after
+    // 21 silent days. A clock here would double the day.
+    const plan = planDisposition('messaged', { prevMisses: 2, hot: true, nowMs: Date.parse('2026-09-02T10:00:00Z') });
+    expect(plan.status).toBe('messaged');
+    expect(plan.nextActionAt).toBeNull();
+    expect(plan.callbackAt).toBeNull();
+    expect(plan.noAnswerCount).toBe(2);
   });
 
   it('converted, not_interested and dnd close the lead — no re-queue clock', () => {
