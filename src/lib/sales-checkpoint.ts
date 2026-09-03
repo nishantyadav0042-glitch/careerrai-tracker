@@ -30,6 +30,9 @@ export interface OpportunityRow {
   objective: SalesObjective;
   /** Sort position within the day. Lower is more urgent. */
   rank: number;
+  /** The lane that produced the card. Optional: only readers that need to
+   *  count today's rotation ask for it. */
+  lane?: string | null;
   /** Null until a real disposition lands. */
   workedAt: string | null;
   outcome: string | null;

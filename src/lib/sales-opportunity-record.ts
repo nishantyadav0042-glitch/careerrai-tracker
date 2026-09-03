@@ -1,4 +1,5 @@
 import type { CallLead } from '@/lib/call-queue';
+import { SHIFT_END_HOUR_IST } from '@/lib/os/scale-config';
 import type { OpportunityRow } from '@/lib/sales-checkpoint';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -128,7 +129,7 @@ export async function readToday(
   try {
     const { data, error } = await admin
       .from('sales_opportunity')
-      .select('student_id, objective, rank, worked_at, outcome, closed_at, close_reason, skip_reason')
+      .select('student_id, objective, rank, lane, worked_at, outcome, closed_at, close_reason, skip_reason')
       .eq('rep_id', repId)
       .eq('ist_day', istDay(now))
       .order('rank', { ascending: true });
@@ -140,6 +141,7 @@ export async function readToday(
       studentId: r.student_id as string,
       objective: r.objective as OpportunityRow['objective'],
       rank: Number(r.rank),
+      lane: (r.lane as string | null) ?? null,
       workedAt: (r.worked_at as string | null) ?? null,
       outcome: (r.outcome as string | null) ?? null,
       closedAt: (r.closed_at as string | null) ?? null,
@@ -206,23 +208,41 @@ export interface DayCloseResult {
  * day had been worked. Now the day closes itself and the record is total:
  * every card offered ends as worked, skipped, or not marked.
  *
- * Deliberately swept by DAY, not by age in hours: the shift ends at 21:00 IST
- * and the sweep runs after it, so "the day ended" is a calendar fact both the
- * counsellor and the founder can check. Days before today are swept too, so a
- * missed run repairs itself on the next one instead of leaving a permanent
- * hole in the record.
+ * Deliberately swept by DAY, not by age in hours: the shift ends at
+ * SHIFT_END_HOUR_IST and the sweep runs after it, so "the day ended" is a
+ * calendar fact both the counsellor and the founder can check. Every day up
+ * to and including the newest CLOSABLE one is swept, so a missed run repairs
+ * itself instead of leaving a permanent hole.
+ *
+ * WHICH DAYS ARE CLOSABLE (fixed 3 Sep 2026, hours after this shipped). The
+ * first version swept `ist_day < today`, which sounds safe and is a day late:
+ * run at 21:45 IST it closed nothing, because today is not less than today.
+ * Today's cards would sit open until the following night, so the founder's
+ * "unmarked" column was always reporting yesterday. The real rule is not
+ * "before today", it is "after the shift" — so today counts once the shift
+ * has ended, and does not before it. That also makes the function safe to run
+ * by hand at any hour: at 11 AM it still refuses to touch today's cards,
+ * which are a counsellor's to mark.
  */
 export async function closeDay(
   admin: any,
   now: Date = new Date(),
 ): Promise<DayCloseResult> {
+  // `% 24` is not paranoia: en-GB with hour12:false renders midnight as "24"
+  // in some runtimes, which would make 00:xx IST look like the end of the day.
+  const istHour = Number(now.toLocaleString('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', hour12: false })) % 24;
   const today = istDay(now);
+  // The newest day whose shift is over. Before the shift ends, that is
+  // yesterday; after it, today.
+  const newestClosable = istHour >= SHIFT_END_HOUR_IST
+    ? today
+    : istDay(new Date(now.getTime() - 86_400_000));
   try {
     const { data, error } = await admin
       .from('sales_opportunity')
       .update({ closed_at: now.toISOString(), close_reason: 'not_marked' })
       .is('closed_at', null)
-      .lt('ist_day', today)
+      .lte('ist_day', newestClosable)
       .select('ist_day');
     if (error) {
       console.error('[sales-opportunity] day close failed:', error.message);
