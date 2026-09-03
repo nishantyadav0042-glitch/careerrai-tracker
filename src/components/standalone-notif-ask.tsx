@@ -35,7 +35,14 @@ export { NOTIF_ASK_SETTLED_EVENT };
 // permission (which is also what killed the push endpoint). These students
 // were permanently unreachable: prefs said ON so this ask never rendered, and
 // the healer never prompts. Now they get the same overlay with reconnect copy.
-export function StandaloneNotifAsk({ pushEnabled, serverSubDead = false }: { pushEnabled: boolean; serverSubDead?: boolean }) {
+export function StandaloneNotifAsk({ pushEnabled, serverSubDead = false, appInstalled = false }: {
+  pushEnabled: boolean;
+  serverSubDead?: boolean;
+  /** Server truth (profiles.app_installed): this student has reached
+   *  standalone at least once, so the icon IS on their phone. It changes what
+   *  a browser tab MEANS — see the deferral in evaluate(). */
+  appInstalled?: boolean;
+}) {
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -80,6 +87,17 @@ export function StandaloneNotifAsk({ pushEnabled, serverSubDead = false }: { pus
         // a remedy exists we show it — this is the 206 App Store students who
         // previously got silence, and the tab students who got nothing.
         if (cap.remedy === 'none') { setAskVisible(false); setCannot(null); report('skipped', cap.reason!); return; }
+        // …but "install it" is the WRONG remedy for a student who already
+        // did. 133 of the 238 Android students whose last session was a
+        // browser tab had already accepted an install prompt: the icon is on
+        // their phone, they simply arrived through a WhatsApp link, which
+        // always opens a tab. A full-screen "Install app" panel tells them to
+        // fix something that is not broken. They get ReopenAppNudge's slim
+        // banner instead — same destination, no blocking overlay, and it says
+        // the true thing ("open the app you already have").
+        if (appInstalled && cap.surface === 'browser_tab') {
+          setAskVisible(false); setCannot(null); report('skipped', 'already_installed_tab'); return;
+        }
         setCannot(cap);
         setAskVisible(true);
         setShow(true);
@@ -110,7 +128,7 @@ export function StandaloneNotifAsk({ pushEnabled, serverSubDead = false }: { pus
     /* eslint-enable react-hooks/set-state-in-effect */
     // `reconnect` is derived from the other two, so listing it re-runs nothing
     // extra — it just keeps the dependency list honest.
-  }, [pushEnabled, serverSubDead, reconnect]);
+  }, [pushEnabled, serverSubDead, reconnect, appInstalled]);
 
   // The ONE place this event is emitted. Keyed on the state flip rather than
   // the tap, so it counts students who are blocked, not how many times they

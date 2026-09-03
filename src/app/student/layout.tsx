@@ -287,7 +287,11 @@ export default async function StudentLayout({ children }: { children: React.Reac
         // subscription anywhere but its permanent home. StandaloneNotifAsk also
         // fires when prefs say push=ON but the server holds no live
         // subscription (the reconnect case).
-        <StandaloneNotifAsk pushEnabled={pushEnabled} serverSubDead={!profile?.push_subscription} />
+        <StandaloneNotifAsk
+          pushEnabled={pushEnabled}
+          serverSubDead={!profile?.push_subscription}
+          appInstalled={appInstalled}
+        />
       ) : null}
       {showInstallJourney && <InstallJourney appInstalled={appInstalled} planReady={!showOnboarding} />}
       {showCoverageReview && <CoverageReviewGate />}

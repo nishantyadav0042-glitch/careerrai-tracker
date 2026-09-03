@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { codeOnly } from './test-support/code-only';
 
 /**
  * ── NUDGE THE STUDENT TOWARD THE ICON THEY ALREADY HAVE ─────────────────────
@@ -63,5 +64,37 @@ describe('the source never touches push subscription code', () => {
 
   it('never calls Notification.requestPermission', () => {
     expect(SOURCE).not.toMatch(/requestPermission/);
+  });
+});
+
+describe('the overlay and the banner never both speak to the same student', () => {
+  // StandaloneNotifAsk gained a capability-based guidance panel on main
+  // (push-capability.ts). For a browser tab its remedy is "install the app" —
+  // correct for someone who has not installed, WRONG for the 133 of 238
+  // Android tab-students who already accepted an install prompt. Two surfaces
+  // would then talk at once, and the louder one (a full-screen overlay) would
+  // be the one telling a returning student to fix a thing that is not broken.
+  const ASK = readFileSync(join(__dirname, '..', 'components', 'standalone-notif-ask.tsx'), 'utf8');
+
+  it('the ask defers to the banner for an already-installed browser tab', () => {
+    expect(ASK).toMatch(/appInstalled && cap\.surface === 'browser_tab'/);
+    expect(ASK).toContain("report('skipped', 'already_installed_tab')");
+  });
+
+  it('the deferral is BEFORE the guidance panel is armed, not after', () => {
+    // setCannot() is what renders "Install app". Deferring after it would
+    // still flash the wrong panel.
+    const code = codeOnly(ASK);
+    const defer = code.indexOf("'already_installed_tab'");
+    const arm = code.indexOf('setCannot(cap)');
+    expect(defer).toBeGreaterThan(-1);
+    expect(arm).toBeGreaterThan(-1);
+    expect(defer, 'the deferral must come first').toBeLessThan(arm);
+  });
+
+  it('the layout actually passes the server truth in — a default of false silently restores the bug', () => {
+    const layout = readFileSync(join(__dirname, '..', 'app', 'student', 'layout.tsx'), 'utf8');
+    const tag = layout.slice(layout.indexOf('<StandaloneNotifAsk'), layout.indexOf('<StandaloneNotifAsk') + 260);
+    expect(tag).toMatch(/appInstalled=\{appInstalled\}/);
   });
 });
