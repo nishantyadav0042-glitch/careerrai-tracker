@@ -8,6 +8,7 @@ import { sendMetaCapiEvent } from '@/lib/meta-capi';
 import { SESSION_PLAN_ID, SESSION_PRICE_PAISE } from '@/lib/session-credit';
 import { MENTOR_FREE_MESSAGES } from '@/lib/mentor-doors';
 import { assignBuddyToCredit } from '@/lib/session-assignment';
+import { dispatch } from '@/lib/notification-os';
 
 // The ONE path that turns a real Razorpay capture into a paid, premium student.
 // Shared by the webhook (normal case) and the reconcile-payments cron (the
@@ -345,6 +346,7 @@ async function activateSessionCredit(
   // never become a permanent mentorship.
   const { data: fresh } = await admin
     .from('session_credits').select('id').eq('payment_id', row.id).maybeSingle();
+  let mentorAssigned = false;
   if (fresh?.id) {
     const assigned = await assignBuddyToCredit(admin, {
       creditId: fresh.id as string,
@@ -361,8 +363,41 @@ async function activateSessionCredit(
         .update({ buddy_id: assigned.buddyId })
         .eq('student_id', row.student_id)
         .is('buddy_id', null);
+      mentorAssigned = true;
     }
   }
+
+  // ── TELL THE STUDENT THEY'RE BOOKED ─────────────────────────────────────
+  //
+  // This function minted the credit, the chat grant and the mentor
+  // assignment, and until now told the student none of it — the ONLY session
+  // ever bought and assigned in production (Dhruv Vakadia, 24 Aug) got zero
+  // notifications in the ten minutes after paying. The subscription path's
+  // own premium-grant helper (lib/premium.ts) already closes this exact
+  // silence for the ₹999/₹2,599 plans; this is its session-credit sibling.
+  //
+  // Two honest variants, not one. A confirmed mentor is a stronger claim than
+  // "we're looking" — and the "still looking" copy promises NO timeframe on
+  // purpose: nothing retries an unassigned credit on a schedule (see the
+  // comment above assignBuddyToCredit), so a fixed "within 24 hours" here
+  // would be exactly the kind of claim beyond the evidence this app refuses
+  // to print. Fires regardless of whether assignment succeeded — the payment
+  // itself is real either way, and that is the fact this message exists to
+  // confirm reached the phone, not the bell.
+  const { data: notifProfile } = await admin
+    .from('profiles').select('notif_prefs').eq('id', row.student_id).single();
+  await dispatch({
+    userId: row.student_id,
+    type: 'session_booked',
+    title: mentorAssigned ? '🎉 Session booked!' : '✅ Payment received',
+    body: mentorAssigned
+      ? "Your mentor is confirmed and will reach out soon. Log today's study while you wait."
+      : "We're matching you with a mentor now — you'll hear from them here the moment it's confirmed.",
+    url: '/student/buddy',
+    reason: 'Session payment just captured — confirm it landed, immediately',
+    expectedAction: 'open_buddy',
+    prefs: (notifProfile?.notif_prefs as Record<string, unknown>) ?? {},
+  });
 
   await logSecurityEvent(admin, {
     type: 'payment_activated', severity: 'info', userId: row.student_id,
