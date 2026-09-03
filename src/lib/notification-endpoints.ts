@@ -178,16 +178,124 @@ export async function recordDelivery(
   if (!endpointId) return;
   const now = new Date().toISOString();
   try {
-    await admin.from('notification_deliveries').insert({
+    // UPSERT, not insert, on (notification_id, endpoint_id) — the unique index
+    // from 20260903a. A legitimate re-send of the same notification to the same
+    // device must update its one delivery fact, not raise a unique violation
+    // and not create a second row.
+    //
+    // device_confirmed_at is deliberately ABSENT from this payload. It belongs
+    // to the device, not to the sender, and a re-send must never erase a
+    // confirmation the device has already given us. Postgres's ON CONFLICT DO
+    // UPDATE only touches the columns named here, so leaving it out preserves it.
+    //
+    // The opposite outcome column IS nulled: a row carrying both a failed_at
+    // from attempt one and a provider_accepted_at from attempt two describes
+    // no coherent event.
+    await admin.from('notification_deliveries').upsert({
       notification_id: notificationId,
       endpoint_id: endpointId,
       attempted_at: now,
       ...(outcome.accepted
-        ? { provider_accepted_at: now }
-        : { failed_at: now, fail_reason: (outcome.reason ?? 'unknown').slice(0, 120) }),
-    });
+        ? { provider_accepted_at: now, failed_at: null, fail_reason: null }
+        : { failed_at: now, fail_reason: (outcome.reason ?? 'unknown').slice(0, 120), provider_accepted_at: null }),
+    }, { onConflict: 'notification_id,endpoint_id' });
   } catch (err) {
     console.error('[endpoints] delivery record failed:', err);
+  }
+}
+
+/** What confirmDelivery() actually did — the route turns this into a status. */
+export type ConfirmOutcome =
+  | 'confirmed'   // first valid receipt for this (notification, device)
+  | 'already'     // a receipt was already recorded — replay, harmless
+  | 'rejected';   // the pair is not ours to confirm: unknown, or cross-student
+
+/**
+ * Stamp the device-level receipt for ONE endpoint.
+ *
+ * THE ATTRIBUTION RULE: a push sent to device A is confirmable only by device
+ * A. Both ids arrive from an UNAUTHENTICATED beacon (the service worker may
+ * hold no session — same as /api/push/click), so neither may be trusted on its
+ * own. What makes the pair safe is that it is checked against facts only THIS
+ * SERVER creates:
+ *
+ *   - the notification row names the student it was raised for
+ *   - the endpoint row names the student it belongs to
+ *   - they must be the same student, or the pair is refused
+ *
+ * So a caller cannot confirm another student's notification, cannot confirm on
+ * another student's device, and cannot invent an endpoint. The worst a forged
+ * pair achieves is confirming a student's own real notification on that same
+ * student's own real device — which is the thing the beacon exists to report.
+ *
+ * IDEMPOTENT by construction: the write is conditional on device_confirmed_at
+ * being null and the table carries a unique index on the pair, so a replayed
+ * or concurrent beacon returns 'already' and writes nothing. Never throws —
+ * a measurement failure must not fail a beacon the device already earned.
+ */
+export async function confirmDelivery(
+  admin: any,
+  notificationId: string,
+  endpointId: string,
+): Promise<ConfirmOutcome> {
+  const now = new Date().toISOString();
+  try {
+    // OWNERSHIP: both sides must name the same student. Read them rather than
+    // trusting the pair — this is the whole security boundary of this function.
+    const [{ data: notif }, { data: ep }] = await Promise.all([
+      admin.from('notifications').select('user_id').eq('id', notificationId).maybeSingle(),
+      admin.from('notification_endpoints').select('student_id').eq('id', endpointId).maybeSingle(),
+    ]);
+    if (!notif?.user_id || !ep?.student_id) return 'rejected';        // unknown id on either side
+    if (notif.user_id !== ep.student_id) return 'rejected';           // cross-student pair
+
+    // A revoked endpoint is NOT rejected. A 410 revokes the row at send time,
+    // but a push already in flight can still land and be displayed afterwards;
+    // refusing that receipt would throw away true evidence of a real display.
+    // The row keeps its own revoked_at, so the two facts stay separable.
+    const { data: updated } = await admin
+      .from('notification_deliveries')
+      .update({ device_confirmed_at: now })
+      .eq('notification_id', notificationId)
+      .eq('endpoint_id', endpointId)
+      .is('device_confirmed_at', null)
+      .select('id');
+
+    if (!updated || updated.length === 0) {
+      // Either already confirmed (replay) or the delivery row does not exist
+      // yet. The second is a real race: recordDelivery() writes the row only
+      // AFTER webpush.sendNotification() resolves, and a fast device can beacon
+      // back inside that window. Losing those receipts would silently
+      // under-count exactly the devices that are healthiest. Ownership is
+      // already proven above, so it is safe to create the row the sender is
+      // about to write; the unique index makes the two writers converge on one.
+      const { data: existing } = await admin
+        .from('notification_deliveries')
+        .select('id, device_confirmed_at')
+        .eq('notification_id', notificationId)
+        .eq('endpoint_id', endpointId)
+        .maybeSingle();
+      if (existing?.device_confirmed_at) return 'already';
+      if (existing) return 'already'; // row exists, our conditional update lost a race
+
+      await admin.from('notification_deliveries').upsert({
+        notification_id: notificationId,
+        endpoint_id: endpointId,
+        attempted_at: now,
+        device_confirmed_at: now,
+      }, { onConflict: 'notification_id,endpoint_id' });
+    }
+
+    // The endpoint's own last-confirmed watermark: what lets a reach query ask
+    // "which DEVICES are proven live" without walking every delivery row.
+    await admin.from('notification_endpoints')
+      .update({ last_delivery_confirmed_at: now, updated_at: now })
+      .eq('id', endpointId);
+
+    return 'confirmed';
+  } catch (err) {
+    console.error('[endpoints] delivery confirm failed:', err);
+    return 'rejected';
   }
 }
 

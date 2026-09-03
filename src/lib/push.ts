@@ -158,7 +158,7 @@ async function sendToEndpoint(
 
   let last: PushResult = { ok: false, reason: 'unreachable' };
   for (let attempt = 1; attempt <= 2; attempt++) {
-    last = await attemptSend(admin, userId, ep.subscription as unknown as webpush.PushSubscription, payload);
+    last = await attemptSend(admin, userId, ep.subscription as unknown as webpush.PushSubscription, payload, ep.id);
     if (last.ok || last.terminal) break;
     if (attempt < 2) { console.warn(`[push] attempt ${attempt} failed for ${userId}, retrying…`); await sleep(1500); }
   }
@@ -176,7 +176,12 @@ async function attemptSend(
   admin: any,
   userId: string,
   subscription: webpush.PushSubscription,
-  payload: { title: string; body: string; url?: string; notifId: string; tag?: string; senderName?: string }
+  payload: { title: string; body: string; url?: string; notifId: string; tag?: string; senderName?: string },
+  // Which endpoint row this exact copy is going to. Null only for the synthetic
+  // fallback endpoint (a student still on profiles.push_subscription, with no
+  // registry row) — that copy carries no endpointId and the beacon stays
+  // student-level for them, exactly as before this change.
+  endpointId: string | null,
 ): Promise<PushResult & { terminal?: boolean }> {
   try {
     // Every push needs a UNIQUE tag. sw.js falls back to a single shared tag when
@@ -199,6 +204,18 @@ async function attemptSend(
       data: {
         url: payload.url ?? '/',
         notifId: payload.notifId,
+        // WHICH DEVICE THIS COPY WENT TO (task #79). The SW echoes it back on
+        // the arrival beacon, which is the only way a receipt can name a
+        // device rather than a student — a student with two phones otherwise
+        // produces one receipt and no way to tell which phone displayed it.
+        //
+        // Safe to carry: this is the endpoint's own row id, sent only to that
+        // endpoint, inside the aes128gcm payload Web Push encrypts end-to-end
+        // between this server and that browser. The push service cannot read
+        // it. It is an opaque identifier, never a credential — /api/push/received
+        // re-derives ownership server-side and refuses any pair whose
+        // notification and endpoint do not name the same student.
+        ...(endpointId ? { endpointId } : {}),
         ...(payload.senderName ? { senderName: payload.senderName } : {}),
       },
     };
