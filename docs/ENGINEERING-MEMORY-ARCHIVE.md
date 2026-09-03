@@ -3629,3 +3629,73 @@ leaving it open, and people correctly choose the second.
 And the corollary that made the fix safe: **when adding a way to close
 something, never reuse the column that measures whether it was DONE.** A skip
 and a sweep are closes, not work. Two columns, two questions.
+
+## Incident #68
+
+**Date:** 2026-09-03 (found ~23:00 IST, hours after #67 shipped)
+**Area:** Sales OS — the daily day (its size, and its close)
+**Severity:** P1 (founder visibility / counsellor trust) — no student harmed
+
+### What was wrong
+
+Two defects, both in code that had gone live that morning, both found by
+reading production rather than by any test.
+
+**1. The day refilled, so it could never be finished.** `sales_opportunity`
+showed each seat had been offered **97 cards** on 3 Sep against a design
+ceiling of 70 (Anshul 97, Neelam 97; max rank 69, so each individual build
+was correct). The queue is stateless and rebuilt on every page load: a worked
+card dropped out via the same-day cooldown, rotation backfilled to
+`DAY_FLOOR`, and the counsellor was handed fresh students. Work ten, get ten
+more, forever. It also silently violated the founder's 30 Aug ruling —
+"working 5 does not summon 5. Replacement must be signal-driven, not
+quota-driven" — because a floor-backfill is precisely a quota.
+
+It also meant a **skip did not stick**: a skip deliberately writes no
+lead_outreach state (nothing happened to the student), so nothing suppressed
+the card and it returned on the very next page load.
+
+**2. The sweep closed a day late.** `closeDay` swept `ist_day < today`, which
+reads as safe and is off by one: run at 21:45 IST it closed **0 rows**,
+because today is not less than today. Today's 147 open cards would have sat
+until the following night, so the "unmarked" column the founder had just been
+given always reported yesterday.
+
+### Why nothing caught it
+
+Both were provable from the code and neither test asked the question. The day
+tests exercised `assembleDay` on one build, never two — and one build was
+always correct. The sweep test asserted the filter it had been written with
+(`lt:ist_day`) rather than the property that matters ("a day closes the night
+its shift ends"), so it passed while encoding the bug.
+
+### The fix
+
+- **The day is a fixed set.** `buildCallQueue` reads today's `sales_opportunity`
+  rows for the viewing rep. Cards already CLOSED today drop out (which is what
+  finally makes a skip stick), and `assembleDay` takes a `DayContext`:
+  already-open cards are carried, and rotation may only top up to the day's
+  target counting what it already spent. Signals remain the deliberate
+  exception — a promise, an abandoned checkout or a buddy tap at 6pm is real
+  new work and still appears, which is the signal-driven replenishment the
+  30 Aug ruling actually asked for.
+- **A day closes the night its shift ends.** `closeDay` computes the newest
+  CLOSABLE day: today once the IST hour is past `SHIFT_END_HOUR_IST` (21),
+  yesterday before it, then sweeps `ist_day <= that`. Safe to run by hand at
+  any hour: at 11am it still refuses to touch a live day.
+- Tests now pin the properties, not the filters: a rebuild continues today
+  rather than dealing a second day; a signal still arrives mid-day; the sweep
+  before, at and after the shift boundary.
+
+### The lesson, with teeth
+
+**A stateless surface plus a floor equals an infinite list.** Any "give them N
+per day" rule computed fresh on every render will re-give as soon as items
+leave, and the people using it experience a list that grows as they work. If
+a day is supposed to be finishable, the day has to be *recorded*, and the
+rebuild has to read that record.
+
+And: **a test that asserts the implementation it was written against is not a
+guard.** Both of these shipped green. The sweep test asserted `lt:ist_day` —
+the exact expression containing the bug — instead of "a day closes the night
+its shift ends", which would have failed immediately.

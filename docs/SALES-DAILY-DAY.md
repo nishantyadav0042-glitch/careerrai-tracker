@@ -85,6 +85,17 @@ A card now ends the day in exactly one of three recorded states:
   instead of leaving a permanent hole.
 - **Worked + skipped + not marked + open always equals given.** Nothing can
   hide, on the counsellor's screen or the founder's.
+- **The day is a fixed set** *(fixed 3 Sep, Incident #68)*. The queue is
+  rebuilt on every page load, and a floor-backfill made that deal MORE cards
+  each time — 97 per seat against a ceiling of 70, a list that could never be
+  finished. The rebuild now reads today's `sales_opportunity`: cards closed
+  today drop out (this is what makes a skip stick), carried cards stay, and
+  rotation only tops up to the day's target counting what it already spent.
+  Signals are the exception and still arrive live — a promise or an abandoned
+  checkout at 6pm is real new work.
+- **A day closes the night its shift ends** *(same incident)*. The sweep's
+  newest closable day is today once past `SHIFT_END_HOUR_IST` (21:00), and
+  yesterday before it — so a hand-run at 11am cannot close a live day.
 
 ## What each person sees
 

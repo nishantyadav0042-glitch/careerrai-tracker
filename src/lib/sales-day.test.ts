@@ -133,6 +133,51 @@ describe('order and channel', () => {
   });
 });
 
+// ── THE DAY IS A FIXED SET (found in production 3 Sep 2026) ────────────────
+//
+// Each seat was offered 97 cards in one day against a ceiling of 70, because
+// the queue is rebuilt on every page load: a worked card left, rotation
+// backfilled to the floor, and the counsellor was handed fresh students. The
+// list could never be finished — work ten, get ten more — and that is exactly
+// the quota-driven replenishment the founder ruled out on 30 Aug.
+describe('a rebuild continues today, it does not deal a second day', () => {
+  it('rotation does not re-top after cards are worked', () => {
+    // Morning: 50 rotation cards dealt. By evening 30 are marked and 20 remain
+    // open. A rebuild must show those 20 — not 20 plus 30 replacements.
+    const remaining = c('rotation', 20);
+    const openToday = new Set(remaining.map((x) => x.studentId));
+    const day = assembleDay([...remaining, ...c('rotation', 200)], {
+      openToday, rotationUsedToday: 50,
+    });
+    expect(day.queue).toHaveLength(20);
+    expect(day.queue.every((x) => openToday.has(x.studentId))).toBe(true);
+  });
+
+  it('rotation tops up only to the day-s target, counting what it already spent', () => {
+    // 10 dealt this morning, 4 still open: the target is 50, so at most 40 new.
+    const remaining = c('rotation', 4);
+    const openToday = new Set(remaining.map((x) => x.studentId));
+    const day = assembleDay([...remaining, ...c('rotation', 200)], {
+      openToday, rotationUsedToday: 10,
+    });
+    expect(day.counts.given.rotation).toBe(4 + (DAY_FLOOR - 10));
+  });
+
+  it('a genuinely new SIGNAL still arrives mid-day — that is the point of the exception', () => {
+    // A promise coming due at 6pm, on a rotation target already fully spent.
+    const day = assembleDay([...c('callback', 1), ...c('rotation', 50)], {
+      openToday: new Set(), rotationUsedToday: DAY_FLOOR,
+    });
+    expect(day.counts.given.promises, 'a promise is never withheld').toBe(1);
+    expect(day.counts.given.rotation, 'but rotation is done for today').toBe(0);
+  });
+
+  it('with no context it behaves exactly as before — nothing else changes', () => {
+    const cands = [...c('going_cold', 5), ...c('rotation', 100)];
+    expect(assembleDay(cands).queue).toHaveLength(DAY_FLOOR);
+  });
+});
+
 describe('the 4 AM anchor', () => {
   it('before 4 AM IST the anchor is yesterday 4 AM; after, today 4 AM', () => {
     // 02:00 IST on 3 Sep = 20:30 UTC on 2 Sep.

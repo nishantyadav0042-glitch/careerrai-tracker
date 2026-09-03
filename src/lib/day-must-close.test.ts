@@ -160,6 +160,7 @@ function db() {
       c.update = (p: any) => { patch = p; return c; };
       c.eq = (k: string, v: unknown) => { filters.push([k, v]); return c; };
       c.lt = (k: string, v: unknown) => { filters.push([`lt:${k}`, v]); return c; };
+      c.lte = (k: string, v: unknown) => { filters.push([`lte:${k}`, v]); return c; };
       c.is = (k: string, v: unknown) => { if (v === null) isNull.push(k); return c; };
       c.select = () => c;
       c.then = (ok: (r: unknown) => unknown) => {
@@ -206,24 +207,49 @@ describe('closeDay — the shift ends and the record completes itself', () => {
   let h: ReturnType<typeof db>;
   beforeEach(() => { h = db(); });
 
-  it('stamps only OPEN rows from days that have already ended', async () => {
-    h.setAnswer({ data: [{ ist_day: '2026-09-02' }, { ist_day: '2026-09-02' }, { ist_day: '2026-08-30' }], error: null });
-    const r = await closeDay(h.client as any, new Date('2026-09-03T16:15:00Z'));
+  it('stamps only OPEN rows, and never counts as work', async () => {
+    h.setAnswer({ data: [{ ist_day: '2026-09-03' }, { ist_day: '2026-09-02' }, { ist_day: '2026-08-30' }], error: null });
+    const r = await closeDay(h.client as any, new Date('2026-09-03T16:15:00Z')); // 21:45 IST
     expect(r.ok).toBe(true);
     expect(r.closed).toBe(3);
-    expect(r.days).toEqual(['2026-08-30', '2026-09-02']);
+    expect(r.days).toEqual(['2026-08-30', '2026-09-02', '2026-09-03']);
     const u = h.updates[0];
     expect(u.patch.close_reason).toBe('not_marked');
     expect(u.patch.worked_at, 'the sweep is not work either').toBeUndefined();
     expect(u.isNull).toContain('closed_at');
-    expect(u.filters, "today's cards are still the counsellor's to mark")
-      .toContainEqual(['lt:ist_day', '2026-09-03']);
+  });
+
+  // ── The day-late defect, fixed hours after it shipped ────────────────────
+  //
+  // The first version swept `ist_day < today`. Run at 21:45 IST it closed
+  // NOTHING, because today is not less than today — so today's cards sat open
+  // until the following night and the founder's "unmarked" column always
+  // reported yesterday. The rule is "after the shift", not "before today".
+  it('AFTER the shift, today is closable — the day closes the night it ends', async () => {
+    h.setAnswer({ data: [], error: null });
+    await closeDay(h.client as any, new Date('2026-09-03T16:15:00Z')); // 21:45 IST
+    expect(h.updates[0].filters, 'the shift is over, so today counts')
+      .toContainEqual(['lte:ist_day', '2026-09-03']);
+  });
+
+  it('DURING the shift, today is untouchable — those cards are still somebody\'s to mark', async () => {
+    h.setAnswer({ data: [], error: null });
+    await closeDay(h.client as any, new Date('2026-09-03T05:30:00Z')); // 11:00 IST
+    expect(h.updates[0].filters, 'a hand-run at 11am must not close a live day')
+      .toContainEqual(['lte:ist_day', '2026-09-02']);
+  });
+
+  it('just before the shift ends, today is still open', async () => {
+    h.setAnswer({ data: [], error: null });
+    await closeDay(h.client as any, new Date('2026-09-03T15:25:00Z')); // 20:55 IST
+    expect(h.updates[0].filters).toContainEqual(['lte:ist_day', '2026-09-02']);
   });
 
   it('a missed run repairs itself — every past day is swept, not just yesterday', async () => {
     h.setAnswer({ data: [{ ist_day: '2026-08-30' }, { ist_day: '2026-09-01' }, { ist_day: '2026-09-02' }], error: null });
     const r = await closeDay(h.client as any, new Date('2026-09-03T16:15:00Z'));
     expect(r.days).toEqual(['2026-08-30', '2026-09-01', '2026-09-02']);
+    expect(r.closed).toBe(3);
   });
 
   it('a quiet sweep is a success with zero closed, not a failure', async () => {

@@ -12,6 +12,7 @@ import {
   ROTATION_SILENT_DAYS, TOUCH_COOLDOWN_DAYS, ATTENTION_WINDOW_DAYS,
 } from '@/lib/os/scale-config';
 import { assembleDay, dayAnchorMs, type Channel, type DaySection, type DayCounts } from '@/lib/sales-day';
+import { readToday } from '@/lib/sales-opportunity-record';
 import { journeyStage, JOURNEY_NEXT_STEP, type JourneyStage } from '@/lib/sales-messages';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -399,6 +400,28 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
   // yesterday and did not log" means the same thing all day long.
   const attentionSinceIso = new Date(dayAnchorMs(now) - ATTENTION_WINDOW_DAYS * 86_400_000).toISOString();
 
+  // ── TODAY'S LIST IS ALREADY DECIDED ──────────────────────────────────────
+  //
+  // The queue is stateless and rebuilt on every page load, and until 3 Sep
+  // that meant each rebuild dealt MORE students: a worked card left, rotation
+  // backfilled to the floor, and each seat was offered 97 cards against a
+  // ceiling of 70. The list could never be finished.
+  //
+  // sales_opportunity already records what was offered today, so the rebuild
+  // reads it instead of starting fresh. Two things come from it: cards already
+  // CLOSED today drop out (which is what finally makes a skip stick for the
+  // rest of the day — a skip deliberately writes no lead state, so nothing
+  // else would suppress it), and rotation knows how much of the day's target
+  // it has already spent.
+  //
+  // Rep-scoped only: an admin viewing the workspace is looking at everybody's
+  // work and has no day of their own. readToday never throws — a failed read
+  // degrades to the old rebuild-fresh behaviour rather than blocking the day.
+  const mine = viewer?.role === 'sales' ? await readToday(db, viewer.id) : [];
+  const closedToday = new Set(mine.filter((r) => r.closedAt).map((r) => r.studentId));
+  const openToday = new Set(mine.filter((r) => !r.closedAt).map((r) => r.studentId));
+  const rotationUsedToday = mine.filter((r) => r.lane === 'rotation' || r.lane === 'fresh').length;
+
   const roster = await getRosterMomentum(db);
   const free = roster.filter((r) => !r.isPremium && !r.hasBuddy);
   const ids = free.map((r) => r.id);
@@ -519,6 +542,8 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
     const o = outById.get(r.id) as any;
     const status = (o?.status as string | null) ?? null;
     if (isClosedForSales(status, paidIds.has(r.id))) continue;
+    // Marked today — worked or skipped. Done is done until tomorrow.
+    if (closedToday.has(r.id)) continue;
     // A student with no phone cannot be called. They keep their owner and
     // their state — dropping them would make them nobody's problem forever —
     // but they are never dealt as a card. They surface as a data-quality
@@ -752,7 +777,7 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
   // ── THE DAY (lib/sales-day, founder 2 Sep 2026): 50–70, signals first,
   // rotation fills, per-lane ceilings, channel per card. Pure and proven on
   // its own; this file decides who and why, that one decides how many.
-  const day = assembleDay(cands);
+  const day = assembleDay(cands, { openToday, rotationUsedToday });
   const queue: CallLead[] = day.queue.map(({ _sort, ...c }) => { void _sort; return c as CallLead; });
   return { queue, connectedToday, dueNow, totalOpen, counts: day.counts, band: day.band };
 }

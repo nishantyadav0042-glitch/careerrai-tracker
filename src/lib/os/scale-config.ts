@@ -96,6 +96,9 @@ export const NEW_ARRIVAL_CEILING = 15;
 export const ATTENTION_WINDOW_DAYS = 2;
 /** The day is dealt from 4 AM IST: the previous Indian day is complete. */
 export const DAY_ANCHOR_HOUR_IST = 4;
+/** When the counsellors' shift ends. After this hour a day may be CLOSED —
+ *  before it, its cards are still somebody's to mark (3 Sep 2026). */
+export const SHIFT_END_HOUR_IST = 21;
 /** In rotation, every Nth card is a call rather than a message. */
 export const ROTATION_CALL_EVERY = 4;
 

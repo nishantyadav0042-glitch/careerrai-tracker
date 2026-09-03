@@ -77,6 +77,31 @@ export function dayAnchorMs(nowMs: number): number {
 
 export interface DayCounts { given: Record<DaySection, number>; heldBack: number; rotationPool: number }
 
+/**
+ * What has already happened today, so a rebuild does not deal a second day.
+ *
+ * THE DEFECT THIS CLOSES (found in production 3 Sep 2026, hours after the
+ * 50–70 day shipped). The queue is stateless and rebuilt on every page load.
+ * A worked card leaves it, rotation backfilled to the floor, and the counsellor
+ * was handed fresh students — so each seat was offered NINETY-SEVEN cards in
+ * one day against a ceiling of seventy, and the list could never be finished:
+ * work ten, get ten more. That is also quota-driven replenishment, which the
+ * founder ruled out on 30 Aug ("working 5 does not summon 5").
+ *
+ * So the day is a FIXED SET. Cards already dealt today stay dealt; rotation
+ * may only top up to the day's rotation target, counting what it already
+ * spent. Signals are the deliberate exception — a promise coming due, an
+ * abandoned checkout or a buddy tap at 6pm is genuinely new work and must
+ * appear, which is exactly the signal-driven replenishment the 30 Aug ruling
+ * asked for.
+ */
+export interface DayContext {
+  /** Students dealt today and still unmarked. They ARE today's list. */
+  openToday?: ReadonlySet<string>;
+  /** Rotation cards already dealt today, in any state. Spends the target. */
+  rotationUsedToday?: number;
+}
+
 export interface AssembledDay<T> {
   queue: (T & { channel: Channel; section: DaySection })[];
   counts: DayCounts;
@@ -91,7 +116,12 @@ const emptyCounts = (): Record<DaySection, number> =>
  * rotation pool must already be ordered never-contacted first, then longest
  * silent. Both orders come from the queue's sort and are not re-derived here.
  */
-export function assembleDay<T extends { studentId: string; dueReason: DueReason }>(cands: readonly T[]): AssembledDay<T> {
+export function assembleDay<T extends { studentId: string; dueReason: DueReason }>(
+  cands: readonly T[],
+  ctx: DayContext = {},
+): AssembledDay<T> {
+  const openToday = ctx.openToday ?? new Set<string>();
+  const rotationUsedToday = ctx.rotationUsedToday ?? 0;
   const heldBack: T[] = [];
   const signals: T[] = [];
   const rotationPool: T[] = [];
@@ -125,7 +155,13 @@ export function assembleDay<T extends { studentId: string; dueReason: DueReason 
   // the pool can supply it.
   const room = Math.max(0, DAY_CEILING - signals.length);
   const want = Math.min(room, Math.max(ROTATION_FLOOR, DAY_FLOOR - signals.length));
-  const rotation = rotationPool.slice(0, want);
+  // Carried cards were dealt earlier today and are still unmarked: they are
+  // today's list and must stay visible however many rebuilds happen. Only
+  // genuinely NEW rotation students consume what is left of the day's target.
+  const carried = rotationPool.filter((c) => openToday.has(c.studentId));
+  const newcomers = rotationPool.filter((c) => !openToday.has(c.studentId));
+  const newAllowance = Math.max(0, want - rotationUsedToday);
+  const rotation = [...carried, ...newcomers.slice(0, newAllowance)].slice(0, room);
 
   // Short day and real signals held back? Use them before ending short.
   const day: T[] = [...signals, ...rotation];
