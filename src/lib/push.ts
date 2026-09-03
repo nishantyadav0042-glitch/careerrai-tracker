@@ -146,12 +146,34 @@ async function sendToEndpoint(
   ep: LiveEndpoint,
   payload: { title: string; body: string; url?: string; notifId: string; tag?: string; senderName?: string },
 ): Promise<PushResult> {
-  // APNs has no transport yet — there is no native iOS app in this repository
-  // to register a device token from, so no row can carry provider 'apns'
-  // today. Named explicitly rather than silently skipped: when the native
-  // shell exists, this is the one line that has to grow, and a delivery row
-  // records the gap in the meantime.
-  if (ep.provider === 'apns' || !ep.subscription) {
+  // APNs — the second transport (task #78). Same retry policy, same delivery
+  // evidence, same terminal semantics as the web-push path below: a dead token
+  // (410 / BadDeviceToken) revokes THIS endpoint and nothing else, and our own
+  // credential problems are classified non-terminal inside apns.ts so a
+  // misconfigured key can never mass-revoke student devices. Until the APNs
+  // server_config rows exist, sendApnsToToken answers 'apns_not_configured'
+  // (non-terminal) and this branch is exactly as dormant as it was before.
+  if (ep.provider === 'apns') {
+    if (!ep.token) {
+      await recordDelivery(admin, payload.notifId, ep.id, { accepted: false, reason: 'apns_row_missing_token' });
+      return { ok: false, reason: 'apns_row_missing_token', terminal: false };
+    }
+    const { sendApnsToToken } = await import('@/lib/apns');
+    let last: PushResult = { ok: false, reason: 'unreachable' };
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      last = await sendApnsToToken(ep.token, {
+        title: payload.title, body: payload.body, url: payload.url,
+        notifId: payload.notifId, endpointId: ep.id,
+      });
+      if (last.ok || last.terminal || last.reason === 'apns_not_configured') break;
+      if (attempt < 2) { console.warn(`[push] apns attempt ${attempt} failed for ${userId}, retrying…`); await sleep(1500); }
+    }
+    await recordDelivery(admin, payload.notifId, ep.id, { accepted: last.ok, reason: last.reason });
+    if (last.terminal && ep.id) await revokeEndpoint(admin, ep.id, last.reason ?? 'apns_terminal');
+    return last;
+  }
+
+  if (!ep.subscription) {
     await recordDelivery(admin, payload.notifId, ep.id, { accepted: false, reason: 'no_transport_for_provider' });
     return { ok: false, reason: 'no_transport_for_provider', terminal: false };
   }
