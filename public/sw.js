@@ -1,5 +1,6 @@
-﻿// Service Worker — push notifications + installability (v8: chat threads
-// collapse to one tray entry; v7: never answer a navigation)
+﻿// Service Worker — push notifications + installability (v9: the arrival beacon
+// names the DEVICE, not just the student; v8: chat threads collapse to one tray
+// entry; v7: never answer a navigation)
 //
 // Chrome only offers ONE-TAP PWA install (fires `beforeinstallprompt`) when the
 // site has a service worker with a REAL fetch handler. So we add one — but it is
@@ -114,6 +115,12 @@ self.addEventListener('push', (event) => {
 
   const work = [showPromise];
   const notifId = notificationData.data && notificationData.data.notifId;
+  // Which endpoint this copy was sent to (task #79). Echoed back verbatim so
+  // the receipt names THIS device, not just this student — the server checks
+  // the pair against its own records before trusting it. Absent for a student
+  // still on the legacy single-column fallback, in which case the beacon
+  // behaves exactly as it did before and stays student-level.
+  const endpointId = notificationData.data && notificationData.data.endpointId;
   if (notifId) {
     // Best-effort — must never delay or block showNotification above — but
     // "best-effort" used to mean "vanishes with zero trace on ANY failure",
@@ -123,7 +130,7 @@ self.addEventListener('push', (event) => {
     // DevTools is ever open — matching push.ts's own transient-failure
     // retry, not inventing a new pattern.
     work.push(
-      beaconWithRetry('/api/push/received', notifId).catch(function (e) {
+      beaconWithRetry('/api/push/received', notifId, endpointId).catch(function (e) {
         console.warn('[Service Worker] received beacon failed after retry:', e);
       })
     );
@@ -131,12 +138,14 @@ self.addEventListener('push', (event) => {
   event.waitUntil(Promise.all(work));
 });
 
-function beaconWithRetry(path, notifId) {
+function beaconWithRetry(path, notifId, endpointId) {
   function attempt() {
     return fetch(path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: notifId }),
+      body: JSON.stringify(
+        endpointId ? { id: notifId, endpointId: endpointId } : { id: notifId }
+      ),
     }).then(function (res) {
       if (!res.ok) throw new Error('beacon status ' + res.status);
       return res;
