@@ -2,11 +2,19 @@
 --
 -- Task #79, found in the 3 Sep reach audit.
 --
--- notification_deliveries.device_confirmed_at was populated in 0 of 682 rows,
--- and notification_endpoints.last_delivery_confirmed_at in 0 of 171. The
--- columns shipped in 20260901a; nothing ever wrote them, because the service
+-- notification_deliveries.device_confirmed_at was populated in 0 of 682 rows.
+-- The column shipped in 20260901a; nothing ever wrote it, because the service
 -- worker's arrival beacon carries only a notification id. Every receipt was
 -- therefore keyed to a STUDENT, never to the DEVICE that displayed it.
+--
+-- CORRECTION to the first version of this comment, which claimed
+-- notification_endpoints.last_delivery_confirmed_at was likewise 0 of 171.
+-- It was not: 158 of 171 carried a value. But not one of them was EARNED.
+-- 20260901a backfilled that column straight from profiles.push_verified_at
+-- (see its insert ... select), a student-level fact copied onto a device-level
+-- column, and no line of code has written it since. So the column was worse
+-- than empty: it looked like per-device evidence and was per-student evidence
+-- wearing a device's name. This migration is what makes it mean what it says.
 --
 -- That was harmless only by accident: the Step 1 backfill made the registry
 -- exactly one endpoint per student (171 rows, 171 distinct URLs, 171 distinct
