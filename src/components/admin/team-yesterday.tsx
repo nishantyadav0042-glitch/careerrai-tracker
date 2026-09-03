@@ -1,4 +1,4 @@
-import { teamYesterday } from '@/lib/sales-yesterday';
+import type { TeamYesterday as TeamYesterdayData } from '@/lib/sales-yesterday';
 import { SnapshotChips } from '@/components/sales/yesterday-flash';
 
 // ── THE FOUNDER'S COMPILED VIEW OF YESTERDAY (founder order, 3 Sep) ─────────
@@ -11,11 +11,7 @@ import { SnapshotChips } from '@/components/sales/yesterday-flash';
 // every number is a disposition a rep recorded; the system has no telephony
 // record and does not pretend to.
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
-export async function TeamYesterday({ admin }: { admin: any }) {
-  const t = await teamYesterday(admin);
-
+export function TeamYesterday({ t }: { t: TeamYesterdayData }) {
   return (
     <div className="mb-4 rounded-xl border border-stone-200 bg-white p-4 shadow-sm">
       <div className="flex items-baseline justify-between">

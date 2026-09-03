@@ -160,11 +160,13 @@ describe('teamYesterday', () => {
 describe('both surfaces render from the ONE snapshot authority', () => {
   it('the rep workspace mounts the flash', () => {
     const page = codeOnly(readFileSync('src/app/sales/page.tsx', 'utf8'));
-    expect(page).toMatch(/<YesterdayFlash admin=\{admin\} repId=\{user\.id\} \/>/);
+    expect(page).toMatch(/repDaySnapshot\(admin, user\.id, istYesterdayWindow\(\)\)/);
+    expect(page).toMatch(/<YesterdayFlash s=\{yesterday\} \/>/);
   });
   it('the Control Tower mounts the compiled view', () => {
     const tower = codeOnly(readFileSync('src/app/admin/sales/tower/page.tsx', 'utf8'));
-    expect(tower).toMatch(/<TeamYesterday admin=\{admin\} \/>/);
+    expect(tower).toMatch(/teamYesterday\(admin\)/);
+    expect(tower).toMatch(/<TeamYesterday t=\{yesterdayTeam\} \/>/);
   });
   it('neither surface computes its own numbers — both import from sales-yesterday', () => {
     for (const f of ['src/components/sales/yesterday-flash.tsx', 'src/components/admin/team-yesterday.tsx']) {

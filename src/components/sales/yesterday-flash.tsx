@@ -1,18 +1,17 @@
-import { istYesterdayWindow, repDaySnapshot, type DaySnapshot } from '@/lib/sales-yesterday';
+import type { DaySnapshot } from '@/lib/sales-yesterday';
 
-// ── "कल तुमने क्या किया" — the rep's morning mirror (founder order, 3 Sep) ──
+// ── THE REP'S MORNING MIRROR (founder order, 3 Sep) ─────────────────────────
 //
-// Renders yesterday's OWN work at the top of the rep workspace, every open,
-// all day: dispositions made, students touched, the outcome split, callbacks
-// promised, remarks actually typed. Server-rendered from sales_activity via
-// the same function the founder's Control Tower compiles — a rep and the
-// founder can never be looking at two different numbers for the same day.
+// Yesterday's OWN work at the top of the rep workspace, every open, all day:
+// dispositions made, students touched, the outcome split, callbacks promised,
+// remarks actually typed. The PAGE computes the snapshot (via the same
+// function the founder's Control Tower compiles, so the two views can never
+// disagree) and hands it here; this component only renders. Sync on purpose -
+// a nested async server component suspends under renderToStaticMarkup, which
+// is how the /sales render tests caught the first version of this file.
 //
-// A zero renders as a zero, on purpose. "कितने नहीं किए" is half of what was
-// asked for: a quiet day must be as visible as a busy one, so the card never
-// hides itself when attempts === 0.
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
+// A zero renders as a zero, deliberately. "How much was NOT done" is half of
+// what was asked for, so the card never hides itself when attempts === 0.
 
 export const OUTCOME_LABEL: Record<string, string> = {
   interested: 'Interested',
@@ -52,10 +51,7 @@ export function SnapshotChips({ s }: { s: Pick<DaySnapshot, 'byOutcome'> }) {
   );
 }
 
-export async function YesterdayFlash({ admin, repId }: { admin: any; repId: string }) {
-  const window = istYesterdayWindow();
-  const s = await repDaySnapshot(admin, repId, window);
-
+export function YesterdayFlash({ s }: { s: DaySnapshot }) {
   return (
     <div className="mb-3 rounded-xl border border-stone-200 bg-white p-3.5 shadow-sm">
       <div className="flex items-baseline justify-between">

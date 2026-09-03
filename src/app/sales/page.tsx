@@ -7,6 +7,7 @@ import { SECTION_ORDER, SECTION_LABEL } from '@/lib/sales-day';
 import { getTeamCapacity, BINDING_LABEL } from '@/lib/sales-capacity';
 import { MyOutcomes } from '@/components/sales/my-outcomes';
 import { YesterdayFlash } from '@/components/sales/yesterday-flash';
+import { istYesterdayWindow, repDaySnapshot } from '@/lib/sales-yesterday';
 import { interventionPicture, type LedgerRow } from '@/lib/student-success-mis';
 import { recordSurfaced, readToday } from '@/lib/sales-opportunity-record';
 import { computeCheckpoint, describeCheckpoint } from '@/lib/sales-checkpoint';
@@ -28,6 +29,10 @@ export default async function SalesCallsPage() {
   // R3: the identity is profiles.id, never the email. The previous line read
   // `email ?? null`, and a null there granted the oversight frame.
   const principal = await salesPrincipal(admin, user.id);
+  // Founder order, 3 Sep: yesterday's own numbers, computed here so the
+  // component below stays sync (a nested async component suspends under the
+  // render tests) and so the tower's compiled view uses the same function.
+  const yesterday = await repDaySnapshot(admin, user.id, istYesterdayWindow());
   // The rep's OWN outcomes, last 30 days. Scoped by rep_id: a rep sees what
   // happened after their calls and never another rep's numbers — there is no
   // leaderboard here, by design.
@@ -85,7 +90,7 @@ export default async function SalesCallsPage() {
       {/* Founder order, 3 Sep: yesterday in the rep's own numbers greets every
           open - computed by the same function the Control Tower compiles, so
           the two views cannot disagree. A zero renders as a zero. */}
-      <YesterdayFlash admin={admin} repId={user.id} />
+      <YesterdayFlash s={yesterday} />
       <div className="rounded-2xl border border-teal-700 bg-teal-700 p-5 text-white">
         <p className="text-[11px] font-bold uppercase tracking-widest text-teal-200">Today</p>
         {/* THE COUNSELLOR NEVER REPORTS THIS. Every number is derived from rows
