@@ -115,6 +115,10 @@ export interface RepCoverage {
   /** Today's offer by section, from sales_opportunity (what the system gave). */
   givenToday: Record<DaySection, number>;
   workedToday: number;
+  /** Closed without acting, with a reason. Not work, not leakage. */
+  skippedToday: number;
+  /** Still open — nobody has marked these yet (founder, 3 Sep 2026). */
+  openToday: number;
   calledToday: number;
   messagedToday: number;
 }
@@ -142,14 +146,14 @@ export async function readCoverage(admin: any, staff: StaffDirectory | null, day
       () => admin.from('sales_activity').select('actor_id, activity_type').gte('created_at', dayStart).in('activity_type', ['call', 'whatsapp']),
       { orderBy: 'id' });
     if (acts.error || !acts.data) return { reps: null, failed: `sales_activity: ${acts.error?.message ?? 'no data'}` };
-    const offers = await fetchAll<{ rep_id: string; lane: string; worked_at: string | null }>(
-      () => admin.from('sales_opportunity').select('rep_id, lane, worked_at').eq('ist_day', todayIst),
+    const offers = await fetchAll<{ rep_id: string; lane: string; worked_at: string | null; closed_at: string | null; close_reason: string | null }>(
+      () => admin.from('sales_opportunity').select('rep_id, lane, worked_at, closed_at, close_reason').eq('ist_day', todayIst),
       { orderBy: 'id' });
     if (offers.error || !offers.data) return { reps: null, failed: `sales_opportunity: ${offers.error?.message ?? 'no data'}` };
 
     const by = new Map<string, RepCoverage>();
     const get = (id: string) => {
-      if (!by.has(id)) by.set(id, { repId: id, name: nameOf(id), book: 0, touched21d: 0, neverTouched: 0, givenToday: empty(), workedToday: 0, calledToday: 0, messagedToday: 0 });
+      if (!by.has(id)) by.set(id, { repId: id, name: nameOf(id), book: 0, touched21d: 0, neverTouched: 0, givenToday: empty(), workedToday: 0, skippedToday: 0, openToday: 0, calledToday: 0, messagedToday: 0 });
       return by.get(id)!;
     };
     const cutoff = nowMs - ROTATION_SILENT_DAYS * 86_400_000;
@@ -171,7 +175,11 @@ export async function readCoverage(admin: any, staff: StaffDirectory | null, day
       const c = get(o.rep_id);
       const section = (SECTION_OF as Record<string, DaySection>)[o.lane] ?? 'rotation';
       c.givenToday[section]++;
+      // The three states a card can end the day in. They must add up to
+      // `given` — that is the whole point of closing the day (3 Sep 2026).
       if (o.worked_at) c.workedToday++;
+      else if (o.close_reason === 'skipped') c.skippedToday++;
+      else if (!o.closed_at) c.openToday++;
     }
     return { reps: [...by.values()].sort((a, b) => a.name.localeCompare(b.name)), failed: null };
   } catch (e) {

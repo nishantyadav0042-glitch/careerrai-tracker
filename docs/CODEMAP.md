@@ -216,6 +216,12 @@ refund processed ─▶ settleRefund()      ── stamps refunded_at ───�
   a real outcome (`sales-disposition.ts`); `sales-messages.ts` writes the
   one-tap WhatsApp by lane and journey stage. *Guards: `sales-day.test.ts`,
   `sales-messages.test.ts`, the queue doctrine tests.*
+- **Closing the day (Incident #67).** Every card dealt ends as `worked`,
+  `skipped` (with a reason, and it changes NOTHING about the student) or
+  `not_marked` (the 21:45 IST sweep, `api/cron/day-close`). `worked_at` keeps
+  its single meaning and still drives coverage; `closed_at` answers the
+  separate question "is this card still open?", so a skip can never inflate
+  a coverage number. *Guard: `day-must-close.test.ts`.*
 - **`lib/sales-board.ts`** — one counsellor's day: open promises bucketed
   overdue/today/upcoming (from `sales_followup`) plus who is still waiting for a
   first call. `promises: null` survives to the renderer — a failed read must

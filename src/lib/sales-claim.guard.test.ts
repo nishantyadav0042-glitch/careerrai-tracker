@@ -36,9 +36,9 @@ describe('activity vocabulary: code and DB CHECK stay one list', () => {
   it('the sales_activity CHECK lists exactly ACTIVITY_STATUSES', () => {
     // 20260824b supersedes 20260820c's CHECK: same constraint, 'dnd' added.
     // The guard always reads the NEWEST definition.
-    // 20260903a supersedes 20260824b: 'messaged' joined the vocabulary (the
-    // 50–70 day is half messages, and a touch the day cannot record is lost).
-    const sql = readFileSync('supabase/migrations/20260903a_messaged_outcome.sql', 'utf8');
+    // 20260903b supersedes 20260903a: 'skipped' joined the vocabulary, so a
+    // counsellor can close a card honestly instead of leaving it open (3 Sep).
+    const sql = readFileSync('supabase/migrations/20260903b_day_must_close.sql', 'utf8');
     const m = sql.match(/sales_activity_status_check\s*\n?\s*check \(status in \(([^)]+)\)\)/);
     expect(m, 'CHECK constraint not found in migration').toBeTruthy();
     const dbList = [...m![1].matchAll(/'([^']+)'/g)].map((x) => x[1]).sort();

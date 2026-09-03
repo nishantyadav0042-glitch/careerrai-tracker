@@ -1,13 +1,13 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { isCallOutcome, isConnectedOutcome, planDisposition, type CallOutcome } from '@/lib/sales-disposition';
+import { isCallOutcome, isConnectedOutcome, isSkipReason, planDisposition, type CallOutcome } from '@/lib/sales-disposition';
 import {
   canAccessLead, checkSalesTarget, loadStaffDirectory, resolveLeadOwner, salesPrincipal,
 } from '@/lib/sales-authz';
 import { completeDueFollowups, scheduleFollowup } from '@/lib/sales-followup';
 import { resolveConvertedClaim } from '@/lib/sales-conversion-truth';
-import { markWorked } from '@/lib/sales-opportunity-record';
+import { markSkipped, markWorked } from '@/lib/sales-opportunity-record';
 import { captureStateSnapshot, recordIntervention, interventionTypeForLane } from '@/lib/intervention-ledger';
 import { isReasonCategory, reasonNeedsVerbatim } from '@/lib/intervention-taxonomy';
 
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
   if (!principal) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const body = await request.json().catch(() => ({}));
-  const { studentId, outcome, note, callbackAt, hot,
+  const { studentId, outcome, note, callbackAt, hot, skipReason,
           reasonCategory, reasonVerbatim, askMade, microCommitment, channel } = body ?? {};
   if (!isCallOutcome(outcome)) {
     return NextResponse.json({ error: 'Invalid disposition' }, { status: 400 });
@@ -94,6 +94,50 @@ export async function POST(request: NextRequest) {
   // A callback needs a time.
   if (outcome === 'callback' && !(typeof callbackAt === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(callbackAt))) {
     return NextResponse.json({ error: 'Pick a callback time.' }, { status: 400 });
+  }
+
+  // ── A SKIP CLOSES THE CARD AND TOUCHES NOTHING ELSE ──────────────────────
+  //
+  // Founder, 3 Sep 2026: "make sure they mark every list close." A counsellor
+  // who cannot honestly log a call had no way to close a card, so 240 of the
+  // 241 cards ever dealt sat open forever and "worked_at is null" meant three
+  // different things at once.
+  //
+  // This branch is deliberately the shortest path in the file. A skip is NOT a
+  // contact: no lead_outreach write (so no status, no last_attempt_at, no
+  // clock, no miss count), no follow-up, no intervention ledger, and it never
+  // counts as reaching anybody. Nothing happened to the student, so the
+  // student's state must not change — they return to tomorrow's queue on
+  // exactly the same terms. A skip buys a day, never a disappearance.
+  //
+  // What it DOES do is leave two rows: the history of who skipped what and
+  // why, and the closed card. That is the whole difference between a list and
+  // a suggestion.
+  if (outcome === 'skipped') {
+    if (!isSkipReason(skipReason)) {
+      return NextResponse.json({ error: 'Say why you are skipping this student.' }, { status: 400 });
+    }
+    const { error: skipHistoryError } = await admin.from('sales_activity').insert({
+      student_id: studentId,
+      actor_id: principal.id,
+      activity_type: 'skip',
+      channel: null,
+      provenance: 'self_reported',
+      status: 'skipped',
+      note: noteText || `Skipped: ${skipReason.replace(/_/g, ' ')}`,
+    });
+    if (skipHistoryError) {
+      console.error('[sales/log] skip history insert failed:', skipHistoryError.message);
+      return NextResponse.json({ error: 'Could not record the skip — try again.' }, { status: 500 });
+    }
+    // Checked, unlike markWorked's best-effort call: closing the card IS the
+    // entire point of a skip. If this fails the counsellor must know, because
+    // the card is still open and their screen would otherwise say it is done.
+    const closed = await markSkipped(admin, principal.id, studentId, skipReason);
+    if (!closed) {
+      return NextResponse.json({ error: 'Skip recorded, but the card did not close — refresh and try again.' }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true, skipped: true });
   }
 
   // ── The learning snapshot, taken BEFORE anything is written ───────────────

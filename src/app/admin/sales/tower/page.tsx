@@ -177,6 +177,8 @@ export default async function SalesControlTower() {
                 <th className="p-2 text-right" title="Nobody has ever called or messaged them.">Never touched</th>
                 <th className="p-2 text-left">Given today</th>
                 <th className="p-2 text-right">Worked</th>
+                <th className="p-2 text-right" title="Closed without acting, with a reason.">Skipped</th>
+                <th className="p-2 text-right" title="Dealt today and still not marked either way.">Unmarked</th>
                 <th className="p-2 text-right">Called</th>
                 <th className="p-2 text-right">Messaged</th>
               </tr>
@@ -196,6 +198,12 @@ export default async function SalesControlTower() {
                         : <><span className="font-bold text-stone-800">{given}</span> · {SECTION_ORDER.filter((k) => c.givenToday[k] > 0).map((k) => `${SECTION_LABEL[k]} ${c.givenToday[k]}`).join(' · ')}</>}
                     </td>
                     <td className="p-2 text-right tabular-nums">{c.workedToday}</td>
+                    <td className="p-2 text-right tabular-nums text-stone-500">{c.skippedToday}</td>
+                    {/* The number the founder asked for on 3 Sep: cards dealt
+                        and never marked either way. After 21:45 IST the sweep
+                        has closed them, so a non-zero here during the shift is
+                        work still to do, not a permanent hole. */}
+                    <td className={cn('p-2 text-right tabular-nums', c.openToday > 0 && 'font-bold text-amber-700')}>{c.openToday}</td>
                     <td className="p-2 text-right tabular-nums">{c.calledToday}</td>
                     <td className="p-2 text-right tabular-nums">{c.messagedToday}</td>
                   </tr>
@@ -207,7 +215,8 @@ export default async function SalesControlTower() {
       )}
       <p className="mt-1 text-[11px] text-stone-500">
         The day is 50–70 per counsellor, dealt from 4 AM IST: signals first, then rotation through everyone untouched for 21 days.
-        &ldquo;Given&rdquo; is what the system offered; &ldquo;worked&rdquo; is a logged outcome, never a tap.
+        &ldquo;Given&rdquo; is what the system offered; &ldquo;worked&rdquo; is a logged outcome, never a tap. Worked + skipped +
+        unmarked always equals given — every card ends the day marked, and the 21:45 IST sweep records the ones nobody touched.
       </p>
       {t.conversionRateSuppressed && (
         <p className="mt-1 text-[11px] font-semibold text-stone-600">

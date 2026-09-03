@@ -50,14 +50,50 @@ yields a short day, and that is information, not a bug.
   and the one-tap WhatsApp asks for exactly the next step
   (`lib/sales-messages.ts`).
 
+## Every card ends the day marked
+
+*Added 3 Sep 2026, on the founder's word: "make sure they mark every list
+close or something, otherwise it doesn't make sense of these lists."*
+
+Verified that morning: **240 of the 241 cards ever dealt were still open**,
+going back to 30 August. A card left the deck only when a call was logged, so
+`worked_at is null` was storing three different facts in one empty cell — the
+counsellor never got to it, deliberately deferred it, or could not act on it.
+
+A card now ends the day in exactly one of three recorded states:
+
+| State | Set by | Counts as work? | Counts as leakage? |
+|---|---|---|---|
+| **worked** | a disposition (call or message) | yes | no |
+| **skipped** | the counsellor, with a reason | **no** | no — somebody decided |
+| **not marked** | the 21:45 IST sweep | no | it *is* the leakage number |
+
+- **A skip changes nothing about the student.** No `lead_outreach` write, no
+  status, no `last_attempt_at`, no clock, no miss count, and it never counts
+  as reaching anyone. They return to tomorrow's queue on the same terms — a
+  skip buys a day, never a disappearance. Reasons: not reachable today ·
+  wrong/dead number · already spoke recently · ran out of time · not worth
+  calling today.
+- **A skip is never work.** `worked_at` keeps its one meaning (a real
+  disposition) and still drives coverage and "reached". Closing a card by
+  stamping `worked_at` would make a day of skips read as 100% — that is the
+  defect the second column exists to prevent, and `day-must-close.test.ts`
+  pins it.
+- **The day closes itself.** `/api/cron/day-close` at 21:45 IST, 45 minutes
+  after the shift, stamps every still-open card from a day that has ended as
+  `not_marked`. It sweeps *every* past day, so a missed run repairs itself
+  instead of leaving a permanent hole.
+- **Worked + skipped + not marked + open always equals given.** Nothing can
+  hide, on the counsellor's screen or the founder's.
+
 ## What each person sees
 
-- **Counsellor** (`/sales`): the deck in sections with counts, a channel pill
+- **Counsellor** (`/sales`): "N marked · N still to mark" at the top, the deck in sections with counts, a channel pill
   per card, the journey stage and next step, a prefilled WhatsApp message, and
   a one-tap **Messaged** outcome. The headline stays coverage of what the
   system gave.
 - **Founder** (`/admin/sales/tower`): per counsellor — book, touched in 21
-  days, never touched, today's day by section, worked, called, messaged. The
+  days, never touched, today's day by section, worked, **skipped, unmarked**, called, messaged. The
   daily intake line above it says whether new students entered books.
 
 ## Where the patterns come from

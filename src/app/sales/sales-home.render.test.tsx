@@ -127,7 +127,10 @@ describe('/sales on day one', () => {
     // list, opening the full profile — not a name that happens to be a link.
     expect(html).toContain('Profile');
     expect(html).toContain('href="/sales/student/s1"');
-    expect(html).toContain('1 in your queue');
+    // CHANGED 3 Sep 2026: the deck header used to read "1 in your queue",
+    // which says nothing about whether the day was finished. Every card must
+    // now end the day marked, so the line names the job that is left.
+    expect(html).toContain('1 still to mark');
     expect(html).not.toContain('No one to call right now');
   });
 
