@@ -127,8 +127,13 @@ describe('§5 — no catch-all lane (the "42 means 42" rule)', () => {
     const q = read('src/lib/call-queue.ts');
     expect(q, 'the classifier must be able to say "no signal"')
       .toMatch(/export function classifyLane\([^)]*\):\s*LaneVerdict \| null/);
-    expect(q, 'an already-contacted student with no signal is not dealt a card')
-      .toMatch(/if \(o\?\.last_attempt_at\) continue;/);
+    // CHANGED 2 Sep 2026 (SALES-OS.md §5 amended): an already-contacted
+    // student with no signal RESTS — for ROTATION_SILENT_DAYS — and then is
+    // dealt again with the reason printed ("last spoken to N days ago"). The
+    // rule this pins is unchanged in spirit: silence within the resting
+    // window is still backlog, never a card.
+    expect(q, 'a recently-contacted student with no signal is not dealt a card')
+      .toMatch(/if \(daysSilent < ROTATION_SILENT_DAYS\) continue;/);
   });
 
   it('a never-contacted student is still surfaced — that IS the reason', () => {
