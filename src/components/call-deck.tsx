@@ -48,6 +48,11 @@ export function CallDeck({ queue, repFirstName }: { queue: CallLead[]; repFirstN
   const [list, setList] = useState(queue);
   const [done, setDone] = useState(0);
   const [openId, setOpenId] = useState<string | null>(null);
+  // Which card has the 'what did you message?' box open, and its draft.
+  // Founder order, 3 Sep: a sent message must carry the rep's own words -
+  // the one-tap auto-note said a message existed, never what it said.
+  const [msgOpenId, setMsgOpenId] = useState<string | null>(null);
+  const [msgNote, setMsgNote] = useState('');
   const [errorById, setErrorById] = useState<Record<string, string>>({});
   // ── ONE TAP IS ONE ATTEMPT ────────────────────────────────────────────────
   //
@@ -218,9 +223,11 @@ export function CallDeck({ queue, repFirstName }: { queue: CallLead[]; repFirstN
                 <MessageCircle className="h-4 w-4" /> {lead.channel === 'message' ? 'Message' : 'WA'}
               </a>
             )}
-            {/* ONE TAP AFTER SENDING. A message is a touch the day must
-                record (2 Sep): it starts the cooldown and counts as worked. */}
-            <button onClick={() => void dispose(lead, 'messaged', '')} disabled={inFlight[lead.studentId]}
+            {/* A message is a touch the day must record (2 Sep) - and since
+                3 Sep it must record WHAT was sent (founder order): the tap
+                opens a one-line box instead of firing an empty note. */}
+            <button onClick={() => { setMsgOpenId(msgOpenId === lead.studentId ? null : lead.studentId); setMsgNote(''); }}
+              disabled={inFlight[lead.studentId]}
               className="flex items-center justify-center gap-1 bg-white px-3 py-3 text-[12px] font-semibold text-amber-800 active:scale-95 disabled:opacity-50">
               <Send className="h-4 w-4" /> Messaged
             </button>
@@ -234,6 +241,18 @@ export function CallDeck({ queue, repFirstName }: { queue: CallLead[]; repFirstN
           {errorById[lead.studentId] ? (
             <p className="border-t border-rose-100 bg-rose-50 px-4 py-2 text-[12px] font-semibold text-rose-700">{errorById[lead.studentId]}</p>
           ) : null}
+          {msgOpenId === lead.studentId && (
+            <div className="flex items-stretch gap-2 border-t border-amber-100 bg-amber-50/60 px-4 py-2.5">
+              <input value={msgNote} onChange={(e) => setMsgNote(e.target.value)} autoFocus
+                placeholder="What did you message them? (required)"
+                className="min-w-0 flex-1 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm" />
+              <button disabled={msgNote.trim().length === 0 || inFlight[lead.studentId]}
+                onClick={async () => { const ok = await dispose(lead, 'messaged', msgNote.trim()); if (ok) { setMsgOpenId(null); setMsgNote(''); } }}
+                className="rounded-lg bg-amber-700 px-3 py-2 text-[12px] font-bold text-white disabled:opacity-40">
+                Save
+              </button>
+            </div>
+          )}
           {openId === lead.studentId && <Disposition lead={lead} onDispose={dispose} />}
         </div>
   );
@@ -302,20 +321,16 @@ function Disposition({ lead, onDispose }: {
   // studying" taxonomy is as inapplicable here as it is to an unanswered dial.
   const asksReason = outcome !== 'no_answer' && !isSkip;
   const needsVerbatim = asksReason && reasonNeedsVerbatim(reason || null);
-  // ── A NOTE IS REQUIRED ONLY WHERE IT CARRIES SOMETHING A FIELD CANNOT ────
+  // ── A NOTE IS REQUIRED ON EVERY CONNECTED OUTCOME ────────────────────────
   //
-  // This used to be `note.trim().length > 0` for EVERY connected outcome, so
-  // the Save button stayed disabled until the rep typed something on all five.
-  // Sixty calls a day like that produces "ok", "x", "talked" by the end of the
-  // first week — and once the remarks are junk the timeline is junk, which
-  // destroys the one thing that makes the second call better than the first.
-  //
-  // So it is mandatory exactly where the free text IS the record: the student
-  // refused (why), or asked never to be contacted again (who said it, and when
-  // — see the DND note above). For interested / callback / converted the
-  // structured fields already carry the meaning, and a short remark is welcome
-  // but never extorted. SALES-OS.md §8.
-  const NOTE_REQUIRED = new Set(['not_interested', 'dnd']);
+  // Founder order, 3 Sep (SALES-OS §8 amendment, recorded there): every
+  // conversation carries the rep's own words. An earlier version relaxed this
+  // to not_interested/dnd only, fearing "ok"/"x" junk — but the server never
+  // relaxed with it, so interested/callback/converted saves were passing a
+  // disabled-looking gate here only to 400 on the API. Client and server now
+  // enforce the SAME rule, and the junk-remark risk is managed by review of
+  // the daily snapshot, not by dropping the record.
+  const NOTE_REQUIRED = new Set(['interested', 'callback', 'converted', 'not_interested', 'dnd']);
   // The API rejects `other` without at least 3 characters of verbatim, so the
   // button has to know that too — otherwise the rep taps Save, the request
   // fails, and the card stays put with no explanation.

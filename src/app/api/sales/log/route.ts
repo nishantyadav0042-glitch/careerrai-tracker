@@ -87,9 +87,18 @@ export async function POST(request: NextRequest) {
   }
 
   const noteText = typeof note === 'string' ? note.trim() : '';
-  // Feedback is mandatory on a connected call (not on a no-answer).
-  if (isConnectedOutcome(outcome) && noteText.length === 0) {
-    return NextResponse.json({ error: 'Feedback is required for a connected call.' }, { status: 400 });
+  // Remarks are mandatory wherever the rep has something only they know
+  // (founder order, 3 Sep - SALES-OS 8 amendment): every connected outcome,
+  // AND a sent message. The auto-note said only that a message was sent,
+  // never WHAT was sent, which made the one-tap the free square of the day.
+  // no_answer keeps its truthful auto-note: there is nothing to say about a
+  // call nobody picked up, and extorting text there breeds the ok/x junk
+  // remarks this rule exists to kill.
+  if ((isConnectedOutcome(outcome) || outcome === 'messaged') && noteText.length === 0) {
+    const msg = outcome === 'messaged'
+      ? 'Say what you messaged them - that is the record.'
+      : 'Feedback is required for a connected call.';
+    return NextResponse.json({ error: msg }, { status: 400 });
   }
   // A callback needs a time.
   if (outcome === 'callback' && !(typeof callbackAt === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(callbackAt))) {
