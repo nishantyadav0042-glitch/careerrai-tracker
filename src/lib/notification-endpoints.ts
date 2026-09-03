@@ -135,6 +135,75 @@ export async function registerWebPushEndpoint(
 }
 
 /**
+ * Register (or refresh) one native APNs device token (task #78 — the App
+ * Store WKWebView app, which Apple bars from Web Push entirely).
+ *
+ * THE OWNERSHIP RULE THAT MAKES ACCOUNT SWITCHING SAFE: an APNs token names a
+ * physical iPhone, and a phone notifies whoever is looking at it — so a token
+ * may be live for AT MOST ONE student at a time. When student B logs in on a
+ * phone that was student A's, registering B's token here revokes A's live row
+ * for that same token first. Without that, A's reminders — streaks, mentor
+ * chat, payment confirmations — would keep landing on B's lock screen.
+ * (The per-student unique index alone cannot express "unique across
+ * students"; this function is where that invariant lives.)
+ *
+ * Registration is idempotent per (student, token): re-registering the same
+ * phone refreshes last_seen_at on the existing row — the partial unique index
+ * notification_endpoints_unique_apns is what makes a concurrent double-insert
+ * impossible. Deliberately writes NOTHING to the legacy profiles.push_*
+ * columns: they are Web-Push-shaped, and stuffing a bare hex token into them
+ * is exactly the lie the 1 Sep scope doc refused. Until Step 3 migrates the
+ * legacy readers, an APNs-only student is visible in the registry alone —
+ * stated, not hidden.
+ *
+ * Never throws, same contract as registerWebPushEndpoint.
+ */
+export async function registerApnsEndpoint(
+  admin: any,
+  studentId: string,
+  deviceToken: string,
+): Promise<void> {
+  const now = new Date().toISOString();
+  try {
+    // Account switch: this physical phone stops belonging to anyone else.
+    await admin.from('notification_endpoints')
+      .update({ revoked_at: now, revoked_reason: 'token_reassigned_to_other_account', updated_at: now })
+      .eq('provider', 'apns')
+      .eq('device_token', deviceToken)
+      .neq('student_id', studentId)
+      .is('revoked_at', null);
+
+    const { data: existing } = await admin
+      .from('notification_endpoints')
+      .select('id')
+      .eq('student_id', studentId)
+      .eq('provider', 'apns')
+      .eq('device_token', deviceToken)
+      .is('revoked_at', null)
+      .maybeSingle();
+
+    if (existing?.id) {
+      await admin.from('notification_endpoints')
+        .update({ last_seen_at: now, updated_at: now })
+        .eq('id', existing.id);
+      return;
+    }
+
+    await admin.from('notification_endpoints').insert({
+      student_id: studentId,
+      provider: 'apns',
+      platform: 'ios',
+      app_context: 'ios_app',
+      device_token: deviceToken,
+      registered_at: now,
+      last_seen_at: now,
+    });
+  } catch (err) {
+    console.error('[endpoints] apns register failed:', err);
+  }
+}
+
+/**
  * Mark ONE endpoint dead. The whole point of the registry: a 410 on a
  * student's old phone must not take their current phone down with it, which
  * is exactly what `update profiles set push_subscription = null` did.
