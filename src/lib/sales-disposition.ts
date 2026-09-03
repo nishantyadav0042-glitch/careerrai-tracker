@@ -33,7 +33,41 @@ export const CONNECTED_OUTCOMES = ['interested', 'callback', 'converted', 'not_i
  *  it sets last_attempt_at, starts the 7-day cooldown and counts as worked.
  *  Without it, twenty messages a day left no trace and the rotation could not
  *  count them. */
-export const CALL_OUTCOMES = [...CONNECTED_OUTCOMES, 'no_answer', 'messaged'] as const;
+export const CALL_OUTCOMES = [...CONNECTED_OUTCOMES, 'no_answer', 'messaged', 'skipped'] as const;
+
+/**
+ * Why a card was closed without acting on it (founder, 3 Sep 2026).
+ *
+ * A skip is NOT a contact and must never be recorded as one: it writes no
+ * lead_outreach state, starts no clock, touches no_answer_count not at all,
+ * and never counts as reaching a student. Its whole job is to let a counsellor
+ * close a card HONESTLY instead of leaving it open — because the alternative,
+ * which is what production did until today, stores "I deliberately deferred
+ * this" and "I never looked at this" as the same empty cell.
+ *
+ * The student is untouched, so they return to tomorrow's queue on the same
+ * terms. A skip buys a day, never a disappearance.
+ */
+export const SKIP_REASONS = [
+  'not_reachable_today',
+  'wrong_number',
+  'spoke_recently',
+  'ran_out_of_time',
+  'not_worth_calling',
+] as const;
+export type SkipReason = (typeof SKIP_REASONS)[number];
+
+export const SKIP_REASON_LABEL: Record<SkipReason, string> = {
+  not_reachable_today: 'Not reachable today',
+  wrong_number: 'Wrong / dead number',
+  spoke_recently: 'Already spoke recently',
+  ran_out_of_time: 'Ran out of time',
+  not_worth_calling: 'Not worth calling today',
+};
+
+export function isSkipReason(v: unknown): v is SkipReason {
+  return typeof v === 'string' && (SKIP_REASONS as readonly string[]).includes(v);
+}
 export type CallOutcome = (typeof CALL_OUTCOMES)[number];
 
 /** Every value lead_outreach.status may hold. Mirrors the DB CHECK — see the
@@ -50,6 +84,9 @@ export const LEAD_STATUSES = [
   'messaged',
 ] as const;
 export type LeadStatus = (typeof LEAD_STATUSES)[number];
+
+/** A skip never becomes a lead status: nothing happened to the student. */
+export const SKIP_OUTCOME = 'skipped' as const;
 
 /** Every value sales_activity.status may hold: the five call dispositions
  *  plus 'reassigned' (an admin's intentional ownership transfer, appended as
@@ -161,6 +198,12 @@ export function planDisposition(
   }
   if (outcome === 'interested') {
     return { status: 'interested', nextActionAt: istFutureIso(nowMs, 2, 11, 0), callbackAt: null, noAnswerCount: 0 };
+  }
+  if (outcome === 'skipped') {
+    // Deliberately inert. The caller must NOT write this to lead_outreach —
+    // it is here only so the vocabulary is total and a skip can never be
+    // mistaken for a contact by a future caller that forgets to branch.
+    return { status: 'not_contacted', nextActionAt: null, callbackAt: null, noAnswerCount: prevMisses };
   }
   if (outcome === 'messaged') {
     // No clock. A message is answered by the STUDENT'S next move, not by a

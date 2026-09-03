@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { REASON_CATEGORIES, REASON_LABEL, reasonNeedsVerbatim,
   type ReasonCategory } from '@/lib/intervention-taxonomy';
+import { SKIP_REASONS, SKIP_REASON_LABEL, type SkipReason } from '@/lib/sales-disposition';
 import { MessageCircle, PhoneCall, PhoneOff, ChevronDown, UserRound, Send } from 'lucide-react';
 import type { CallLead } from '@/lib/call-queue';
 import { SECTION_ORDER, SECTION_LABEL, type DaySection } from '@/lib/sales-day';
@@ -28,6 +29,12 @@ const OUTCOMES: { key: string; label: string; cls: string }[] = [
   // The student said stop calling. Closes the lead forever (dnd ≠ "no to the
   // offer" — it's "no to the contact"). Note is mandatory: record who said it.
   { key: 'dnd', label: 'Stop calling (DND)', cls: 'bg-rose-700 text-white' },
+  // CLOSING A CARD WITHOUT ACTING (founder, 3 Sep 2026). Every card must end
+  // the day marked; a counsellor who cannot honestly log a call needs a way to
+  // say so. It is deliberately two taps and demands a reason — skipping should
+  // cost slightly more than working — and it changes nothing about the
+  // student, who returns to tomorrow's queue on the same terms.
+  { key: 'skipped', label: 'Skip today', cls: 'bg-stone-500 text-white' },
 ];
 
 function defaultCallback(): string {
@@ -67,6 +74,7 @@ export function CallDeck({ queue, repFirstName }: { queue: CallLead[]; repFirstN
   const dispose = async (
     lead: CallLead, outcome: string, note: string, callbackAt?: string,
     reasonCategory?: string | null, reasonVerbatim?: string | null,
+    skipReason?: string | null,
   ): Promise<boolean> => {
     if (inFlight[lead.studentId]) return false;
     setInFlight((f) => ({ ...f, [lead.studentId]: true }));
@@ -79,6 +87,7 @@ export function CallDeck({ queue, repFirstName }: { queue: CallLead[]; repFirstN
           studentId: lead.studentId, outcome, note, callbackAt, hot: lead.hot,
           reasonCategory: reasonCategory ?? null,
           reasonVerbatim: reasonVerbatim ?? null,
+          skipReason: skipReason ?? null,
         }),
       });
       const json = await res.json().catch(() => null);
@@ -103,7 +112,7 @@ export function CallDeck({ queue, repFirstName }: { queue: CallLead[]; repFirstN
     return (
       <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-8 text-center">
         <p className="text-lg font-bold text-emerald-800">Queue cleared for now 👏</p>
-        <p className="mt-1 text-sm text-emerald-700">{done} handled this session. New leads and callbacks roll in through the day — check back.</p>
+        <p className="mt-1 text-sm text-emerald-700">Every card marked — {done} this session. New leads and callbacks roll in through the day; tomorrow&rsquo;s list is dealt at 4 AM.</p>
       </div>
     );
   }
@@ -231,7 +240,12 @@ export function CallDeck({ queue, repFirstName }: { queue: CallLead[]; repFirstN
 
   return (
     <div className="space-y-3">
-      <p className="px-1 text-center text-xs font-semibold text-stone-500">{done} handled this session · {list.length} in your queue</p>
+      {/* EVERY CARD ENDS THE DAY MARKED (founder, 3 Sep 2026). The old line
+          read "N in your queue", which says nothing about whether the day was
+          finished. This one names the job that is left. */}
+      <p className="px-1 text-center text-xs font-semibold text-stone-500">
+        {done} marked · <span className="text-stone-800">{list.length} still to mark</span>
+      </p>
       {SECTION_ORDER.filter((k) => (bySection.get(k)?.length ?? 0) > 0).map((k) => (
         <section key={k} className="space-y-3">
           <h2 className="flex items-baseline gap-2 px-1 pt-1 text-[11px] font-bold uppercase tracking-widest text-stone-400">
@@ -248,7 +262,7 @@ function Disposition({ lead, onDispose }: {
   lead: CallLead;
   onDispose: (
     l: CallLead, o: string, n: string, cb?: string,
-    reason?: string | null, verbatim?: string | null,
+    reason?: string | null, verbatim?: string | null, skipReason?: string | null,
   ) => Promise<boolean>;
 }) {
   const [outcome, setOutcome] = useState('interested');
@@ -282,7 +296,11 @@ function Disposition({ lead, onDispose }: {
   // asking why they are not studying would be inviting the rep to guess.
   const [reason, setReason] = useState<ReasonCategory | ''>('');
   const [reasonVerbatim, setReasonVerbatim] = useState('');
-  const asksReason = outcome !== 'no_answer';
+  const [skipReason, setSkipReason] = useState<SkipReason | ''>('');
+  const isSkip = outcome === 'skipped';
+  // Nobody spoke to a student who was skipped either, so the "why aren't they
+  // studying" taxonomy is as inapplicable here as it is to an unanswered dial.
+  const asksReason = outcome !== 'no_answer' && !isSkip;
   const needsVerbatim = asksReason && reasonNeedsVerbatim(reason || null);
   // ── A NOTE IS REQUIRED ONLY WHERE IT CARRIES SOMETHING A FIELD CANNOT ────
   //
@@ -302,7 +320,10 @@ function Disposition({ lead, onDispose }: {
   // button has to know that too — otherwise the rep taps Save, the request
   // fails, and the card stays put with no explanation.
   const canSave = (!NOTE_REQUIRED.has(outcome) || note.trim().length > 0)
-    && (!needsVerbatim || reasonVerbatim.trim().length >= 3);
+    && (!needsVerbatim || reasonVerbatim.trim().length >= 3)
+    // A skip without a reason is the blank cell this whole change exists to
+    // remove, so the API rejects it and the button knows that too.
+    && (!isSkip || skipReason !== '');
 
   return (
     <div className="space-y-2.5 border-t border-stone-100 bg-stone-50 px-4 py-3">
@@ -314,6 +335,23 @@ function Disposition({ lead, onDispose }: {
           </button>
         ))}
       </div>
+      {isSkip && (
+        <div className="rounded-lg border border-stone-300 bg-white p-2.5">
+          <label className="text-[11px] font-bold uppercase tracking-wide text-stone-600">
+            Why are you skipping {lead.firstName} today?
+          </label>
+          <select value={skipReason} onChange={(e) => setSkipReason(e.target.value as SkipReason | '')}
+            className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm">
+            <option value="">— pick one —</option>
+            {SKIP_REASONS.map((r) => (
+              <option key={r} value={r}>{SKIP_REASON_LABEL[r]}</option>
+            ))}
+          </select>
+          <p className="mt-1 text-[11px] text-stone-500">
+            Nothing changes for {lead.firstName} — they come back tomorrow. This just closes the card honestly.
+          </p>
+        </div>
+      )}
       {needsCallback && (
         <div>
           <label className="text-[11px] font-semibold text-stone-500">Call back at (the time they said)</label>
@@ -355,11 +393,12 @@ function Disposition({ lead, onDispose }: {
             needsCallback ? (callbackAt || defaultCallback()) : undefined,
             asksReason ? (reason || null) : null,
             asksReason && reasonVerbatim.trim() ? reasonVerbatim.trim() : null,
+            isSkip ? skipReason : null,
           );
           if (!ok) setSaving(false); // failed — keep the form so she can retry
         }}
         className="w-full rounded-xl bg-stone-900 py-2.5 text-sm font-bold text-white active:scale-[0.98] disabled:opacity-40">
-        {saving ? 'Saving…' : canSave ? 'Save & next' : 'Write feedback to save'}
+        {saving ? 'Saving…' : canSave ? (isSkip ? 'Skip & next' : 'Save & next') : isSkip ? 'Pick a reason to skip' : 'Write feedback to save'}
       </button>
     </div>
   );

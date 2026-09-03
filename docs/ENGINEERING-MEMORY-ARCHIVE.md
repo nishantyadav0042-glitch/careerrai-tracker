@@ -3558,3 +3558,74 @@ recurring job gets a "last run / never ran" line on the surface whose numbers
 depend on it. And a ceiling that nothing measures is not a ceiling — the
 capacity panel had said so in its own words ("not instrumented") for nine
 days.
+
+## Incident #67
+
+**Date:** 2026-09-03
+**Area:** Sales OS — the daily list (closing it)
+**Severity:** P1 (founder visibility) — no student harmed
+
+### What the founder saw
+
+"Make sure they mark every list close or something, otherwise it doesn't make
+sense of these lists."
+
+### What was wrong
+
+`sales_opportunity` records what the system OFFERED. A row was marked
+`worked_at` only by a logged disposition, and nothing else ever wrote to it.
+So on the morning of 3 Sep, of 241 cards ever dealt: **240 were still open** —
+58 from 30 Aug, 122 from 2 Sep, 60 from that morning. One card had ever been
+worked.
+
+The real defect was not the number, it was the ambiguity. `worked_at is null`
+was storing three completely different facts in one empty cell:
+
+- the counsellor never got to it (the day ran out);
+- the counsellor looked and chose not to act (deliberate, and often correct);
+- the counsellor could not act (wrong number, not reachable today).
+
+And there was no honest way to record the second or third: the only outcomes
+were call outcomes, so closing a card meant claiming a call that never
+happened. The rational thing for a counsellor to do was leave it open — which
+is exactly what happened, 240 times.
+
+### Why nothing caught it
+
+The checkpoint reported `remaining = surfaced - worked`, which is arithmetically
+true and tells you nothing: it counts a deliberate skip and an ignored student
+identically. Coverage looked like a real measure and was not one. Nothing swept
+the day, so a past day's cards stayed open forever and yesterday was
+indistinguishable from today.
+
+### The fix
+
+- Migration `20260903b`: `closed_at`, `close_reason` (`worked` / `skipped` /
+  `not_marked`), `skip_reason`, with CHECKs tying them to `worked_at` so the
+  two can never disagree. `worked_at` keeps its one meaning — a real
+  disposition — because stamping a skip or a sweep into it would inflate
+  coverage, reached, and every founder-facing number at once.
+- A `skipped` outcome with a required reason. It writes history and closes the
+  card, and touches NOTHING else: no lead state, no clock, no miss count, never
+  counted as reaching anyone. The student returns to tomorrow's queue on the
+  same terms. A skip buys a day, never a disappearance.
+- `/api/cron/day-close` at 21:45 IST sweeps every still-open card from a day
+  that has ended into `not_marked`. Sweeps all past days, so a missed run
+  repairs itself.
+- Backfill recorded the 180 historical cards as `not_marked` rather than
+  deleting them — "we gave these students to somebody and nothing happened" is
+  the most useful thing that table has ever held.
+- The counsellor's header now reads "N marked · N still to mark"; the founder's
+  tower shows worked / skipped / unmarked per counsellor per day.
+
+### The lesson, with teeth
+
+**A queue nobody closes is not a queue, it is a suggestion.** If a surface
+hands somebody a list of work, the list must have a terminal state for every
+item, and the person must have an honest way to reach it — including "I looked
+and chose not to". Without the honest option, the only options are lying or
+leaving it open, and people correctly choose the second.
+
+And the corollary that made the fix safe: **when adding a way to close
+something, never reuse the column that measures whether it was DONE.** A skip
+and a sweep are closes, not work. Two columns, two questions.

@@ -33,6 +33,12 @@ export interface OpportunityRow {
   /** Null until a real disposition lands. */
   workedAt: string | null;
   outcome: string | null;
+  /** When the card stopped being open — a disposition, a skip, or the sweep.
+   *  Undefined on rows written before 3 Sep 2026, which is why "closed" below
+   *  also accepts a worked row: a worked card was always a closed card. */
+  closedAt?: string | null;
+  closeReason?: 'worked' | 'skipped' | 'not_marked' | null;
+  skipReason?: string | null;
 }
 
 export interface ObjectiveTally {
@@ -63,7 +69,19 @@ export interface DayCheckpoint {
   /** Actually spoke to a human. The honest denominator for anything about
    *  intervention quality — see ObjectiveTally.reached. */
   reached: number;
+  /**
+   * Cards still OPEN — neither worked nor skipped nor swept. This is the
+   * counsellor's "left to mark" and the founder's leakage number.
+   *
+   * Founder, 3 Sep 2026: "make sure they mark every list close." Before that
+   * this was `surfaced - worked`, which silently lumped a deliberate skip in
+   * with a card nobody ever looked at. Those are different facts about a day.
+   */
   remaining: number;
+  /** Closed without acting, with a reason. NOT work, and never coverage. */
+  skipped: number;
+  /** The shift ended and nobody touched these. Zero until the sweep runs. */
+  notMarked: number;
   retention: ObjectiveTally;
   conversion: ObjectiveTally;
   /**
@@ -111,6 +129,8 @@ export function computeCheckpoint(rows: readonly OpportunityRow[]): DayCheckpoin
   const conversion = emptyTally();
   let worked = 0;
   let reached = 0;
+  let skipped = 0;
+  let notMarked = 0;
 
   for (const r of rows) {
     const t = r.objective === 'retention' ? retention : conversion;
@@ -124,7 +144,19 @@ export function computeCheckpoint(rows: readonly OpportunityRow[]): DayCheckpoin
       // than re-deciding it here, so the two can never disagree about what
       // counts as having spoken to somebody.
       if (isConnectedOutcome(r.outcome)) { t.reached++; reached++; }
-    } else { t.remaining++; }
+    } else if (r.closeReason === 'skipped') {
+      // Closed without acting, with a reason on the row. Not work, and never
+      // coverage — but not leakage either: somebody looked and decided.
+      skipped++;
+    } else if (r.closeReason === 'not_marked') {
+      // The shift ended and nobody touched it. Written by the end-of-day
+      // sweep, so "nobody marked this" is a fact in the table (3 Sep 2026).
+      notMarked++;
+    } else if (!r.closedAt) {
+      // OPEN. A worked row is closed by definition, which is what keeps rows
+      // written before closed_at existed counting exactly as they always did.
+      t.remaining++;
+    }
   }
 
   // Rank order decides the top slice, not the order rows came back from the
@@ -134,13 +166,17 @@ export function computeCheckpoint(rows: readonly OpportunityRow[]): DayCheckpoin
   const byRank = [...rows].sort((a, b) =>
     a.rank !== b.rank ? a.rank - b.rank : (a.studentId < b.studentId ? -1 : a.studentId > b.studentId ? 1 : 0));
   const top = byRank.slice(0, HIGH_PRIORITY_SLICE);
-  const highPriorityStudentIds = top.filter((r) => !r.workedAt).map((r) => r.studentId);
+  // Still open, at the top of the day. A skipped card is not leakage — the
+  // counsellor made a judgement about it and said so.
+  const highPriorityStudentIds = top.filter((r) => !r.workedAt && !r.closedAt).map((r) => r.studentId);
 
   return {
     surfaced: rows.length,
     worked,
     reached,
-    remaining: rows.length - worked,
+    remaining: retention.remaining + conversion.remaining,
+    skipped,
+    notMarked,
     retention,
     conversion,
     highPriorityRemaining: highPriorityStudentIds.length,
@@ -159,8 +195,17 @@ export function computeCheckpoint(rows: readonly OpportunityRow[]): DayCheckpoin
  */
 export function describeCheckpoint(c: DayCheckpoint): string {
   if (c.surfaced === 0) return 'Nothing needs attention right now.';
-  if (c.remaining === 0) return `All ${c.surfaced} worked. Nothing left today.`;
-  const base = `${c.worked} of ${c.surfaced} worked · ${c.remaining} left`;
+  if (c.remaining === 0) {
+    // Every card is accounted for. Say what actually happened to them — "all
+    // worked" when some were skipped would be the counsellor's own screen
+    // telling them something untrue about their own day.
+    if (c.skipped === 0 && c.notMarked === 0) return `All ${c.surfaced} worked. Nothing left today.`;
+    const parts = [`${c.worked} worked`];
+    if (c.skipped > 0) parts.push(`${c.skipped} skipped`);
+    if (c.notMarked > 0) parts.push(`${c.notMarked} never marked`);
+    return `${parts.join(' · ')}. Nothing left today.`;
+  }
+  const base = `${c.worked} of ${c.surfaced} worked · ${c.remaining} left to mark`;
   return c.highPriorityRemaining > 0
     ? `${base} · ${c.highPriorityRemaining} of those are top priority`
     : base;
