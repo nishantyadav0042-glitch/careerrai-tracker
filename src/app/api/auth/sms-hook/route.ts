@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'node:crypto';
-import { sendOtpSms } from '@/lib/indiahost-otp';
+import { sendOtpSms, maskPhone } from '@/lib/indiahost-otp';
 
 // Supabase "Send SMS" Auth Hook → us → indiahost.
 //
@@ -70,7 +70,36 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'missing phone or otp' }, { status: 400 });
     }
 
-    await sendOtpSms(phone, otp);
+    const outcome = await sendOtpSms(phone, otp);
+
+    // Every send is recorded, whatever happened. On 4 Sep this hook returned
+    // 200 eighteen times while nothing was delivered, and the logs held not one
+    // line to say so — the gateway's own reply was read and thrown away. It is
+    // kept now. The line carries a masked number and the reply text; never the
+    // OTP, and never the full number.
+    const line = `[sms-hook] indiahost verdict=${outcome.verdict} http=${outcome.httpStatus} to=${maskPhone(phone)} body=${JSON.stringify(outcome.body)}`;
+
+    if (outcome.verdict === 'rejected') {
+      // The gateway said no. Returning 200 here is what let a silent outage
+      // run for seven hours: Supabase marks the code as delivered, the student
+      // waits for an SMS that was never accepted, and the retry burns another.
+      // A 500 makes Supabase surface the failure instead of hiding it.
+      console.error(line);
+      return NextResponse.json({ error: 'gateway rejected' }, { status: 500 });
+    }
+
+    if (outcome.verdict === 'unknown') {
+      // Deliberately NOT treated as failure. We do not yet know indiahost's
+      // success format, and guessing wrong in this direction would break
+      // working sign-ins for everyone. It is logged at error level so it is
+      // impossible to miss, and the body is right there to read: once a real
+      // reply has been seen, teach SUCCESS or REJECTED in indiahost-otp.ts and
+      // this branch stops firing.
+      console.error(`${line} (unrecognised reply — classify it in indiahost-otp.ts)`);
+      return NextResponse.json({});
+    }
+
+    console.log(line);
     return NextResponse.json({});
   } catch (e) {
     console.error('[sms-hook] delivery error', e);
