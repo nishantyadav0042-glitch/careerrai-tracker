@@ -3881,3 +3881,82 @@ record what the other side actually said — because the difference between
 Encoded in `src/lib/indiahost-otp.test.ts`: every phrase in this entry is a test
 case, so the specific replies that caused this outage can never again be read as
 a successful send.
+
+## Incident #71
+
+**Date:** 2026-09-04 (found ~23:00 IST, the first full day the 50–70 rule ran)
+**Area:** Sales OS — the conversion lane
+**Severity:** P1 (founder instruction defeated; counsellor told something untrue)
+
+### What was wrong
+
+The day was supposed to be "a mix of all variety" with "the old students
+rotating" (founder, 2 Sep). On 4 Sep the mix was:
+
+| Rep | conversion | new | attention | retention | promises | **rotation** |
+|---|---|---|---|---|---|---|
+| Anshul | 47 | 17 | 13 | 5 | 5 | **0** |
+| Neelam | 52 | 28 | 9 | 1 | 18 | **0** |
+
+Two thirds of the day was one lane, and the lane whose entire purpose is to
+reach the silent base got nothing — while 243 never-contacted students sat in
+the two books untouched.
+
+The cause was a flag masquerading as a signal.
+`student_engagement.buddy_cta_clicks` is a **cumulative counter that never
+resets**, and the lane fired on `buddyTaps >= 1`. So a single tap put a
+student in the conversion lane permanently: 136 students held it, only 32 had
+tapped within a fortnight, and the oldest still being pitched was from
+**21 July** — six weeks stale. 29 more carried clicks with no timestamp at
+all, because `buddy_cta_last_at` was added after those rows existed.
+
+The card's own words made it worse. It said *"Pitch the single session —
+intent is warm"* about a student who had tapped once, in July, and never
+returned.
+
+### Why nothing caught it
+
+The codebase had already written the warning down. `call-queue.ts` explains,
+in the comment defining RETENTION_LANES, that buddy intent "is measured by
+buddy_cta_clicks, a cumulative counter that never resets. A student who tapped
+the buddy option once in July would sit in the conversion lane forever." That
+sentence was read while building the 50–70 day and its consequence was not
+followed through: ceilings were given to attention (20) and new arrivals (15),
+and conversion — the only unbounded lane fed by a permanent flag — was left
+uncapped.
+
+The lane guard asserted "declared buddy intent is the CONVERSION lane" with no
+date at all, so it encoded the defect as the specification.
+
+### The fix
+
+- **Intent must be datable and fresh.** `classifyLane` takes `intentAt` (the
+  later of `buddy_cta_last_at` and `intent_door_at`) and the lane fires only
+  within `CONVERSION_INTENT_DAYS` (14). The card now says *when*: "Opened the
+  buddy option 2 days ago".
+- **An undateable tap is NOT recent.** The 29 rows with clicks and no
+  timestamp fall out of the lane. "We cannot date this" is not "this is
+  fresh" (L1: a trustworthy UNKNOWN beats a precise lie).
+- **A ceiling as the fuse.** `CONVERSION_CEILING` (12) in `sales-day.ts`, so
+  no single lane can own a day again even if its predicate is right.
+- **The 360 agrees with the queue** — same `intentAt`, so a card opened
+  directly never claims warmth the calling list has stopped believing.
+- Stale-intent students are not deleted: they keep their card through
+  rotation, with a reason that is true.
+
+Effect, measured before shipping: conversion candidates fall from 47/52 to
+13/12 per rep, and ~94 stale students rejoin a never-contacted pool of 188 and
+147 that rotation can finally reach.
+
+### The lesson, with teeth
+
+**A cumulative counter is a flag, not a signal, and a flag never expires.**
+Any lane, filter or score built on a monotonic counter (`*_clicks`, `*_count`,
+`total_*`) selects the same population forever and grows without bound. If a
+predicate is meant to mean "recently", it must read a TIMESTAMP — and a row
+that cannot be dated fails the test rather than passing it.
+
+And the sharper one: **the warning was already in the file.** The comment
+naming this exact hazard was read during the work that introduced it. Reading
+a caveat is not the same as applying it — when a comment says a column never
+resets, every new predicate over that column is suspect on sight.

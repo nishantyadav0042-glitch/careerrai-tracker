@@ -101,6 +101,20 @@ export const DAY_ANCHOR_HOUR_IST = 4;
 export const SHIFT_END_HOUR_IST = 21;
 /** In rotation, every Nth card is a call rather than a message. */
 export const ROTATION_CALL_EVERY = 4;
+/**
+ * How recently a student must have reached for the paid option for the
+ * conversion lane to call it INTENT (founder, 4 Sep 2026, Incident #71).
+ *
+ * `student_engagement.buddy_cta_clicks` is a cumulative counter that never
+ * resets, so "tapped the buddy option" was a permanent flag: 136 students
+ * held it, only 32 had tapped within a fortnight, and the oldest live one was
+ * from 21 July. The lane took 47 and 52 cards of a 70-card day and rotation
+ * got none. Intent decays; a six-week-old tap is history, and the card's own
+ * words ("intent is warm") were untrue for most of them.
+ */
+export const CONVERSION_INTENT_DAYS = 14;
+/** And a ceiling, so even a real spike cannot take the day. */
+export const CONVERSION_CEILING = 12;
 
 // ── Buddy check-in (founder, 10 Aug) ────────────────────────────────────────
 // "Agar mere paas 5 student assigned hain aur unme se kisi ek ne bhi kal log

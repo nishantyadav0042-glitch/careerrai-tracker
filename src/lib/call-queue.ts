@@ -10,6 +10,7 @@ import {
   BROKEN_STREAK_MIN_RUN, BROKEN_STREAK_MAX_DAYS_SINCE,
   NEW_LEAD_MIN_AGE_DAYS, NEW_LEAD_MAX_AGE_DAYS,
   ROTATION_SILENT_DAYS, TOUCH_COOLDOWN_DAYS, ATTENTION_WINDOW_DAYS,
+  CONVERSION_INTENT_DAYS,
 } from '@/lib/os/scale-config';
 import { assembleDay, dayAnchorMs, type Channel, type DaySection, type DayCounts } from '@/lib/sales-day';
 import { readToday } from '@/lib/sales-opportunity-record';
@@ -147,6 +148,14 @@ export interface LaneSignals {
   buddyTaps: number;
   intentDoor: boolean;
   momentumScore: number;
+  /**
+   * When the student last reached for the paid option — the buddy tap or the
+   * intent door, whichever is later. NULL means we cannot date the intent,
+   * and an undateable tap is NOT recent: 29 production rows carry clicks with
+   * no timestamp because the column was added after them, and treating those
+   * as live intent is the same lie as treating a July tap as live.
+   */
+  intentAt?: string | null;
   /** Attention inputs (2 Sep 2026). Optional so older callers keep compiling;
    *  the attention lane only fires when `attentionSinceIso` is given. */
   lastSeenAt?: string | null;
@@ -258,10 +267,28 @@ export function classifyLane(s: LaneSignals): LaneVerdict | null {
 
   // Conversion: declared buddy intent. The evidence is the student's own
   // taps, never an inferred "readiness".
-  if (s.buddyTaps >= 1 || s.intentDoor) {
+  // ── CONVERSION: intent, and only while it is still intent ────────────────
+  //
+  // Incident #71 (4 Sep 2026). This branch used to read `buddyTaps >= 1`, and
+  // buddy_cta_clicks is a cumulative counter that never resets — so a single
+  // tap in July put a student in the conversion lane forever. 136 students
+  // held the flag, 32 had tapped within a fortnight, and the lane took 47 and
+  // 52 cards of a 70-card day while rotation got zero and 243 never-contacted
+  // students were never dealt. The card also told the counsellor "intent is
+  // warm", which was untrue for most of them.
+  //
+  // So the lane now requires intent we can DATE and that is still fresh. A
+  // stale tap is not nothing — the student keeps their card through rotation,
+  // with a reason that is true — it is just not a commercial signal any more.
+  const intentAgeDays = s.intentAt
+    ? Math.floor((Date.parse(s.todayIst) - Date.parse(istDateStr(s.intentAt))) / 86_400_000)
+    : null;
+  const intentRecent = intentAgeDays != null && intentAgeDays >= 0 && intentAgeDays <= CONVERSION_INTENT_DAYS;
+  if ((s.buddyTaps >= 1 || s.intentDoor) && intentRecent) {
     const why: string[] = [];
-    if (s.buddyTaps >= 2) why.push(`Tapped the buddy option ${s.buddyTaps}× — actively wants a mentor`);
-    else if (s.buddyTaps === 1) why.push('Opened the buddy option once');
+    const when = intentAgeDays === 0 ? 'today' : intentAgeDays === 1 ? 'yesterday' : `${intentAgeDays} days ago`;
+    if (s.buddyTaps >= 2) why.push(`Tapped the buddy option ${s.buddyTaps}× — most recently ${when}`);
+    else if (s.buddyTaps === 1) why.push(`Opened the buddy option ${when}`);
     if (s.intentDoor) why.push('Came back to the buddy a second time (intent door)');
     if (lastLog != null && lastLog <= 3) why.push(`Active — studied ${fmt(lastLog)}`);
     return {
@@ -440,7 +467,7 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
 
   const [{ data: profs }, { data: eng }, { data: reports }, outreach, { data: paidRows }, { data: unpaidRows }, { data: lastActs }, { data: tapRows }] = await Promise.all([
     selectInChunks((chunk) => db.from('profiles').select('id, created_at, last_seen_at, app_installed, push_subscription, push_died_at, target_percentile, cat_percentile, starting_percentile, pain_points, dream_colleges, is_repeater').in('id', chunk), ids),
-    selectInChunks((chunk) => db.from('student_engagement').select('student_id, buddy_cta_clicks, mock_opened, intent_door_at').in('student_id', chunk), ids),
+    selectInChunks((chunk) => db.from('student_engagement').select('student_id, buddy_cta_clicks, mock_opened, intent_door_at, buddy_cta_last_at').in('student_id', chunk), ids),
     selectInChunks((chunk) => db.from('daily_reports').select('student_id, report_date').in('student_id', chunk).gte('report_date', since30), ids),
     // The only read here that decides a business state — checked, retried, or thrown.
     readLeadOutreach(db, ids),
@@ -605,6 +632,12 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
     const e = engById.get(r.id) as any;
     const buddyTaps = (e?.buddy_cta_clicks as number | null) ?? 0;
     const intentDoor = e?.intent_door_at != null;
+    // The later of the two intent moments; null when neither can be dated.
+    const tapAt = (e?.buddy_cta_last_at as string | null) ?? null;
+    const doorAt = (e?.intent_door_at as string | null) ?? null;
+    const intentAt = tapAt && doorAt ? (tapAt > doorAt ? tapAt : doorAt) : (tapAt ?? doorAt);
+    const intentIsRecent = intentAt != null
+      && Date.parse(intentAt) >= now - CONVERSION_INTENT_DAYS * 86_400_000;
     const mock = e?.mock_opened === true;
     const dates = logDates.get(r.id) ?? [];
     const nLogs = dates.length;
@@ -691,7 +724,7 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
       // exists at all: retention first, conversion second, fresh last.
       const lane = classifyLane({
         todayIst, createdAt: (prof?.created_at as string | null) ?? null, logDates: dates,
-        buddyTaps, intentDoor, momentumScore: r.score,
+        buddyTaps, intentDoor, momentumScore: r.score, intentAt,
         lastSeenAt: (prof?.last_seen_at as string | null) ?? null,
         notificationTapAt: tapBy.get(r.id) ?? null,
         attentionSinceIso,
@@ -765,7 +798,9 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
       // The commercial signals the queue can actually see today, strongest
       // first: an order the student created and never paid, then the paid
       // option reached for, then a second visit to it.
-      hasCommercialSignal: abandonedBy.has(r.id) || buddyTaps >= 1 || intentDoor,
+      // Same recency rule as the lane (Incident #71): a six-week-old tap must
+      // never make a card announce PRIMARY OBJECTIVE: CONVERSION.
+      hasCommercialSignal: abandonedBy.has(r.id) || intentIsRecent,
       // Never logged at all counts as retention need — it is activation, which
       // is the most valuable form of retention we have and applies to roughly
       // three-quarters of the base.
