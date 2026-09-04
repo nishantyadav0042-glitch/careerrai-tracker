@@ -1,7 +1,7 @@
 import type { DueReason } from '@/lib/call-queue';
 import {
   DAY_FLOOR, DAY_CEILING, ROTATION_FLOOR, ATTENTION_CEILING, NEW_ARRIVAL_CEILING,
-  ROTATION_CALL_EVERY, DAY_ANCHOR_HOUR_IST,
+  ROTATION_CALL_EVERY, DAY_ANCHOR_HOUR_IST, CONVERSION_CEILING,
 } from '@/lib/os/scale-config';
 
 // ── THE DAY — how 50 to 70 students are dealt from what the book supplies ────
@@ -63,6 +63,10 @@ const UNTRIMMABLE: ReadonlySet<DueReason> = new Set<DueReason>(['callback', 'ret
 const CEILING: Partial<Record<DueReason, number>> = {
   attention: ATTENTION_CEILING,
   new_never_logged: NEW_ARRIVAL_CEILING,
+  // Incident #71: uncapped, this lane took two thirds of a day and starved
+  // rotation completely. Recency in classifyLane is the real fix; the ceiling
+  // is the fuse, so no single lane can ever own the day again.
+  conversion: CONVERSION_CEILING,
 };
 
 /** The most recent DAY_ANCHOR_HOUR_IST o'clock IST at or before `nowMs`. */

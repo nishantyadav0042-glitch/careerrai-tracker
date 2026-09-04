@@ -20,7 +20,7 @@ the founder's word.
 |---|---|---|---|---|
 | 1 | Promises | callback, retry, follow-up due | call | all, never bumped |
 | 2 | Money | order created and never paid | call | all |
-| 3 | Buddy intent | buddy option tapped, intent door | call | all |
+| 3 | Buddy intent | buddy option tapped or intent door **within `CONVERSION_INTENT_DAYS` (14)** | call | ceiling 12 |
 | 4 | New arrivals | signed up 1–7 days ago, no first log | call | ceiling 15 |
 | 5 | Attention | opened the app and did not log, or tapped a notification, in the 2 days since the 4 AM anchor | **message first** | floor via backfill, ceiling 20 |
 | 6 | Retention | going cold, broken streak | call | all |
@@ -93,7 +93,13 @@ A card now ends the day in exactly one of three recorded states:
   rotation only tops up to the day's target counting what it already spent.
   Signals are the exception and still arrive live — a promise or an abandoned
   checkout at 6pm is real new work.
-- **A day closes the night its shift ends** *(same incident)*. The sweep's
+- **Intent expires** *(fixed 4 Sep, Incident #71)*. `buddy_cta_clicks` never
+  resets, so "tapped the buddy option" was a permanent flag: 136 students held
+  it, 32 had tapped inside a fortnight, the oldest was 21 July, and the lane
+  took two thirds of a day while rotation got zero. The lane now needs intent
+  we can DATE and that is still fresh, and an undateable tap is not fresh. A
+  stale-intent student is not lost — rotation reaches them with a true reason.
+- **A day closes the night its shift ends** *(Incident #68)*. The sweep's
   newest closable day is today once past `SHIFT_END_HOUR_IST` (21:00), and
   yesterday before it — so a hand-run at 11am cannot close a live day.
 
@@ -125,7 +131,8 @@ A card now ends the day in exactly one of three recorded states:
 
 `DAY_FLOOR 50 · DAY_CEILING 70 · ROTATION_FLOOR 15 · ROTATION_SILENT_DAYS 21 ·
 TOUCH_COOLDOWN_DAYS 7 · ATTENTION_CEILING 20 · NEW_ARRIVAL_CEILING 15 ·
-ATTENTION_WINDOW_DAYS 2 · DAY_ANCHOR_HOUR_IST 4 · ROTATION_CALL_EVERY 4`
+ATTENTION_WINDOW_DAYS 2 · DAY_ANCHOR_HOUR_IST 4 · ROTATION_CALL_EVERY 4 ·
+SHIFT_END_HOUR_IST 21 · CONVERSION_INTENT_DAYS 14 · CONVERSION_CEILING 12`
 
 ## Proof
 

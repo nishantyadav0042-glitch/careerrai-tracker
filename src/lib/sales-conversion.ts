@@ -245,6 +245,14 @@ export async function getSalesConversionView(admin: any, id: string): Promise<Co
     createdAt: (p.created_at as string | null) ?? null,
     logDates: ((strip14 ?? []) as any[]).map((r) => r.report_date as string),
     buddyTaps, intentDoor, momentumScore: momentum.score,
+    // Incident #71: the 360 and the queue must agree on what "intent" means,
+    // or a card opened directly would claim a warm buddy tap the calling list
+    // has already stopped believing.
+    intentAt: (() => {
+      const tap = (eng?.buddy_cta_last_at as string | null) ?? null;
+      const door = (eng?.intent_door_at as string | null) ?? null;
+      return tap && door ? (tap > door ? tap : door) : (tap ?? door);
+    })(),
   });
 
   // ── Objection playbook (tailored) ──
