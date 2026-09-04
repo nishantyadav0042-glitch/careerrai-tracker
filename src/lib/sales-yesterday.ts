@@ -20,6 +20,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { ACTIVITY_STATUSES } from '@/lib/sales-disposition';
+import { isTypedRemark } from '@/lib/sales-remarks';
 
 const IST_OFFSET_MS = 5.5 * 3600_000;
 const DAY_MS = 24 * 3600_000;
@@ -44,19 +45,12 @@ export function istYesterdayWindow(nowMs: number = Date.now()): { startIso: stri
 /** Rows the sales day is made of. 'reassigned' is bookkeeping, not work. */
 const WORK_STATUSES = ACTIVITY_STATUSES.filter((s) => s !== 'reassigned');
 
-/**
- * Did the rep actually WRITE this remark, or did the system? The auto-notes
- * ('Did not pick up', the skip-reason echo, and the legacy one-tap message
- * note) are honest records but they are not the rep's words — and "how many
- * remarks did they actually type" is precisely what the founder asked to see.
- */
-export function isTypedRemark(status: string, note: string | null): boolean {
-  if (!note || note.trim().length === 0) return false;
-  if (status === 'no_answer' && note === 'Did not pick up') return false;
-  if (status === 'skipped' && note.startsWith('Skipped: ')) return false;
-  if (status === 'messaged' && note === 'Sent a WhatsApp message') return false; // pre-3-Sep one-tap rows
-  return true;
-}
+// The rep's words vs the system's auto-note. The rule lives in
+// lib/sales-remarks — the calling card leads with the newest typed remark and
+// this snapshot counts them, and one rule serving both is why those two
+// surfaces can never disagree. Re-exported so this module stays the single
+// import for everything "yesterday".
+export { isTypedRemark } from '@/lib/sales-remarks';
 
 export interface DaySnapshot {
   repId: string;

@@ -14,6 +14,7 @@ import {
 import { assembleDay, dayAnchorMs, type Channel, type DaySection, type DayCounts } from '@/lib/sales-day';
 import { readToday } from '@/lib/sales-opportunity-record';
 import { journeyStage, JOURNEY_NEXT_STEP, type JourneyStage } from '@/lib/sales-messages';
+import { buildRemarkHistories, EMPTY_HISTORY, HUMAN_PROVENANCE, MAX_REMARKS_ON_CARD, type RemarkHistory } from '@/lib/sales-remarks';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -74,14 +75,21 @@ export interface CallLead {
   /** The other goal, when it also applies. One student is always ONE card. */
   objectiveSecondary: SalesObjective | null;
   /**
-   * What was said last time, ready before the counsellor dials.
+   * EVERY remark anyone has written about this student, newest first.
    *
    * This is the difference between the second call and the first. It lived one
    * tap deeper on the 360, which meant it was read when there was time and
    * skipped when there wasn't — so the student repeated themselves and the
-   * relationship never compounded. NULL only when nobody has spoken to them.
+   * relationship never compounded.
+   *
+   * Until 4 Sep 2026 the card carried exactly ONE row and did not check where
+   * it came from, which broke it two ways at once: an unanswered dial buried
+   * the real conversation before it, and lead-intake bookkeeping — 272 of the
+   * 319 touched students — sat in the slot pretending to be what the student
+   * said. lib/sales-remarks owns both rules now; `remarks` is empty only when
+   * nobody at CareerRai has ever spoken to them.
    */
-  lastInteraction: { atIso: string; outcome: string | null; note: string | null } | null;
+  remarks: RemarkHistory;
   why: string[];                // WHY THIS STUDENT IS HERE — evidence, real numbers
   action: string;               // the recommended move, one line
   status: string | null; noAnswerCount: number;
@@ -465,16 +473,27 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
       .in('status', ['created', 'failed'])
       .in('student_id', chunk)
       .order('created_at', { ascending: false }), ids),
-    // WHAT WAS SAID LAST TIME. Bounded and cheap: newest-first across the
-    // whole book, reduced to one row per student below. A counsellor who has
-    // to open another screen to remember the previous conversation will stop
-    // doing it by the second week, and the student ends up repeating
-    // themselves to the same company twice.
+    // WHAT WAS SAID, EVERY TIME IT WAS SAID. A counsellor who has to open
+    // another screen to remember the previous conversation will stop doing it
+    // by the second week, and the student ends up repeating themselves to the
+    // same company twice.
+    //
+    // FILTERED TO HUMAN TOUCHES AT THE DATABASE (4 Sep 2026). Lead intake and
+    // reassignment write their own bookkeeping into this table, and without
+    // this predicate they won — 272 of 319 touched students had an intake log
+    // line as their newest row, so the card showed a rep our internal
+    // distribution ledger in the place reserved for the student's own words.
+    // provenance + actor_id is the definition of a remark (lib/sales-remarks).
+    //
+    // Still newest-first and bounded: if the cap ever bites it drops the
+    // OLDEST activity in the chunk, which is the correct thing to lose.
     selectInChunks((chunk) => db.from('sales_activity')
-      .select('student_id, created_at, status, note')
+      .select('student_id, created_at, status, note, provenance, actor_id')
+      .eq('provenance', HUMAN_PROVENANCE)
+      .not('actor_id', 'is', null)
       .in('student_id', chunk)
       .order('created_at', { ascending: false })
-      .limit(2000), ids),
+      .limit(IN_CHUNK * MAX_REMARKS_ON_CARD * 4), ids),
     // ATTENTION (2 Sep): who tapped a notification inside the window. Bounded
     // by the chunk and the window — the notifications table is 100k rows and
     // is never read whole here.
@@ -502,17 +521,13 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
     abandonedBy.set(r.student_id, { atIso: r.created_at as string, plan: (r.plan as string | null) ?? null });
   }
 
-  const lastBy = new Map<string, { atIso: string; outcome: string | null; note: string | null }>();
-  for (const a of ((lastActs ?? []) as any[])) {
-    // Ordered newest-first, so the FIRST row seen for a student is their most
-    // recent interaction — later rows are older and deliberately ignored.
-    if (lastBy.has(a.student_id)) continue;
-    lastBy.set(a.student_id, {
-      atIso: a.created_at as string,
-      outcome: (a.status as string | null) ?? null,
-      note: (a.note as string | null) ?? null,
-    });
-  }
+  // Grouped, re-sorted and attributed by lib/sales-remarks — including the
+  // "newest TYPED remark", which is deliberately not the same as the newest
+  // row: no_answer is the commonest disposition in production and its
+  // auto-note must never bury the conversation that came before it.
+  const remarksBy = buildRemarkHistories(
+    (lastActs ?? []) as any[], staff?.labelById ?? null, MAX_REMARKS_ON_CARD,
+  );
   const tapBy = new Map<string, string>();
   for (const t of ((tapRows ?? []) as any[])) {
     const prev = tapBy.get(t.user_id);
@@ -747,11 +762,9 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
 
     const objectiveVerdict = classifyObjective({
       lane: dueReason,
-      // The commercial signals the queue can actually see today: the student
-      // reached for the paid option, or came back to it a second time. The
-      // abandoned-checkout signal is the strongest one we have and is NOT wired
-      // in yet — it is the next piece of work, and until it lands those 16
-      // students classify on their other signals rather than on the money.
+      // The commercial signals the queue can actually see today, strongest
+      // first: an order the student created and never paid, then the paid
+      // option reached for, then a second visit to it.
       hasCommercialSignal: abandonedBy.has(r.id) || buddyTaps >= 1 || intentDoor,
       // Never logged at all counts as retention need — it is activation, which
       // is the most valuable form of retention we have and applies to roughly
@@ -762,7 +775,7 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
     cands.push({
       objective: objectiveVerdict.primary,
       objectiveSecondary: objectiveVerdict.secondary,
-      lastInteraction: lastBy.get(r.id) ?? null,
+      remarks: remarksBy.get(r.id) ?? EMPTY_HISTORY,
       studentId: r.id, name: r.full_name ?? 'Student', firstName: (r.full_name ?? '').trim().split(' ')[0] || 'there',
       phone: r.phone, waNumber: waNumber(r.phone),
       convScore: conv, tier, momentumScore: r.score, momentumBand: bandMeta(r.band).label, hot: tier === 'hot',

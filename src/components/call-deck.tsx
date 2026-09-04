@@ -5,6 +5,7 @@ import { REASON_CATEGORIES, REASON_LABEL, reasonNeedsVerbatim,
 import { SKIP_REASONS, SKIP_REASON_LABEL, type SkipReason } from '@/lib/sales-disposition';
 import { MessageCircle, PhoneCall, PhoneOff, ChevronDown, UserRound, Send } from 'lucide-react';
 import type { CallLead } from '@/lib/call-queue';
+import type { Remark, RemarkHistory } from '@/lib/sales-remarks';
 import { SECTION_ORDER, SECTION_LABEL, type DaySection } from '@/lib/sales-day';
 import { messageFor, JOURNEY_LABEL } from '@/lib/sales-messages';
 
@@ -181,24 +182,9 @@ export function CallDeck({ queue, repFirstName }: { queue: CallLead[]; repFirstN
               {lead.why.map((w, i) => (
                 <p key={i} className="text-[12px] font-semibold leading-snug text-stone-700">{w}</p>
               ))}
-              {/* WHAT WAS SAID LAST TIME. This is the whole reason the second
-                  call is better than the first. It used to live one tap deeper
-                  on the 360, which meant it was read when there was time and
-                  skipped when there wasn't — and the student repeated
-                  themselves to the same company twice. */}
-              {lead.lastInteraction && (
-                <div className="mt-1.5 rounded-lg bg-stone-100 px-2.5 py-1.5">
-                  <p className="text-[10px] font-bold uppercase tracking-wide text-stone-400">
-                    Last time · {new Date(lead.lastInteraction.atIso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                    {lead.lastInteraction.outcome ? ` · ${lead.lastInteraction.outcome.replace(/_/g, ' ')}` : ''}
-                  </p>
-                  {lead.lastInteraction.note && (
-                    <p className="mt-0.5 text-[12px] font-semibold italic leading-snug text-stone-700">
-                      &ldquo;{lead.lastInteraction.note}&rdquo;
-                    </p>
-                  )}
-                </div>
-              )}
+              {/* WHAT WAS SAID — every remark, not the newest row. This is the
+                  whole reason the second call is better than the first. */}
+              <Remarks h={lead.remarks} repFirstName={repFirstName} />
               <p className="mt-1 text-[12px] font-bold text-teal-700">→ {lead.action}</p>
             </div>
             {/* The weakness brief — what she reads before dialing */}
@@ -415,6 +401,103 @@ function Disposition({ lead, onDispose }: {
         className="w-full rounded-xl bg-stone-900 py-2.5 text-sm font-bold text-white active:scale-[0.98] disabled:opacity-40">
         {saving ? 'Saving…' : canSave ? (isSkip ? 'Skip & next' : 'Save & next') : isSkip ? 'Pick a reason to skip' : 'Write feedback to save'}
       </button>
+    </div>
+  );
+}
+
+
+// ── WHAT WAS SAID (founder order, 4 Sep 2026) ───────────────────────────────
+//
+// "Salesman should also be able to see their last remarks which should be
+// visible next time, for each remark they have filled."
+//
+// Three rules, each of which the old single-row block broke:
+//
+//  1. LEAD WITH THE WORDS, NOT THE NEWEST ROW. no_answer is the commonest
+//     disposition in production and it carries the auto-note "Did not pick
+//     up" — so one unanswered dial used to bury the actual conversation from
+//     the call before it. The newest TYPED remark comes first, however old.
+//  2. THE UNANSWERED DIAL STILL COUNTS. It is shown underneath, because "we
+//     tried yesterday and got nothing" changes how the next call opens.
+//  3. ALL OF IT IS REACHABLE FROM HERE. Every established CRM puts recent
+//     notes on the working surface and the rest one expand away (HubSpot's
+//     lead record shows the last five; Pipedrive's Focus section pins what
+//     matters above the history). Sending a counsellor to another page mid-day
+//     means the history is read when there is time and skipped when there
+//     isn't — which is the same as not having it.
+//
+// Attribution appears only when somebody ELSE wrote the remark. On a
+// reassigned lead the previous rep's words are the most valuable thing on the
+// card, and the counsellor must know they are quoting a colleague rather than
+// remembering their own call.
+function outcomeWords(o: string | null): string {
+  return o ? o.replace(/_/g, ' ') : 'touched';
+}
+function dayLabel(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' });
+}
+
+function RemarkLine({ r, repFirstName }: { r: Remark; repFirstName: string }) {
+  const other = r.by && r.by.trim().split(' ')[0].toLowerCase() !== repFirstName.trim().toLowerCase()
+    ? r.by.trim().split(' ')[0] : null;
+  return (
+    <div>
+      <p className="text-[10px] font-bold uppercase tracking-wide text-stone-400">
+        {dayLabel(r.atIso)} · {outcomeWords(r.outcome)}
+        {other ? <span className="text-stone-500"> · {other}</span> : null}
+      </p>
+      {r.note ? (
+        <p className={`mt-0.5 text-[12px] leading-snug ${r.typed ? 'font-semibold italic text-stone-700' : 'text-stone-500'}`}>
+          {r.typed ? <>&ldquo;{r.note}&rdquo;</> : r.note}
+        </p>
+      ) : (
+        <p className="mt-0.5 text-[12px] text-stone-400">Nothing written down</p>
+      )}
+    </div>
+  );
+}
+
+function Remarks({ h, repFirstName }: { h: RemarkHistory; repFirstName: string }) {
+  const [open, setOpen] = useState(false);
+  // Nobody has ever spoken to this student. Saying so is the fresh lane's job
+  // on the same card; an empty quote box here would just be furniture.
+  if (h.total === 0) return null;
+
+  const lead = h.lastTyped ?? h.last;
+  // The newest touch, shown under the words only when it is a DIFFERENT row —
+  // otherwise the card would print the same remark twice.
+  const alsoLast = h.last && lead && h.last.atIso !== lead.atIso ? h.last : null;
+
+  return (
+    <div className="mt-1.5 rounded-lg bg-stone-100 px-2.5 py-1.5">
+      <p className="mb-1 text-[10px] font-bold uppercase tracking-widest text-stone-400">
+        What was said · {h.total} {h.total === 1 ? 'remark' : 'remarks'}
+      </p>
+      {open ? (
+        <div className="space-y-2">
+          {h.remarks.map((r, i) => <RemarkLine key={`${r.atIso}-${i}`} r={r} repFirstName={repFirstName} />)}
+          {h.total > h.remarks.length && (
+            <p className="text-[11px] text-stone-500">
+              Showing the newest {h.remarks.length} of {h.total} — the rest are on their profile.
+            </p>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          {lead && <RemarkLine r={lead} repFirstName={repFirstName} />}
+          {alsoLast && (
+            <p className="text-[11px] text-stone-500">
+              Then {outcomeWords(alsoLast.outcome)} · {dayLabel(alsoLast.atIso)}
+            </p>
+          )}
+        </div>
+      )}
+      {h.total > 1 && (
+        <button type="button" onClick={() => setOpen(!open)}
+          className="mt-1 text-[11px] font-bold text-teal-700 underline underline-offset-2">
+          {open ? 'Show less' : `Show all ${h.total}`}
+        </button>
+      )}
     </div>
   );
 }

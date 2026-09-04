@@ -3699,3 +3699,96 @@ And: **a test that asserts the implementation it was written against is not a
 guard.** Both of these shipped green. The sweep test asserted `lt:ist_day` —
 the exact expression containing the bug — instead of "a day closes the night
 its shift ends", which would have failed immediately.
+
+---
+
+## Incident #69
+
+**Date:** 4 September 2026
+**Severity:** P1 — Sales (Trust)
+**Found by:** the founder's feature request, not by any alarm.
+
+### What was wrong
+
+The calling card carried a block headed "Last time": the date, the outcome, and
+the student's own words from the previous conversation. It is the single most
+valuable thing on the card — the whole reason a second call is better than a
+first — and it had been shipped, reviewed, tested and used in production.
+
+It was mostly showing our internal lead-distribution ledger.
+
+`buildCallQueue` read `sales_activity` newest-first and kept exactly one row per
+student. `sales_activity` is not a conversation log: lead intake and
+reassignment write their own bookkeeping into the same table. On the morning of
+4 Sep, the newest row for **272 of the 319** touched students was one of those:
+
+```
+"Daily intake -> Neelam Singh: 50 of 50 new-per-day used, book at 500"
+```
+
+Against **47** students whose newest row was a real human disposition. So for
+six students out of seven, the block reserved for what the student said was
+quoting our own distribution engine back at the counsellor.
+
+A second defect sat underneath it and would have outlived the first. `no_answer`
+is the commonest disposition we record, and it carries the auto-note "Did not
+pick up". One unanswered dial therefore replaced the conversation from the call
+before it. The rep dialled again with nothing in front of them, and the student
+explained themselves to the same company twice — the exact harm the block's own
+code comment said it existed to prevent.
+
+### Why nothing caught it
+
+Three guards existed and all three passed:
+
+* A render test proved the block appears when `lastInteraction` is set.
+* A guard test in `sales-objective.test.ts` proved the queue reads
+  `sales_activity` ordered `ascending: false`.
+* A second guard proved the card renders `lead.lastInteraction.note` rather than
+  just the timestamp — written specifically to defeat a `{false && ...}` bypass.
+
+Every one of them asserted that the pipe was **connected**. Not one asserted
+anything about **what came through it**. The fixtures all carried a plausible
+counsellor's remark, because the person writing them was thinking about
+conversations; production carried an intake log line, because a different
+subsystem shares the table.
+
+This is L2 ("no claim about product behaviour from code location alone") in a
+form the file had not yet recorded: the trace PRODUCER → WRITE → CONSUMER →
+SURFACE was followed and was correct. What was skipped is that a table can have
+**more than one producer**, and the consumer had no predicate saying which one
+it wanted.
+
+### The fix
+
+`src/lib/sales-remarks.ts` is now the one place that answers "is this row a
+remark". A remark is a human touch and nothing else: `provenance =
+'self_reported'` AND `actor_id IS NOT NULL`. The predicate is applied **at the
+database**, not in a reducer that a future caller could forget. `isTypedRemark`
+moved here from `sales-yesterday.ts` so the daily snapshot's count of typed
+remarks and the card's lead sentence are computed by the same rule.
+
+The card now carries the newest five remarks, leads with the newest one the rep
+actually typed however old it is, still reports the unanswered dial underneath,
+and expands to the rest in place.
+
+### The lesson, encoded
+
+**A shared table has more than one producer. A read that does not name the
+producer it wants is not reading what it thinks it is.**
+
+`sales_activity` holds dispositions, lead assignments, reassignments, vendor
+imports and enrolment bookkeeping. So does `student_events`. So do
+`notifications` and `intervention_ledger`. Any read that means "what a human
+said" must say so in the query.
+
+With teeth, not just here: `sales-remarks.behaviour.test.ts` pins the exact
+production intake string out of the model, and the guard tests in
+`sales-objective.test.ts` were **rewritten rather than deleted** — the rule they
+protected ("the most recent interaction wins, older rows are ignored") was
+itself the defect, and the rewrite records why, so the next person to widen this
+read learns it from the file instead of from production.
+
+Second lesson, for the test suite: **a fixture that only ever contains the happy
+shape proves the pipe, not the water.** Where a table has several producers, at
+least one fixture must contain a row from a producer the surface must reject.
