@@ -3792,3 +3792,92 @@ read learns it from the file instead of from production.
 Second lesson, for the test suite: **a fixture that only ever contains the happy
 shape proves the pipe, not the water.** Where a table has several producers, at
 least one fixture must contain a row from a producer the surface must reject.
+
+## Incident #70
+
+**2026-09-04 — Seven hours of no sign-ins, and every dashboard said fine.**
+
+**Area:** Identity/Auth (P0). **Students hit:** everyone, including the founder,
+who could not reach his own admin account.
+
+### What happened
+
+OTP delivery stopped at 09:00 UTC. Nobody found out until the founder tried to
+log in that afternoon and asked whether something was broken.
+
+The shape of it, from `student_events`:
+
+| Window (UTC) | requested | resent | verified |
+|---|---|---|---|
+| 2-3 Sep | 12 | 0 | **12** |
+| 4 Sep, 09:00 onward | 13 | 18 | **0** |
+
+Thirty-one requests to `/api/auth/request-phone-otp`, 18 reaching the SMS hook,
+13 turned away with a 429 as students hammered resend, and exactly **one**
+verification attempt — the signature of an SMS that never arrives.
+
+### Why nothing caught it
+
+Every layer reported success. Supabase called the hook; the hook returned 200
+eighteen times out of eighteen; no error appeared in any log. The cause was one
+line in `src/lib/indiahost-otp.ts`:
+
+```js
+if (/(error|failed|invalid|not found|unauthor)/i.test(text)
+    && !/(success|sent|ok)/i.test(text)) throw
+```
+
+Success was defined as *the absence of five specific words* in the gateway's
+reply. Any failure phrased differently passed through as a good send —
+"insufficient balance", "account suspended", "quota exceeded", "number
+blacklisted", an API key rejection, or an empty body. The hook then told
+Supabase the code was delivered, and Supabase told the student to check their
+phone.
+
+The reply text was read and thrown away. That is the whole incident: the
+gateway was telling us what was wrong on every one of the 18 calls, and we
+discarded the message and returned 200.
+
+### What was NOT the cause
+
+Ruled out before the fix, so the next person does not re-walk it: the OTP path
+had not been modified in weeks (last touch #103/#124); the phone normalizer
+correctly produces `+91XXXXXXXXXX`; the hook signature check was fine; the hook
+URL was right (it was being called); the account had 3,000 OTPs remaining; and
+this provider involves no DLT templates. Three deploys landed that day and all
+three were Sales work.
+
+An early hypothesis — exhausted credits — was stated to the founder and was
+wrong. It is recorded here because the reasoning that produced it was sound and
+the correction came from him, not from the data: the data could not distinguish
+the two, which was itself the defect.
+
+### The fix
+
+`src/lib/indiahost-otp.ts` now returns a verdict instead of guessing:
+
+- the gateway's reply is **always** recorded — masked number and body, never the
+  OTP, never the full number
+- **rejection is checked before success**, so a reply carrying both ("sent: 0,
+  failed: 1") is a failure
+- a rejected send returns **500**, so Supabase surfaces the failure rather than
+  telling a student their code is on the way
+- a reply that cannot be positively classified is reported as **UNKNOWN** and
+  logged at error level, not guessed. We do not know this gateway's exact
+  success format; assuming success hides the next outage, and assuming failure
+  would break every working sign-in. The body is in the log line, so the first
+  real reply settles it.
+
+Twenty-two tests, one per reply that used to pass silently.
+
+### The lesson, and where it has teeth
+
+**A denylist of error words is not a success check.** It fails open, and failing
+open on a delivery path means an outage that looks exactly like a healthy day.
+Any integration whose reply we parse must define success positively, and must
+record what the other side actually said — because the difference between
+"delivered" and "silently dropped" is only ever visible in that text.
+
+Encoded in `src/lib/indiahost-otp.test.ts`: every phrase in this entry is a test
+case, so the specific replies that caused this outage can never again be read as
+a successful send.
