@@ -6,6 +6,7 @@ import { SKIP_REASONS, SKIP_REASON_LABEL, type SkipReason } from '@/lib/sales-di
 import { MessageCircle, PhoneCall, PhoneOff, ChevronDown, UserRound, Send } from 'lucide-react';
 import type { CallLead } from '@/lib/call-queue';
 import type { Remark, RemarkHistory } from '@/lib/sales-remarks';
+import { NO_ANSWER_CONTRADICTION_CODE } from '@/lib/no-answer-contradiction';
 import { SECTION_ORDER, SECTION_LABEL, type DaySection } from '@/lib/sales-day';
 import { messageFor, JOURNEY_LABEL } from '@/lib/sales-messages';
 
@@ -55,6 +56,10 @@ export function CallDeck({ queue, repFirstName }: { queue: CallLead[]; repFirstN
   const [msgOpenId, setMsgOpenId] = useState<string | null>(null);
   const [msgNote, setMsgNote] = useState('');
   const [errorById, setErrorById] = useState<Record<string, string>>({});
+  // ── THE CONTRADICTION QUESTION (founder, 4 Sep 2026) ──────────────────────
+  // Held per student, with the exact arguments the rep tried to save, so
+  // answering it re-sends THEIR entry rather than a reconstruction of it.
+  const [askById, setAskById] = useState<Record<string, PendingAsk>>({});
   // ── ONE TAP IS ONE ATTEMPT ────────────────────────────────────────────────
   //
   // The "No answer" quick action had no in-flight guard, and the only real
@@ -81,10 +86,14 @@ export function CallDeck({ queue, repFirstName }: { queue: CallLead[]; repFirstN
     lead: CallLead, outcome: string, note: string, callbackAt?: string,
     reasonCategory?: string | null, reasonVerbatim?: string | null,
     skipReason?: string | null,
+    // Set ONLY by the rep answering "they did answer" to the contradiction
+    // question. Never a default — the server treats absence as unconfirmed.
+    answeredConfirmed?: boolean,
   ): Promise<boolean> => {
     if (inFlight[lead.studentId]) return false;
     setInFlight((f) => ({ ...f, [lead.studentId]: true }));
     setErrorById((e) => ({ ...e, [lead.studentId]: '' }));
+    setAskById((a) => { const n = { ...a }; delete n[lead.studentId]; return n; });
     let failure = 'Could not save the call — check your connection and try again.';
     try {
       const res = await fetch('/api/sales/log', {
@@ -94,6 +103,7 @@ export function CallDeck({ queue, repFirstName }: { queue: CallLead[]; repFirstN
           reasonCategory: reasonCategory ?? null,
           reasonVerbatim: reasonVerbatim ?? null,
           skipReason: skipReason ?? null,
+          answeredConfirmed: answeredConfirmed === true,
         }),
       });
       const json = await res.json().catch(() => null);
@@ -103,6 +113,19 @@ export function CallDeck({ queue, repFirstName }: { queue: CallLead[]; repFirstN
         setOpenId(null);
         setInFlight((f) => ({ ...f, [lead.studentId]: false }));
         return true;
+      }
+      // The two halves of the entry disagree. This is a QUESTION, not a
+      // failure: the card asks which one happened and re-sends the rep's own
+      // entry either way. Rendered as a prompt rather than a red error,
+      // because nothing is wrong yet — the rep simply has to say.
+      if (res.status === 409 && json?.code === NO_ANSWER_CONTRADICTION_CODE) {
+        setAskById((a) => ({ ...a, [lead.studentId]: {
+          lead, outcome, note, callbackAt, reasonCategory: reasonCategory ?? null,
+          reasonVerbatim: reasonVerbatim ?? null, skipReason: skipReason ?? null,
+          question: String(json.error ?? 'Did they actually answer?'),
+        } }));
+        setInFlight((f) => ({ ...f, [lead.studentId]: false }));
+        return false;
       }
       if (json?.error) failure = json.error;
     } catch { /* network failure — fall through to the shared message */ }
@@ -224,6 +247,19 @@ export function CallDeck({ queue, repFirstName }: { queue: CallLead[]; repFirstN
               Log <ChevronDown className={`h-4 w-4 transition-transform ${openId === lead.studentId ? 'rotate-180' : ''}`} />
             </button>
           </div>
+          {askById[lead.studentId] ? (
+            <NoAnswerAsk
+              ask={askById[lead.studentId]}
+              busy={inFlight[lead.studentId] === true}
+              onAnswered={() => { const a = askById[lead.studentId];
+                void dispose(a.lead, a.outcome, a.note, a.callbackAt, a.reasonCategory, a.reasonVerbatim, a.skipReason, true); }}
+              onNoAnswer={() => { const a = askById[lead.studentId];
+                // Their remark travels with the corrected outcome — the words
+                // are the record, and "not pick" on a no_answer is true.
+                // callbackAt is deliberately dropped: no promise was made.
+                void dispose(a.lead, 'no_answer', a.note); }}
+            />
+          ) : null}
           {errorById[lead.studentId] ? (
             <p className="border-t border-rose-100 bg-rose-50 px-4 py-2 text-[12px] font-semibold text-rose-700">{errorById[lead.studentId]}</p>
           ) : null}
@@ -498,6 +534,49 @@ function Remarks({ h, repFirstName }: { h: RemarkHistory; repFirstName: string }
           {open ? 'Show less' : `Show all ${h.total}`}
         </button>
       )}
+    </div>
+  );
+}
+
+// ── "WHICH ONE HAPPENED?" (founder, 4 Sep 2026) ─────────────────────────────
+//
+// Shown when a rep marks a CONNECTED outcome — one that asserts a human spoke
+// — while their own remark says nobody picked up. Production, 3-4 Sep: four
+// such rows in two days, ~15% of one rep's dispositions. Each put a student
+// who never answered into a warm lane on a wrong clock, and inflated the
+// interested/callback counts on the founder's tower.
+//
+// NEITHER ANSWER IS THE WRONG ANSWER, and the copy is written to mean it.
+// "He didn't pick up my first call but rang back and said interested" is a
+// real connected call whose note contains "didn't pick up" — so this asks
+// rather than refuses. A rule that refused would teach the reps to write
+// shorter, emptier remarks, which would cost us far more than the miscoding.
+//
+// Amber, not red: nothing has gone wrong. The rep is being asked, once, to
+// settle which of their own two statements is the one they meant.
+interface PendingAsk {
+  lead: CallLead; outcome: string; note: string; callbackAt?: string;
+  reasonCategory: string | null; reasonVerbatim: string | null; skipReason: string | null;
+  question: string;
+}
+
+function NoAnswerAsk({ ask, busy, onAnswered, onNoAnswer }: {
+  ask: PendingAsk; busy: boolean; onAnswered: () => void; onNoAnswer: () => void;
+}) {
+  return (
+    <div className="border-t border-amber-200 bg-amber-50 px-4 py-3">
+      <p className="text-[12.5px] font-semibold leading-snug text-amber-900">{ask.question}</p>
+      <p className="mt-1 text-[11.5px] italic text-amber-800">&ldquo;{ask.note}&rdquo;</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <button type="button" disabled={busy} onClick={onNoAnswer}
+          className="rounded-full bg-stone-800 px-3.5 py-1.5 text-[12px] font-bold text-white disabled:opacity-50">
+          They didn&apos;t answer
+        </button>
+        <button type="button" disabled={busy} onClick={onAnswered}
+          className="rounded-full border border-amber-300 bg-white px-3.5 py-1.5 text-[12px] font-bold text-amber-900 disabled:opacity-50">
+          They did answer — save as {ask.outcome.replace(/_/g, ' ')}
+        </button>
+      </div>
     </div>
   );
 }

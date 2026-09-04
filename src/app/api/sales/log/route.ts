@@ -1,7 +1,8 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { isCallOutcome, isConnectedOutcome, isSkipReason, planDisposition, type CallOutcome } from '@/lib/sales-disposition';
+import { isCallOutcome, isConnectedOutcome, isSkipReason, planDisposition, CONNECTED_OUTCOMES, type CallOutcome } from '@/lib/sales-disposition';
+import { contradictsConnectedOutcome, contradictionQuestion, NO_ANSWER_CONTRADICTION_CODE } from '@/lib/no-answer-contradiction';
 import {
   canAccessLead, checkSalesTarget, loadStaffDirectory, resolveLeadOwner, salesPrincipal,
 } from '@/lib/sales-authz';
@@ -47,7 +48,11 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json().catch(() => ({}));
   const { studentId, outcome, note, callbackAt, hot, skipReason,
-          reasonCategory, reasonVerbatim, askMade, microCommitment, channel } = body ?? {};
+          reasonCategory, reasonVerbatim, askMade, microCommitment, channel,
+          // The rep's answer to the contradiction question below. Only ever
+          // set by a rep who was SHOWN the contradiction and said "yes, they
+          // really did answer" — never a default, never sent blind.
+          answeredConfirmed } = body ?? {};
   if (!isCallOutcome(outcome)) {
     return NextResponse.json({ error: 'Invalid disposition' }, { status: 400 });
   }
@@ -100,6 +105,31 @@ export async function POST(request: NextRequest) {
       : 'Feedback is required for a connected call.';
     return NextResponse.json({ error: msg }, { status: 400 });
   }
+  // ── THE TWO HALVES OF THE ENTRY MUST AGREE (founder, 4 Sep 2026) ────────
+  //
+  // A connected outcome asserts a human spoke. When the rep's own remark says
+  // nobody picked up, the entry contradicts itself, and production shows this
+  // is not rare: roughly 15% of one rep's dispositions over two days, each one
+  // putting a student who never answered into a warm lane with a wrong clock
+  // and inflating the interested/callback counts the founder reads.
+  //
+  // ASKED, NOT REFUSED. "He didn't pick up my first call but rang back and
+  // said interested" is a legitimate connected outcome whose note contains
+  // "didn't pick up" — blocking it would teach the reps to write shorter,
+  // emptier notes and destroy the remark history itself. So the card asks
+  // which one happened and sends the answer back; either way is one tap.
+  //
+  // THE GATE LIVES HERE, not only on the card. The card owns the question;
+  // this owns the rule. A client that never asked cannot write the
+  // contradiction by omitting the flag, because absence is not confirmation.
+  if (answeredConfirmed !== true
+      && contradictsConnectedOutcome(outcome, noteText, CONNECTED_OUTCOMES)) {
+    return NextResponse.json({
+      error: contradictionQuestion(String(outcome).replace(/_/g, ' ')),
+      code: NO_ANSWER_CONTRADICTION_CODE,
+    }, { status: 409 });
+  }
+
   // A callback needs a time.
   if (outcome === 'callback' && !(typeof callbackAt === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(callbackAt))) {
     return NextResponse.json({ error: 'Pick a callback time.' }, { status: 400 });
