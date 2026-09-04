@@ -1,4 +1,5 @@
 import { getStudentMomentum } from '@/lib/momentum';
+import { loadStaffDirectory } from '@/lib/sales-authz';
 import { profileFacts, type ProfileFact } from '@/lib/sales-profile-facts';
 import { computeTopicMemory } from '@/lib/prep-memory-data';
 import { TOPIC_METADATA } from '@/lib/topics-constants';
@@ -46,6 +47,11 @@ export interface TimelineItem {
   label: string;
   note: string | null;
   provenance: string | null;
+  /** Who at CareerRai recorded it, when we can resolve a name. Null for
+   *  system rows and for an actor no longer in the staff directory. On a
+   *  reassigned lead this is the difference between "somebody wrote this" and
+   *  "Neelam wrote this on the call she had with them". */
+  by: string | null;
 }
 
 export interface ConversionView {
@@ -143,6 +149,11 @@ export async function getSalesConversionView(admin: any, id: string): Promise<Co
   }));
 
   // ── Merged interaction timeline (newest first) ──
+  //
+  // Attributed since 4 Sep 2026. The 360 is where a rep goes for the FULL
+  // history — including, on a reassigned lead, conversations somebody else
+  // had. Anonymous notes made that indistinguishable from their own memory.
+  const staff = await loadStaffDirectory(admin);
   const timeline: TimelineItem[] = [];
   for (const a of acts ?? []) {
     timeline.push({
@@ -150,11 +161,12 @@ export async function getSalesConversionView(admin: any, id: string): Promise<Co
       label: a.activity_type === 'assigned' || a.activity_type === 'reassigned'
         ? 'Lead assigned' : `${a.channel === 'whatsapp' ? 'WhatsApp' : 'Call'} — ${String(a.status ?? 'logged').replace(/_/g, ' ')}`,
       note: a.note ?? null, provenance: a.provenance ?? null,
+      by: (a.actor_id && staff?.labelById.get(a.actor_id as string)) ?? null,
     });
   }
   for (const f of followups) {
-    timeline.push({ at: (fups ?? []).find((x: any) => x.id === f.id)?.created_at ?? f.dueAt, kind: 'followup_created', label: `Follow-up promised for ${new Date(f.dueAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata' })}`, note: f.reason, provenance: 'system_generated' });
-    if (f.completedAt) timeline.push({ at: f.completedAt, kind: 'followup_closed', label: `Follow-up ${f.status === 'no_response' ? 'attempted — no response' : f.status}`, note: f.outcome, provenance: 'system_generated' });
+    timeline.push({ at: (fups ?? []).find((x: any) => x.id === f.id)?.created_at ?? f.dueAt, kind: 'followup_created', label: `Follow-up promised for ${new Date(f.dueAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata' })}`, note: f.reason, provenance: 'system_generated', by: null });
+    if (f.completedAt) timeline.push({ at: f.completedAt, kind: 'followup_closed', label: `Follow-up ${f.status === 'no_response' ? 'attempted — no response' : f.status}`, note: f.outcome, provenance: 'system_generated', by: null });
   }
   timeline.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
 

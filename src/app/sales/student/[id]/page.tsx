@@ -272,6 +272,11 @@ export default async function ConvertPage({ params }: { params: Promise<{ id: st
               <div key={i} className="border-l-2 border-stone-200 pl-3">
                 <p className="text-[12px] font-semibold text-stone-700">
                   {t.label} · <span className="font-normal text-stone-400">{new Date(t.at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' })}</span>
+                  {/* WHO WROTE IT (4 Sep 2026). On a reassigned lead the
+                      previous rep's words are the most valuable thing here,
+                      and a counsellor must know they are quoting a colleague
+                      rather than remembering their own call. */}
+                  {t.by && <span className="ml-1 font-normal text-stone-500">· {t.by}</span>}
                   {t.provenance === 'self_reported' && <span className="ml-1 rounded bg-stone-100 px-1 py-0.5 text-[9px] font-bold text-stone-400">SELF-REPORTED</span>}
                 </p>
                 {t.note && <p className="text-[12px] text-stone-600">{t.note}</p>}

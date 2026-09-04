@@ -82,22 +82,53 @@ describe('the card carries what the counsellor needs before dialling', () => {
     expect(d, 'and the card must show it').toMatch(/lead\.objective/);
   });
 
-  it('the last interaction is on the card, not one tap deeper', () => {
+  it('the remark history is on the card, not one tap deeper', () => {
     const q = read('src/lib/call-queue.ts');
-    expect(q, 'the queue must read prior interactions').toMatch(/from\('sales_activity'\)[\s\S]{0,200}created_at/);
+    expect(q, 'the queue must read prior interactions').toMatch(/from\('sales_activity'\)[\s\S]{0,300}created_at/);
     const d = read('src/components/call-deck.tsx');
     // Checking for the identifier alone was too weak — wrapping the block in
-    // `{false && …}` left it matching. The guard now requires the branch to be
+    // `{false && ...}` left it matching. The guard requires the branch to be
     // driven by the value AND the student's actual words to be rendered.
-    expect(d, "a counsellor who has to open another screen will stop doing it")
-      .toMatch(/\{lead\.lastInteraction && \(/);
+    //
+    // WIDENED 4 Sep 2026 (founder order). This used to pin `lead.lastInteraction`
+    // — a single row. It is now the whole history: see the rewritten test below
+    // for why one row was not merely thin but usually WRONG.
+    expect(d, 'a counsellor who has to open another screen will stop doing it')
+      .toMatch(/<Remarks h=\{lead\.remarks\}/);
     expect(d, "the student's own words are the point, not the timestamp")
-      .toMatch(/lead\.lastInteraction\.note/);
+      .toMatch(/r\.note/);
   });
 
-  it('the most recent interaction wins — older rows are ignored, not overwritten', () => {
+  // ── REWRITTEN 4 Sep 2026 — THE RULE THIS TEST USED TO PIN WAS THE BUG ─────
+  //
+  // It read: "the most recent interaction wins — older rows are ignored, not
+  // overwritten", and it pinned `if (lastBy.has(a.student_id)) continue;`.
+  // Both halves of that rule turned out to be wrong in production:
+  //
+  //   • IGNORING OLDER ROWS threw away the conversation. no_answer is the
+  //     commonest disposition we record and it carries the auto-note "Did not
+  //     pick up", so a single unanswered dial erased what the student had said
+  //     on the call before it.
+  //   • MOST RECENT ROW WINS was not even most-recent-REMARK. Lead intake
+  //     writes bookkeeping into sales_activity, and on 4 Sep 2026 an intake
+  //     log line was the newest row for 272 of the 319 touched students — so
+  //     the block reserved for the student's own words was showing a rep our
+  //     internal lead-distribution ledger.
+  //
+  // The rule now: only human touches are remarks, the newest TYPED one leads,
+  // and the rest are kept and reachable. Recorded here rather than deleted so
+  // the next person to read this file learns what was tried.
+  it('only human touches are remarks, and the newest TYPED one leads', () => {
     const q = read('src/lib/call-queue.ts');
     expect(q).toMatch(/ascending: false/);
-    expect(q, 'first row seen per student is the newest').toMatch(/if \(lastBy\.has\(a\.student_id\)\) continue;/);
+    expect(q, 'intake bookkeeping is excluded at the database')
+      .toMatch(/\.eq\('provenance', HUMAN_PROVENANCE\)/);
+    expect(q, 'grouping and ordering belong to the one remark authority')
+      .toMatch(/buildRemarkHistories\(/);
+    expect(q, 'the single-row reducer that caused this is gone')
+      .not.toMatch(/lastBy/);
+    const d = read('src/components/call-deck.tsx');
+    expect(d, 'an unanswered dial must not bury the conversation before it')
+      .toMatch(/h\.lastTyped \?\? h\.last/);
   });
 });
