@@ -3882,6 +3882,32 @@ Encoded in `src/lib/indiahost-otp.test.ts`: every phrase in this entry is a test
 case, so the specific replies that caused this outage can never again be read as
 a successful send.
 
+### The second lesson: nothing was watching the outcome
+
+The parser was the cause, but it is not the only thing that failed. For seven
+hours no alarm fired, and the founder found out by trying to log in himself.
+
+`/api/cron/founder-alerts` runs every fifteen minutes and was working
+perfectly — it just cannot see this. `findSacredFailures` only looks at
+PER-STUDENT states: a paid student stuck after payment, a mentor with no room.
+A student who cannot log in has no state to be stuck in; they never become a
+row. So the one failure that stops **everybody** was structurally invisible to
+the only active alarm we had.
+
+**A per-entity alert system cannot see a platform-wide fault.** The two need
+separate producers, and the platform one must be an OUTCOME check, because
+every layer we control reported success throughout: the route returned 200, the
+hook returned 200, and the gateway said `{"status":"success"}` on all 1,741
+calls. A gateway health-check would have been green the entire time. Codes
+requested is a claim; codes verified is a fact.
+
+`src/lib/os/auth-health.ts` is that producer: over a rolling 60-minute window,
+five or more codes requested with zero verified is a critical system Exception
+that pages the founder. The 4 September window — 21 requested, 0 verified — is
+a test case, so the shape of this outage can never again go unannounced. Below
+five requests it reports `idle`, not healthy: silence is not evidence of
+health, and a pager that cries at 3am over two sleepy students gets muted.
+
 ## Incident #71
 
 **Date:** 2026-09-04 (found ~23:00 IST, the first full day the 50–70 rule ran)
