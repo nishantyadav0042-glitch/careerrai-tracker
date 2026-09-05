@@ -3882,6 +3882,31 @@ Encoded in `src/lib/indiahost-otp.test.ts`: every phrase in this entry is a test
 case, so the specific replies that caused this outage can never again be read as
 a successful send.
 
+### How it ended
+
+Delivery resumed on its own at **4 Sep ~19:00 UTC** (00:30 IST), about ten
+hours after it stopped. The recovery is confirmed by three sources that agree:
+`student_events` shows the first verifications since the outage began (19:00
+UTC: 6 requested, 2 verified — the first non-zero hour since 3 Sep 23:00),
+`auth.users.last_sign_in_at` shows three real sessions created after that
+point, and the founder confirmed codes arriving on a handset. A student typing
+a correct code is proof the SMS reached a phone; no other source can fake it.
+
+**The cause was never explained.** Nothing changed on our side between the
+break and the recovery — no deploy, no config change, no gateway parameter. The
+provider offers no delivery-report endpoint, so we could not observe the failing
+leg while it was failing, and they did not tell us what they fixed. This entry
+therefore closes with the system proven working and the root cause unknown,
+which is an honest state and not a comfortable one: an unexplained outage can
+recur without warning, and the only thing standing between a repeat and another
+silent seven hours is the alarm below.
+
+Do not read the recovery as a fix. The open item this leaves is not "watch the
+gateway" — it is that the front door of the product depends on **one vendor who
+cannot tell us whether a message was delivered**. That was a considered founder
+decision on 5 Sep (wait for the provider's answer before adding a second
+vendor), recorded here so the next person knows it was chosen, not missed.
+
 ### The second lesson: nothing was watching the outcome
 
 The parser was the cause, but it is not the only thing that failed. For seven
