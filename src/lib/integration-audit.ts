@@ -21,6 +21,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 
 export type AuditAction =
   | 'timetable.buddy_edited'  // a buddy rewrote their student's coaching timetable
+  | 'buddy.approved'          // an admin cleared a mentor to be shown/assigned to students
+  | 'buddy.approval_revoked'  // approval withdrawn; existing students keep their mentor
   | 'google.connected'
   | 'google.disconnected'
   | 'google.connect_failed'   // consent refused, or the token exchange failed

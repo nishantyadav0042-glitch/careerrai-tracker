@@ -20,6 +20,8 @@
   "best_streak",
   "biggest_blocker",
   "biggest_mistake",
+  "buddy_approved_at",
+  "buddy_approved_by",
   "buddy_bio",
   "buddy_id",
   "buddy_meet_calendar_id",
