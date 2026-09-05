@@ -4011,3 +4011,88 @@ And the sharper one: **the warning was already in the file.** The comment
 naming this exact hazard was read during the work that introduced it. Reading
 a caveat is not the same as applying it — when a comment says a column never
 resets, every new predicate over that column is suspect on sight.
+
+---
+
+## Incident #72
+
+**Date:** 2026-09-05 (found ~22:00 IST, reading the day the #71 fix went live)
+**Area:** Sales OS — the day's size
+**Severity:** P1 (a list that cannot be finished; coverage reads as failure)
+
+### What was wrong
+
+The two seats were dealt **111 and 174 cards** against a ceiling of 70.
+
+| Rep | given | worked | not marked | attention (ceiling 20) | fresh |
+|---|---|---|---|---|---|
+| Anshul | 111 | 25 | 86 | 45 | 15 |
+| Neelam | 174 | 95 | 59 | 64 | 44 |
+
+The first assembly of the day was **exactly right**: Anshul's 07:00 deck was
+65 cards with attention at 20 and new arrivals at 15, both precisely their
+ceilings. The day then grew on every page load — 20 more attention cards at
+12:00, 11 more at 20:00; for Neelam, 15 fresh students at 00:00, 15 more at
+20:00 and 14 more at 22:00.
+
+### Cause
+
+Every ceiling was measured against the cards **still on screen**, not the cards
+already dealt. A worked card leaves the queue, so the lane has room again and
+the next rebuild deals a fresh full allowance. Three places, one mistake:
+
+- per-lane ceilings counted only the candidates in this assembly;
+- `DAY_CEILING` trimmed against this assembly's signals;
+- rotation's target was `DAY_FLOOR − signals currently open`, which grows as
+  signals get worked, so rotation re-topped even though Incident #68 had
+  supposedly closed exactly this.
+
+That is the sharp part. **Incident #68 is this defect.** It was found on 3 Sep
+(97 cards against a ceiling of 70), root-caused correctly — "the queue is
+rebuilt on every page load and a backfill made that deal MORE cards each time"
+— and then fixed for **rotation alone**, with `rotationUsedToday` as a
+rotation-shaped patch. The general statement was written down in the same
+commit and not acted on. Two days later the same defect returned through the
+five lanes the patch did not cover, larger than the first time.
+
+A second defect in the same read: the sweep closed 5 Sep at 21:45 IST and the
+deck dealt Neelam 20 more cards at 22:00 — 14 of them never-contacted students
+— into a day that was over. Nobody would work them; tomorrow's sweep would file
+them as leakage.
+
+### Fix
+
+- `DayContext.usedToday` is the day's ledger: cards dealt today per section, in
+  every state (worked, skipped, still open). Every ceiling is measured against
+  it and against nothing else.
+- Candidates are split into CARRIED (dealt today, already in the ledger — they
+  pass every gate, because a rebuild may never take back a card the counsellor
+  can already see) and NEW (which spend the day's remaining allowance).
+- The day ceiling trims against `usedTotal + new signals`, so rotation dealt
+  this morning still occupies the day this evening.
+- The short-day backfill measures shortness on the whole day, not the screen.
+- `shiftOver`: past `SHIFT_END_HOUR_IST` the deck shows what was dealt and
+  deals nothing new.
+- `istHour()` is now one exported function instead of the same `% 24`
+  expression written out twice (the midnight-renders-as-24 trap of #68).
+
+### Lesson
+
+**A fix scoped to the lane where the bug was seen is not a fix.** The defect
+was in how the day accounts for itself; it presented in rotation, so it was
+fixed in rotation. When a root cause is stated in general terms — "the queue is
+rebuilt and each rebuild deals more" — the fix has to be general too, or the
+next lane hits it. Before closing an incident, ask which other call sites share
+the cause, and either fix them or write down why they are exempt.
+
+**The second lesson is about verification.** #68 was verified by the tests and
+by a same-day read that looked right. What proves a day-shaped rule is a
+day-shaped test: the replay in `sales-day.test.ts` now deals a morning and
+rebuilds twelve times, working five cards each round, and asserts the seat was
+never offered more than `DAY_CEILING`. A single assembly cannot show this bug —
+the first assembly was correct on both 3 and 5 September.
+
+**And a smaller one:** four deck tests started failing the moment `shiftOver`
+shipped, because CI happened to run at 22:00 IST. A test whose result depends
+on when it runs is not a passing test, it is an unfired one. `test-support/
+mid-shift.ts` pins the hour.

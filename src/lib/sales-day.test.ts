@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { assembleDay, dayAnchorMs, SECTION_OF, SECTION_ORDER } from './sales-day';
+import { assembleDay, dayAnchorMs, istHour, SECTION_OF, SECTION_ORDER, type DaySection } from './sales-day';
 import type { DueReason } from './call-queue';
 import {
   DAY_FLOOR, DAY_CEILING, ROTATION_FLOOR, ATTENTION_CEILING, NEW_ARRIVAL_CEILING, ROTATION_CALL_EVERY,
+  SHIFT_END_HOUR_IST,
 } from './os/scale-config';
 
 // ── THE DAY IS 50–70, AND EVERY RULE OF IT IS PROVEN HERE ───────────────────
@@ -147,7 +148,7 @@ describe('a rebuild continues today, it does not deal a second day', () => {
     const remaining = c('rotation', 20);
     const openToday = new Set(remaining.map((x) => x.studentId));
     const day = assembleDay([...remaining, ...c('rotation', 200)], {
-      openToday, rotationUsedToday: 50,
+      openToday, usedToday: { rotation: 50 },
     });
     expect(day.queue).toHaveLength(20);
     expect(day.queue.every((x) => openToday.has(x.studentId))).toBe(true);
@@ -158,7 +159,7 @@ describe('a rebuild continues today, it does not deal a second day', () => {
     const remaining = c('rotation', 4);
     const openToday = new Set(remaining.map((x) => x.studentId));
     const day = assembleDay([...remaining, ...c('rotation', 200)], {
-      openToday, rotationUsedToday: 10,
+      openToday, usedToday: { rotation: 10 },
     });
     expect(day.counts.given.rotation).toBe(4 + (DAY_FLOOR - 10));
   });
@@ -166,7 +167,7 @@ describe('a rebuild continues today, it does not deal a second day', () => {
   it('a genuinely new SIGNAL still arrives mid-day — that is the point of the exception', () => {
     // A promise coming due at 6pm, on a rotation target already fully spent.
     const day = assembleDay([...c('callback', 1), ...c('rotation', 50)], {
-      openToday: new Set(), rotationUsedToday: DAY_FLOOR,
+      openToday: new Set(), usedToday: { rotation: DAY_FLOOR },
     });
     expect(day.counts.given.promises, 'a promise is never withheld').toBe(1);
     expect(day.counts.given.rotation, 'but rotation is done for today').toBe(0);
@@ -186,5 +187,167 @@ describe('the 4 AM anchor', () => {
     // 15:00 IST on 3 Sep = 09:30 UTC.
     const later = Date.parse('2026-09-03T09:30:00Z');
     expect(new Date(dayAnchorMs(later)).toISOString()).toBe('2026-09-02T22:30:00.000Z'); // 3 Sep 04:00 IST
+  });
+});
+
+// ── A CEILING COUNTS THE DAY, NOT THE SCREEN (production, 5 Sep 2026) ───────
+//
+// The first assembly of 5 Sep was exactly right: Anshul was dealt 65 cards
+// with attention at 20 and new arrivals at 15, both precisely their ceilings.
+// By 22:00 he had been dealt 111 and Neelam 174, against a ceiling of 70 —
+// attention alone reached 45 and 64.
+//
+// Why: every ceiling was measured against the cards still ON SCREEN. Work a
+// card and it leaves the queue, so the lane has "room" again and the next
+// page load deals a fresh full allowance. Incident #68 found this exact defect
+// and fixed it for rotation ALONE; the same hole stayed open in every other
+// lane, and in the day ceiling itself.
+//
+// The ledger below (`usedToday`) is what a ceiling is measured against now:
+// cards DEALT today, in every state — worked, skipped, still open.
+describe('the day s ceilings count what was dealt today', () => {
+  it('a lane at its ceiling admits nothing new, however many candidates wait', () => {
+    // 20 attention cards already dealt and all of them worked, so none are on
+    // screen. 40 more students have since opened the app without logging.
+    const day = assembleDay([...c('attention', 40), ...c('rotation', 100)], {
+      openToday: new Set(), usedToday: { attention: ATTENTION_CEILING },
+    });
+    expect(day.counts.given.attention, 'the lane is spent for the day').toBe(0);
+  });
+
+  it('a lane part-spent admits only the remainder', () => {
+    const day = assembleDay([...c('attention', 40), ...c('rotation', 100)], {
+      openToday: new Set(), usedToday: { attention: ATTENTION_CEILING - 5 },
+    });
+    expect(day.counts.given.attention).toBe(5);
+  });
+
+  it('new arrivals are capped by the day too, not by the screen', () => {
+    const day = assembleDay([...c('new_never_logged', 30), ...c('rotation', 100)], {
+      openToday: new Set(), usedToday: { new: NEW_ARRIVAL_CEILING },
+    });
+    expect(day.counts.given.new).toBe(0);
+  });
+
+  it('the DAY ceiling counts the day: 65 dealt leaves room for 5', () => {
+    const day = assembleDay([...c('going_cold', 40), ...c('rotation', 100)], {
+      openToday: new Set(),
+      usedToday: { attention: 20, new: 15, retention: 10, rotation: 20 },
+    });
+    const dealt = 65 + day.queue.length;
+    expect(dealt).toBeLessThanOrEqual(DAY_CEILING);
+  });
+
+  it('rotation s target counts signals DEALT today, not signals still open', () => {
+    // Neelam, 5 Sep 20:00. 40 signals and 15 rotation cards dealt since
+    // midnight; nearly all worked, so the screen looks empty and the old rule
+    // read "few signals — deal 50 more rotation cards". It dealt 15 more, then
+    // 14 more at 22:00: 44 never-contacted students in one day.
+    const day = assembleDay([...c('fresh', 200)], {
+      openToday: new Set(),
+      usedToday: { promises: 5, attention: 20, new: 15, rotation: ROTATION_FLOOR },
+    });
+    expect(day.counts.given.rotation, 'rotation is done for today').toBe(0);
+  });
+
+  it('carried cards always survive, even in a lane that is over its ceiling', () => {
+    // The ceiling must never take back a card the counsellor can already see.
+    const open = c('attention', 25);
+    const day = assembleDay([...open, ...c('attention', 10), ...c('rotation', 100)], {
+      openToday: new Set(open.map((x) => x.studentId)),
+      usedToday: { attention: 25 },
+    });
+    expect(day.counts.given.attention, 'all 25 stay, none of the 10 new ones join').toBe(25);
+    expect(open.every((o) => day.queue.some((x) => x.studentId === o.studentId))).toBe(true);
+  });
+
+  it('a promise still arrives mid-day, on a day already at its ceiling', () => {
+    const day = assembleDay([...c('callback', 1), ...c('attention', 20)], {
+      openToday: new Set(), usedToday: { attention: 20, new: 15, retention: 15, rotation: 20 },
+    });
+    expect(day.counts.given.promises, 'never withheld').toBe(1);
+    expect(day.counts.given.attention, 'but the lane is spent').toBe(0);
+  });
+
+  it('the backfill measures shortness on the whole day, not the screen', () => {
+    // 60 cards dealt today, 55 of them worked. The day is not short; a
+    // held-back card must not be pulled in to "fill" an empty-looking screen.
+    const day = assembleDay([...c('attention', 40)], {
+      openToday: new Set(), usedToday: { attention: ATTENTION_CEILING, new: 15, retention: 10, rotation: 15 },
+    });
+    expect(day.queue).toHaveLength(0);
+  });
+});
+
+// ── A CLOSED DAY IS NOT RE-DEALT (production, 5 Sep 2026) ───────────────────
+//
+// The sweep closed 5 Sep at 21:45 IST. At 22:00 Neelam's page dealt her 20
+// MORE cards — 14 of them never-contacted students — into a day that was over.
+// Nobody was going to work them, and tomorrow's sweep would file them as
+// leakage. A card dealt after the shift is not work, it is noise in the count.
+describe('after the shift ends', () => {
+  it('deals nothing new', () => {
+    const day = assembleDay([...c('attention', 30), ...c('callback', 2), ...c('rotation', 100)], {
+      openToday: new Set(), usedToday: { attention: 5 }, shiftOver: true,
+    });
+    expect(day.queue).toHaveLength(0);
+  });
+
+  it('still shows the cards already dealt, so a late marking lands', () => {
+    const open = c('attention', 6);
+    const day = assembleDay([...open, ...c('rotation', 100)], {
+      openToday: new Set(open.map((x) => x.studentId)),
+      usedToday: { attention: 6 }, shiftOver: true,
+    });
+    expect(day.queue).toHaveLength(6);
+    expect(day.counts.given.rotation).toBe(0);
+  });
+});
+
+// ── THE PRODUCTION DAY, REPLAYED ───────────────────────────────────────────
+describe('5 Sep 2026 replayed', () => {
+  it('a day of rebuilds can never exceed the ceiling', () => {
+    // Deal the morning, then rebuild twelve times, working five cards each
+    // time — exactly what a counsellor's browser did all day.
+    const pool = [...c('attention', 120), ...c('new_never_logged', 60), ...c('going_cold', 30), ...c('fresh', 400)];
+    const used: Partial<Record<DaySection, number>> = {};
+    const worked = new Set<string>();
+    let open = new Set<string>();
+    let dealt = 0;
+    for (let round = 0; round < 12; round++) {
+      const day = assembleDay(pool.filter((x) => !worked.has(x.studentId)), { openToday: open, usedToday: used });
+      for (const card of day.queue) {
+        if (!open.has(card.studentId)) {
+          used[card.section] = (used[card.section] ?? 0) + 1;
+          dealt++;
+        }
+      }
+      open = new Set(day.queue.map((x) => x.studentId));
+      for (const card of day.queue.slice(0, 5)) { worked.add(card.studentId); open.delete(card.studentId); }
+    }
+    expect(dealt, `a seat was offered ${dealt} cards`).toBeLessThanOrEqual(DAY_CEILING);
+    expect(dealt).toBeGreaterThanOrEqual(DAY_FLOOR);
+  });
+});
+
+describe('the IST hour', () => {
+  it('midnight IST is hour 0, not 24 — the modulo is load-bearing', () => {
+    // 00:30 IST on 5 Sep = 19:00 UTC on 4 Sep. en-GB renders this as "24",
+    // and an unguarded compare would call it past the shift end (Incident #68).
+    expect(istHour(new Date('2026-09-04T19:00:00Z'))).toBe(0);
+    expect(istHour(new Date('2026-09-04T19:00:00Z')) >= SHIFT_END_HOUR_IST).toBe(false);
+    expect(istHour(new Date('2026-09-05T16:30:00Z'))).toBe(22);
+    expect(istHour(new Date('2026-09-05T15:00:00Z'))).toBe(20);
+  });
+});
+
+describe('a card the ledger cannot name still occupies the day', () => {
+  it('an unrecognised lane does not hand back a full allowance', () => {
+    // 60 cards dealt today, but a lane rename left 40 of them unattributable.
+    // The sections sum to 20; the day is still 60 and has room for 10.
+    const day = assembleDay([...c('going_cold', 40), ...c('rotation', 100)], {
+      openToday: new Set(), usedToday: { attention: 20 }, dealtToday: 60,
+    });
+    expect(60 + day.queue.length).toBeLessThanOrEqual(DAY_CEILING);
   });
 });

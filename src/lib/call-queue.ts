@@ -10,9 +10,9 @@ import {
   BROKEN_STREAK_MIN_RUN, BROKEN_STREAK_MAX_DAYS_SINCE,
   NEW_LEAD_MIN_AGE_DAYS, NEW_LEAD_MAX_AGE_DAYS,
   ROTATION_SILENT_DAYS, TOUCH_COOLDOWN_DAYS, ATTENTION_WINDOW_DAYS,
-  CONVERSION_INTENT_DAYS,
+  CONVERSION_INTENT_DAYS, SHIFT_END_HOUR_IST,
 } from '@/lib/os/scale-config';
-import { assembleDay, dayAnchorMs, type Channel, type DaySection, type DayCounts } from '@/lib/sales-day';
+import { assembleDay, dayAnchorMs, istHour, SECTION_OF, type Channel, type DaySection, type DayCounts } from '@/lib/sales-day';
 import { readToday } from '@/lib/sales-opportunity-record';
 import { journeyStage, JOURNEY_NEXT_STEP, type JourneyStage } from '@/lib/sales-messages';
 import { buildRemarkHistories, EMPTY_HISTORY, HUMAN_PROVENANCE, MAX_REMARKS_ON_CARD, type RemarkHistory } from '@/lib/sales-remarks';
@@ -455,7 +455,19 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
   const mine = viewer?.role === 'sales' ? await readToday(db, viewer.id) : [];
   const closedToday = new Set(mine.filter((r) => r.closedAt).map((r) => r.studentId));
   const openToday = new Set(mine.filter((r) => !r.closedAt).map((r) => r.studentId));
-  const rotationUsedToday = mine.filter((r) => r.lane === 'rotation' || r.lane === 'fresh').length;
+  // THE DAY'S LEDGER, section by section (Incident #72). Every ceiling — each
+  // lane's, the day's, and rotation's target — is measured against what has
+  // already been DEALT today, not against what happens to be on screen right
+  // now. Measured on the screen, a ceiling refills every time a card is
+  // worked: on 5 Sep that dealt 111 and 174 cards against a ceiling of 70.
+  const usedToday: Partial<Record<DaySection, number>> = {};
+  for (const r of mine) {
+    const section = r.lane ? SECTION_OF[r.lane as DueReason] : undefined;
+    if (section) usedToday[section] = (usedToday[section] ?? 0) + 1;
+  }
+  // Past the shift the day has been closed by the sweep. Carried cards stay so
+  // a late marking still lands; nothing new is dealt into a day nobody works.
+  const shiftOver = istHour(new Date(now)) >= SHIFT_END_HOUR_IST;
 
   const roster = await getRosterMomentum(db);
   const free = roster.filter((r) => !r.isPremium && !r.hasBuddy);
@@ -825,7 +837,7 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
   // ── THE DAY (lib/sales-day, founder 2 Sep 2026): 50–70, signals first,
   // rotation fills, per-lane ceilings, channel per card. Pure and proven on
   // its own; this file decides who and why, that one decides how many.
-  const day = assembleDay(cands, { openToday, rotationUsedToday });
+  const day = assembleDay(cands, { openToday, usedToday, dealtToday: mine.length, shiftOver });
   const queue: CallLead[] = day.queue.map(({ _sort, ...c }) => { void _sort; return c as CallLead; });
   return { queue, connectedToday, dueNow, totalOpen, counts: day.counts, band: day.band };
 }
