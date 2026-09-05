@@ -20,6 +20,10 @@ interface LoggingModalProps {
    *  student who came here to record a mock is not asked to find it again. */
   openWithMock?: boolean;
   isSubmitting?: boolean;
+  /** Closed without saving. `touchedAnything` separates a considered "not now"
+   *  from a reflex tap — the caller uses it to decide whether this sighting
+   *  counted (see lib/first-log-nudge.ts). */
+  onDismiss?: (info: { touchedAnything: boolean; secondsOpen: number | null }) => void;
 }
 
 export interface LoggingData {
@@ -53,7 +57,7 @@ const OFF_PLAN_SECTIONS = ['VARC', 'DILR', 'QA', 'Revision'] as const;
 
 type TaskState = 'half' | 'full';
 
-export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false, openWithMock }: LoggingModalProps) {
+export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false, openWithMock, onDismiss }: LoggingModalProps) {
   const [planTasks, setPlanTasks] = useState<PlanTask[]>([]);
   const [taskChoice, setTaskChoice] = useState<Map<string, TaskState>>(new Map());
   const [initialDoneIds, setInitialDoneIds] = useState<Set<string>>(new Set());
@@ -245,13 +249,16 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false, 
 
   const handleClose = () => {
     if (!savedRef.current) {
+      const secondsOpen = openedAt.current ? Math.round((Date.now() - openedAt.current) / 1000) : null;
+      const touchedAnything = taskChoice.size > 0 || mockTaken !== null;
+      onDismiss?.({ touchedAnything, secondsOpen });
       track('log_dismissed', {
-        secondsOpen: openedAt.current ? Math.round((Date.now() - openedAt.current) / 1000) : null,
+        secondsOpen,
         planTasksOffered: planTasks.length,
         tasksMarked: taskChoice.size,
         mockAnswered: mockTaken !== null,
         wasSubmittable: isValid,
-        touchedAnything: taskChoice.size > 0 || mockTaken !== null,
+        touchedAnything,
       });
     }
     onClose();

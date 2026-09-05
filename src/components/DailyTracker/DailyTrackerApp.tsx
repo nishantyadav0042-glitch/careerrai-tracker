@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import dynamic from 'next/dynamic';
@@ -12,7 +12,8 @@ import { getLogDateString } from '@/lib/streak-utils';
 import { RatingPromptSheet } from '@/components/rating-prompt-sheet';
 import type { RatingPromptTrigger } from '@/lib/rating-prompt';
 import { track } from '@/lib/journey';
-import { NOTIF_ASK_SETTLED_EVENT, TOUR_DONE_EVENT, INSIGHT_DONE_EVENT, insightVisible } from '@/lib/first-run-events';
+import { NOTIF_ASK_SETTLED_EVENT, TOUR_DONE_EVENT, INSIGHT_DONE_EVENT, insightVisible, tourSettled } from '@/lib/first-run-events';
+import { readState, writeState, shouldShow, afterShown, afterDismiss, afterLogged, nudgeToday } from '@/lib/first-log-nudge';
 
 import { joinState, canJoinNow, shouldShowLink, countdownLabel } from '@/lib/session-link';
 import type { EvidenceItem } from '@/lib/evidence/mock-evidence';
@@ -106,6 +107,9 @@ export function DailyTrackerApp({
   firstLogNudge = false,
 }: DailyTrackerAppProps) {
   const [isLogOpen, setIsLogOpen] = useState(false);
+  // True only while the modal on screen was opened BY the first-log nudge, so a
+  // dismissal is charged to the nudge's budget and a self-opened log is not.
+  const nudgeOpenedRef = useRef(false);
   /** Which door the sheet was opened from — the mock one pre-answers "did you
    *  give a mock today". */
   const [logWithMock, setLogWithMock] = useState(false);
@@ -227,17 +231,24 @@ export function DailyTrackerApp({
   // at the peak of the first session — not hours later on a dead channel.
   useEffect(() => {
     if (!firstLogNudge || hasLoggedToday) return;
-    const KEY = 'cr_first_log_prompt_v1';
-    try { if (localStorage.getItem(KEY)) return; } catch { return; }
     let fired = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
-    const tourDone = () => { try { return localStorage.getItem('cr_app_tour_v1') === '1'; } catch { return false; } };
     const askUp = () => { try { return (window as Window & { __crNotifAskVisible?: boolean }).__crNotifAskVisible === true; } catch { return false; } };
     const maybeOpen = () => {
-      if (fired || !tourDone() || askUp() || insightVisible()) return;
+      // tourSettled, NOT tourDone: the tour only runs in the installed app, so
+      // waiting for it to finish meant a browser student waited forever. 451
+      // browser students opened CareerRai in 21 days, none saw this, one logged.
+      if (fired || !tourSettled() || askUp() || insightVisible()) return;
+      const today = nudgeToday();
+      const state = readState();
+      if (!shouldShow(state, today)) return;
       fired = true;
-      try { localStorage.setItem(KEY, '1'); } catch { /* ignore */ }
-      track('first_log_prompt');
+      // The sighting is recorded, but it is not SPENT — only engaging with the
+      // modal (or logging) ends the nudge. A four-second reflex dismissal used
+      // to be final; now it buys another day, up to MAX_SIGHTINGS.
+      writeState(afterShown(state, today));
+      nudgeOpenedRef.current = true;
+      track('first_log_prompt', { sighting: state.shown + 1 });
       setIsLogOpen(true);
     };
     // Small delay on each trigger so sibling listeners (the notif ask's own
@@ -259,6 +270,10 @@ export function DailyTrackerApp({
     const backdated = logDateOverride;
     const result = await submitLog({ ...data, ...(backdated ? { log_date: backdated } : {}) });
     setLogDateOverride(null);
+    // They logged. That is the whole point of the nudge — retire it for good,
+    // whichever way the modal was opened.
+    nudgeOpenedRef.current = false;
+    writeState(afterLogged(readState()));
 
     // Integrated flow: the ticked plan topics become plan completions + coverage
     // advances — one action, consistent everywhere. skip_day_close because the
@@ -412,7 +427,21 @@ export function DailyTrackerApp({
         </Card>
       )}
 
-      <LoggingModal isOpen={isLogOpen} onClose={() => { setIsLogOpen(false); setLogWithMock(false); }} onSubmit={handleLogSubmit} isSubmitting={isSubmitting} openWithMock={logWithMock} />
+      <LoggingModal
+        isOpen={isLogOpen}
+        onClose={() => { setIsLogOpen(false); setLogWithMock(false); }}
+        onSubmit={handleLogSubmit}
+        isSubmitting={isSubmitting}
+        openWithMock={logWithMock}
+        onDismiss={({ touchedAnything }) => {
+          // Only a dismissal of the AUTO-OPENED nudge is the nudge's to spend.
+          // A student who opened the log themselves and changed their mind has
+          // not used up anything.
+          if (!nudgeOpenedRef.current) return;
+          nudgeOpenedRef.current = false;
+          writeState(afterDismiss(readState(), touchedAnything));
+        }}
+      />
       {/* The payoff replaces the old "Logged! 🎉 Your streak is now 1 day"
           modal, which celebrated the act of recording and said nothing about
           the plan the recording produced. Now the student watches the plan

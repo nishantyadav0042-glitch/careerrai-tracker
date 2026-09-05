@@ -4085,3 +4085,107 @@ Second lesson, cheaper to state than it was to learn: **when a bug is found in
 one producer, grep for its shape in the others before closing it.** The dead
 column was fixed once and left in place twice.
 
+## Incident #73
+
+**Date:** 2026-09-05
+**Area:** Activation — the first log
+**Severity:** P0 (the one action the product is about, for most of the base)
+
+### What was wrong
+
+First-log conversion, tenure-controlled by signup week:
+
+| Week | Signups | Ever logged |
+|---|---:|---:|
+| 20 Jul | 120 | **39.2%** |
+| 10 Aug | 169 | 23.1% |
+| 17 Aug | 326 | 23.6% |
+| 24 Aug | 210 | **19.5%** |
+
+The obvious suspects were all wrong, and ruling them out is half the value:
+onboarding completion is **96–99%** (the cliff is entirely after it); only 2 of
+335 abandoned logs had an empty plan to mark; `log_blocked` (validation)
+touched 46 students; and Meta traffic converts at 21.1% against direct's 25.5%
+— real, but nowhere near a halving.
+
+The funnel for 666 students who signed up in 21 days: 619 opened the app, 403
+finished the onboarding log tour, **288 saw the first-log nudge**, 311 opened
+the log somehow, **152 logged**.
+
+### Cause (a): a gate that no browser could ever pass
+
+The nudge auto-opens the logging modal once for a student who has never logged.
+It was gated on `tourDone()`. `app-tour` starts **only in the installed app** —
+its own comment says so: *"a browser tab still shows the address bar and the
+install prompts, so the tour there lands on the wrong screen."*
+
+So in a browser the flag is never written and the gate never opens. Split by
+display mode over 21 days:
+
+| Surface | Opened the app | Saw the nudge | Logged |
+|---|---:|---:|---:|
+| standalone | 367 | 195 (53%) | 56 |
+| ios_app | 196 | 108 (55%) | 24 |
+| **browser** | **451** | **0** | **1** |
+
+Browser is the LARGEST group of app-openers, and its conversion is one student
+in four hundred and fifty-one.
+
+The gate was written to stop first-run overlays stacking. Inside the installed
+sequence it does that correctly. Outside it, it is a condition that can never
+become true — and nothing in the type system, the tests, or the telemetry said
+so, because "nobody saw the nudge" and "nobody needed the nudge" produce the
+same silence.
+
+### Cause (b): the one-shot spent itself on reflexes
+
+The modal wrote `cr_first_log_prompt_v1` when it OPENED, not when it worked.
+
+| | Auto-opened nudge | Student opened it |
+|---|---:|---:|
+| Dismissals (21d) | 242 | 93 |
+| Touched any control | **14.5%** | 29.0% |
+| Median seconds open | **9** | 9 |
+| Gone within 5 seconds | 80 | 27 |
+
+Median nine seconds, and 85.5% never touched a single control — they did not
+fail to fill it in, they never started. Every one of those dismissals was final:
+226 students can no longer be nudged on that device.
+
+The same read was `try { ... } catch { return; }`, so a browser that throws on
+localStorage (private mode, blocked site data) showed the nudge to nobody — the
+fallback for "I cannot remember whether I showed this" was to withhold it.
+
+### The fix
+
+- `tourSettled()` = `tourDone() || !tourApplies()` in `first-run-events.ts`.
+  Wait for the tour only where a tour will run.
+- `lib/first-log-nudge.ts`: a sighting budget that is spent by ENGAGEMENT, not
+  by being shown. Up to 3 sightings, at most one per study-day, retired the
+  moment the student logs, and an untouched dismissal buys another day.
+- Storage now fails OPEN: unreadable state shows the nudge.
+- `LoggingModal` reports dismissal quality to its parent, so only the
+  auto-opened modal is charged to the nudge's budget.
+
+### Still open, deliberately not changed here
+
+**Four more first-run surfaces carry gate (a) unchanged** —
+`coverage-review-gate`, `daily-buddy-nudge`, `check-in-gate` and
+`insight-cloud` all wait on `tourDone()` and are therefore equally shut in a
+browser. They are different features with real UX consequences, so they are the
+founder's call, not a silent widening of this fix. Flagged, not fixed.
+
+### The lesson, and where it has teeth
+
+**A precondition that one platform can never satisfy is a feature flag that
+nobody knows they set.** `tourDone()` was correct in the sequence it was written
+for and catastrophic one component away. Any gate on another feature's
+completion must also answer: *what if that feature never runs here?*
+
+And: **a one-shot must be spent by success, not by display.** Recording "shown"
+at open time makes the cheapest possible user action — a reflex tap — permanent.
+
+Encoded in `src/lib/first-log-nudge.test.ts`: the reflex-dismissal shape, the
+per-day and budget limits, and a source assertion that the nudge waits on
+`tourSettled()` and never on `tourDone()`.
+

@@ -61,6 +61,33 @@ export function tourDone(): boolean {
   try { return localStorage.getItem(TOUR_KEY) === '1'; } catch { return false; }
 }
 
+/**
+ * Does an app tour even run here? `app-tour` starts ONLY in the installed app —
+ * a browser tab still shows the address bar and the install prompts, so the
+ * tour there lands on the wrong screen.
+ *
+ * This matters far outside the tour. Anything that waited for `tourDone()` was
+ * waiting for an event that can never happen in a browser: on 5 Sep the
+ * first-log nudge was found gated this way, and in 21 days 451 students who
+ * opened CareerRai in a browser saw it ZERO times, of whom exactly one ever
+ * logged. A sequencing gate outside the sequence it sequences is a locked door.
+ */
+export function tourApplies(): boolean {
+  try {
+    const nav = navigator as Navigator & { standalone?: boolean };
+    return window.matchMedia?.('(display-mode: standalone)').matches === true || nav.standalone === true;
+  } catch { return false; }
+}
+
+/**
+ * "The tour is no longer in the way" — true once it has been completed, and
+ * true immediately where no tour will ever run. Wait on THIS, never on
+ * tourDone(), unless the thing you are sequencing is itself installed-only.
+ */
+export function tourSettled(): boolean {
+  return tourDone() || !tourApplies();
+}
+
 export function timetableAskVisible(): boolean {
   try { return (window as FirstRunWindow).__crTimetableAskVisible === true; } catch { return false; }
 }
