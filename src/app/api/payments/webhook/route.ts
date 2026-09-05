@@ -82,6 +82,22 @@ export async function POST(request: NextRequest) {
             type: 'payment_refunded', severity: 'warning', userId: target.studentId,
             metadata: { paymentId: refundedPaymentId },
           });
+        } else {
+          // A refund we cannot match to any row in our ledger. Usually harmless
+          // (a payment that was never ours), but it is ALSO exactly what a
+          // refund we should have processed looks like when the payment id has
+          // drifted — and until now that case ACKed 200 and vanished without a
+          // trace, so nobody could tell the two apart afterwards.
+          //
+          // Same class of defect as Incident #70: a delivery path that answers
+          // "fine" when it did nothing. Recording it costs one row and turns an
+          // invisible event into a searchable one. Deliberately does NOT 500 —
+          // a genuinely foreign refund must not be redelivered forever.
+          console.error(`[rzp-webhook] refund for unknown payment ${refundedPaymentId} — nothing settled`);
+          await logSecurityEvent(admin, {
+            type: 'refund_unmatched', severity: 'warning',
+            metadata: { razorpayPaymentId: refundedPaymentId, event: event.event },
+          });
         }
       }
     }
