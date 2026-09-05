@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { pinMidShiftClock } from './test-support/mid-shift';
 
 // ── Incident #57: the queue died at ~850 students ───────────────────────────
 //
@@ -76,6 +77,7 @@ const student = (i: number) => ({
 });
 
 beforeEach(() => { vi.clearAllMocks(); ROSTER.length = 0; inSizes = []; });
+pinMidShiftClock();
 
 describe('the queue survives the real student base', () => {
   it('renders for 975 students instead of throwing Bad Request', async () => {

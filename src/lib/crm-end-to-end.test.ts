@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { pinMidShiftClock } from './test-support/mid-shift';
 import { readFileSync, existsSync } from 'node:fs';
 import { WORKSPACES } from './admin-workspaces';
 import { planDisposition, MAX_CONSECUTIVE_NO_ANSWER } from './sales-disposition';
@@ -89,6 +90,7 @@ function db(outreach: Record<string, unknown>[], opts: { outreachFails?: boolean
 
 const HOUR = 3600_000;
 beforeEach(() => vi.clearAllMocks());
+pinMidShiftClock();
 
 describe('Scenario A — a new lead reaches the rep', () => {
   it('a student nobody has called appears in the queue as fresh work', async () => {

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { pinMidShiftClock } from './test-support/mid-shift';
 
 // ── THE QUEUE IS AN OPPORTUNITY LIST, NOT A QUOTA ───────────────────────────
 //
@@ -59,6 +60,7 @@ async function queueSize(outreach: Record<string, unknown>[]) {
 }
 
 beforeEach(() => { vi.clearAllMocks(); ROSTER.length = 0; });
+pinMidShiftClock();
 
 describe('the queue returns the work that exists, not a quota', () => {
   it('23 genuine opportunities produce a queue of 23, not 60', async () => {

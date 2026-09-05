@@ -212,7 +212,10 @@ refund processed ─▶ settleRefund()      ── stamps refunded_at ───�
   `docs/SALES-DAILY-DAY.md`). `call-queue.ts` decides WHO and WHY (lanes:
   promises, money, buddy, new, attention, retention, rotation); `assembleDay`
   decides HOW MANY — signals first, per-lane ceilings, rotation through
-  everyone silent 21 days with a floor of 15, channel per card. `messaged` is
+  everyone silent 21 days with a floor of 15, channel per card. **Every ceiling
+  is measured against `DayContext.usedToday`** — cards DEALT today, in every
+  state — never against what is on screen, or the day refills itself all day
+  (Incident #72); past `SHIFT_END_HOUR_IST` nothing new is dealt. `messaged` is
   a real outcome (`sales-disposition.ts`); `sales-messages.ts` writes the
   one-tap WhatsApp by lane and journey stage. *Guards: `sales-day.test.ts`,
   `sales-messages.test.ts`, the queue doctrine tests.*

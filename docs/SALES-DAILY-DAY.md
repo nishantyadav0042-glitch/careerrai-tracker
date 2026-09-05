@@ -99,6 +99,20 @@ A card now ends the day in exactly one of three recorded states:
   took two thirds of a day while rotation got zero. The lane now needs intent
   we can DATE and that is still fresh, and an undateable tap is not fresh. A
   stale-intent student is not lost — rotation reaches them with a true reason.
+- **A ceiling counts the DAY, not the screen** *(fixed 5 Sep, Incident #72)*.
+  Every ceiling — each lane's, the day's, and rotation's target — was measured
+  against the cards still visible. Work a card and it leaves the queue, so the
+  lane had "room" again and the next page load dealt a fresh full allowance:
+  111 and 174 cards against a ceiling of 70, attention alone at 45 and 64. The
+  first assembly of the day had been exactly right. `DayContext.usedToday` is
+  now the day's ledger — cards DEALT today, in every state — and nothing may be
+  measured against anything else. Incident #68 found this defect and fixed it
+  for rotation alone; the hole stayed open in every other lane.
+- **A closed day is not re-dealt** *(fixed 5 Sep, Incident #72)*. The sweep
+  closed 5 Sep at 21:45 and the deck dealt 20 more cards at 22:00. Past
+  `SHIFT_END_HOUR_IST` the deck shows what was already dealt, so a late marking
+  still lands, and deals nothing new — a card dealt after the shift is not
+  work, it is noise in tomorrow's leakage count.
 - **A day closes the night its shift ends** *(Incident #68)*. The sweep's
   newest closable day is today once past `SHIFT_END_HOUR_IST` (21:00), and
   yesterday before it — so a hand-run at 11am cannot close a live day.
