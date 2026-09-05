@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { pinMidShiftClock } from './test-support/mid-shift';
 
 // ── THE QUEUE IS REBUILT, NOT CARRIED FORWARD ──────────────────────────────
 //
@@ -101,6 +102,7 @@ async function build(outreach: Record<string, unknown>[] = [], paid: string[] = 
 const ids = (q: { studentId: string }[]) => q.map((l) => l.studentId);
 
 beforeEach(() => { vi.clearAllMocks(); ROSTER.length = 0; });
+pinMidShiftClock();
 
 describe('worked students leave, unworked students stay', () => {
   it('THE SCENARIO: 60 owned, 20 worked — the other 40 are still there tomorrow', async () => {

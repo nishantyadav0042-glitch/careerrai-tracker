@@ -79,6 +79,15 @@ export function dayAnchorMs(nowMs: number): number {
   return anchor;
 }
 
+/**
+ * The IST hour of `now`, 0–23. `en-GB` renders midnight as "24", so the
+ * modulo is not decoration — without it a day closes an hour into tomorrow
+ * (Incident #68). One definition, so there is one place to get it right.
+ */
+export function istHour(now: Date): number {
+  return Number(now.toLocaleString('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', hour12: false })) % 24;
+}
+
 export interface DayCounts { given: Record<DaySection, number>; heldBack: number; rotationPool: number }
 
 /**
@@ -102,8 +111,26 @@ export interface DayCounts { given: Record<DaySection, number>; heldBack: number
 export interface DayContext {
   /** Students dealt today and still unmarked. They ARE today's list. */
   openToday?: ReadonlySet<string>;
-  /** Rotation cards already dealt today, in any state. Spends the target. */
-  rotationUsedToday?: number;
+  /**
+   * THE DAY'S LEDGER: how many cards each section has already been dealt
+   * today, in EVERY state — worked, skipped, still open. A ceiling that is
+   * measured against anything else is not a ceiling (Incident #72).
+   */
+  usedToday?: Partial<Record<DaySection, number>>;
+  /**
+   * Total cards dealt today, when the caller knows it independently. The
+   * sections above are summed for the day's ceiling, so a row whose lane the
+   * code no longer recognises — a rename landing mid-day — would vanish from
+   * the ledger and quietly hand back a full allowance. The larger of the two
+   * wins, because a card that was dealt occupies the day whatever it is called.
+   */
+  dealtToday?: number;
+  /**
+   * The counsellor's shift is over and the day has been closed. Carried cards
+   * stay visible so a late marking still lands; nothing NEW is dealt into a
+   * day nobody is working (Incident #72).
+   */
+  shiftOver?: boolean;
 }
 
 export interface AssembledDay<T> {
@@ -125,54 +152,74 @@ export function assembleDay<T extends { studentId: string; dueReason: DueReason 
   ctx: DayContext = {},
 ): AssembledDay<T> {
   const openToday = ctx.openToday ?? new Set<string>();
-  const rotationUsedToday = ctx.rotationUsedToday ?? 0;
+  const used = ctx.usedToday ?? {};
+  const usedIn = (s: DaySection): number => used[s] ?? 0;
+  const ledgered = SECTION_ORDER.reduce((n, s) => n + usedIn(s), 0);
+  const usedTotal = Math.max(ledgered, ctx.dealtToday ?? 0);
+  const usedSignals = usedTotal - usedIn('rotation');
+  const shiftOver = ctx.shiftOver ?? false;
+
+  // Three piles. CARRIED cards were dealt earlier today and are already in the
+  // ledger, so they pass through every gate — they are today's list and no
+  // rebuild may take them away. Only NEW cards spend the day's allowance.
+  const carried: T[] = [];
+  const newSignals: T[] = [];
+  const newRotation: T[] = [];
   const heldBack: T[] = [];
-  const signals: T[] = [];
-  const rotationPool: T[] = [];
-  const perLane = new Map<DueReason, number>();
+  const admitted = new Map<DaySection, number>();
 
   for (const c of cands) {
     const section = SECTION_OF[c.dueReason];
-    if (section === 'rotation') { rotationPool.push(c); continue; }
+    if (openToday.has(c.studentId)) { carried.push(c); continue; }
+    if (shiftOver) continue; // the day is over; they are tomorrow's, not today's held-back
+    if (section === 'rotation') { newRotation.push(c); continue; }
     const cap = CEILING[c.dueReason];
-    const n = perLane.get(c.dueReason) ?? 0;
-    if (cap != null && n >= cap) { heldBack.push(c); continue; }
-    perLane.set(c.dueReason, n + 1);
-    signals.push(c);
+    if (cap != null && usedIn(section) + (admitted.get(section) ?? 0) >= cap) { heldBack.push(c); continue; }
+    admitted.set(section, (admitted.get(section) ?? 0) + 1);
+    newSignals.push(c);
   }
 
   // Over the ceiling on signals alone: trim from the bottom, never a promise
-  // or a money card. Trimmed cards are held back, ahead of the lane overflow,
-  // because they outranked it.
+  // or a money card. Only NEW cards can be trimmed — a card already dealt
+  // today cannot be un-dealt. Trimmed cards are held back, ahead of the lane
+  // overflow, because they outranked it.
   const trimmed: T[] = [];
-  while (signals.length > DAY_CEILING) {
+  while (usedTotal + newSignals.length > DAY_CEILING) {
     let idx = -1;
-    for (let i = signals.length - 1; i >= 0; i--) {
-      if (!UNTRIMMABLE.has(signals[i].dueReason)) { idx = i; break; }
+    for (let i = newSignals.length - 1; i >= 0; i--) {
+      if (!UNTRIMMABLE.has(newSignals[i].dueReason)) { idx = i; break; }
     }
     if (idx === -1) break;
-    trimmed.unshift(signals.splice(idx, 1)[0]);
+    trimmed.unshift(newSignals.splice(idx, 1)[0]);
   }
   const held = [...trimmed, ...heldBack];
 
-  // Rotation: what is left up to the ceiling, never below the floor while
-  // the pool can supply it.
-  const room = Math.max(0, DAY_CEILING - signals.length);
-  const want = Math.min(room, Math.max(ROTATION_FLOOR, DAY_FLOOR - signals.length));
-  // Carried cards were dealt earlier today and are still unmarked: they are
-  // today's list and must stay visible however many rebuilds happen. Only
-  // genuinely NEW rotation students consume what is left of the day's target.
-  const carried = rotationPool.filter((c) => openToday.has(c.studentId));
-  const newcomers = rotationPool.filter((c) => !openToday.has(c.studentId));
-  const newAllowance = Math.max(0, want - rotationUsedToday);
-  const rotation = [...carried, ...newcomers.slice(0, newAllowance)].slice(0, room);
+  // Rotation: what is left of the DAY up to the ceiling, never below the
+  // floor while the pool can supply it, minus what the day already spent.
+  const signalsToday = usedSignals + newSignals.length;
+  const room = DAY_CEILING - usedTotal - newSignals.length;
+  const target = Math.max(ROTATION_FLOOR, DAY_FLOOR - signalsToday);
+  const rotation = newRotation.slice(0, Math.max(0, Math.min(room, target - usedIn('rotation'))));
 
-  // Short day and real signals held back? Use them before ending short.
-  const day: T[] = [...signals, ...rotation];
-  for (const h of held) {
-    if (day.length >= DAY_FLOOR) break;
-    day.push(h);
+  // Short day and real signals held back? Use them before ending short — but
+  // "short" is measured on the whole day, not on what is left on screen.
+  const keep = new Set<string>();
+  for (const c of carried) keep.add(c.studentId);
+  for (const c of newSignals) keep.add(c.studentId);
+  for (const c of rotation) keep.add(c.studentId);
+  let dealtToday = usedTotal + newSignals.length + rotation.length;
+  let backfilled = 0;
+  if (!shiftOver) {
+    for (const h of held) {
+      if (dealtToday >= DAY_FLOOR) break;
+      if (keep.has(h.studentId)) continue;
+      keep.add(h.studentId);
+      dealtToday++; backfilled++;
+    }
   }
+
+  // Rank order is the queue's, not ours: filter, never re-sort.
+  const day = cands.filter((c) => keep.has(c.studentId));
 
   const counts = emptyCounts();
   let rotationIndex = 0;
@@ -190,7 +237,7 @@ export function assembleDay<T extends { studentId: string; dueReason: DueReason 
 
   return {
     queue,
-    counts: { given: counts, heldBack: held.length - Math.max(0, day.length - signals.length - rotation.length), rotationPool: rotationPool.length },
+    counts: { given: counts, heldBack: held.length - backfilled, rotationPool: newRotation.length + carried.filter((c) => SECTION_OF[c.dueReason] === 'rotation').length },
     band: { floor: DAY_FLOOR, ceiling: DAY_CEILING },
   };
 }

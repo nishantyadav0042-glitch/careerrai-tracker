@@ -1,5 +1,6 @@
 import type { CallLead } from '@/lib/call-queue';
 import { SHIFT_END_HOUR_IST } from '@/lib/os/scale-config';
+import { istHour } from '@/lib/sales-day';
 import type { OpportunityRow } from '@/lib/sales-checkpoint';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -230,11 +231,11 @@ export async function closeDay(
 ): Promise<DayCloseResult> {
   // `% 24` is not paranoia: en-GB with hour12:false renders midnight as "24"
   // in some runtimes, which would make 00:xx IST look like the end of the day.
-  const istHour = Number(now.toLocaleString('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', hour12: false })) % 24;
+  const hour = istHour(now);
   const today = istDay(now);
   // The newest day whose shift is over. Before the shift ends, that is
   // yesterday; after it, today.
-  const newestClosable = istHour >= SHIFT_END_HOUR_IST
+  const newestClosable = hour >= SHIFT_END_HOUR_IST
     ? today
     : istDay(new Date(now.getTime() - 86_400_000));
   try {

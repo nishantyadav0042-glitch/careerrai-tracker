@@ -211,6 +211,13 @@ const KNOWN_PARKED_MODULES: Record<string, string> = {
     'authority for facts, and deleting it would leave the second-definition ' +
     'problem with nothing standing against it. Wiring it means moving the ' +
     'existing consumers onto it, which is its own cycle.',
+  'src/lib/test-support/mid-shift.ts':
+    'KEEP. Test infrastructure, not product code; having no runtime importer ' +
+    'is the correct shape for it. It pins the clock to mid-shift because the ' +
+    'day stops dealing new cards after SHIFT_END_HOUR_IST (Incident #72), so ' +
+    'four deck test files would otherwise pass all morning and return an ' +
+    'empty deck after 21:00 IST — a suite whose result depends on when it ' +
+    'runs. One definition, so the next deck test does not invent a fifth.',
   'src/lib/test-support/code-only.ts':
     'KEEP. Test infrastructure, not product code, and having no runtime ' +
     'importer is the correct shape for it — the same shape reachability.ts ' +
