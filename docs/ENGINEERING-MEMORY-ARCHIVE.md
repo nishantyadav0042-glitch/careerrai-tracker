@@ -4011,3 +4011,77 @@ And the sharper one: **the warning was already in the file.** The comment
 naming this exact hazard was read during the work that introduced it. Reading
 a caveat is not the same as applying it — when a comment says a column never
 resets, every new predicate over that column is suspect on sight.
+
+## Incident #72
+
+**Date:** 2026-09-05
+**Area:** Retention — streak display
+**Severity:** P1 (every streak surface wrong; the metric the product is judged by)
+
+### What was wrong
+
+The founder asked how many students were on a streak. Production answered: 27
+on 3+ days, 4 above seven days, longest 30. Rebuilt from `daily_reports` — the
+actual consecutive logging days — the real answer was **8 on 3+ days and ZERO
+above seven**, longest live streak 6.
+
+Students who had last logged **42, 23 and 21 days ago** were still being
+counted as holding a 3-day streak.
+
+### Why
+
+`streak_data.current_streak` is written when a student logs and never decays on
+its own. Miss a day and the column keeps the old number until the next log. So
+the stored value means *"the streak this student HAD at their last log"* — it
+has never meant *"the streak they have"*.
+
+This was known. `liveStreak(current_streak, last_log_date)` has existed since
+20 July, written for this exact reason, with the rule stated in its own
+docblock:
+
+> Every DISPLAY of a streak must go through this.
+
+### Why nothing caught it
+
+**The rule lived only in a comment.** Nothing failed when a new surface read
+the column raw, so over six weeks it eroded into ten files:
+
+| Surface | What the student or mentor saw |
+|---|---|
+| `useLogging` | the student's own streak on the logging screen |
+| `routine/today` | the streak in the daily payload |
+| `study-companion` | the 08:00 push congratulating a streak that had ended |
+| `buddy/cockpit` | read BACKWARDS — a stale streak of 5 meant "log every day this week" was never suggested to the student who most needed it |
+| `sales-ready` | `streak >= 3` flagged students whose engagement stopped a fortnight ago |
+| `urgency-score` | `streakStatus: 'broken'` printed next to `streakDays: 7` |
+| `intervention-ledger` | `streakBefore` — a corrupted measurement in the learning record, forever |
+| `student-dna` | a behaviour the student no longer has |
+| `buddy-briefing`, `feedback-draft` | **worse**: both read `profiles.current_streak`, which is 0 for every student — so every AI draft opened with "Streak: 0 days" for students well into one |
+
+Those last two are the sharpest part. `chat/draft` hit exactly that dead-column
+bug and was fixed with a comment explaining it. The fix was never propagated to
+the two sibling producers, and nothing looked for the same shape elsewhere.
+
+### The fix
+
+Every read routed through `liveStreak`; both AI drafts pointed at `streak_data`;
+the dead `profiles.current_streak` select removed from `buddy-checkin`, where it
+was fetched and never used. `student/debug` now shows stored AND live side by
+side, so the two disagreeing is visible rather than invisible.
+
+### The lesson, and where it has teeth
+
+**A rule that lives only in a docblock is not a rule — it is a wish.** The
+helper existed, was correct, was documented, and was bypassed ten times.
+Writing a shared function is only half of it; nothing is enforced until
+something fails when it is bypassed.
+
+Encoded in `src/lib/streak-decay.guard.test.ts`: any raw `.current_streak` read
+outside a documented allowlist fails the build, as does any select of the dead
+`profiles.current_streak`. Both the 19-day and the six-week-stale production
+shapes are test cases.
+
+Second lesson, cheaper to state than it was to learn: **when a bug is found in
+one producer, grep for its shape in the others before closing it.** The dead
+column was fixed once and left in place twice.
+

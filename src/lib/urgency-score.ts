@@ -5,6 +5,7 @@
  */
 
 import { createClient } from '@/lib/supabase/client';
+import { liveStreak } from '@/lib/streak-utils';
 
 export interface StudentUrgencyData {
   student_id: string;
@@ -236,7 +237,9 @@ export async function loadStudentUrgency(
       lastFeedback: latestFeedback?.created_at || null,
       daysSinceFeedback,
       streakStatus: streakBroken ? 'broken' : 'active',
-      streakDays: streak?.current_streak || 0,
+      // streakStatus already knows this streak is broken; streakDays used to
+      // print the stale number beside it, so a card could read "broken · 7 days".
+      streakDays: liveStreak(streak?.current_streak, streak?.last_log_date),
       recentDrops: dropAlerts?.length || 0,
       // Efficacy fields — null here; populated by loadBuddyStudents which has the batch data
       starting_percentile: null,
@@ -397,7 +400,7 @@ export async function loadBuddyStudents(
         lastFeedback: latestFeedback?.created_at ?? null,
         daysSinceFeedback,
         streakStatus: streakBroken ? 'broken' : 'active',
-        streakDays: streak?.current_streak ?? 0,
+        streakDays: liveStreak(streak?.current_streak, streak?.last_log_date),
         recentDrops: dropAlertCount,
         free_onboarding_used: student.free_onboarding_used ?? false,
         starting_percentile: student.starting_percentile ?? null,

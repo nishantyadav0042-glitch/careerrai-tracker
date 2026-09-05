@@ -1,6 +1,7 @@
 import { classifyLane } from '@/lib/call-queue';
 import { isInterventionType, isReasonCategory, reasonNeedsVerbatim,
   type InterventionType, type ReasonCategory } from '@/lib/intervention-taxonomy';
+import { liveStreak } from '@/lib/streak-utils';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -102,7 +103,10 @@ export async function captureStateSnapshot(admin: any, studentId: string, nowMs 
     // lane rather than being dropped or given a lane it does not have.
     lane: lane?.dueReason ?? null,
     daysSinceLastLog,
-    streakBefore: (streak?.current_streak as number | null) ?? null,
+    // This is a MEASUREMENT of the student's state at the moment we reached
+    // out — every later "did the intervention work?" reads it. A stale value
+    // here does not mislead a person once, it corrupts the analysis forever.
+    streakBefore: liveStreak(streak?.current_streak as number | null, streak?.last_log_date as string | null),
     priorInterventions: priorCount ?? 0,
     tenureDays,
     reachableByPush: prof ? prof.push_subscription != null : null,

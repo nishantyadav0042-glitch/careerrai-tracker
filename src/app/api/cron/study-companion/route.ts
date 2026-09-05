@@ -14,7 +14,7 @@ import {
 } from '@/lib/companion';
 import { computeTodaysPlan, type TodaysPlan } from '@/lib/routine-plan';
 import { resolveFocusSections } from '@/lib/focus-sections';
-import { getLogDateString } from '@/lib/streak-utils';
+import { getLogDateString, liveStreak } from '@/lib/streak-utils';
 import { withCronTracking } from '@/lib/cron-run-tracker';
 import { readRows, isUnavailable, type Source, readAllRows } from '@/lib/truth/source';
 import { readRowsForIds } from '@/lib/truth/batch';
@@ -312,7 +312,8 @@ async function studyCompanionRun(slot: CompanionSlot): Promise<NextResponse> {
         // Morning greeting for graduated loggers — arc students get their own
         // Day-N morning elsewhere, so don't double their morning.
         if (isArc) break;
-        copy = kickoffCopy((streak?.current_streak as number | null) ?? 0, weakest, dreamCollege);
+        // A morning push must never congratulate a streak that has broken.
+        copy = kickoffCopy(liveStreak(streak?.current_streak, streak?.last_log_date), weakest, dreamCollege);
         reason = `Companion 08:00 — morning kickoff (${weakest} weakest)`;
         break;
       case 'spark':
@@ -389,7 +390,7 @@ async function studyCompanionRun(slot: CompanionSlot): Promise<NextResponse> {
         break;
       case 'close':
         if (!loggedToday) break; // no log, no celebration — and no guilt either
-        copy = closeCopy((streak?.current_streak as number | null) ?? 0, weakest);
+        copy = closeCopy(liveStreak(streak?.current_streak, streak?.last_log_date), weakest);
         reason = 'Companion 22:00 — day closed, logged';
         break;
     }

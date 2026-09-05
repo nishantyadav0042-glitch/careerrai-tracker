@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { authorizedCron } from '@/lib/cron-auth';
 import { withCronTracking } from '@/lib/cron-run-tracker';
+import { liveStreak } from '@/lib/streak-utils';
 
 // Sales-ready trigger (§D), daily. The hottest signal (buddy-CTA click) flags
 // sales_ready instantly in /api/engagement; this catches the slower criteria:
@@ -42,12 +43,17 @@ export async function POST(request: NextRequest) {
       (profs ?? []).filter((p) => p.role === 'student' && !p.is_premium).map((p) => p.id)
     );
 
-    // Streak lookup for the streak>=3 criterion.
+    // Streak lookup for the streak>=3 criterion. last_log_date comes along
+    // because current_streak alone is a LIE for this purpose: the column is
+    // written at log time and never decays, so a student who logged three days
+    // running and then vanished for a fortnight still reads as streak=3 and
+    // would be flagged sales-ready on the strength of engagement that stopped.
     const { data: streaks } = await admin
       .from('streak_data')
-      .select('student_id, current_streak')
+      .select('student_id, current_streak, last_log_date')
       .in('student_id', ids);
-    const streakById = new Map((streaks ?? []).map((s) => [s.student_id, s.current_streak as number]));
+    const streakById = new Map((streaks ?? []).map((s) =>
+      [s.student_id, liveStreak(s.current_streak as number | null, s.last_log_date as string | null)]));
 
     const toFlag: string[] = [];
     for (const r of rows) {

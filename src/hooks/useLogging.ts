@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
 import { track } from '@/lib/journey';
-import { getLogDateString } from '@/lib/streak-utils';
+import { getLogDateString, liveStreak } from '@/lib/streak-utils';
 import type { StreakData } from '@/types';
 
 interface LoggingPayload {
@@ -101,7 +101,10 @@ export function useLogging(studentId: string, initial?: InitialLogging | null) {
   );
 
   return {
-    currentStreak: streakData?.current_streak ?? 0,
+    // liveStreak, not the raw column: streak_data.current_streak is written
+    // at log time and never decays, so a student who broke their streak two
+    // days ago would still be shown the streak they used to have.
+    currentStreak: liveStreak(streakData?.current_streak, streakData?.last_log_date),
     maxStreak: streakData?.longest_streak ?? 0,
     hasLoggedToday: hasLoggedToday ?? false,
     streakData,

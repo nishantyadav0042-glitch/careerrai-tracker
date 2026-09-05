@@ -1,4 +1,5 @@
 import type { createAdminClient } from '@/lib/supabase/admin';
+import { liveStreak } from '@/lib/streak-utils';
 
 // Student DNA — the per-student behavioural fingerprint. Deterministic and
 // EXPLAINABLE BY CONSTRUCTION (founder, 24 Jul: never return a bare number —
@@ -79,7 +80,9 @@ export async function computeStudentDna(admin: Admin, p: DnaProfileInput): Promi
   const logDays7 = inWindow(0, 7);
   const logDaysPrev7 = inWindow(7, 14);
   const lastLog = [...logDates].sort().reverse()[0] ?? null;
-  const currentStreak = (streak?.current_streak as number | undefined) ?? 0;
+  // Live, not last-known: the DNA describes how a student studies NOW, and a
+  // streak that ended a fortnight ago is not a behaviour they still have.
+  const currentStreak = liveStreak(streak?.current_streak as number | null, streak?.last_log_date as string | null);
 
   // ── event signals ──
   const ev = events ?? [];

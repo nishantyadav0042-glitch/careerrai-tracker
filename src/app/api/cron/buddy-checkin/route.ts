@@ -56,7 +56,10 @@ async function buddy_checkinRun(): Promise<NextResponse> {
 
   const { data: students } = await admin
     .from('profiles')
-    .select('id, full_name, buddy_id, current_streak')
+    // profiles.current_streak is dead (0 for every student — nothing writes
+    // it; the real streak lives in streak_data). It was selected here and
+    // never read; selecting it invites the next reader to trust it.
+    .select('id, full_name, buddy_id')
     .eq('role', 'student')
     .not('buddy_id', 'is', null)
     // PAID ONLY (founder, 10 Aug: "this is only our premium feature, don't

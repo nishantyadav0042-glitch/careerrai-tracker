@@ -13,7 +13,7 @@ import { weightedCompletedForDay } from '@/lib/completion-portion';
 import { assembleIntelligence, momentumProxy } from '@/lib/intelligence';
 import { ROADMAP_PHASES, currentRoadmapIndex, weeksToExam } from '@/lib/study-plan';
 import { TOPIC_METADATA } from '@/lib/topics-constants';
-import { getLogDateString } from '@/lib/streak-utils';
+import { getLogDateString, liveStreak } from '@/lib/streak-utils';
 import { planReason } from '@/lib/plan-reason';
 import { planStaleReason } from '@/lib/plan-freshness';
 import { dailyHours, hoursForDay } from '@/lib/daily-hours';
@@ -541,7 +541,9 @@ export async function GET() {
     mission,
     roadmap,
     completions: completions ?? [],
-    currentStreak: streak?.current_streak ?? 0,
+    // Decay-aware: the raw column holds the streak at the LAST log, so a
+    // student returning after a gap must not be told it is still running.
+    currentStreak: liveStreak(streak?.current_streak, streak?.last_log_date),
     isCatchUp: gapDays != null && gapDays >= 2,
     yesterday: history.yesterday,
     // Adaptation is now a READING, not a change: "your days are running heavy"

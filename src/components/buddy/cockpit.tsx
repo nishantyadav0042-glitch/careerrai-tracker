@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { AlertTriangle, Video, Lock } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { computeBreach } from '@/lib/plan-breach';
+import { liveStreak } from '@/lib/streak-utils';
 import { computeRequiredPace, remainingSyllabusHours, remainingMockHours, studentEffortMultiplier } from '@/lib/study-pace';
 import { CallCloseout } from './call-closeout';
 import { QuickNote } from './quick-note';
@@ -127,7 +128,10 @@ export async function BuddyCockpit(p: CockpitProps) {
   // Commitment chips built from THIS student's real state — the common case
   // should be one tap on something already true.
   const suggestions: string[] = [];
-  if ((streak?.current_streak ?? 0) < 3) suggestions.push('Log every day this week');
+  // Raw current_streak read backwards here: a student who stopped logging a
+  // fortnight ago still carried a stale streak of 5, so the ONE suggestion
+  // they needed — 'log every day' — was the one the mentor never saw.
+  if (liveStreak(streak?.current_streak, streak?.last_log_date) < 3) suggestions.push('Log every day this week');
   if (breach && breach.level !== 'none') suggestions.push(`Study ${Math.max(1, Math.round(pace!.requiredPerDay / 2))} hrs/day this week`);
   if (p.weakestSection) suggestions.push(`Finish ${p.weakestSection} basics`);
   suggestions.push('Take 1 full mock');

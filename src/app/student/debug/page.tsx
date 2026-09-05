@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
+import { liveStreak } from '@/lib/streak-utils';
 
 function Row({ label, value }: { label: string; value: ReactNode }) {
   return (
@@ -108,7 +109,10 @@ export default async function DebugPage() {
         </Section>
 
         <Section title="Streak">
-          <Row label="Current streak" value={streak?.current_streak ?? profile?.current_streak ?? 0} />
+          {/* Debug shows BOTH: the stored column and what a student is actually
+              shown. Seeing them disagree is the fastest way to spot a decay bug. */}
+          <Row label="Current streak (live)" value={liveStreak(streak?.current_streak, streak?.last_log_date)} />
+          <Row label="Current streak (stored, never decays)" value={streak?.current_streak ?? 0} />
           <Row label="Longest streak" value={streak?.longest_streak ?? profile?.best_streak ?? 0} />
           <Row label="Streak last updated" value={streak?.updated_at ? new Date(streak.updated_at).toLocaleString('en-IN') : null} />
         </Section>

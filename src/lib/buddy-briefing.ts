@@ -29,10 +29,21 @@ export async function generateBuddyBriefing(studentId: string, buddyId: string):
 
   const { data: student } = await admin
     .from('profiles')
-    .select('buddy_id, full_name, current_streak, last_log_date, is_repeater, is_working_professional')
+    .select('buddy_id, full_name, is_repeater, is_working_professional')
     .eq('id', studentId)
     .single();
   if (!student || student.buddy_id !== buddyId) return null;
+
+  // profiles.current_streak / last_log_date are DEAD — 0/NULL for every
+  // student, nothing has ever written them. chat/draft hit this and was
+  // fixed; these two producers kept the same read, so every AI draft
+  // opened with "Streak: 0 days" for students well into a streak. The
+  // real streak lives in streak_data.
+  const { data: streak } = await admin
+    .from('streak_data')
+    .select('current_streak, last_log_date')
+    .eq('student_id', studentId)
+    .maybeSingle();
 
   // 0C.3 Wave 1. Was `now − 7d` — an EIGHT-day inclusive window rendered to a
   // paid mentor as "{n}/7 days logged". This producer was MISSED by the first
@@ -153,7 +164,7 @@ export async function generateBuddyBriefing(studentId: string, buddyId: string):
   ].filter(Boolean);
 
   const factsContext = [
-    `Streak: ${liveStreak(student.current_streak, student.last_log_date)} days`,
+    `Streak: ${liveStreak(streak?.current_streak, streak?.last_log_date)} days`,
     // UNKNOWN says so rather than borrowing the shape of a bad week.
     daysLogged === null
       ? 'Days logged this week: UNKNOWN — the log read failed. Do not treat as zero.'
@@ -181,10 +192,10 @@ export async function generateBuddyBriefing(studentId: string, buddyId: string):
       summaryText = stripNames(aiResult, [student.full_name]);
       source = 'ai';
     } else {
-      summaryText = fallbackBriefing(daysLogged, avgHours, liveStreak(student.current_streak, student.last_log_date), (debriefs ?? []) as MockDebrief[], syllabusFacts);
+      summaryText = fallbackBriefing(daysLogged, avgHours, liveStreak(streak?.current_streak, streak?.last_log_date), (debriefs ?? []) as MockDebrief[], syllabusFacts);
     }
   } else {
-    summaryText = fallbackBriefing(daysLogged, avgHours, liveStreak(student.current_streak, student.last_log_date), (debriefs ?? []) as MockDebrief[], syllabusFacts);
+    summaryText = fallbackBriefing(daysLogged, avgHours, liveStreak(streak?.current_streak, streak?.last_log_date), (debriefs ?? []) as MockDebrief[], syllabusFacts);
   }
 
   const generated_at = new Date().toISOString();

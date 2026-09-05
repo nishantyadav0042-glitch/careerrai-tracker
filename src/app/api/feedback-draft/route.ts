@@ -21,12 +21,23 @@ export async function POST(request: NextRequest) {
     // Verify buddy owns this student
     const { data: student } = await admin
       .from('profiles')
-      .select('buddy_id, full_name, current_streak, last_log_date')
+      .select('buddy_id, full_name')
       .eq('id', studentId)
       .single();
     if (!student || student.buddy_id !== user.id) {
       return NextResponse.json({ error: 'Not your student' }, { status: 403 });
     }
+
+    // profiles.current_streak / last_log_date are DEAD — 0/NULL for every
+    // student, nothing has ever written them. chat/draft hit this and was
+    // fixed; these two producers kept the same read, so every AI draft
+    // opened with "Streak: 0 days" for students well into a streak. The
+    // real streak lives in streak_data.
+    const { data: streak } = await admin
+      .from('streak_data')
+      .select('current_streak, last_log_date')
+      .eq('student_id', studentId)
+      .maybeSingle();
 
     // Shared free-tier Gemini key — cap per buddy so one can't drain the quota.
     if (await overAiHourlyLimit(admin, user.id, 'feedback_draft', 60)) {
@@ -61,7 +72,7 @@ export async function POST(request: NextRequest) {
       : '0';
 
     const factsContext = [
-      `Current streak: ${liveStreak(student.current_streak, student.last_log_date)} days`,
+      `Current streak: ${liveStreak(streak?.current_streak, streak?.last_log_date)} days`,
       `Last 7 days: ${daysLogged}/7 days logged, avg ${avgHours} hrs/day`,
       latestDebrief
         ? `Latest mock (${latestDebrief.taken_on}): ${latestDebrief.overall_percentile ?? '?'}%ile`
@@ -70,7 +81,7 @@ export async function POST(request: NextRequest) {
 
     if (!(await geminiEnabled())) {
       // Rule-based fallback — buddy still gets something useful
-      const draft = ruleDraft(liveStreak(student.current_streak, student.last_log_date), daysLogged, avgHours, latestDebrief?.overall_percentile ?? null);
+      const draft = ruleDraft(liveStreak(streak?.current_streak, streak?.last_log_date), daysLogged, avgHours, latestDebrief?.overall_percentile ?? null);
       return NextResponse.json({ draft });
     }
 
@@ -95,7 +106,7 @@ ${safeContext}`;
 
     const draft = aiDraft
       ? stripNames(aiDraft, [student.full_name])
-      : ruleDraft(liveStreak(student.current_streak, student.last_log_date), daysLogged, avgHours, latestDebrief?.overall_percentile ?? null);
+      : ruleDraft(liveStreak(streak?.current_streak, streak?.last_log_date), daysLogged, avgHours, latestDebrief?.overall_percentile ?? null);
 
     return NextResponse.json({ draft });
   } catch (error) {
