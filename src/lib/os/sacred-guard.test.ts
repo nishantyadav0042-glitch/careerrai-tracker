@@ -32,9 +32,17 @@ describe('the detector only fires after self-heal has failed', () => {
     expect(src).toContain("lt('paid_at', healDeadline)");
   });
 
-  it('skips a payment whose student IS premium', () => {
-    // A `paid` row on an activated student is the healthy case, not an alert.
-    expect(src).toContain('prof.is_premium === true) continue');
+  it('skips a payment whose student WAS SERVED', () => {
+    // Was `prof.is_premium === true) continue` until 5 Sep 2026. That asked
+    // whether the student is premium RIGHT NOW, which also goes false when a
+    // subscription simply expires — so three correctly-served month-old
+    // payments sat as permanent CRITICAL alerts that no action could clear.
+    // The healthy case is "they received what they paid for": premium was
+    // granted at least once (premium_since, which only activation writes), or
+    // for a single-session purchase, the credit exists.
+    expect(src).toContain('if (delivered) continue');
+    expect(src).toMatch(/prof\.premium_since !== null/);
+    expect(src).toMatch(/creditedPayIds\.has\(pay\.id\)/);
   });
 
   it('carries the student, the money, the cause and a one-click action', () => {
