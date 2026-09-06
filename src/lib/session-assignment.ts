@@ -153,20 +153,39 @@ export interface BookabilityFacts {
  * Pure: same facts, same answer, no I/O and no clock — so every state can be
  * enumerated in a test rather than argued about.
  *
- * GOOGLE IS NOW THE MENTOR'S INFRASTRUCTURE — founder decision, 27 Aug, and a
- * deliberate reversal of what this comment said before. The previous rule was
- * `!hasRoom && !googleConnected`: a pasted link satisfied it, on the reasoning
- * that "a room is a room" and that requiring Google made booking hostage to
- * Google's verification queue. That reasoning was sound for the product we had
- * and wrong for the product we want. It also had a cost that only showed up in
- * the UI: it forced every mentor screen to explain a CHOICE — paste a room, or
- * connect Google — and a setup question with two right answers is one most
- * people simply do not finish.
+ * EITHER A ROOM OR GOOGLE SATISFIES THE ROOM HALF — founder decision, 5 Sep
+ * 2026. This reverses the 27 Aug rule, and the reason is worth stating plainly
+ * because the 27 Aug note predicted it.
  *
- * So the product is now one path. CareerRai owns the meeting infrastructure
- * through the mentor's Google account: Calendar for the event, Meet for the
- * link, and the reminders that hang off both. A pasted URL cannot do any of
- * that, which is why "either satisfies the room half" no longer holds.
+ * On 27 Aug Google was made the mentor's whole infrastructure: Calendar for
+ * the event, Meet for the link, reminders hanging off both. The note recorded
+ * what it was trading away — that requiring Google made booking "hostage to
+ * Google's verification queue" — and judged that acceptable for the product we
+ * wanted. It also named a real UI cost of the old rule: a setup screen with
+ * two right answers is one most people do not finish.
+ *
+ * The queue never cleared. Our OAuth app requests the sensitive
+ * calendar.events scope, so until Google verifies it every mentor meets a full
+ * red "Google hasn't verified this app" interstitial. On 5 Sep a mentor with
+ * three students and a paid session credit waiting refused to click through
+ * it — correctly; that screen tells her not to. A check of production that day
+ * found ZERO of seven mentors connected, so the rule was not gating a few
+ * stragglers: it had made every mentor unbookable and routed every student to
+ * "our team will arrange your session".
+ *
+ * TRUST-OS already recorded this wall killing Google Meet once ("killed by
+ * per-buddy OAuth + Google's verification wall"). Requiring Google walked back
+ * into it.
+ *
+ * So a pasted room counts again. It is worse than Google — no calendar event,
+ * no auto-reminders — but it satisfies the one law that actually protects the
+ * student: `validateRoomLink` checks it, and TRUST-OS's rule is never to hand
+ * out a link we cannot verify, not that only Google may mint one. A mentor who
+ * can host a call today beats a perfect integration nobody can switch on.
+ *
+ * THIS IS A STOPGAP, and the 27 Aug reasoning is not wrong — it is blocked.
+ * When verification lands, Google should become the default path again. Delete
+ * this paragraph then, not before.
  *
  * THE REASON CODE DELIBERATELY DID NOT CHANGE. `no_meeting_room` is threaded
  * through booking-blocked, session-credit, the ops queue and the student copy,
@@ -180,7 +199,8 @@ export function decideBookability(facts: BookabilityFacts): Bookability {
   if (facts.availability.active !== true) {
     return { bookable: false, reason: 'not_taking_bookings' };
   }
-  if (!facts.googleConnected) {
+  // EITHER path satisfies the room half (5 Sep 2026 — see the note above).
+  if (!facts.googleConnected && !facts.hasRoom) {
     return { bookable: false, reason: 'no_meeting_room' };
   }
   return { bookable: true, timezone: facts.availability.timezone ?? 'Asia/Kolkata' };

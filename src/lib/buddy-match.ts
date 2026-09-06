@@ -284,6 +284,13 @@ export const MATCH_BUDDY_COLUMNS =
 export async function fetchEligibleBuddies(admin: any): Promise<MatchBuddy[]> {
   const { data } = await admin.from('profiles').select(MATCH_BUDDY_COLUMNS)
     .eq('role', 'buddy').eq('buddy_onboarding_completed', true)
+    // ADMIN APPROVAL IS THE GATE (5 Sep 2026). Finishing your own onboarding
+    // used to be enough to be recommended to students — and every credential
+    // on that card (percentile, IIM converted, company) is self-declared in
+    // that same form. Incident #66 then showed an accidental phone-OTP fork
+    // could arrive already holding role='buddy', one completed wizard away
+    // from a student's mentor list. NULL = not approved; no exceptions.
+    .not('buddy_approved_at', 'is', null)
     .not('cat_percentile', 'is', null)
     .not('is_test_account', 'is', true); // never recommend test/demo buddies
   return (data ?? []) as MatchBuddy[];

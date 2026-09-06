@@ -149,7 +149,7 @@ describe('the ₹299 relationship never becomes the premium one', () => {
 });
 
 describe('a student is never offered a slot nobody can hold', () => {
-  it('bookability requires availability AND a connected Google account', async () => {
+  it('bookability requires availability AND (Google OR a room)', async () => {
     // The connection is read from google_oauth_tokens. It used to be read from
     // profiles.google_calendar_connected, a column nothing has written for
     // weeks — harmless while a pasted room could carry a mentor past it, and a
@@ -158,17 +158,23 @@ describe('a student is never offered a slot nobody can hold', () => {
       admin({ avail: null, googleToken: true }), 'b1');
     expect(noAvail.bookable).toBe(false);
 
-    const noGoogle = await mentorBookability(
+    // NEITHER path — the only way to fail the room half since 5 Sep 2026.
+    const noRoomNoGoogle = await mentorBookability(
       admin({ avail: { active: true, timezone: 'Asia/Kolkata' },
         profile: { buddy_meet_url: null }, googleToken: false }), 'b1');
-    expect(noGoogle.bookable).toBe(false);
-    expect(noGoogle.bookable === false && noGoogle.reason).toBe('no_meeting_room');
+    expect(noRoomNoGoogle.bookable).toBe(false);
+    expect(noRoomNoGoogle.bookable === false && noRoomNoGoogle.reason).toBe('no_meeting_room');
 
-    // 27 Aug: a legacy pasted room no longer opens the door on its own.
-    const legacyRoomOnly = await mentorBookability(
+    // A pasted room with no Google is bookable again. Google's unverified-app
+    // screen had left every mentor stuck on the branch above.
+    const roomOnly = await mentorBookability(
       admin({ avail: { active: true, timezone: 'Asia/Kolkata' },
-        profile: { buddy_meet_url: 'https://meet.google.com/x' }, googleToken: false }), 'b1');
-    expect(legacyRoomOnly.bookable).toBe(false);
+        profile: { buddy_meet_url: 'https://meet.google.com/abc-defg-hij' }, googleToken: false }), 'b1');
+    expect(roomOnly.bookable).toBe(true);
+
+    // Superseded 5 Sep 2026: this asserted the 27 Aug rule, that a legacy
+    // pasted room no longer opened the door on its own. It does again — the
+    // case immediately above is the same state, now expected to be bookable.
 
     const ok = await mentorBookability(
       admin({ avail: { active: true, timezone: 'Asia/Kolkata' },

@@ -2,6 +2,7 @@ import { SELF_HEAL_WINDOW_MIN as CFG_SELF_HEAL_MIN, BUDDY_SLA_HOURS as CFG_BUDDY
 import {
   burstsFrom, ACTION_LABEL, ACTION_ROUTE, SACRED_FAILURE_WINDOW_MIN,
 } from './sacred-failure';
+import { SESSION_PLAN_ID } from '../session-credit';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Admin = any;
@@ -88,7 +89,7 @@ export async function findSacredFailures(admin: Admin, nowMs: number): Promise<F
   const healDeadline = new Date(nowMs - SELF_HEAL_WINDOW_MIN * 60_000).toISOString();
   const { data: paidRows } = await admin
     .from('student_payments')
-    .select('id, student_id, amount, paid_at, razorpay_payment_id')
+    .select('id, student_id, amount, paid_at, razorpay_payment_id, plan')
     .eq('status', 'paid')
     .not('paid_at', 'is', null)
     .lt('paid_at', healDeadline);
@@ -96,7 +97,12 @@ export async function findSacredFailures(admin: Admin, nowMs: number): Promise<F
   const paidStudentIds = [...new Set((paidRows ?? []).map((r: any) => r.student_id))] as string[];
   const { data: paidProfiles } = paidStudentIds.length
     ? await admin.from('profiles')
-        .select('id, full_name, phone, is_premium')
+        // `premium_since` is the fact that decides this alert. It is stamped by
+        // activation and never cleared, so it answers "was this student EVER
+        // granted what they paid for" — which is the actual failure. `is_premium`
+        // only answers "are they premium right now", and those are different
+        // questions the moment a subscription lapses.
+        .select('id, full_name, phone, is_premium, premium_since')
         .in('id', paidStudentIds)
         // Exclude test/demo accounts — the Razorpay Review account is a `paid`
         // row that will never be premium by design, and it was firing as a
@@ -105,19 +111,62 @@ export async function findSacredFailures(admin: Admin, nowMs: number): Promise<F
     : { data: [] as any[] };
   const profileById = new Map((paidProfiles ?? []).map((p: any) => [p.id, p]));
 
+  // ── A SESSION PURCHASE IS NOT A SUBSCRIPTION ───────────────────────────
+  // A single-session purchase buys ONE session credit, never premium. (No
+  // price is stated here on purpose: prices are the pricing authority's to
+  // know, and a figure copied into a comment goes stale silently.) Testing it
+  // with `is_premium` reports a correctly-served customer as a money fault,
+  // forever. So a session payment is judged on the credit it was supposed to
+  // mint, not on premium at all.
+  const sessionPayIds = (paidRows ?? [])
+    .filter((r: any) => r.plan === SESSION_PLAN_ID).map((r: any) => r.id);
+  const { data: creditRows } = sessionPayIds.length
+    ? await admin.from('session_credits').select('payment_id').in('payment_id', sessionPayIds)
+    : { data: [] as any[] };
+  const creditedPayIds = new Set((creditRows ?? []).map((c: any) => c.payment_id));
+
   for (const pay of paidRows ?? []) {
     const prof: any = profileById.get(pay.student_id);
-    if (!prof || prof.is_premium === true) continue; // activated — nothing wrong
+    if (!prof) continue;
+
+    // ── DID THEY GET WHAT THEY PAID FOR? ─────────────────────────────────
+    //
+    // 5 Sep 2026: this alert was firing on three month-old payments that were
+    // all correctly served, and could never clear, because it asked
+    // `is_premium !== true` and nothing else. That question is wrong twice:
+    //
+    //   · Dhruv Vakadia bought a single SESSION. His credit was minted and a
+    //     mentor assigned. He was never meant to be premium.
+    //   · Harsh Rajput and Vedashri kale each bought a MONTHLY on 4 Aug.
+    //     Activation ran (premium_since stamped 4 Aug), they had their month,
+    //     and it lapsed on 4 Sep. An expired subscription is a renewal
+    //     opportunity, not money captured without delivery.
+    //
+    // All three carried `premium_since`, which only activation writes — so the
+    // alert's own root-cause text ("activation did not complete") was provably
+    // false in every case. And because a lapsed subscription never becomes
+    // premium again, the alert was permanent: no action could ever clear it,
+    // which is how a P0 interrupt becomes background noise the founder learns
+    // to scroll past.
+    const isSession = pay.plan === SESSION_PLAN_ID;
+    const delivered = isSession
+      ? creditedPayIds.has(pay.id)          // the credit they bought exists
+      : prof.premium_since !== null;        // premium was granted at least once
+    if (delivered) continue;
     alerts.push({
       id: `unlock:${pay.id}`,
       severity: 'critical',
       channel: 'interrupt',
-      title: `₹${(pay.amount ?? 0) / 100} captured but premium never unlocked for ${prof.full_name ?? 'a student'}`,
+      title: isSession
+        ? `₹${(pay.amount ?? 0) / 100} captured but the session credit was never created for ${prof.full_name ?? 'a student'}`
+        : `₹${(pay.amount ?? 0) / 100} captured but premium never unlocked for ${prof.full_name ?? 'a student'}`,
       student: { id: prof.id, name: prof.full_name ?? 'Student', phone: prof.phone ?? null },
       amountRupees: (pay.amount ?? 0) / 100,
-      rootCause: pay.razorpay_payment_id
-        ? 'Razorpay confirmed the payment, but activation did not complete — webhook or activation failure. Automatic reconcile has already retried and not fixed it.'
-        : 'Marked paid with no Razorpay payment id — a manual or malformed record. Verify before granting access.',
+      rootCause: !pay.razorpay_payment_id
+        ? 'Marked paid with no Razorpay payment id — a manual or malformed record. Verify before granting access.'
+        : isSession
+          ? 'Razorpay confirmed the payment, but the session credit was never minted — the student paid for a session they do not have. Automatic reconcile has already retried and not fixed it.'
+          : 'Razorpay confirmed the payment, but premium was never granted — activation never ran for this student. Automatic reconcile has already retried and not fixed it.',
       retryAvailable: true,
       actionLabel: 'Open payment',
       actionRoute: `/admin/payment/${pay.id}`,

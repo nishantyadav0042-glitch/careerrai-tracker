@@ -279,6 +279,12 @@ export async function readMentorRoster(
       admin.from('profiles')
         .select('id, full_name, specialities, strongest_section, own_weakest_section, attempt_number, weekly_session_cap')
         .eq('role', 'buddy')
+        // Admin approval, same gate as the showcase and mentor-doors (5 Sep
+        // 2026). This is the STRONGEST hand-out of the three: the student has
+        // paid for this session. It was also the weakest-gated — it did not
+        // even exclude test accounts — so both filters are added here.
+        .not('buddy_approved_at', 'is', null)
+        .not('is_test_account', 'is', true)
         .not('weekly_session_cap', 'is', null),
       admin.from('session_credits')
         .select('buddy_id')

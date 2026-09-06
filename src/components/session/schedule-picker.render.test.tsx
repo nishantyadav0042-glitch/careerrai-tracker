@@ -40,31 +40,29 @@ describe('mentor readiness never claims what it cannot back', () => {
 
   const HOURS_SET = { configured: true, work_days: [1, 2, 3], start_minute: 600, end_minute: 1140, active: true };
 
-  it('a legacy pasted room WITHOUT Google is not ready', () => {
-    // Two branches disagreed about this one line and the merge had to settle
-    // it. The older rule was `hasRoom || googleConnected`, and a version of
-    // this test asserted a pasted room alone was READY.
+  it('a pasted room WITHOUT Google IS ready — restored 5 Sep 2026', () => {
+    // This case has flipped twice. The 27 Aug version asserted the opposite,
+    // on two arguments that were both correct at the time:
     //
-    // It cannot be, once the manual-room UI is gone. Both branches deleted the
-    // paste-your-own-Meet form on 27 Aug, so nothing in the product can set
-    // buddy_meet_url any more — the rule was honouring a field only history
-    // can write. Worse, a mentor called bookable on a legacy room has no
-    // Google connection, so holdSessionOnCalendar returns not_connected: the
-    // booking gets no hold, no invite and no google_event_id, leaving cancel
-    // and reschedule nothing to act on and the mentor's hour still free for
-    // them to give away. That is the exact defect lib/session-calendar was
-    // written to close, reached through the back door of the readiness rule.
+    //   1. "Nothing in the product can set buddy_meet_url any more" — the
+    //      paste form had been deleted, so the rule honoured a field only
+    //      history could write. That is no longer true: the mentor-facing
+    //      /api/buddy/meeting-room route and its input are restored.
+    //   2. A room-only mentor gets no calendar hold, no invite and no
+    //      google_event_id. STILL TRUE, and accepted deliberately. Verified
+    //      before restoring: holdSessionOnCalendar's `not_connected` is
+    //      non-fatal and runs AFTER the session exists and both parties are
+    //      told, and reschedule already reads the event id as nullable
+    //      (`legacyEventId`). So the booking completes and the session opens;
+    //      what is lost is the mentor's own calendar block and reminders.
     //
-    // Checked against production before choosing, because a stricter rule can
-    // take live mentors offline: there are 0 Google connections and the 2
-    // mentors with active availability have no room either, so they are
-    // already unbookable under BOTH rules. The tightening costs no one a
-    // booking today, and Google is the only setup path a mentor is now shown.
+    // What changed is the cost of the other side. That 27 Aug note checked
+    // production and found the stricter rule "costs no one a booking today".
+    // By 5 Sep it cost every one: 0 of 7 mentors connected, because Google's
+    // unverified-app screen tells them not to proceed. A mentor who can host
+    // a call today beats a perfect integration nobody can switch on.
     const canBook = verdict({ availability: { active: true }, hasRoom: true, googleConnected: false });
-    expect(canBook).toBe(false);
-    const html = renderToStaticMarkup(
-      <SessionReadiness canBook={canBook} availability={HOURS_SET} />);
-    expect(html).toMatch(/students cannot book you yet/i);
+    expect(canBook).toBe(true);
   });
 
   it('no room AND no Google is genuinely not ready', () => {

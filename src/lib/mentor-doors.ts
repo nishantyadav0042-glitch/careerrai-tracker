@@ -109,7 +109,11 @@ export async function activateGrant(admin: Admin, studentId: string): Promise<Me
     .select('id, full_name')
     .eq('role', 'buddy')
     .not('is_test_account', 'is', true)
-    .eq('buddy_onboarding_completed', true);
+    .eq('buddy_onboarding_completed', true)
+    // Same gate as the showcase (5 Sep 2026). Assignment is the STRONGER
+    // hand-out of the two — a showcased buddy is a suggestion, an assigned one
+    // already has the student. An unapproved buddy must never be either.
+    .not('buddy_approved_at', 'is', null);
   if (!buddies?.length) return grant;
   const { data: loads } = await admin
     .from('profiles')
