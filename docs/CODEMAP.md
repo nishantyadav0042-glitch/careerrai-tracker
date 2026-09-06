@@ -141,8 +141,12 @@ real Gemini API (set `GEMINI_LIVE_KEY`; skipped otherwise).
 ### Notifications
 - **`lib/notifications.ts`** (dispatch, budget, dedupe) ← everything sends
   through this. `lib/push.ts` + `push-client.ts` for web push mechanics.
-- `api/cron/study-companion` — six daily slots, one route. The state ladders
-  (activation / reactivation / active) live in `lib/companion.ts`.
+- `api/cron/study-companion` — one route, four scheduled slots (08:00 kickoff,
+  11:00 spark, 20:30 progress, 21:30 log IST). Four because `BUDGET_ACTIVE = 4`.
+  Five more slots keep their copy but are retired (`RETIRED_COMPANION_SLOTS`)
+  and refused by the route. vercel.json is the canonical schedule and
+  `companion-schedule.guard.test.ts` holds the two in agreement. The state
+  ladders (activation / reactivation / active) live in `lib/companion.ts`.
 - **`lib/os/buddy-checkin.ts`** — the mentor check-in: when a PAYING student
   goes two days without any log, the cron DRAFTS a message from that student's
   real data and the mentor sends it with one tap from their own id. Pure logic
@@ -245,8 +249,9 @@ refund processed ─▶ settleRefund()      ── stamps refunded_at ───�
 
 ## 4. The crons (vercel.json is the schedule of record)
 
-33 jobs. The ones that shape a student's day: `study-companion` (6 slots —
-builds plans at 6am IST before anyone wakes), `weekly-plan-reconcile` (Sunday
+42 declared crons (38 routes; study-companion is declared once per slot).
+The ones that shape a student's day: `study-companion` (4 scheduled slots),
+`weekly-plan-reconcile` (Sunday
 19:00 IST — the ONLY thing that moves a finish date), `daily-insight` (5pm),
 `daily-heartbeat` (9pm guarantee push), `timetable-horizon` (9am — "upload
 your next sheet"). All POST, all `authorizedCron`, all idempotent per day —

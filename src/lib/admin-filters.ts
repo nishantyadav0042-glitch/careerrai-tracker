@@ -37,13 +37,25 @@ export interface RealStudent {
 
 // One fetch of the base population, reused by the filters below within a
 // request. Every card derives from this exact set.
+//
+// A FAILED READ THROWS. It must not return an empty population, and `data ??
+// []` did exactly that: `fetchAll` reports a failure in `error` and leaves
+// `data` null, so a timeout on page three rendered as zero students, every
+// Founder Inbox card empty, and "All clear" at the top of the screen. That is
+// the same shape as Incident #65 itself — an absent value presenting itself as
+// a valid one — only louder in its consequences, because a truncated roster
+// still looks like a roster while an empty one reads as a calm day.
+//
+// Every card here derives from this list, so there is no safe partial answer:
+// the page failing is strictly better than the page lying.
 export async function getRealStudents(admin: any): Promise<RealStudent[]> {
-  const { data } = await fetchAll(() => admin
+  const { data, error } = await fetchAll(() => admin
     .from('profiles')
     .select('id, full_name, phone, onboarding_completed')
     .eq('role', 'student')
     .not('is_test_account', 'is', true)
     .not('is_demo', 'is', true));
+  if (error) throw new Error(`getRealStudents failed: ${error.message}`);
   return (data ?? []) as RealStudent[];
 }
 

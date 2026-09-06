@@ -4096,3 +4096,68 @@ the first assembly was correct on both 3 and 5 September.
 shipped, because CI happened to run at 22:00 IST. A test whose result depends
 on when it runs is not a passing test, it is an unfired one. `test-support/
 mid-shift.ts` pins the hour.
+
+---
+
+## Incident #73
+
+**2026-09-02 · careerrai-test raised `rls_disabled_in_public` a second time ·
+Security (P0 class, zero actual exposure)**
+
+**What happened.** Supabase Security Advisor emailed a CRITICAL finding on
+careerrai-test (`endycmkdphymmhzniaih`): table `public._probe` had RLS
+disabled while `anon` held INSERT, SELECT, UPDATE, DELETE and TRUNCATE. The
+anon key ships to every browser by design, so anyone holding the test project
+URL could read or destroy its contents.
+
+**What was actually at risk: nothing.** Read before acting — 8 rows,
+`(n int, probe text, result text)`, holding sales-conversion invariant probe
+results ("P1 same payment credited twice" -> "PASS - rejected 23505"). No
+student data, no PII, no credentials, no production reference.
+
+**Production was never affected**, verified read-only before touching test:
+101 of 101 public tables RLS-enabled, zero disabled.
+
+**The real lesson — fixing the census never fixes the default.**
+`20260826f_rls_parity_from_production.sql` (Incident from 26 Aug) enabled RLS
+on the 91 tables that were unprotected *at that moment*. It was a correct fix
+and it was structurally incapable of preventing the recurrence, because
+`_probe` did not exist yet. careerrai-test is a scratch database where
+creating ad-hoc tables during verification is the entire point, so "audit the
+tables that exist" was always going to be outrun by the next probe run. Six
+days later it was.
+
+This is the same shape as the companion-slot defect closed the same week: a
+per-item audit that passes today and cannot notice tomorrow's new item. In
+both cases the durable fix was to make the *absence* of the safe state
+impossible to reach silently, not to re-run the census.
+
+**The fix, with teeth.** `20260902a` drops `_probe` (disposable scratch,
+referenced by nothing — the checked-in `supabase/tests/*_probes.sql` create
+and drop their own `public.__probe(text)` FUNCTION; this TABLE was ad hoc).
+`20260902b` installs an event trigger on `ddl_command_end` that enables RLS on
+every newly created `public` table. Service role and table owners bypass RLS,
+so app queries, migrations and probe runs are unaffected; RLS with no policies
+denies anon/authenticated by default, which is the correct posture for a table
+nobody designed access for.
+
+**Verified, not assumed.** After applying, `create table
+public._rls_trigger_selftest (id int)` came out with `relrowsecurity = true`
+without being asked, and was dropped. Project state after: 100 public tables,
+100 RLS-enabled, 0 disabled, **0 ERROR-level advisor findings** (was 1).
+
+**Scoped to test deliberately.** Production is already 101/101 and has
+migration review as its control; installing a DDL event trigger there is a
+behaviour change nobody asked for. Extending it is the founder's call, not a
+side effect of a test-project fix.
+
+**Checked while there, and left alone:** production has three SECURITY
+DEFINER functions reachable by `anon`/`authenticated`. Two
+(`enforce_sales_seat_cap`, `sync_student_crm`) return `trigger`, so PostgREST
+cannot invoke them as RPC at all; `is_admin(uuid)` is authenticated-only,
+returns a boolean, and is called by RLS policies — revoking EXECUTE could
+break those policies. Not a vulnerability, and not touched.
+
+**Rule to carry forward:** when a security finding is "this object is
+misconfigured", ask whether the *class* of object can be created again
+tomorrow. If it can, the fix is a default or a guard, not a corrected census.

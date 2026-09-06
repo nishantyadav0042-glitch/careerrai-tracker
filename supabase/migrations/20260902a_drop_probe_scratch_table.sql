@@ -1,0 +1,33 @@
+-- ── P0 SECURITY: careerrai-test rls_disabled_in_public, second occurrence ───
+--
+-- APPLIED TO careerrai-test (endycmkdphymmhzniaih) ON 2 SEP 2026.
+-- NOT APPLIED TO PRODUCTION — production has nothing to fix (see below).
+--
+-- Supabase Security Advisor raised one CRITICAL finding on careerrai-test:
+-- table `public._probe` had RLS disabled while `anon` held INSERT, SELECT,
+-- UPDATE, DELETE and TRUNCATE on it. The anon key ships to every browser by
+-- design, so anyone with the test project URL could read or destroy its rows.
+--
+-- ── WHAT WAS ACTUALLY AT RISK: NOTHING ─────────────────────────────────────
+--
+-- Read before acting. 8 rows, columns (n int, probe text, result text),
+-- holding sales-conversion invariant probe results:
+--   "P0 a legal conversion inserts"      -> "PASS"
+--   "P1 same payment credited twice"     -> "PASS - rejected 23505"
+--   "P5 incentive_percent = 250"         -> "PASS - rejected 23514"   ... etc.
+-- No student data, no PII, no credentials, no production reference.
+--
+-- ── WHY DROP RATHER THAN SECURE ────────────────────────────────────────────
+--
+-- It is disposable verification scratch, referenced by nothing in the repo.
+-- The checked-in probe files (`supabase/tests/*_probes.sql`) create and then
+-- drop their own `public.__probe(text)` FUNCTION; this TABLE was created ad
+-- hoc by a session and never cleaned up. Enabling RLS on it would preserve a
+-- table with no reason to exist. Dropping removes the exposure and the anon
+-- grants with it.
+--
+-- ── PRODUCTION WAS NEVER AFFECTED ──────────────────────────────────────────
+--
+-- Verified read-only BEFORE touching test: careerrai (pobhpszlsozeonejtzqy)
+-- has RLS enabled on 101 of 101 public tables, zero disabled.
+drop table if exists public._probe;
