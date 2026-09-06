@@ -190,11 +190,24 @@ robotic calls to the same person.
 
 ---
 
-## 5. Sizing: a recommendation, never a quota
+## 5. Sizing: the system owes the day, the counsellor owes the outcomes
 
-**There is no call quota. There is no mandatory student count.** 70–100 is a
-recommended daily opportunity window, not a target, and it is never a component
-of pay or performance.
+*Amended 2 Sep 2026 on the founder's word ("take charge… keep a range 50–70
+daily"; the design and the reasons are in `docs/SALES-DAILY-DAY.md`).*
+
+**The system owes each counsellor a full day: 50 to 70 named students, each
+with a true printed reason and a channel.** The counsellor owes conversations
+and outcomes, never a count. The number is what the platform must supply, not
+what a person is judged on — it is never a component of pay or performance,
+and a day the book cannot fill is reported short, never padded.
+
+**Rotation is a lane with a reason, not padding.** A student nobody has spoken
+to in 21 days is due a touch, oldest first; the card says so in words
+("last spoken to 24 days ago — nothing since"). Signals fill the day first;
+rotation fills the rest, with a floor so the silent book always moves.
+
+The rest of this section, written before the amendment, stands where it does
+not conflict:
 
 | Actionable today | The queue shows |
 |---|---|
@@ -293,6 +306,15 @@ Interested · Not interested · DND · Unqualified · Converted.
 
 **Remark** — short free text, and only where it carries something a structured
 field cannot: *"Student said busy till Monday. Wants strategy discussion after."*
+
+> **Amendment, 3 Sep 2026 (founder order):** a remark in the rep's own words is
+> **mandatory** on every connected outcome (interested, callback, converted,
+> not interested, DND) **and on every sent message** — "a message was sent"
+> without what it said is not a record. `no_answer` keeps its truthful
+> auto-note ("Did not pick up"): there is nothing to say about a call nobody
+> answered, and extorting text there is how junk remarks are bred. Enforced
+> server-side in `/api/sales/log`; the junk-remark risk the original wording
+> feared is managed by the daily snapshot review, not by dropping the record.
 
 **Follow-up** — if the student names a time, the counsellor sets it and forgets
 it. A date that lives only inside remark text does not exist. This is binding: a
@@ -434,8 +456,11 @@ Until there is enough data for that comparison, retention impact is reported as
 A change that does any of these violates this contract, however well-intentioned:
 
 1. Making a P5 telemetry number into a target, a quota, a KPI or an input to pay.
-2. Introducing a call quota or a mandatory daily student count.
-3. Padding the queue with low-value students to reach a number.
+2. Judging a counsellor on a count. (*Amended 2 Sep 2026:* the 50–70 day is
+   what the SYSTEM must supply — §5 — never what the counsellor must hit.)
+3. Dealing a student with no true printed reason. (*Amended 2 Sep 2026:*
+   rotation's reason — "nobody has spoken to them in N days" — is true and
+   printed; a card without one is padding and is forbidden.)
 4. Letting a typed status override the payment ledger as conversion truth.
 5. Merging `no_answer` with `not_interested`, or `not_contacted` with rejection.
 6. Letting a promised follow-up date live only in free text.

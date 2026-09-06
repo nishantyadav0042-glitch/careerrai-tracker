@@ -88,6 +88,14 @@
       "path": "/api/cron/sales-ready",
       "schedule": "30 9 * * *"
     },
+{
+      "path": "/api/cron/lead-intake",
+      "schedule": "30 22 * * *"
+    },
+{
+      "path": "/api/cron/day-close",
+      "schedule": "15 16 * * *"
+    },
     {
       "path": "/api/cron/outcome-sweep",
       "schedule": "45 1 * * *"

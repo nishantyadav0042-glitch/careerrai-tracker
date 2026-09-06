@@ -65,5 +65,11 @@
       "label": "Know your CAT readiness in minutes"
     }
   ],
-  "prefer_related_applications": false
+  "prefer_related_applications": false,
+  "related_applications": [
+    {
+      "platform": "webapp",
+      "url": "https://careerrai.in/manifest.json"
+    }
+  ]
 }

@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { dispatch } from '@/lib/notification-os';
 import { authorizedCron } from '@/lib/cron-auth';
 import { withCronTracking } from '@/lib/cron-run-tracker';
-import { readRows, isUnavailable } from '@/lib/truth/source';
+import { readRows, isUnavailable, readAllRows } from '@/lib/truth/source';
 import { readRowsForIds } from '@/lib/truth/batch';
 
 // ── B3b #8 — read safety ONLY ──────────────────────────────────────────────
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
 async function nishantWeeklyRun(): Promise<NextResponse> {
   const admin = createAdminClient();
 
-  const studentsSource = await readRows<PingStudent>('profiles(students)', () =>
+  const studentsSource = await readAllRows<PingStudent>('profiles(students)', () =>
     admin.from('profiles').select('id, full_name, notif_prefs').eq('role', 'student'));
   if (isUnavailable(studentsSource)) return pingSourceDead(studentsSource.reason, 0);
   const students = studentsSource.state === 'value' ? studentsSource.value : [];

@@ -61,13 +61,17 @@ vi.mock('@/lib/supabase/admin', () => ({
     from(table: string) {
       const m: Mode = mode[table] ?? 'ok';
       let chunk: string[] | null = null;
+      // Paging: fetchAll asks for .range(from, to) per page; a fake that ignores
+      // it would hand back the whole roster on every page and never terminate.
+      let rng: [number, number] | null = null;
+      const page = <T,>(rows: T[]) => (rng ? rows.slice(rng[0], rng[1] + 1) : rows);
       const answer = () => {
         if (m === 'throw') throw new Error(`${table} exploded`);
         if (m === 'error') return Promise.resolve({ data: null, error: { message: `${table} timeout` } });
         if (m === 'null-no-error') return Promise.resolve({ data: null, error: null });
         const all = rows(population);
         if (table === 'profiles') {
-          return Promise.resolve({ data: chunk ? all.filter((r) => chunk!.includes(r.id)) : all, error: null });
+          return Promise.resolve({ data: page(chunk ? all.filter((r) => chunk!.includes(r.id)) : all), error: null });
         }
         if (table === 'daily_reports') {
           const scope = chunk ? all.filter((r) => chunk!.includes(r.id)) : all;
@@ -82,6 +86,7 @@ vi.mock('@/lib/supabase/admin', () => ({
       for (const k of ['select', 'eq', 'gte', 'lte', 'contains', 'limit', 'order', 'is', 'not']) {
         chain[k] = () => chain;
       }
+      chain.range = (from: number, to: number) => { rng = [from, to]; return chain; };
       chain.in = (_c: string, vals: unknown) => {
         if (Array.isArray(vals) && typeof vals[0] === 'string' && vals[0].startsWith('s')) chunk = vals as string[];
         return chain;

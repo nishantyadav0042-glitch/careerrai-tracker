@@ -1,9 +1,12 @@
 import Link from 'next/link';
+import { SECTION_ORDER, SECTION_LABEL } from '@/lib/sales-day';
 import { requireAdmin } from '@/lib/admin-auth';
 import { cn } from '@/lib/utils';
 import { WorkspaceShell } from '@/components/admin/workspace-shell';
 import { buildTower, renderMetric, type Metric } from '@/lib/sales-control-tower';
 import { AssignPanel } from './assign-panel';
+import { TeamYesterday } from '@/components/admin/team-yesterday';
+import { teamYesterday } from '@/lib/sales-yesterday';
 import { getTeamCapacity } from '@/lib/sales-capacity';
 import { repAllocationLimit, EMPLOYMENT_LABEL, REFUSAL_COPY } from '@/lib/sales-rep-provisioning';
 
@@ -54,6 +57,7 @@ function MetricCard({ m }: { m: Metric }) {
 export default async function SalesControlTower() {
   const { user, admin } = await requireAdmin();
   const t = await buildTower(admin);
+  const yesterdayTeam = await teamYesterday(admin);
   // Same authority the distribute route enforces with — the preview and the
   // refusal must be computed from one function, or the founder is shown a
   // split the server will reject.
@@ -81,6 +85,13 @@ export default async function SalesControlTower() {
           NOT AVAILABLE — DATA QUALITY FAILURE. The CRM tables could not be read, so nothing below is trustworthy.
         </div>
       )}
+
+      {/* Founder order, 3 Sep: both reps' yesterday, compiled from the same
+          per-rep function each rep sees herself. Sits above the levels because
+          it is the one thing the founder asked to read daily. */}
+      <div className="mt-4">
+        <TeamYesterday t={yesterdayTeam} />
+      </div>
 
       {/* L1 — TODAY */}
       <h2 className="mt-4 text-[11px] font-bold uppercase tracking-widest text-stone-400">Level 1 · Today</h2>
@@ -154,6 +165,69 @@ export default async function SalesControlTower() {
         <strong>Claimed</strong> and <strong>confirmed</strong> are deliberately separate columns and are never added
         together. A rep typing &ldquo;called&rdquo; is operational information; it is not evidence that a call happened.
       </p>
+
+      {/* COVERAGE (founder, 2 Sep): "are we tracking the old students?" must be
+          readable here every day. Book, touched in 21 days, never touched, and
+          today's day by section — every number derived from rows. */}
+      <h3 className="mt-4 text-[11px] font-bold uppercase tracking-widest text-stone-400">Coverage · is every student being tracked?</h3>
+      {t.coverage.reps === null ? (
+        <div className="mt-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-800">
+          NOT AVAILABLE — could not read coverage ({t.coverage.failed}). Not zero.
+        </div>
+      ) : t.coverage.reps.length === 0 ? (
+        <div className="mt-2 rounded-xl border border-stone-200 bg-white p-4 text-sm text-stone-500">No book exists yet.</div>
+      ) : (
+        <div className="mt-2 overflow-x-auto rounded-xl border border-stone-200 bg-white">
+          <table className="w-full min-w-[760px] text-[12px]">
+            <thead className="bg-stone-50 text-[10px] uppercase tracking-wide text-stone-500">
+              <tr>
+                <th className="p-2 text-left">Rep</th>
+                <th className="p-2 text-right">Book</th>
+                <th className="p-2 text-right" title="Any call or message in the last 21 days.">Touched · 21d</th>
+                <th className="p-2 text-right" title="Nobody has ever called or messaged them.">Never touched</th>
+                <th className="p-2 text-left">Given today</th>
+                <th className="p-2 text-right">Worked</th>
+                <th className="p-2 text-right" title="Closed without acting, with a reason.">Skipped</th>
+                <th className="p-2 text-right" title="Dealt today and still not marked either way.">Unmarked</th>
+                <th className="p-2 text-right">Called</th>
+                <th className="p-2 text-right">Messaged</th>
+              </tr>
+            </thead>
+            <tbody>
+              {t.coverage.reps.map((c) => {
+                const given = SECTION_ORDER.reduce((s, k) => s + c.givenToday[k], 0);
+                const pct = c.book > 0 ? Math.round((c.touched21d / c.book) * 100) : null;
+                return (
+                  <tr key={c.repId} className="border-t border-stone-100">
+                    <td className="p-2 font-semibold text-stone-800">{c.name}</td>
+                    <td className="p-2 text-right tabular-nums">{c.book}</td>
+                    <td className="p-2 text-right tabular-nums">{c.touched21d}{pct !== null && <span className="text-stone-400"> · {pct}%</span>}</td>
+                    <td className={cn('p-2 text-right tabular-nums', c.neverTouched > 0 && 'font-bold text-rose-600')}>{c.neverTouched}</td>
+                    <td className="p-2 text-[11px] text-stone-600">
+                      {given === 0 ? <span className="text-stone-400">nothing dealt yet today</span>
+                        : <><span className="font-bold text-stone-800">{given}</span> · {SECTION_ORDER.filter((k) => c.givenToday[k] > 0).map((k) => `${SECTION_LABEL[k]} ${c.givenToday[k]}`).join(' · ')}</>}
+                    </td>
+                    <td className="p-2 text-right tabular-nums">{c.workedToday}</td>
+                    <td className="p-2 text-right tabular-nums text-stone-500">{c.skippedToday}</td>
+                    {/* The number the founder asked for on 3 Sep: cards dealt
+                        and never marked either way. After 21:45 IST the sweep
+                        has closed them, so a non-zero here during the shift is
+                        work still to do, not a permanent hole. */}
+                    <td className={cn('p-2 text-right tabular-nums', c.openToday > 0 && 'font-bold text-amber-700')}>{c.openToday}</td>
+                    <td className="p-2 text-right tabular-nums">{c.calledToday}</td>
+                    <td className="p-2 text-right tabular-nums">{c.messagedToday}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="mt-1 text-[11px] text-stone-500">
+        The day is 50–70 per counsellor, dealt from 4 AM IST: signals first, then rotation through everyone untouched for 21 days.
+        &ldquo;Given&rdquo; is what the system offered; &ldquo;worked&rdquo; is a logged outcome, never a tap. Worked + skipped +
+        unmarked always equals given — every card ends the day marked, and the 21:45 IST sweep records the ones nobody touched.
+      </p>
       {t.conversionRateSuppressed && (
         <p className="mt-1 text-[11px] font-semibold text-stone-600">
           Conversion rate: <span className="text-rose-700">UNAVAILABLE</span> — {t.paidTotal ?? 0} paid customers in
@@ -163,6 +237,37 @@ export default async function SalesControlTower() {
 
       {/* L3 — DISTRIBUTION */}
       <h2 className="mt-6 text-[11px] font-bold uppercase tracking-widest text-stone-400">Level 3 · Lead distribution</h2>
+      {/* THE DAILY INTAKE (founder, 2 Sep). "Are new students being added to
+          their lists daily?" must be answerable from this line, every day,
+          without asking a counsellor. Never-ran is shown as never-ran. */}
+      <div className="mt-2 rounded-xl border border-stone-200 bg-white p-3 text-[12px]">
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          <span className="font-bold text-stone-900">Daily intake</span>
+          {t.intake.enrolledToday === null ? (
+            <span className="font-semibold text-rose-700">could not read today&apos;s intake — not zero</span>
+          ) : t.intake.enrolledToday.length === 0 ? (
+            <span className="text-stone-600">no student has entered a book today yet</span>
+          ) : (
+            <span className="text-stone-700">
+              today {t.intake.enrolledToday.map((e) => `${e.name.split(' ')[0]} +${e.count}`).join(' · ')}
+            </span>
+          )}
+        </div>
+        <p className="mt-1 text-[11px] text-stone-500">
+          {t.intake.lastRun === null ? (
+            <span className="font-semibold text-rose-700">The intake engine has never run.</span>
+          ) : (
+            <>
+              Last run {new Date(t.intake.lastRun.at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' })}
+              {' · '}<span className={t.intake.lastRun.ok ? 'font-semibold text-emerald-700' : 'font-semibold text-rose-700'}>{t.intake.lastRun.state}</span>
+              {' · '}{t.intake.lastRun.enrolled} enrolled
+              {t.intake.lastRun.waiting !== null && <> · {t.intake.lastRun.waiting} still waiting for a seat</>}
+              {t.intake.lastRun.error && <> · {t.intake.lastRun.error}</>}
+            </>
+          )}
+          {' · '}runs 2:30 PM IST · <Link href="/admin/sales/capacity" className="underline">run now / new-per-day caps</Link>
+        </p>
+      </div>
       <AssignPanel
         reps={(t.reps ?? []).map((r) => {
           const cap = capById.get(r.id);

@@ -3,8 +3,11 @@ import { salesPrincipal } from '@/lib/sales-authz';
 import { cn } from '@/lib/utils';
 import { buildCallQueue } from '@/lib/call-queue';
 import { CallDeck } from '@/components/call-deck';
+import { SECTION_ORDER, SECTION_LABEL } from '@/lib/sales-day';
 import { getTeamCapacity, BINDING_LABEL } from '@/lib/sales-capacity';
 import { MyOutcomes } from '@/components/sales/my-outcomes';
+import { YesterdayFlash } from '@/components/sales/yesterday-flash';
+import { istYesterdayWindow, repDaySnapshot } from '@/lib/sales-yesterday';
 import { interventionPicture, type LedgerRow } from '@/lib/student-success-mis';
 import { recordSurfaced, readToday } from '@/lib/sales-opportunity-record';
 import { computeCheckpoint, describeCheckpoint } from '@/lib/sales-checkpoint';
@@ -26,6 +29,10 @@ export default async function SalesCallsPage() {
   // R3: the identity is profiles.id, never the email. The previous line read
   // `email ?? null`, and a null there granted the oversight frame.
   const principal = await salesPrincipal(admin, user.id);
+  // Founder order, 3 Sep: yesterday's own numbers, computed here so the
+  // component below stays sync (a nested async component suspends under the
+  // render tests) and so the tower's compiled view uses the same function.
+  const yesterday = await repDaySnapshot(admin, user.id, istYesterdayWindow());
   // The rep's OWN outcomes, last 30 days. Scoped by rep_id: a rep sees what
   // happened after their calls and never another rep's numbers — there is no
   // leaderboard here, by design.
@@ -35,7 +42,7 @@ export default async function SalesCallsPage() {
   // counsellor's face every morning. The checkpoint replaces it with coverage
   // of what mattered — SALES-OS.md §0, activity is P5 and must not read as the
   // measure of a day.
-  const [{ queue, dueNow }, team, myLedger] = await Promise.all([
+  const [{ queue, dueNow, counts }, team, myLedger, me] = await Promise.all([
     buildCallQueue(admin, principal),
     getTeamCapacity(admin),
     admin.from('intervention_ledger')
@@ -43,7 +50,10 @@ export default async function SalesCallsPage() {
       .eq('rep_id', user.id)
       .gte('occurred_at', since30)
       .limit(2000),
+    // The counsellor's first name signs every one-tap message.
+    admin.from('profiles').select('full_name').eq('id', user.id).maybeSingle(),
   ]);
+  const repFirstName = (String(me?.data?.full_name ?? '').trim().split(' ')[0]) || 'CareerRai';
 
   // CHECKED: a failed read must not render as "you helped nobody". Null means
   // the strip reports nothing rather than a demoralising fabricated zero.
@@ -77,6 +87,10 @@ export default async function SalesCallsPage() {
 
   return (
     <div>
+      {/* Founder order, 3 Sep: yesterday in the rep's own numbers greets every
+          open - computed by the same function the Control Tower compiles, so
+          the two views cannot disagree. A zero renders as a zero. */}
+      <YesterdayFlash s={yesterday} />
       <div className="rounded-2xl border border-teal-700 bg-teal-700 p-5 text-white">
         <p className="text-[11px] font-bold uppercase tracking-widest text-teal-200">Today</p>
         {/* THE COUNSELLOR NEVER REPORTS THIS. Every number is derived from rows
@@ -102,8 +116,16 @@ export default async function SalesCallsPage() {
           </div>
         )}
         <p className="mt-1.5 text-sm text-teal-100">
-          Highest priority first. Read the brief, call, log the outcome.
+          Highest priority first. Read the brief, call or message, log the outcome.
         </p>
+        {/* WHAT THE DAY IS MADE OF (founder, 2 Sep): the mix, by section, so a
+            counsellor can see at a glance that today is not only sales calls. */}
+        {counts && queue.length > 0 && (
+          <p className="mt-1.5 text-[12px] text-teal-100">
+            {SECTION_ORDER.filter((k) => counts.given[k] > 0)
+              .map((k) => `${SECTION_LABEL[k]} ${counts.given[k]}`).join(' · ')}
+          </p>
+        )}
         <div className={cn('mt-3 rounded-xl px-3 py-2 text-[13px] font-semibold', primeTime ? 'bg-emerald-400/20 text-emerald-100' : 'bg-white/10 text-teal-100')}>
           {primeTime ? '🟢 Prime calling hours (6–9 PM) — best pickup. Push hard now.' : '⏰ Best pickup is 6–9 PM. Work the due callbacks and top leads first.'}
         </div>
@@ -121,8 +143,9 @@ export default async function SalesCallsPage() {
         </div>
       )}
 
-      {/* Phase 2B-1: the rep's own workload, one line. Nothing here changes
-          how leads reach them — claiming is still manual and unchanged. */}
+      {/* Phase 2B-1: the rep's own workload, one line. New students reach
+          their book through the daily intake (lib/lead-intake.ts); this line
+          shows the live work that book currently holds. */}
       {mine?.configured && (
         <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-[12px]">
           <span className="font-bold text-stone-800">
@@ -147,7 +170,7 @@ export default async function SalesCallsPage() {
             No one to call right now. Callbacks and fresh leads roll in through the day — check back this evening.
           </div>
         ) : (
-          <CallDeck queue={queue} />
+          <CallDeck queue={queue} repFirstName={repFirstName} />
         )}
       </div>
     </div>

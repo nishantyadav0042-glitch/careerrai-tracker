@@ -127,6 +127,14 @@ export const EVENT_POLICY: Readonly<Record<string, EventPolicy>> = {
 
   // ── Money — transactional, must arrive ───────────────────────────────────
   membership:          { importance: 'P0', taxonomy: 'transactional', ladder: ['whatsapp', 'push'], urgent: true },
+  // The single-session purchase's own confirmation. Until 3 Sep it had none —
+  // activateSessionCredit minted the credit, the chat grant and the mentor
+  // assignment, and told the student nothing, the exact silence membership
+  // already exists to prevent for the subscriptions. Its own type rather than
+  // reusing 'membership': the copy is genuinely different (a session confirms
+  // a mentor OR that one is still being found; a subscription always confirms
+  // the same thing) and the two must stay auditable on separate lines.
+  session_booked:       { importance: 'P0', taxonomy: 'transactional', ladder: ['whatsapp', 'push'], urgent: true },
   renewal_reminder:    { importance: 'P1', taxonomy: 'transactional', ladder: ['push', 'whatsapp'] },
   refund_request:      { importance: 'P0', taxonomy: 'transactional', ladder: ['push'], urgent: true },
 

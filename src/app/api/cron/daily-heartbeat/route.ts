@@ -5,6 +5,7 @@ import { dispatch, BUDGET_RECOVERY } from '@/lib/notification-os';
 import { getLogDateString } from '@/lib/streak-utils';
 import { withCronTracking } from '@/lib/cron-run-tracker';
 
+import { fetchAll } from '@/lib/supabase/fetch-all';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
@@ -31,16 +32,16 @@ async function dailyHeartbeatRun(): Promise<NextResponse> {
     new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) + 'T00:00:00+05:30';
 
   const [{ data: students }, { data: pushedRows }, { data: todayLogs }] = await Promise.all([
-    admin.from('profiles')
+    fetchAll(() => admin.from('profiles')
       .select('id, full_name, notif_prefs')
       .eq('role', 'student')
       .not('is_demo', 'is', true)  // test accounts stay IN: this cron IS the student experience (founder tests as a student); demo accounts are shared logins and stay out
-      .not('push_subscription', 'is', null),
-    admin.from('notifications')
+      .not('push_subscription', 'is', null)),
+    fetchAll(() => admin.from('notifications')
       .select('user_id')
       .not('pushed_at', 'is', null)
-      .gte('pushed_at', todayStart),
-    admin.from('daily_reports').select('student_id').eq('report_date', logDay),
+      .gte('pushed_at', todayStart)),
+    fetchAll(() => admin.from('daily_reports').select('student_id').eq('report_date', logDay)),
   ]);
   const pushedIds = new Set((pushedRows ?? []).map((r) => r.user_id as string));
   const loggedIds = new Set((todayLogs ?? []).map((r) => r.student_id as string));

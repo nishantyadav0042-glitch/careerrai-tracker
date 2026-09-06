@@ -1,6 +1,7 @@
 import { requireAdmin } from '@/lib/admin-auth';
 import { Activity } from 'lucide-react';
 
+import { fetchAll } from '@/lib/supabase/fetch-all';
 export const dynamic = 'force-dynamic';
 
 // Real behaviour, from student_events.
@@ -67,9 +68,9 @@ export default async function AdminAnalyticsPage() {
 
   const [{ rows: allEvents, truncated: eventsTruncated }, { data: students }, { data: reports }, { data: dna }] = await Promise.all([
     fetchAllEvents(),
-    admin.from('profiles').select('id, role, is_test_account').eq('role', 'student'),
-    admin.from('daily_reports').select('student_id, report_date').gte('report_date', istDay(sinceIso)),
-    admin.from('student_dna').select('student_id, activation, consistency, momentum, purchase_intent, churn_risk, journey_stage'),
+    fetchAll(() => admin.from('profiles').select('id, role, is_test_account').eq('role', 'student')),
+    fetchAll(() => admin.from('daily_reports').select('student_id, report_date').gte('report_date', istDay(sinceIso))),
+    fetchAll(() => admin.from('student_dna').select('student_id, activation, consistency, momentum, purchase_intent, churn_risk, journey_stage'), { orderBy: 'student_id' }),
   ]);
 
   // Only real students count. A founder test account inflating "daily actives"

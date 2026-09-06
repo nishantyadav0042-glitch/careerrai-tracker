@@ -127,8 +127,13 @@ describe('§5 — no catch-all lane (the "42 means 42" rule)', () => {
     const q = read('src/lib/call-queue.ts');
     expect(q, 'the classifier must be able to say "no signal"')
       .toMatch(/export function classifyLane\([^)]*\):\s*LaneVerdict \| null/);
-    expect(q, 'an already-contacted student with no signal is not dealt a card')
-      .toMatch(/if \(o\?\.last_attempt_at\) continue;/);
+    // CHANGED 2 Sep 2026 (SALES-OS.md §5 amended): an already-contacted
+    // student with no signal RESTS — for ROTATION_SILENT_DAYS — and then is
+    // dealt again with the reason printed ("last spoken to N days ago"). The
+    // rule this pins is unchanged in spirit: silence within the resting
+    // window is still backlog, never a card.
+    expect(q, 'a recently-contacted student with no signal is not dealt a card')
+      .toMatch(/if \(daysSilent < ROTATION_SILENT_DAYS\) continue;/);
   });
 
   it('a never-contacted student is still surfaced — that IS the reason', () => {
@@ -136,12 +141,19 @@ describe('§5 — no catch-all lane (the "42 means 42" rule)', () => {
     expect(q).toContain("dueLabel = 'Never contacted'");
   });
 
-  it('the disposition form does not extort a note on every connected call', () => {
+  it('a connected call carries the rep\'s own words - client and server agree (3 Sep order)', () => {
+    // REWRITTEN 3 Sep. The original pinned NOTE_REQUIRED to not_interested/dnd
+    // only, per the old section-8 wording - while the SERVER always required a
+    // note on all five connected outcomes, so interested/callback/converted
+    // saves passed this gate only to 400 on the API. The founder's 3 Sep order
+    // (recorded as a dated amendment in SALES-OS section 8) makes the remark
+    // mandatory on every connected outcome AND on a sent message; what this
+    // guard now protects is that the CLIENT enforces the same rule the server
+    // does, so the Save button never promises what the API will refuse.
     const d = read('src/components/call-deck.tsx');
-    expect(d, 'a note required on all five outcomes produces "ok" and "x" within a week')
-      .not.toMatch(/const canSave = note\.trim\(\)\.length > 0;/);
-    expect(d, 'it stays mandatory where the free text IS the record')
-      .toMatch(/NOTE_REQUIRED = new Set\(\['not_interested', 'dnd'\]\)/);
+    expect(d).toMatch(/NOTE_REQUIRED = new Set\(\['interested', 'callback', 'converted', 'not_interested', 'dnd'\]\)/);
+    expect(d, 'a sent message must carry what was sent - no more empty one-tap')
+      .not.toMatch(/dispose\(lead, 'messaged', ''\)/);
   });
 
   it('the rep is not offered a button that claims money arrived', () => {

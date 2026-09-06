@@ -16,6 +16,11 @@ import { repAllocationLimit, REFUSAL_COPY } from '@/lib/sales-rep-provisioning';
 // Deliberately not an algorithm the server invents: the founder said not to
 // implement an opaque automatic distribution, so the server's job is to be a
 // faithful, auditable executor of a decision that was shown before it was made.
+//
+// The daily intake (lib/lead-intake.ts, 2 Sep 2026) is the sanctioned
+// automation, and it is not opaque: it enrols new students into BOOKS on a
+// published rule with a stored explanation per row. It never distributes
+// live work — that is still this route, still a founder's previewed split.
 
 const MAX_TOTAL = 500;
 

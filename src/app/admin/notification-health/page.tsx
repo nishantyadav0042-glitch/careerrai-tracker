@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { pushRecoveryMessage, waNumber } from '@/lib/wa-messages';
 import { getNotificationHealth, getReliabilityMetrics } from '@/lib/notification-health';
 
+import { fetchAll } from '@/lib/supabase/fetch-all';
 export const dynamic = 'force-dynamic';
 
 export const metadata = { title: 'Notification Health · CareerRai' };
@@ -78,10 +79,10 @@ export default async function NotificationHealthPage() {
       .gte('created_at', fourteenDaysAgoIso)
       .order('created_at', { ascending: false })
       .limit(2000),
-    admin.from('daily_reports').select('student_id, report_date').gte('report_date', reportsWindowStart),
-    admin.from('profiles')
+    fetchAll(() => admin.from('daily_reports').select('student_id, report_date').gte('report_date', reportsWindowStart)),
+    fetchAll(() => admin.from('profiles')
       .select('id, full_name, phone, dream_colleges, notif_prefs, push_subscription, push_died_at, onboarding_completed, is_test_account')
-      .eq('role', 'student'),
+      .eq('role', 'student')),
   ]);
 
   const rows = (notifs ?? []) as NotifRow[];

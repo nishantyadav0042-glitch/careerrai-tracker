@@ -6,6 +6,7 @@ import { dispatch, BUDGET_ACTIVE } from '@/lib/notification-os';
 import { fetchEligibleBuddies, fetchFocusInputsBulk, recommendFor } from '@/lib/buddy-match';
 import { withCronTracking } from '@/lib/cron-run-tracker';
 
+import { fetchAll } from '@/lib/supabase/fetch-all';
 // Every invocation of this route walks the whole student roster. Vercel's
 // default ceiling was never a decision anyone made here — it was simply
 // inherited, and when it is reached the invocation is killed mid-loop and the
@@ -36,21 +37,21 @@ async function buddyEveningRun(): Promise<NextResponse> {
 
   // Free students with a live push subscription. Premium/assigned students are
   // filtered out (buddy_id null + is_premium not true).
-  const { data: students } = await admin
+  const { data: students } = await fetchAll(() => admin
     .from('profiles')
     .select('id, is_premium, notif_prefs')
     .eq('role', 'student')
     .is('buddy_id', null)
-    .not('push_subscription', 'is', null);
+    .not('push_subscription', 'is', null));
   if (!students?.length) return NextResponse.json({ ok: true, sent: 0, reason: 'no_students' });
 
 
   // Idempotency: who already got today's buddy nudge.
-  const { data: already } = await admin
+  const { data: already } = await fetchAll(() => admin
     .from('notifications')
     .select('user_id')
     .eq('type', 'buddy_evening')
-    .gte('created_at', todayStart);
+    .gte('created_at', todayStart));
   const sentToday = new Set((already ?? []).map((r) => r.user_id));
 
   // P1 FIX (20 Aug). This cron used to call rankBuddies directly with only the

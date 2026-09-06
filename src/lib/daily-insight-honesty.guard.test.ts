@@ -90,9 +90,18 @@ describe('the same insight cannot nag every morning', () => {
     expect(insightKey(a)).toBe('high_weightage:Quadratic Equations');
   });
 
-  it('the fallback is exempt — a quiet week still gets its line', () => {
-    // 'progress' is not an observation; suppressing it would blank the card.
-    expect(src()).toMatch(/kind !== 'progress' && suppressed\.has/);
+  it('the fallback rotates too — only its last resort is exempt', () => {
+    // Founder, 2 Sep: the insight changes every day. After Incident #37 the
+    // observation rules rotated cleanly in production; the ONLY consecutive
+    // repeats left came from a fallback that was exempt from suppression.
+    // The fallback is now a family suppressed like everything else, and the
+    // one exemption remaining is "every member already shown this week → the
+    // first returns" — which is what keeps a quiet week from blanking the
+    // card, the reason the old blanket exemption existed. The exact old
+    // shape must not come back.
+    const s = src();
+    expect(s).not.toMatch(/kind !== 'progress' && suppressed\.has/);
+    expect(s).toMatch(/family\.find\(\(i\) => !suppressed\.has\(insightKey\(i\)\)\) \?\? family\[0\]/);
   });
 
   it('both surfaces consult and record through the shared authority', () => {

@@ -206,6 +206,29 @@ refund processed ─▶ settleRefund()      ── stamps refunded_at ───�
   minutes (`work_days` + hours), never wall clock: a lead handed over at 21:30
   is due next working evening. `assigned_at` / `first_contact_at` on
   `lead_outreach` are the two clocks; **NULL means unknown, never "on time"**.
+- **`lib/lead-intake.ts`** — the daily intake (Incident #66). New free
+  students with a phone enter a book every day at 14:30 IST, newest first,
+  dealt across configured seats, fused by `max_new_per_day` (measured from
+  `lead_outreach.enrolled_at`) — responsibility, never live work. ON CONFLICT
+  DO NOTHING, explanation on every row, kill switch `SALES_INTAKE_ENABLED`.
+  *Guards: `lead-intake.test.ts`, `lead-intake/mutation-safety.test.ts`.*
+- **`lib/sales-day.ts`** — the 50–70 day (founder, 2 Sep 2026; rule in
+  `docs/SALES-DAILY-DAY.md`). `call-queue.ts` decides WHO and WHY (lanes:
+  promises, money, buddy, new, attention, retention, rotation); `assembleDay`
+  decides HOW MANY — signals first, per-lane ceilings, rotation through
+  everyone silent 21 days with a floor of 15, channel per card. **Every ceiling
+  is measured against `DayContext.usedToday`** — cards DEALT today, in every
+  state — never against what is on screen, or the day refills itself all day
+  (Incident #72); past `SHIFT_END_HOUR_IST` nothing new is dealt. `messaged` is
+  a real outcome (`sales-disposition.ts`); `sales-messages.ts` writes the
+  one-tap WhatsApp by lane and journey stage. *Guards: `sales-day.test.ts`,
+  `sales-messages.test.ts`, the queue doctrine tests.*
+- **Closing the day (Incident #67).** Every card dealt ends as `worked`,
+  `skipped` (with a reason, and it changes NOTHING about the student) or
+  `not_marked` (the 21:45 IST sweep, `api/cron/day-close`). `worked_at` keeps
+  its single meaning and still drives coverage; `closed_at` answers the
+  separate question "is this card still open?", so a skip can never inflate
+  a coverage number. *Guard: `day-must-close.test.ts`.*
 - **`lib/sales-board.ts`** — one counsellor's day: open promises bucketed
   overdue/today/upcoming (from `sales_followup`) plus who is still waiting for a
   first call. `promises: null` survives to the renderer — a failed read must
@@ -295,6 +318,18 @@ and most have a guard test that fails the build if violated.
    *Guards: `task-resource-surface.guard.test.ts` (the surface),
    `topic-resources.guard.test.ts` (the data — nine researched videos did not
    exist, twenty-two runtimes were wrong, three channels were misattributed).*
+10. **A population is read paged, never whole.** PostgREST caps every
+   response at `max-rows` (Supabase default 1000) and returns the first
+   thousand rows of an unbounded select with NO error; a client `.limit(N)`
+   at or above the cap does not help, because max-rows is applied after it.
+   The Command Center said STUDENTS 1000 for three days while 1,036 existed,
+   and seven tables were already silently truncated. Any read of a table
+   that can exceed a thousand rows goes through `lib/supabase/fetch-all.ts`
+   (`fetchAll`, ordered pages, short-page termination, loud ceiling) or its
+   Source-typed lift `readAllRows` in `lib/truth/source.ts`.
+   *Guard: `population-cap.guard.test.ts` — a shrink-only baseline of the
+   files still unmigrated; a NEW unbounded read fails the build.*
+   (Incident #65)
 
 ---
 

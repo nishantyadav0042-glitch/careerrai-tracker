@@ -29,6 +29,8 @@ import { getStudentProfile } from '@/lib/student-profile';
 import { projectSyllabusFinish } from '@/lib/study-plan';
 import { catExamDate } from '@/lib/routine-engine';
 import { TOPIC_METADATA } from '@/lib/topics-constants';
+import { firstVerdict } from '@/lib/first-verdict';
+import { FirstVerdictCard } from '@/components/first-verdict-card';
 import { Flame, CalendarCheck, CalendarDays, ChevronRight } from 'lucide-react';
 import { AppTour } from '@/components/app-tour';
 import type { StreakData } from '@/types';
@@ -72,6 +74,7 @@ export default async function DailyTrackerPage() {
     { data: coverageRows },
     { count: plansBuiltCount },
     { count: remindersSentCount },
+    { data: weakestSectionRow },
   ] = await Promise.all([
     getStudentProfile(user.id),
     admin
@@ -114,6 +117,10 @@ export default async function DailyTrackerPage() {
     // /admin/perf.
     admin.from('daily_routines').select('routine_date', { count: 'exact', head: true }).eq('student_id', user.id),
     admin.from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+    // The one onboarding column getStudentProfile's shared selector does not
+    // carry — a single-column read in the same wave rather than widening a
+    // selector every other caller of getStudentProfile also pays for.
+    admin.from('profiles').select('self_reported_weakest_section').eq('id', user.id).maybeSingle(),
   ]);
 
   const firstName = profile?.full_name?.split(' ')[0] ?? 'there';
@@ -134,6 +141,15 @@ export default async function DailyTrackerPage() {
     completionRecords,
     coverageRows: coverageRows ?? [],
   });
+  // The First Verdict (activation forensic, 4 Sep): a coverage-balance read
+  // of the onboarding topic matrix, shown ONLY to a student who has never
+  // logged — see lib/first-verdict.ts for why, and the honesty rule it
+  // enforces. null for everyone else, and for a never-logged student whose
+  // matrix has nothing to say — both fall through to the page's usual shape.
+  const verdict = (logs?.length ?? 0) === 0
+    ? firstVerdict(topicMemory, (weakestSectionRow?.self_reported_weakest_section as string | null) ?? null)
+    : null;
+
   const totalTopics = Object.keys(TOPIC_METADATA).length;
   const notStartedCount = topicMemory.filter((t) => t.status === 'not_started').length;
   const learningCount = topicMemory.filter((t) => t.status === 'learning').length;
@@ -465,12 +481,14 @@ export default async function DailyTrackerPage() {
   // last 7 days steps aside for the next candidate, so the card is a fresh
   // noticing rather than the same sentence every morning. Recording the show
   // is fire-and-forget — a failed write must never blank the home screen.
-  const dailyInsight = (logs ?? []).length >= 2
-    ? await (async () => {
-        const suppressedKeys = await loadSuppressedInsightKeys(admin, user.id).catch(() => new Set<string>());
-        return computeDailyInsight(admin, user.id, archetype, { topicMemory }, { suppressedKeys });
-      })().catch(() => null)
-    : null;
+  // From day 0 (founder, 2 Sep: "2 din rule hata do"). The old `>= 2 logged
+  // days` gate here meant a new student's Home carried no insight at all —
+  // the one screen the 21 Jul brief wanted to open with VALUE. The engine
+  // decides per rule what needs history; this page no longer pre-empts it.
+  const dailyInsight = await (async () => {
+    const suppressedKeys = await loadSuppressedInsightKeys(admin, user.id).catch(() => new Set<string>());
+    return computeDailyInsight(admin, user.id, archetype, { topicMemory }, { suppressedKeys });
+  })().catch(() => null);
   if (dailyInsight) void recordInsightShown(admin, user.id, dailyInsight).catch(() => {});
 
   // LAST WEEK, finished and fixed. A closed calendar week is deterministic,
@@ -538,6 +556,12 @@ export default async function DailyTrackerPage() {
           {/* Moves with the slot, so the page reads like it knows the hour. */}
           <p className="text-[13px] text-stone-500">{slotGreeting(slot)}</p>
         </div>
+
+        {/* THE FIRST VERDICT (activation forensic, 4 Sep) — a student who has
+            never logged sees an honest read of their own onboarding topic
+            matrix instead of the streak/momentum furniture below, which has
+            nothing to say to them yet. See lib/first-verdict.ts. */}
+        {verdict && <FirstVerdictCard v={verdict} />}
 
         {/* 15 August. Renders itself only inside its own date window and
             disappears without anyone having to remember to remove it. */}
@@ -641,8 +665,13 @@ export default async function DailyTrackerPage() {
             the product (founder, 12 Aug: in-app carries the sales load, but
             the app is not an advertisement). */}
 
-        {/* 2 · TODAY'S PLAN — with whole-plan, busy-day and reset actions. */}
-        {planBlock}
+        {/* 2 · TODAY'S PLAN — with whole-plan, busy-day and reset actions.
+            id is the First Verdict card's CTA anchor (activation forensic,
+            4 Sep) — "see today's plan" scrolls here rather than opening the
+            logging modal or any new surface. */}
+        <div id="todays-plan">
+          {planBlock}
+        </div>
 
         {/* The mentor teaser (13 Aug) — the piece the 9 Aug mock had and Home
             never actually built: a real buddy card between the plan and the

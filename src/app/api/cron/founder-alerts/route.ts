@@ -4,6 +4,7 @@ import { authorizedCron } from '@/lib/cron-auth';
 import { withCronTracking } from '@/lib/cron-run-tracker';
 import { sendAdminAlert } from '@/lib/email';
 import { findSacredFailures } from '@/lib/os/sacred-guard';
+import { findAuthOutage } from '@/lib/os/auth-health';
 
 export const maxDuration = 60;
 
@@ -33,11 +34,25 @@ export async function GET(request: NextRequest) {
   return withCronTracking('/api/cron/founder-alerts', async () => {
 
     const admin = createAdminClient();
-    const alerts = await findSacredFailures(admin, Date.now());
+    const now = Date.now();
+
+    // ── Platform auth health, checked BEFORE the per-student sweep ──────────
+    //
+    // Incident #70 (4 Sep): phone OTP login was dead for six hours and nothing
+    // paged, because findSacredFailures only sees students who already have
+    // state. A student who cannot log in never becomes a row, so the outage
+    // that stopped everyone was invisible to the only alarm we had.
+    //
+    // It runs first and separately because it is a different KIND of failure:
+    // not "one student is stuck" but "the front door is locked". If both fire
+    // in the same cycle, the founder should read this one first.
+    const authOutage = await escalateAuthOutage(admin, now);
+
+    const alerts = await findSacredFailures(admin, now);
     const critical = alerts.filter((a) => a.severity === 'critical');
 
     if (critical.length === 0) {
-      return NextResponse.json({ ok: true, critical: 0 });
+      return NextResponse.json({ ok: true, critical: 0, authOutage });
     }
 
     // Which of these have we already paged about? Dedupe on the stable alert id.
@@ -51,7 +66,7 @@ export async function GET(request: NextRequest) {
 
     const fresh = critical.filter((a) => !seen.has(a.id));
     if (fresh.length === 0) {
-      return NextResponse.json({ ok: true, critical: critical.length, newlyEscalated: 0, note: 'all already escalated' });
+      return NextResponse.json({ ok: true, critical: critical.length, newlyEscalated: 0, note: 'all already escalated', authOutage });
     }
 
     const rows = fresh.map((a) => `
@@ -84,8 +99,83 @@ export async function GET(request: NextRequest) {
       })),
     );
 
-    return NextResponse.json({ ok: true, critical: critical.length, newlyEscalated: fresh.length });
+    return NextResponse.json({ ok: true, critical: critical.length, newlyEscalated: fresh.length, authOutage });
   });
 }
 
 export { GET as POST };
+
+// How long one auth outage stays "already paged". Short enough that a founder
+// who missed the first mail gets another before the day is lost; long enough
+// that a six-hour outage costs four mails, not twenty-four. Re-paging a live
+// outage is deliberate — unlike a stuck student, nobody else will report it,
+// because nobody can log in to report it.
+const AUTH_REPAGE_HOURS = 3;
+
+/**
+ * Page the founder when the front door is locked. Returns what it decided so
+ * the cron response is auditable without reading the mailbox.
+ */
+async function escalateAuthOutage(
+  admin: ReturnType<typeof createAdminClient>,
+  nowMs: number,
+): Promise<{ paged: boolean; code?: string; reason?: string; note?: string }> {
+  const fault = await findAuthOutage(admin, nowMs).catch((e) => {
+    console.error('[founder-alerts] auth health check failed', e);
+    return null;
+  });
+  // 'degraded' is real but not act-now; it belongs in the inbox, not the pager.
+  if (!fault || fault.severity !== 'critical') {
+    return { paged: false, code: fault?.code };
+  }
+
+  const since = new Date(nowMs - AUTH_REPAGE_HOURS * 60 * 60 * 1000).toISOString();
+  const { data: recent } = await admin
+    .from('notifications')
+    .select('id')
+    .eq('type', 'founder_alert_sent')
+    .eq('body', fault.code)
+    .gte('created_at', since)
+    .limit(1);
+  if ((recent ?? []).length > 0) {
+    return { paged: false, code: fault.code, note: 'already paged' };
+  }
+
+  const ev = fault.evidence;
+  await sendAdminAlert(
+    '🔴 Nobody can log in — phone OTP is not working',
+    `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px">
+       <h2 style="font-size:18px;color:#1c1917">The front door is locked.</h2>
+       <p style="font-size:14px;color:#292524">${fault.reason}</p>
+       <p style="font-size:13px;color:#57534e">
+         Window: last ${ev.windowMinutes} minutes ·
+         codes requested <b>${ev.requested}</b> · codes that worked <b>${ev.verified}</b>
+       </p>
+       <p style="font-size:13px;color:#57534e">Start here: ${ev.firstCheck}</p>
+       <p style="font-size:13px;color:#57534e">
+         Students with a password can still sign in with phone + password — that
+         path does not touch the SMS gateway.
+       </p>
+       <p style="margin:14px 0 0">
+         <a href="https://careerrai.in${fault.destination}" style="background:#1c1917;color:#fff;padding:8px 16px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600">${fault.suggestedAction.label} →</a>
+       </p>
+     </div>`,
+  ).catch((e) => console.error('[founder-alerts] auth outage email failed', e));
+
+  // The dedupe marker needs an owner (notifications.user_id is NOT NULL) and
+  // the founder is the genuine recipient. If no admin profile resolves we page
+  // anyway and say so: a locked front door is worth a repeat mail, and a silent
+  // outage is the exact failure this function exists to end.
+  const { data: founder } = await admin
+    .from('profiles').select('id').eq('role', 'admin').limit(1).maybeSingle<{ id: string }>();
+  if (!founder) {
+    console.error('[founder-alerts] no admin profile — auth outage will re-page every run');
+    return { paged: true, code: fault.code, reason: fault.reason, note: 'no dedupe marker' };
+  }
+  await admin.from('notifications').insert({
+    user_id: founder.id, type: 'founder_alert_sent', title: 'Auth outage escalated',
+    body: fault.code, channel: 'internal', read: true,
+  });
+
+  return { paged: true, code: fault.code, reason: fault.reason };
+}

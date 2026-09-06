@@ -5,6 +5,7 @@ import { withCronTracking } from '@/lib/cron-run-tracker';
 import { computeStudentDna, type DnaProfileInput, type StudentDna } from '@/lib/student-dna';
 import { computeNextBestAction, detectMilestones, type PrevDna, type ActionPerformance, type Action } from '@/lib/product-brain';
 
+import { fetchAll } from '@/lib/supabase/fetch-all';
 export const maxDuration = 300;
 
 const METRICS = ['activation', 'consistency', 'momentum', 'purchase_intent', 'churn_risk'] as const;
@@ -47,16 +48,16 @@ export async function POST(request: NextRequest) {
     const isoNDaysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString();
 
     const [{ data: students }, { data: prevRows }, { data: recentDecisions }, { data: resolvedDecisions }] = await Promise.all([
-      admin.from('profiles')
+      fetchAll(() => admin.from('profiles')
         .select('id, full_name, created_at, onboarding_completed, app_installed, notif_prefs, is_premium, last_seen_at')
-        .eq('role', 'student').not('is_test_account', 'is', true),
-      admin.from('student_dna').select('student_id, activation, consistency, momentum, purchase_intent, churn_risk, journey_stage, signals'),
+        .eq('role', 'student').not('is_test_account', 'is', true)),
+      fetchAll(() => admin.from('student_dna').select('student_id, activation, consistency, momentum, purchase_intent, churn_risk, journey_stage, signals'), { orderBy: 'student_id' }),
       // Last logged decision per student, bounded to 14 days so this stays cheap
       // as the audit log grows. Ordered desc so the first hit per student is latest.
-      admin.from('decision_log').select('student_id, action_id, created_at').gte('created_at', isoNDaysAgo(14)).order('created_at', { ascending: false }),
+      fetchAll(() => admin.from('decision_log').select('student_id, action_id, created_at').gte('created_at', isoNDaysAgo(14)), { orderBy: 'created_at', ascending: false }),
       // Every RESOLVED decision ever (small table until real scale) — the raw
       // material for the empirical track record per action.
-      admin.from('decision_log').select('action_id, business_impact').not('business_impact', 'is', null),
+      fetchAll(() => admin.from('decision_log').select('action_id, business_impact').not('business_impact', 'is', null)),
     ]);
     if (!students?.length) return NextResponse.json({ computed: 0 });
 

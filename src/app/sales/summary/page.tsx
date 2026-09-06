@@ -3,6 +3,8 @@ import { requireSales } from '@/lib/admin-auth';
 import { cn } from '@/lib/utils';
 import { getRepPortfolio, getRepCallStats } from '@/lib/sales-portfolio';
 import { SESSION_PRICE_PAISE } from '@/lib/session-credit';
+import { repRemarks } from '@/lib/sales-remarks';
+import { RepRemarkLog } from '@/components/sales/rep-remark-log';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'My summary · CareerRai' };
@@ -11,9 +13,15 @@ export default async function SalesSummaryPage() {
   const { user, admin } = await requireSales();
 
   // R3: keyed on profiles.id (the authenticated principal), not the email.
-  const [{ summary: s, leads }, calls] = await Promise.all([
+  const [{ summary: s, leads }, calls, remarks] = await Promise.all([
     getRepPortfolio(admin, user.id),
     getRepCallStats(admin, user.id),
+    // Founder order, 4 Sep: a rep must be able to read back every remark they
+    // have written. Awaited here and handed to a SYNCHRONOUS component — a
+    // nested async server component suspends under the render tests and the
+    // page silently loses the section (the exact trap that cost the daily
+    // snapshot a red CI run on 3 Sep).
+    repRemarks(admin, user.id),
   ]);
   const inr = (n: number) => `Rs ${n.toLocaleString('en-IN')}`;
   const hottest = leads.filter((l) => l.status === 'interested' || l.status === 'follow_up').slice(0, 8);
@@ -59,6 +67,9 @@ export default async function SalesSummaryPage() {
           ))}
         </div>
       </div>
+
+      {/* EVERY REMARK THIS REP HAS WRITTEN (founder, 4 Sep 2026) */}
+      <RepRemarkLog items={remarks.items} failed={remarks.failed} />
 
       {/* Chase these */}
       {hottest.length > 0 && (

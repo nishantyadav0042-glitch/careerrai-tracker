@@ -99,9 +99,10 @@ export function CapacityPanel({ reps }: { reps: RepCapacity[] }) {
                     <Num label="Capacity" value={r.capacity ?? '—'} />
                     <Num label="Active work" value={r.activeNow} sub="click to see who" />
                     <Num label="Available" value={r.available} tone={r.available > 0 ? 'good' : undefined} />
-                    {/* NOT INSTRUMENTED, not 0: nothing records when a lead was
-                        claimed until 2B-2 adds assigned_at. */}
-                    <Num label="New today" value="—" sub={`cap ${r.config?.maxNewPerDay ?? '—'} · not instrumented`} />
+                    {/* Real since 2 Sep 2026: every door into a book stamps
+                        enrolled_at. null = the read failed, shown as "—". */}
+                    <Num label="New today" value={r.newToday ?? '—'} sub={`cap ${r.config?.maxNewPerDay ?? '—'} per day`}
+                      tone={r.newToday != null && r.config && r.newToday >= r.config.maxNewPerDay ? 'warn' : undefined} />
                     <Num label="Overflow" value={r.overflow} tone={r.overflow > 0 ? 'bad' : undefined} />
                     <Num label="Dormant" value={r.dormantCount} sub="owned, no work" />
                   </div>

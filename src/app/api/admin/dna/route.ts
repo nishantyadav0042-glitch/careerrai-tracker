@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isRequestAdmin } from '@/lib/require-admin';
 
+import { fetchAll } from '@/lib/supabase/fetch-all';
 // Answer-first read over Student DNA — returns ACTION segments, not charts. The
 // point isn't "here's a table", it's "here's who to act on today and why".
 export async function GET() {
@@ -10,15 +11,15 @@ export async function GET() {
 
   const isoNDaysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString();
   const [{ data: rows }, { data: recentHistory }, { data: resolved }] = await Promise.all([
-    admin.from('student_dna')
-      .select('student_id, activation, consistency, momentum, purchase_intent, churn_risk, journey_stage, signals, next_best_action, computed_at, profiles!inner(full_name, phone, is_premium)'),
+    fetchAll(() => admin.from('student_dna')
+      .select('student_id, activation, consistency, momentum, purchase_intent, churn_risk, journey_stage, signals, next_best_action, computed_at, profiles!inner(full_name, phone, is_premium)'), { orderBy: 'student_id' }),
     // Cohort explainability: "why did churn move this week?" — aggregate the
     // drivers behind every recent metric CHANGE across the whole population,
     // not just one student. Same primitive (student_dna_history), zoomed out.
-    admin.from('student_dna_history').select('metric, prev_value, new_value, drivers').gte('created_at', isoNDaysAgo(7)),
+    fetchAll(() => admin.from('student_dna_history').select('metric, prev_value, new_value, drivers').gte('created_at', isoNDaysAgo(7))),
     // Closed-loop track record: every RESOLVED Brain decision, ever — "last N
     // times we recommended X, how many actually worked?"
-    admin.from('decision_log').select('action_id, outcome, business_impact').not('outcome', 'is', null),
+    fetchAll(() => admin.from('decision_log').select('action_id, outcome, business_impact').not('outcome', 'is', null)),
   ]);
 
   type Prof = { full_name: string | null; phone: string | null; is_premium: boolean | null };

@@ -2,15 +2,21 @@
 import { useState } from 'react';
 import { REASON_CATEGORIES, REASON_LABEL, reasonNeedsVerbatim,
   type ReasonCategory } from '@/lib/intervention-taxonomy';
-import { MessageCircle, PhoneCall, PhoneOff, ChevronDown } from 'lucide-react';
+import { SKIP_REASONS, SKIP_REASON_LABEL, type SkipReason } from '@/lib/sales-disposition';
+import { MessageCircle, PhoneCall, PhoneOff, ChevronDown, UserRound, Send } from 'lucide-react';
 import type { CallLead } from '@/lib/call-queue';
+import type { Remark, RemarkHistory } from '@/lib/sales-remarks';
+import { NO_ANSWER_CONTRADICTION_CODE } from '@/lib/no-answer-contradiction';
+import { SECTION_ORDER, SECTION_LABEL, type DaySection } from '@/lib/sales-day';
+import { messageFor, JOURNEY_LABEL } from '@/lib/sales-messages';
 
 const TIER: Record<string, string> = { hot: 'bg-rose-50 text-rose-700', warm: 'bg-amber-50 text-amber-800', cool: 'bg-stone-100 text-stone-500' };
 const DUE_CLS: Record<string, string> = {
   callback: 'bg-sky-600 text-white', retry: 'bg-orange-500 text-white', followup: 'bg-amber-500 text-white',
   going_cold: 'bg-rose-600 text-white', broken_streak: 'bg-violet-600 text-white',
   new_never_logged: 'bg-teal-600 text-white', conversion: 'bg-emerald-600 text-white',
-  fresh: 'bg-stone-200 text-stone-600',
+  attention: 'bg-indigo-600 text-white',
+  fresh: 'bg-stone-200 text-stone-600', rotation: 'bg-stone-300 text-stone-700',
 };
 const OUTCOMES: { key: string; label: string; cls: string }[] = [
   { key: 'interested', label: 'Interested', cls: 'bg-amber-500 text-white' },
@@ -25,6 +31,12 @@ const OUTCOMES: { key: string; label: string; cls: string }[] = [
   // The student said stop calling. Closes the lead forever (dnd ≠ "no to the
   // offer" — it's "no to the contact"). Note is mandatory: record who said it.
   { key: 'dnd', label: 'Stop calling (DND)', cls: 'bg-rose-700 text-white' },
+  // CLOSING A CARD WITHOUT ACTING (founder, 3 Sep 2026). Every card must end
+  // the day marked; a counsellor who cannot honestly log a call needs a way to
+  // say so. It is deliberately two taps and demands a reason — skipping should
+  // cost slightly more than working — and it changes nothing about the
+  // student, who returns to tomorrow's queue on the same terms.
+  { key: 'skipped', label: 'Skip today', cls: 'bg-stone-500 text-white' },
 ];
 
 function defaultCallback(): string {
@@ -34,11 +46,20 @@ function defaultCallback(): string {
   return `${ist.getUTCFullYear()}-${p(ist.getUTCMonth() + 1)}-${p(ist.getUTCDate())}T18:00`;
 }
 
-export function CallDeck({ queue }: { queue: CallLead[] }) {
+export function CallDeck({ queue, repFirstName }: { queue: CallLead[]; repFirstName: string }) {
   const [list, setList] = useState(queue);
   const [done, setDone] = useState(0);
   const [openId, setOpenId] = useState<string | null>(null);
+  // Which card has the 'what did you message?' box open, and its draft.
+  // Founder order, 3 Sep: a sent message must carry the rep's own words -
+  // the one-tap auto-note said a message existed, never what it said.
+  const [msgOpenId, setMsgOpenId] = useState<string | null>(null);
+  const [msgNote, setMsgNote] = useState('');
   const [errorById, setErrorById] = useState<Record<string, string>>({});
+  // ── THE CONTRADICTION QUESTION (founder, 4 Sep 2026) ──────────────────────
+  // Held per student, with the exact arguments the rep tried to save, so
+  // answering it re-sends THEIR entry rather than a reconstruction of it.
+  const [askById, setAskById] = useState<Record<string, PendingAsk>>({});
   // ── ONE TAP IS ONE ATTEMPT ────────────────────────────────────────────────
   //
   // The "No answer" quick action had no in-flight guard, and the only real
@@ -64,10 +85,15 @@ export function CallDeck({ queue }: { queue: CallLead[] }) {
   const dispose = async (
     lead: CallLead, outcome: string, note: string, callbackAt?: string,
     reasonCategory?: string | null, reasonVerbatim?: string | null,
+    skipReason?: string | null,
+    // Set ONLY by the rep answering "they did answer" to the contradiction
+    // question. Never a default — the server treats absence as unconfirmed.
+    answeredConfirmed?: boolean,
   ): Promise<boolean> => {
     if (inFlight[lead.studentId]) return false;
     setInFlight((f) => ({ ...f, [lead.studentId]: true }));
     setErrorById((e) => ({ ...e, [lead.studentId]: '' }));
+    setAskById((a) => { const n = { ...a }; delete n[lead.studentId]; return n; });
     let failure = 'Could not save the call — check your connection and try again.';
     try {
       const res = await fetch('/api/sales/log', {
@@ -76,6 +102,8 @@ export function CallDeck({ queue }: { queue: CallLead[] }) {
           studentId: lead.studentId, outcome, note, callbackAt, hot: lead.hot,
           reasonCategory: reasonCategory ?? null,
           reasonVerbatim: reasonVerbatim ?? null,
+          skipReason: skipReason ?? null,
+          answeredConfirmed: answeredConfirmed === true,
         }),
       });
       const json = await res.json().catch(() => null);
@@ -85,6 +113,19 @@ export function CallDeck({ queue }: { queue: CallLead[] }) {
         setOpenId(null);
         setInFlight((f) => ({ ...f, [lead.studentId]: false }));
         return true;
+      }
+      // The two halves of the entry disagree. This is a QUESTION, not a
+      // failure: the card asks which one happened and re-sends the rep's own
+      // entry either way. Rendered as a prompt rather than a red error,
+      // because nothing is wrong yet — the rep simply has to say.
+      if (res.status === 409 && json?.code === NO_ANSWER_CONTRADICTION_CODE) {
+        setAskById((a) => ({ ...a, [lead.studentId]: {
+          lead, outcome, note, callbackAt, reasonCategory: reasonCategory ?? null,
+          reasonVerbatim: reasonVerbatim ?? null, skipReason: skipReason ?? null,
+          question: String(json.error ?? 'Did they actually answer?'),
+        } }));
+        setInFlight((f) => ({ ...f, [lead.studentId]: false }));
+        return false;
       }
       if (json?.error) failure = json.error;
     } catch { /* network failure — fall through to the shared message */ }
@@ -100,19 +141,33 @@ export function CallDeck({ queue }: { queue: CallLead[] }) {
     return (
       <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-8 text-center">
         <p className="text-lg font-bold text-emerald-800">Queue cleared for now 👏</p>
-        <p className="mt-1 text-sm text-emerald-700">{done} handled this session. New leads and callbacks roll in through the day — check back.</p>
+        <p className="mt-1 text-sm text-emerald-700">Every card marked — {done} this session. New leads and callbacks roll in through the day; tomorrow&rsquo;s list is dealt at 4 AM.</p>
       </div>
     );
   }
 
-  return (
-    <div className="space-y-3">
-      <p className="px-1 text-center text-xs font-semibold text-stone-500">{done} handled this session · {list.length} in your queue</p>
-      {list.map((lead) => (
+  // THE DAY IN SECTIONS (founder, 2 Sep): promises, money, buddy interest,
+  // new arrivals, attention, slipping, rotation — in that order, each with its
+  // count, so the mix is visible and a counsellor never works only one kind.
+  const bySection = new Map<DaySection, CallLead[]>();
+  for (const lead of list) {
+    const key = (lead.section ?? 'rotation') as DaySection;
+    if (!bySection.has(key)) bySection.set(key, []);
+    bySection.get(key)!.push(lead);
+  }
+
+  const card = (lead: CallLead) => (
         <div key={lead.studentId} className="overflow-hidden rounded-2xl border border-stone-200 bg-white">
           <div className="px-4 pt-3">
             <div className="flex items-center justify-between gap-2">
               <a href={`/sales/student/${lead.studentId}`} className="truncate text-[15px] font-bold text-stone-900 hover:underline">{lead.name}</a>
+              {/* Founder, 2 Sep: a Profile button beside every student, not a
+                  name that happens to be a link. The counsellor should never
+                  have to know that the name is clickable. */}
+              <a href={`/sales/student/${lead.studentId}`}
+                className="inline-flex shrink-0 items-center gap-1 rounded-full border border-stone-300 bg-white px-2 py-0.5 text-[10px] font-bold text-stone-700 hover:border-stone-500">
+                <UserRound className="h-3 w-3" /> Profile
+              </a>
               <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${DUE_CLS[lead.dueReason]}`}>{lead.dueLabel}</span>
               {/* WHICH GOAL THIS CALL IS FOR (§4). The counsellor must know
                   before they open their mouth whether they are here to get a
@@ -124,11 +179,25 @@ export function CallDeck({ queue }: { queue: CallLead[] }) {
                 {lead.objectiveSecondary ? ` + ${lead.objectiveSecondary}` : ''}
               </span>
             </div>
-            <div className="mt-0.5 flex items-center gap-2">
+            <div className="mt-0.5 flex flex-wrap items-center gap-2">
               <p className="text-xs text-stone-500">{lead.phone ?? 'no phone'}</p>
               <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${TIER[lead.tier]}`}>{lead.tier.toUpperCase()}</span>
               <span className="text-[11px] text-stone-400">momentum {lead.momentumScore}</span>
+              {/* CHANNEL (founder, 2 Sep): half the day is a message. The card
+                  says which, so the counsellor never has to decide. */}
+              <span className={`rounded px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wide ${
+                lead.channel === 'message' ? 'bg-amber-100 text-amber-800' : 'bg-stone-900 text-white'}`}>
+                {lead.channel === 'message' ? 'Message first' : 'Call'}
+              </span>
             </div>
+            {/* THE JOURNEY (founder, 2 Sep): install → notifications → daily
+                log. One stage, one next step — nothing beyond it. */}
+            {lead.journey && (
+              <p className="mt-1 text-[11px] text-stone-500">
+                <span className="font-semibold text-stone-700">{JOURNEY_LABEL[lead.journey]}</span>
+                {lead.nextStep ? <> · next: {lead.nextStep}</> : null}
+              </p>
+            )}
             {/* WHY THIS STUDENT IS HERE (founder, 24 Aug): the lane's trigger
                 with real numbers, then the recommended move. This block is
                 what makes the card intelligence, not a phone list. */}
@@ -136,24 +205,9 @@ export function CallDeck({ queue }: { queue: CallLead[] }) {
               {lead.why.map((w, i) => (
                 <p key={i} className="text-[12px] font-semibold leading-snug text-stone-700">{w}</p>
               ))}
-              {/* WHAT WAS SAID LAST TIME. This is the whole reason the second
-                  call is better than the first. It used to live one tap deeper
-                  on the 360, which meant it was read when there was time and
-                  skipped when there wasn't — and the student repeated
-                  themselves to the same company twice. */}
-              {lead.lastInteraction && (
-                <div className="mt-1.5 rounded-lg bg-stone-100 px-2.5 py-1.5">
-                  <p className="text-[10px] font-bold uppercase tracking-wide text-stone-400">
-                    Last time · {new Date(lead.lastInteraction.atIso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                    {lead.lastInteraction.outcome ? ` · ${lead.lastInteraction.outcome.replace(/_/g, ' ')}` : ''}
-                  </p>
-                  {lead.lastInteraction.note && (
-                    <p className="mt-0.5 text-[12px] font-semibold italic leading-snug text-stone-700">
-                      &ldquo;{lead.lastInteraction.note}&rdquo;
-                    </p>
-                  )}
-                </div>
-              )}
+              {/* WHAT WAS SAID — every remark, not the newest row. This is the
+                  whole reason the second call is better than the first. */}
+              <Remarks h={lead.remarks} repFirstName={repFirstName} />
               <p className="mt-1 text-[12px] font-bold text-teal-700">→ {lead.action}</p>
             </div>
             {/* The weakness brief — what she reads before dialing */}
@@ -170,11 +224,22 @@ export function CallDeck({ queue }: { queue: CallLead[] }) {
               </a>
             )}
             {lead.waNumber && (
-              <a href={`https://wa.me/${lead.waNumber}`} target="_blank" rel="noopener noreferrer"
-                className="flex items-center justify-center gap-1 bg-[#25d366] px-3 py-3 text-[12px] font-bold text-[#04331c] active:scale-95">
-                <MessageCircle className="h-4 w-4" /> WA
+              <a href={`https://wa.me/${lead.waNumber}?text=${encodeURIComponent(messageFor({
+                  firstName: lead.firstName, repFirstName, lane: lead.dueReason, stage: lead.journey ?? null, daysSilent: lead.daysSilent ?? null,
+                }))}`}
+                target="_blank" rel="noopener noreferrer"
+                className={`flex items-center justify-center gap-1 bg-[#25d366] px-3 py-3 text-[12px] font-bold text-[#04331c] active:scale-95 ${lead.channel === 'message' ? 'flex-1' : ''}`}>
+                <MessageCircle className="h-4 w-4" /> {lead.channel === 'message' ? 'Message' : 'WA'}
               </a>
             )}
+            {/* A message is a touch the day must record (2 Sep) - and since
+                3 Sep it must record WHAT was sent (founder order): the tap
+                opens a one-line box instead of firing an empty note. */}
+            <button onClick={() => { setMsgOpenId(msgOpenId === lead.studentId ? null : lead.studentId); setMsgNote(''); }}
+              disabled={inFlight[lead.studentId]}
+              className="flex items-center justify-center gap-1 bg-white px-3 py-3 text-[12px] font-semibold text-amber-800 active:scale-95 disabled:opacity-50">
+              <Send className="h-4 w-4" /> Messaged
+            </button>
             <button onClick={() => void dispose(lead, 'no_answer', '')} disabled={inFlight[lead.studentId]} className="flex items-center justify-center gap-1 bg-white px-3 py-3 text-[12px] font-semibold text-orange-600 active:bg-orange-50 disabled:opacity-40" title="Didn't pick up">
               <PhoneOff className="h-4 w-4" /> No answer
             </button>
@@ -182,11 +247,53 @@ export function CallDeck({ queue }: { queue: CallLead[] }) {
               Log <ChevronDown className={`h-4 w-4 transition-transform ${openId === lead.studentId ? 'rotate-180' : ''}`} />
             </button>
           </div>
+          {askById[lead.studentId] ? (
+            <NoAnswerAsk
+              ask={askById[lead.studentId]}
+              busy={inFlight[lead.studentId] === true}
+              onAnswered={() => { const a = askById[lead.studentId];
+                void dispose(a.lead, a.outcome, a.note, a.callbackAt, a.reasonCategory, a.reasonVerbatim, a.skipReason, true); }}
+              onNoAnswer={() => { const a = askById[lead.studentId];
+                // Their remark travels with the corrected outcome — the words
+                // are the record, and "not pick" on a no_answer is true.
+                // callbackAt is deliberately dropped: no promise was made.
+                void dispose(a.lead, 'no_answer', a.note); }}
+            />
+          ) : null}
           {errorById[lead.studentId] ? (
             <p className="border-t border-rose-100 bg-rose-50 px-4 py-2 text-[12px] font-semibold text-rose-700">{errorById[lead.studentId]}</p>
           ) : null}
+          {msgOpenId === lead.studentId && (
+            <div className="flex items-stretch gap-2 border-t border-amber-100 bg-amber-50/60 px-4 py-2.5">
+              <input value={msgNote} onChange={(e) => setMsgNote(e.target.value)} autoFocus
+                placeholder="What did you message them? (required)"
+                className="min-w-0 flex-1 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm" />
+              <button disabled={msgNote.trim().length === 0 || inFlight[lead.studentId]}
+                onClick={async () => { const ok = await dispose(lead, 'messaged', msgNote.trim()); if (ok) { setMsgOpenId(null); setMsgNote(''); } }}
+                className="rounded-lg bg-amber-700 px-3 py-2 text-[12px] font-bold text-white disabled:opacity-40">
+                Save
+              </button>
+            </div>
+          )}
           {openId === lead.studentId && <Disposition lead={lead} onDispose={dispose} />}
         </div>
+  );
+
+  return (
+    <div className="space-y-3">
+      {/* EVERY CARD ENDS THE DAY MARKED (founder, 3 Sep 2026). The old line
+          read "N in your queue", which says nothing about whether the day was
+          finished. This one names the job that is left. */}
+      <p className="px-1 text-center text-xs font-semibold text-stone-500">
+        {done} marked · <span className="text-stone-800">{list.length} still to mark</span>
+      </p>
+      {SECTION_ORDER.filter((k) => (bySection.get(k)?.length ?? 0) > 0).map((k) => (
+        <section key={k} className="space-y-3">
+          <h2 className="flex items-baseline gap-2 px-1 pt-1 text-[11px] font-bold uppercase tracking-widest text-stone-400">
+            {SECTION_LABEL[k]} <span className="text-stone-500">{bySection.get(k)!.length}</span>
+          </h2>
+          {bySection.get(k)!.map(card)}
+        </section>
       ))}
     </div>
   );
@@ -196,7 +303,7 @@ function Disposition({ lead, onDispose }: {
   lead: CallLead;
   onDispose: (
     l: CallLead, o: string, n: string, cb?: string,
-    reason?: string | null, verbatim?: string | null,
+    reason?: string | null, verbatim?: string | null, skipReason?: string | null,
   ) => Promise<boolean>;
 }) {
   const [outcome, setOutcome] = useState('interested');
@@ -230,27 +337,30 @@ function Disposition({ lead, onDispose }: {
   // asking why they are not studying would be inviting the rep to guess.
   const [reason, setReason] = useState<ReasonCategory | ''>('');
   const [reasonVerbatim, setReasonVerbatim] = useState('');
-  const asksReason = outcome !== 'no_answer';
+  const [skipReason, setSkipReason] = useState<SkipReason | ''>('');
+  const isSkip = outcome === 'skipped';
+  // Nobody spoke to a student who was skipped either, so the "why aren't they
+  // studying" taxonomy is as inapplicable here as it is to an unanswered dial.
+  const asksReason = outcome !== 'no_answer' && !isSkip;
   const needsVerbatim = asksReason && reasonNeedsVerbatim(reason || null);
-  // ── A NOTE IS REQUIRED ONLY WHERE IT CARRIES SOMETHING A FIELD CANNOT ────
+  // ── A NOTE IS REQUIRED ON EVERY CONNECTED OUTCOME ────────────────────────
   //
-  // This used to be `note.trim().length > 0` for EVERY connected outcome, so
-  // the Save button stayed disabled until the rep typed something on all five.
-  // Sixty calls a day like that produces "ok", "x", "talked" by the end of the
-  // first week — and once the remarks are junk the timeline is junk, which
-  // destroys the one thing that makes the second call better than the first.
-  //
-  // So it is mandatory exactly where the free text IS the record: the student
-  // refused (why), or asked never to be contacted again (who said it, and when
-  // — see the DND note above). For interested / callback / converted the
-  // structured fields already carry the meaning, and a short remark is welcome
-  // but never extorted. SALES-OS.md §8.
-  const NOTE_REQUIRED = new Set(['not_interested', 'dnd']);
+  // Founder order, 3 Sep (SALES-OS §8 amendment, recorded there): every
+  // conversation carries the rep's own words. An earlier version relaxed this
+  // to not_interested/dnd only, fearing "ok"/"x" junk — but the server never
+  // relaxed with it, so interested/callback/converted saves were passing a
+  // disabled-looking gate here only to 400 on the API. Client and server now
+  // enforce the SAME rule, and the junk-remark risk is managed by review of
+  // the daily snapshot, not by dropping the record.
+  const NOTE_REQUIRED = new Set(['interested', 'callback', 'converted', 'not_interested', 'dnd']);
   // The API rejects `other` without at least 3 characters of verbatim, so the
   // button has to know that too — otherwise the rep taps Save, the request
   // fails, and the card stays put with no explanation.
   const canSave = (!NOTE_REQUIRED.has(outcome) || note.trim().length > 0)
-    && (!needsVerbatim || reasonVerbatim.trim().length >= 3);
+    && (!needsVerbatim || reasonVerbatim.trim().length >= 3)
+    // A skip without a reason is the blank cell this whole change exists to
+    // remove, so the API rejects it and the button knows that too.
+    && (!isSkip || skipReason !== '');
 
   return (
     <div className="space-y-2.5 border-t border-stone-100 bg-stone-50 px-4 py-3">
@@ -262,6 +372,23 @@ function Disposition({ lead, onDispose }: {
           </button>
         ))}
       </div>
+      {isSkip && (
+        <div className="rounded-lg border border-stone-300 bg-white p-2.5">
+          <label className="text-[11px] font-bold uppercase tracking-wide text-stone-600">
+            Why are you skipping {lead.firstName} today?
+          </label>
+          <select value={skipReason} onChange={(e) => setSkipReason(e.target.value as SkipReason | '')}
+            className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm">
+            <option value="">— pick one —</option>
+            {SKIP_REASONS.map((r) => (
+              <option key={r} value={r}>{SKIP_REASON_LABEL[r]}</option>
+            ))}
+          </select>
+          <p className="mt-1 text-[11px] text-stone-500">
+            Nothing changes for {lead.firstName} — they come back tomorrow. This just closes the card honestly.
+          </p>
+        </div>
+      )}
       {needsCallback && (
         <div>
           <label className="text-[11px] font-semibold text-stone-500">Call back at (the time they said)</label>
@@ -303,12 +430,153 @@ function Disposition({ lead, onDispose }: {
             needsCallback ? (callbackAt || defaultCallback()) : undefined,
             asksReason ? (reason || null) : null,
             asksReason && reasonVerbatim.trim() ? reasonVerbatim.trim() : null,
+            isSkip ? skipReason : null,
           );
           if (!ok) setSaving(false); // failed — keep the form so she can retry
         }}
         className="w-full rounded-xl bg-stone-900 py-2.5 text-sm font-bold text-white active:scale-[0.98] disabled:opacity-40">
-        {saving ? 'Saving…' : canSave ? 'Save & next' : 'Write feedback to save'}
+        {saving ? 'Saving…' : canSave ? (isSkip ? 'Skip & next' : 'Save & next') : isSkip ? 'Pick a reason to skip' : 'Write feedback to save'}
       </button>
+    </div>
+  );
+}
+
+
+// ── WHAT WAS SAID (founder order, 4 Sep 2026) ───────────────────────────────
+//
+// "Salesman should also be able to see their last remarks which should be
+// visible next time, for each remark they have filled."
+//
+// Three rules, each of which the old single-row block broke:
+//
+//  1. LEAD WITH THE WORDS, NOT THE NEWEST ROW. no_answer is the commonest
+//     disposition in production and it carries the auto-note "Did not pick
+//     up" — so one unanswered dial used to bury the actual conversation from
+//     the call before it. The newest TYPED remark comes first, however old.
+//  2. THE UNANSWERED DIAL STILL COUNTS. It is shown underneath, because "we
+//     tried yesterday and got nothing" changes how the next call opens.
+//  3. ALL OF IT IS REACHABLE FROM HERE. Every established CRM puts recent
+//     notes on the working surface and the rest one expand away (HubSpot's
+//     lead record shows the last five; Pipedrive's Focus section pins what
+//     matters above the history). Sending a counsellor to another page mid-day
+//     means the history is read when there is time and skipped when there
+//     isn't — which is the same as not having it.
+//
+// Attribution appears only when somebody ELSE wrote the remark. On a
+// reassigned lead the previous rep's words are the most valuable thing on the
+// card, and the counsellor must know they are quoting a colleague rather than
+// remembering their own call.
+function outcomeWords(o: string | null): string {
+  return o ? o.replace(/_/g, ' ') : 'touched';
+}
+function dayLabel(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' });
+}
+
+function RemarkLine({ r, repFirstName }: { r: Remark; repFirstName: string }) {
+  const other = r.by && r.by.trim().split(' ')[0].toLowerCase() !== repFirstName.trim().toLowerCase()
+    ? r.by.trim().split(' ')[0] : null;
+  return (
+    <div>
+      <p className="text-[10px] font-bold uppercase tracking-wide text-stone-400">
+        {dayLabel(r.atIso)} · {outcomeWords(r.outcome)}
+        {other ? <span className="text-stone-500"> · {other}</span> : null}
+      </p>
+      {r.note ? (
+        <p className={`mt-0.5 text-[12px] leading-snug ${r.typed ? 'font-semibold italic text-stone-700' : 'text-stone-500'}`}>
+          {r.typed ? <>&ldquo;{r.note}&rdquo;</> : r.note}
+        </p>
+      ) : (
+        <p className="mt-0.5 text-[12px] text-stone-400">Nothing written down</p>
+      )}
+    </div>
+  );
+}
+
+function Remarks({ h, repFirstName }: { h: RemarkHistory; repFirstName: string }) {
+  const [open, setOpen] = useState(false);
+  // Nobody has ever spoken to this student. Saying so is the fresh lane's job
+  // on the same card; an empty quote box here would just be furniture.
+  if (h.total === 0) return null;
+
+  const lead = h.lastTyped ?? h.last;
+  // The newest touch, shown under the words only when it is a DIFFERENT row —
+  // otherwise the card would print the same remark twice.
+  const alsoLast = h.last && lead && h.last.atIso !== lead.atIso ? h.last : null;
+
+  return (
+    <div className="mt-1.5 rounded-lg bg-stone-100 px-2.5 py-1.5">
+      <p className="mb-1 text-[10px] font-bold uppercase tracking-widest text-stone-400">
+        What was said · {h.total} {h.total === 1 ? 'remark' : 'remarks'}
+      </p>
+      {open ? (
+        <div className="space-y-2">
+          {h.remarks.map((r, i) => <RemarkLine key={`${r.atIso}-${i}`} r={r} repFirstName={repFirstName} />)}
+          {h.total > h.remarks.length && (
+            <p className="text-[11px] text-stone-500">
+              Showing the newest {h.remarks.length} of {h.total} — the rest are on their profile.
+            </p>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          {lead && <RemarkLine r={lead} repFirstName={repFirstName} />}
+          {alsoLast && (
+            <p className="text-[11px] text-stone-500">
+              Then {outcomeWords(alsoLast.outcome)} · {dayLabel(alsoLast.atIso)}
+            </p>
+          )}
+        </div>
+      )}
+      {h.total > 1 && (
+        <button type="button" onClick={() => setOpen(!open)}
+          className="mt-1 text-[11px] font-bold text-teal-700 underline underline-offset-2">
+          {open ? 'Show less' : `Show all ${h.total}`}
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ── "WHICH ONE HAPPENED?" (founder, 4 Sep 2026) ─────────────────────────────
+//
+// Shown when a rep marks a CONNECTED outcome — one that asserts a human spoke
+// — while their own remark says nobody picked up. Production, 3-4 Sep: four
+// such rows in two days, ~15% of one rep's dispositions. Each put a student
+// who never answered into a warm lane on a wrong clock, and inflated the
+// interested/callback counts on the founder's tower.
+//
+// NEITHER ANSWER IS THE WRONG ANSWER, and the copy is written to mean it.
+// "He didn't pick up my first call but rang back and said interested" is a
+// real connected call whose note contains "didn't pick up" — so this asks
+// rather than refuses. A rule that refused would teach the reps to write
+// shorter, emptier remarks, which would cost us far more than the miscoding.
+//
+// Amber, not red: nothing has gone wrong. The rep is being asked, once, to
+// settle which of their own two statements is the one they meant.
+interface PendingAsk {
+  lead: CallLead; outcome: string; note: string; callbackAt?: string;
+  reasonCategory: string | null; reasonVerbatim: string | null; skipReason: string | null;
+  question: string;
+}
+
+function NoAnswerAsk({ ask, busy, onAnswered, onNoAnswer }: {
+  ask: PendingAsk; busy: boolean; onAnswered: () => void; onNoAnswer: () => void;
+}) {
+  return (
+    <div className="border-t border-amber-200 bg-amber-50 px-4 py-3">
+      <p className="text-[12.5px] font-semibold leading-snug text-amber-900">{ask.question}</p>
+      <p className="mt-1 text-[11.5px] italic text-amber-800">&ldquo;{ask.note}&rdquo;</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <button type="button" disabled={busy} onClick={onNoAnswer}
+          className="rounded-full bg-stone-800 px-3.5 py-1.5 text-[12px] font-bold text-white disabled:opacity-50">
+          They didn&apos;t answer
+        </button>
+        <button type="button" disabled={busy} onClick={onAnswered}
+          className="rounded-full border border-amber-300 bg-white px-3.5 py-1.5 text-[12px] font-bold text-amber-900 disabled:opacity-50">
+          They did answer — save as {ask.outcome.replace(/_/g, ' ')}
+        </button>
+      </div>
     </div>
   );
 }

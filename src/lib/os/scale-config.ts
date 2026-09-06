@@ -68,6 +68,54 @@ export const NEW_LEAD_MIN_AGE_DAYS = 1;
  *  moment and falls through to the ordinary fresh lane. */
 export const NEW_LEAD_MAX_AGE_DAYS = 7;
 
+// ── THE DAY: 50–70 named students per counsellor (founder, 2 Sep 2026) ──────
+//
+// "Keep a range 50–70 daily." The system OWES the counsellor a full day; the
+// counsellor owes conversations and outcomes, never a count (SALES-OS.md §5,
+// amended 2 Sep). Signals fill the day first, in lane order; rotation — the
+// students nobody has spoken to in ROTATION_SILENT_DAYS, oldest contact first
+// — fills the rest, with a floor so the silent book always moves. Every card
+// still carries a true printed reason; the floors never manufacture one.
+/** The day is at least this many when the book can supply them. */
+export const DAY_FLOOR = 50;
+/** And never more than this, except for promises, which are never bumped. */
+export const DAY_CEILING = 70;
+/** Rotation always gets at least this many slots, so the backlog drains. */
+export const ROTATION_FLOOR = 15;
+/** A student nobody has spoken to in this many days is due a rotation touch. */
+export const ROTATION_SILENT_DAYS = 21;
+/** After any touch, a student is left alone this long unless a promise, a
+ *  money signal or a retention lane brings them back. */
+export const TOUCH_COOLDOWN_DAYS = 7;
+/** Attention (opened the app, did not log; tapped a notification) is capped
+ *  so a busy evening cannot eat the day; the rest waits for tomorrow. */
+export const ATTENTION_CEILING = 20;
+/** New arrivals are capped the same way; a signup spike spills to tomorrow. */
+export const NEW_ARRIVAL_CEILING = 15;
+/** How far back "opened but did not log" looks, counted from the 4 AM anchor. */
+export const ATTENTION_WINDOW_DAYS = 2;
+/** The day is dealt from 4 AM IST: the previous Indian day is complete. */
+export const DAY_ANCHOR_HOUR_IST = 4;
+/** When the counsellors' shift ends. After this hour a day may be CLOSED —
+ *  before it, its cards are still somebody's to mark (3 Sep 2026). */
+export const SHIFT_END_HOUR_IST = 21;
+/** In rotation, every Nth card is a call rather than a message. */
+export const ROTATION_CALL_EVERY = 4;
+/**
+ * How recently a student must have reached for the paid option for the
+ * conversion lane to call it INTENT (founder, 4 Sep 2026, Incident #71).
+ *
+ * `student_engagement.buddy_cta_clicks` is a cumulative counter that never
+ * resets, so "tapped the buddy option" was a permanent flag: 136 students
+ * held it, only 32 had tapped within a fortnight, and the oldest live one was
+ * from 21 July. The lane took 47 and 52 cards of a 70-card day and rotation
+ * got none. Intent decays; a six-week-old tap is history, and the card's own
+ * words ("intent is warm") were untrue for most of them.
+ */
+export const CONVERSION_INTENT_DAYS = 14;
+/** And a ceiling, so even a real spike cannot take the day. */
+export const CONVERSION_CEILING = 12;
+
 // ── Buddy check-in (founder, 10 Aug) ────────────────────────────────────────
 // "Agar mere paas 5 student assigned hain aur unme se kisi ek ne bhi kal log
 // nahi bhara, to agle din buddy ki ID se message jaayega." The numbers that

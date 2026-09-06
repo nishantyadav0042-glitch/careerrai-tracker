@@ -18,6 +18,11 @@ vi.mock('@/lib/security-log', () => ({ logSecurityEvent: vi.fn(async () => {}) }
 vi.mock('@/lib/os/timeline', () => ({ emitTimeline: vi.fn(async () => {}) }));
 vi.mock('@/lib/meta-capi', () => ({ sendMetaCapiEvent: vi.fn(async () => {}) }));
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: vi.fn() }));
+// dispatch() (session_booked's real transport, added 3 Sep) makes its own
+// real admin client via the mocked createAdminClient() above, which returns
+// undefined here — so it must be stubbed independently, same as every other
+// activation side effect this file isn't testing.
+vi.mock('@/lib/notification-os', () => ({ dispatch: vi.fn(async () => 'sent') }));
 
 const { activatePaidOrder } = await import('./activate-payment');
 const { SESSION_PLAN_ID } = await import('./session-credit');
@@ -51,6 +56,11 @@ function fakeAdmin(opts: { existingCredit?: boolean; paymentStatus?: string } = 
           ? (opts.existingCredit ? { id: 'c1' } : null)
           : table === 'student_payments' ? { status } : null,
       }),
+      // session_booked's own confirmation reads profiles.notif_prefs with
+      // .single() rather than .maybeSingle() — the same call shape
+      // grantPremiumAndQueueBuddy already uses for the identical read on the
+      // subscription path (lib/premium.ts), mirrored here on purpose.
+      single: async () => ({ data: table === 'profiles' ? { notif_prefs: {} } : null }),
       insert: async (v: unknown) => { (inserts[table] ??= []).push(v); return { error: null }; },
       update: () => { op = 'update'; return chain; },
       then: (res: (v: { data: unknown; error: null }) => void) =>

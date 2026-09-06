@@ -2,6 +2,9 @@ import webpush from 'web-push';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getServerConfig } from '@/lib/server-config';
 import { logConsentEvent } from '@/lib/consent-history';
+import {
+  liveEndpointsFor, recordDelivery, revokeEndpoint, type LiveEndpoint,
+} from '@/lib/notification-endpoints';
 
 // VAPID keypair is sourced from the server_config table (DB-authoritative) so the
 // public key the client subscribes with and the private key the server signs with
@@ -83,22 +86,111 @@ export async function sendPushToUser(
   }
 
   const admin = createAdminClient();
-  const { data: profile } = await admin.from('profiles').select('push_subscription').eq('id', userId).single();
-  if (!profile?.push_subscription) return { ok: false, reason: 'no_subscription' };
 
-  // A dead subscription (410/404) is TERMINAL — no retry can revive it, this is
-  // a hard property of the Web Push standard on every platform. Anything else
-  // (503 from the push service, a DNS blip, a momentary timeout) is TRANSIENT —
-  // retrying once after a short backoff is the difference between a reminder
-  // that silently vanishes and one that actually lands. Previously ANY non-410/
-  // 404 failure was dropped with zero retry.
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    const result = await attemptSend(admin, userId, profile.push_subscription as webpush.PushSubscription, payload);
-    if (result.ok || result.terminal) return result;
-    if (attempt < 2) { console.warn(`[push] attempt ${attempt} failed for ${userId}, retrying…`); await sleep(1500); }
-    else return result;
+  // ── EVERY DEVICE, NOT THE ONE COLUMN ──────────────────────────────────────
+  //
+  // Step 2 of the endpoint-registry migration. This used to read
+  // `profiles.push_subscription` — a single jsonb column, so a student who
+  // installed on a second device had the first silently evicted and could be
+  // reached on exactly one. liveEndpointsFor() returns every live endpoint,
+  // and falls back to that same column when the registry holds none, so no
+  // student who was reachable before this change is unreachable after it.
+  const endpoints = await liveEndpointsFor(admin, userId);
+  if (endpoints.length === 0) return { ok: false, reason: 'no_subscription' };
+
+  const results = await Promise.all(
+    endpoints.map((ep) => sendToEndpoint(admin, userId, ep, payload)),
+  );
+
+  // ONE endpoint landing is a delivered push. A student with a live phone and
+  // a stale laptop is reached, and the stale laptop is revoked on its own —
+  // the failure of one device must never be reported as the failure of the
+  // student, which is precisely what the single column could not express.
+  const delivered = results.find((r) => r.ok);
+  if (delivered) {
+    // The old columns stay true for the ~15 modules still reading them
+    // (Step 3 migrates those). A student with at least one working endpoint
+    // is not dead, whatever a previous failure wrote.
+    await admin.from('profiles').update({ push_died_at: null }).eq('id', userId).not('push_died_at', 'is', null);
+    return { ok: true };
   }
-  return { ok: false, reason: 'unreachable' };
+
+  // Nobody could be reached. Only NOW does the student-level "push is dead"
+  // fact become true — and only when every endpoint failed terminally, not
+  // on a transient network blip that a later send may well survive.
+  const allTerminal = results.every((r) => r.terminal);
+  if (allTerminal) {
+    await admin.from('profiles')
+      .update({ push_subscription: null, push_died_at: new Date().toISOString() })
+      .eq('id', userId);
+    void reportPushDeath(userId).catch((e) => console.error('[push] death report failed:', e));
+    void logConsentEvent(admin, userId, 'subscription_died', results[0]?.reason ?? 'all_endpoints_dead');
+    void logConsentEvent(admin, userId, 'recovery_required');
+  }
+  return results[0] ?? { ok: false, reason: 'unreachable' };
+}
+
+/**
+ * One endpoint, with the retry policy that used to sit in sendPushToUser.
+ *
+ * A dead subscription (410/404) is TERMINAL — no retry can revive it, a hard
+ * property of the Web Push standard on every platform. Anything else (503
+ * from the push service, a DNS blip, a momentary timeout) is TRANSIENT, and
+ * retrying once after a short backoff is the difference between a reminder
+ * that silently vanishes and one that lands.
+ */
+async function sendToEndpoint(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
+  userId: string,
+  ep: LiveEndpoint,
+  payload: { title: string; body: string; url?: string; notifId: string; tag?: string; senderName?: string },
+): Promise<PushResult> {
+  // APNs — the second transport (task #78). Same retry policy, same delivery
+  // evidence, same terminal semantics as the web-push path below: a dead token
+  // (410 / BadDeviceToken) revokes THIS endpoint and nothing else, and our own
+  // credential problems are classified non-terminal inside apns.ts so a
+  // misconfigured key can never mass-revoke student devices. Until the APNs
+  // server_config rows exist, sendApnsToToken answers 'apns_not_configured'
+  // (non-terminal) and this branch is exactly as dormant as it was before.
+  if (ep.provider === 'apns') {
+    if (!ep.token) {
+      await recordDelivery(admin, payload.notifId, ep.id, { accepted: false, reason: 'apns_row_missing_token' });
+      return { ok: false, reason: 'apns_row_missing_token', terminal: false };
+    }
+    const { sendApnsToToken } = await import('@/lib/apns');
+    let last: PushResult = { ok: false, reason: 'unreachable' };
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      last = await sendApnsToToken(ep.token, {
+        title: payload.title, body: payload.body, url: payload.url,
+        notifId: payload.notifId, endpointId: ep.id,
+      });
+      if (last.ok || last.terminal || last.reason === 'apns_not_configured') break;
+      if (attempt < 2) { console.warn(`[push] apns attempt ${attempt} failed for ${userId}, retrying…`); await sleep(1500); }
+    }
+    await recordDelivery(admin, payload.notifId, ep.id, { accepted: last.ok, reason: last.reason });
+    if (last.terminal && ep.id) await revokeEndpoint(admin, ep.id, last.reason ?? 'apns_terminal');
+    return last;
+  }
+
+  if (!ep.subscription) {
+    await recordDelivery(admin, payload.notifId, ep.id, { accepted: false, reason: 'no_transport_for_provider' });
+    return { ok: false, reason: 'no_transport_for_provider', terminal: false };
+  }
+
+  let last: PushResult = { ok: false, reason: 'unreachable' };
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    last = await attemptSend(admin, userId, ep.subscription as unknown as webpush.PushSubscription, payload, ep.id);
+    if (last.ok || last.terminal) break;
+    if (attempt < 2) { console.warn(`[push] attempt ${attempt} failed for ${userId}, retrying…`); await sleep(1500); }
+  }
+
+  // Per-endpoint evidence: this is what makes "sent to the student" and
+  // "accepted for this phone" separable facts.
+  await recordDelivery(admin, payload.notifId, ep.id, { accepted: last.ok, reason: last.reason });
+  // A terminal failure kills THIS endpoint and nothing else.
+  if (last.terminal && ep.id) await revokeEndpoint(admin, ep.id, last.reason ?? 'terminal');
+  return last;
 }
 
 async function attemptSend(
@@ -106,7 +198,12 @@ async function attemptSend(
   admin: any,
   userId: string,
   subscription: webpush.PushSubscription,
-  payload: { title: string; body: string; url?: string; notifId: string; tag?: string; senderName?: string }
+  payload: { title: string; body: string; url?: string; notifId: string; tag?: string; senderName?: string },
+  // Which endpoint row this exact copy is going to. Null only for the synthetic
+  // fallback endpoint (a student still on profiles.push_subscription, with no
+  // registry row) — that copy carries no endpointId and the beacon stays
+  // student-level for them, exactly as before this change.
+  endpointId: string | null,
 ): Promise<PushResult & { terminal?: boolean }> {
   try {
     // Every push needs a UNIQUE tag. sw.js falls back to a single shared tag when
@@ -129,6 +226,18 @@ async function attemptSend(
       data: {
         url: payload.url ?? '/',
         notifId: payload.notifId,
+        // WHICH DEVICE THIS COPY WENT TO (task #79). The SW echoes it back on
+        // the arrival beacon, which is the only way a receipt can name a
+        // device rather than a student — a student with two phones otherwise
+        // produces one receipt and no way to tell which phone displayed it.
+        //
+        // Safe to carry: this is the endpoint's own row id, sent only to that
+        // endpoint, inside the aes128gcm payload Web Push encrypts end-to-end
+        // between this server and that browser. The push service cannot read
+        // it. It is an opaque identifier, never a credential — /api/push/received
+        // re-derives ownership server-side and refuses any pair whose
+        // notification and endpoint do not name the same student.
+        ...(endpointId ? { endpointId } : {}),
         ...(payload.senderName ? { senderName: payload.senderName } : {}),
       },
     };
@@ -152,22 +261,14 @@ async function attemptSend(
     // stamp push_died_at: a dead endpoint usually means the PWA was
     // uninstalled, which is a CRM signal ("push can't reach them — email or
     // a call are the only doors left"), not just an error to swallow.
+    // A 410/404 kills THIS endpoint. It used to null the student's only
+    // column and declare them dead right here — which, once a student can
+    // hold several endpoints, would mean one stale laptop marking a student
+    // with a perfectly live phone as unreachable. The student-level verdict
+    // now belongs to sendPushToUser, which is the only place that can see
+    // whether EVERY endpoint failed; revocation of the individual row is
+    // done by its caller, sendToEndpoint.
     const terminal = statusCode === 410 || statusCode === 404;
-    if (terminal) {
-      await admin.from('profiles')
-        .update({ push_subscription: null, push_died_at: new Date().toISOString() })
-        .eq('id', userId);
-      // Report immediately — a dead subscription means push can no longer
-      // reach this student at all, and nothing else will notice unless we
-      // say so right now. Fire-and-forget: never let alerting break the send path.
-      void reportPushDeath(userId).catch((e) => console.error('[push] death report failed:', e));
-      // Two distinct facts for the consent history, even though they land
-      // at the same instant: the technical event (the endpoint is
-      // confirmed dead) and the business-state consequence (this student
-      // now needs recovery). Both real, both worth their own row.
-      void logConsentEvent(admin, userId, 'subscription_died', `status_${statusCode ?? 'unknown'}`);
-      void logConsentEvent(admin, userId, 'recovery_required');
-    }
     console.error(`[push] send failed (status ${statusCode}) for ${userId}`);
     return { ok: false, reason: `send_failed_${statusCode ?? 'unknown'}`, terminal };
   }

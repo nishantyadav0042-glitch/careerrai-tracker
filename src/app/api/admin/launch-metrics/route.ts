@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAdminCtx } from '@/lib/require-admin';
 import { MIN_ACTIVE_QUESTIONS, MIN_ACTIVE_TIPS } from '@/lib/community-pipeline';
 
+import { fetchAll } from '@/lib/supabase/fetch-all';
 export const maxDuration = 60;
 
 // The Launch Dashboard numbers — the one page the founder opens each morning
@@ -23,7 +24,7 @@ export async function GET() {
     { data: sources }, { data: logs24 }, { data: votes24 },
     { data: subs24 }, { data: notifs24 }, { data: shelf },
   ] = await Promise.all([
-    admin.from('student_events').select('user_id, event').gte('created_at', since24),
+    fetchAll(() => admin.from('student_events').select('user_id, event').gte('created_at', since24)),
     // OTP sends. This queried `created_at` — a column that does not exist on
     // this table; it is `sent_at`. PostgREST rejected the filter, the route
     // swallowed it, and the whole "Login door (OTP)" panel rendered confident
@@ -31,7 +32,7 @@ export async function GET() {
     // the phone path records the send inside the claim_otp_send_slot RPC and
     // the email path writes `email`, so `phone` has never held a value.
     // Distinct RECIPIENT now spans both columns.
-    admin.from('otp_send_events').select('phone, email, sent_at').gte('sent_at', since24),
+    fetchAll(() => admin.from('otp_send_events').select('phone, email, sent_at').gte('sent_at', since24)),
     // Crashes only. `source = 'handled'` rows are errors we CAUGHT and showed
     // the student (lib/report-error.ts) — real signal, but not crashes, and
     // counting them here would silently redefine crash_free_pct against its
@@ -44,19 +45,19 @@ export async function GET() {
     // by /api/client-error, which always sets a source, but a crash silently
     // vanishing from a CRASH metric fails in the flattering direction: the
     // number goes UP and nobody goes looking.
-    admin.from('client_errors').select('student_id, fingerprint, message, path, install_source, created_at')
-      .gte('created_at', since24).or('source.is.null,source.neq.handled'),
-    admin.from('profiles').select('install_source, created_at, is_test_account'),
-    admin.from('daily_reports').select('student_id, report_date').gte('created_at', since24),
-    admin.from('submission_votes').select('student_id').gte('created_at', since24),
-    admin.from('student_submissions').select('kind, status, created_at'),
+    fetchAll(() => admin.from('client_errors').select('student_id, fingerprint, message, path, install_source, created_at')
+      .gte('created_at', since24).or('source.is.null,source.neq.handled')),
+    fetchAll(() => admin.from('profiles').select('install_source, created_at, is_test_account')),
+    fetchAll(() => admin.from('daily_reports').select('student_id, report_date').gte('created_at', since24)),
+    fetchAll(() => admin.from('submission_votes').select('student_id').gte('created_at', since24)),
+    fetchAll(() => admin.from('student_submissions').select('kind, status, created_at')),
     // Push funnel, three real stages. NOT read_at — nothing in the codebase
     // has ever written that column (the only read_at writers are chat and
     // voice notes), so this tile showed 0 opens forever no matter what
     // students did. The service worker beacons the truth: received_at when
     // the push lands on the device, clicked_at when it is tapped.
-    admin.from('notifications').select('id, pushed_at, received_at, clicked_at, created_at').gte('created_at', since24),
-    admin.from('student_submissions').select('kind, status'),
+    fetchAll(() => admin.from('notifications').select('id, pushed_at, received_at, clicked_at, created_at').gte('created_at', since24)),
+    fetchAll(() => admin.from('student_submissions').select('kind, status')),
   ]);
 
   // ── Reach ──
@@ -133,8 +134,8 @@ export async function GET() {
   const pushOpened = (notifs24 ?? []).filter((n) => n.clicked_at != null).length;
 
   // ── Retention: students seen in the last 7 days who were also seen today ──
-  const { data: ev7 } = await admin.from('student_events')
-    .select('user_id').eq('event', 'app_open').gte('created_at', since7d);
+  const { data: ev7 } = await fetchAll(() => admin.from('student_events')
+    .select('user_id').eq('event', 'app_open').gte('created_at', since7d));
   const weekly = new Set((ev7 ?? []).map((e) => e.user_id as string));
 
   return NextResponse.json({

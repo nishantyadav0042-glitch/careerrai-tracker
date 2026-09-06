@@ -1,0 +1,398 @@
+{
+ "_what": "Machine-written ledger of what the YouTube Data API returned for every live resource id. Written ONLY by scripts/verify-resources.mjs against the platform, never by hand and never by a model. topic-resources.guard.test.ts refuses to let any id ship that is not in here, and refuses any row whose runtime or channel disagrees with it.",
+ "_fetched": "2026-09-01",
+ "_source": "YouTube Data API v3 videos.list",
+ "_ids": 78,
+ "videos": {
+  "-8YPOWyt5v8": {
+   "minutes": 69,
+   "channel": "Rodha",
+   "title": "VARC for CAT 2026: Solve Odd Sentence Out Without Guessing | KD Sir Rodha"
+  },
+  "0GNr5I019-I": {
+   "minutes": 76,
+   "channel": "MBA Wallah",
+   "title": "Coordinate Geometry- 2 | Equations of line | Quant Geometry 11 | CAT 2024 | MBA Wallah"
+  },
+  "0S_rT7720t8": {
+   "minutes": 20,
+   "channel": "Rodha",
+   "title": "HCF LCM 2 | Number System for CAT 2026 | Ravi Prakash Rodha"
+  },
+  "17lfsV7IbR0": {
+   "minutes": 58,
+   "channel": "MBA Pathshala",
+   "title": "Mensuration 2-D | CAT & OMETs | Session 01 | Udit Saini"
+  },
+  "1KYf9l1wGTY": {
+   "minutes": 21,
+   "channel": "Rodha",
+   "title": "Probability 2: Graphical and Geometric Probability | CAT 2026 | Ravi Sir"
+  },
+  "25P2O9r3AfM": {
+   "minutes": 33,
+   "channel": "Rodha",
+   "title": "Triangles 1: Centroid Orthocenter Incenter Circumcenter | Geometry for CAT 2026 | Ravi Prakash Rodha"
+  },
+  "27OVCl0b0nQ": {
+   "minutes": 20,
+   "channel": "Rodha",
+   "title": "Quadratic Equation 3: Imaginary and Common Roots | Algebra for CAT 2026 | Ravi Prakash Rodha"
+  },
+  "3LmRyBpIhgQ": {
+   "minutes": 32,
+   "channel": "Rodha",
+   "title": "Alligation and Mixture 1: Weighted Average Seesaw Method | Arithmetic for CAT 2026 | Ravi Sir Rodha"
+  },
+  "3Q6V7qVGReo": {
+   "minutes": 39,
+   "channel": "Rodha",
+   "title": "Profit and Loss 3: Faulty Weights and Cheating | Arithmetic for CAT 2026 | Ravi Prakash Rodha"
+  },
+  "4tI-h-GKWVk": {
+   "minutes": 20,
+   "channel": "Rodha",
+   "title": "Linear and Circular Arrangement - I for CAT I Logical Reasoning Preparation I Basic to Advance"
+  },
+  "4vj3U-tEjYE": {
+   "minutes": 45,
+   "channel": "MBA Wallah",
+   "title": "Circles 1 Basic Terms + Angle Properties | Quant Geometry 07 | CAT 2024 | MBA Wallah"
+  },
+  "6FEnbG2Ux5o": {
+   "minutes": 21,
+   "channel": "Rodha",
+   "title": "Functions 1: Domain Range Types Of Functions | Algebra for CAT 2026 | Ravi Prakash Rodha"
+  },
+  "6IbA-nSj28g": {
+   "minutes": 24,
+   "channel": "Rodha",
+   "title": "Time and Work 2: Alternate Days and Workers Leaving | Arithmetic for CAT 2026 | Ravi Prakash Rodha"
+  },
+  "6jk_4y3qEZg": {
+   "minutes": 85,
+   "channel": "MBA Wallah",
+   "title": "Sequence And Series (Arithmetic Progression) | Quant Modern Math 06 | CAT 2024 | MBA Wallah"
+  },
+  "8YK-4sOQyUU": {
+   "minutes": 9,
+   "channel": "Rodha",
+   "title": "Summary Concepts || Verbal Preparation || CAT Preparation 2019"
+  },
+  "8kvqSY1-W5Y": {
+   "minutes": 27,
+   "channel": "Rodha",
+   "title": "Permutations and Combinations 1: Fundamental Principle of Counting | CAT 2026 | Ravi Sir"
+  },
+  "9t7cKr-KZ8U": {
+   "minutes": 68,
+   "channel": "MBA Wallah",
+   "title": "Coordinate Geometry 1 | Quant Geometry L10 | CAT 2024 | MBA Wallah"
+  },
+  "CKiP208avbc": {
+   "minutes": 22,
+   "channel": "Rodha",
+   "title": "Time Speed and Distance 1: Constant Distance Problems | Arithmetic for CAT 2026 | Ravi Prakash Rodha"
+  },
+  "D3iR5cIr_VQ": {
+   "minutes": 10,
+   "channel": "Rodha",
+   "title": "Venn Diagram & Chocolate Distribution (Introduction) - 1  | LR & DI  || CAT Exam Preparation"
+  },
+  "DcX3oOYVDh0": {
+   "minutes": 12,
+   "channel": "ELITES GRID - CAT PREP",
+   "title": "Selections and Distribution Puzzles by Elites Grid | Best Approach"
+  },
+  "Dy4_ESXGjeY": {
+   "minutes": 13,
+   "channel": "Rodha",
+   "title": "Quadrilaterals 3: Trapezium & Area Questions | Geometry for CAT 2026 | Ravi Prakash Rodha"
+  },
+  "EWB1NaL4N4U": {
+   "minutes": 19,
+   "channel": "Rodha",
+   "title": "Function 2: Total Onto And Bijective Functions | Algebra for CAT 2026 | Ravi Prakash Rodha"
+  },
+  "G8IXAwpurqc": {
+   "minutes": 3,
+   "channel": "Patrick100",
+   "title": "From where should we read editorials? | AskPatrick | Patrick Dsouza | 6 times CAT 100%ile"
+  },
+  "GaEZEJbKLtY": {
+   "minutes": 44,
+   "channel": "MBA Wallah",
+   "title": "Lines and Angles | Quant Geometry L1 | CAT 2024 | MBA Wallah"
+  },
+  "HhtLt2JZKu4": {
+   "minutes": 25,
+   "channel": "Rodha",
+   "title": "Mensuration 1: Prisms, Pyramids & Spheres | Geometry for CAT 2026 | Ravi Prakash Rodha"
+  },
+  "IgEKyxYTXDg": {
+   "minutes": 64,
+   "channel": "Rodha",
+   "title": "CAT 2025 I INTRODUCTION TO VENN Diagrams I LRDI I SWAPANIL SIR"
+  },
+  "IqfBailsqTk": {
+   "minutes": 67,
+   "channel": "Cracku - MBA CAT Preparation",
+   "title": "CAT 2026 Easy Geometry Circles and Polygons | CAT Geometry Important Questions | Geometry Playlist"
+  },
+  "IzzDC2qCYu0": {
+   "minutes": 19,
+   "channel": "Gejo Speaks",
+   "title": "How to read a passage effectively | CAT-RC-Series | GejoSpeaks | Reading Comprehension"
+  },
+  "J9ccMZAG01o": {
+   "minutes": 28,
+   "channel": "CAT Preparation - iQuanta",
+   "title": "Arithmetic for CAT Class 1 | Ratio and Proportion | Quantitative Aptitude for CAT Playlist"
+  },
+  "JyN6EROdhrw": {
+   "minutes": 26,
+   "channel": "Rodha",
+   "title": "HCF LCM 1 | Number System for CAT 2026 | Ravi Prakash Rodha"
+  },
+  "K6Jk3uEkIMA": {
+   "minutes": 31,
+   "channel": "Rodha",
+   "title": "Logarithms part 1: Logarithm Properties | Algebra for CAT 2026 | Ravi Prakash Rodha"
+  },
+  "K77dQAOf_Vg": {
+   "minutes": 34,
+   "channel": "Unacademy CAT",
+   "title": "Ace Para Summary for CAT 2025 - ‘GIST’ Method"
+  },
+  "Kn17_JoFmjU": {
+   "minutes": 30,
+   "channel": "Rodha",
+   "title": "Pie Chart 1 || LR & DI Preparation || CAT Exam Preparation"
+  },
+  "MYud15DuP6s": {
+   "minutes": 18,
+   "channel": "Takshzila",
+   "title": "Averages for CAT: Part 2 (More Concepts and Solved Examples)"
+  },
+  "PQvBSkJDF_E": {
+   "minutes": 24,
+   "channel": "Rodha",
+   "title": "Time Speed and Distance 2: Speed Time Inverse Proportion | Arithmetic for CAT 2026 | Ravi Sir Rodha"
+  },
+  "PlsBlgzhsXU": {
+   "minutes": 35,
+   "channel": "MBA Wallah",
+   "title": "Grammar (Sentence Correction & Error Spotting) for CAT & OMETs - Verbs, Tenses"
+  },
+  "Q4yXuv5g5nc": {
+   "minutes": 21,
+   "channel": "Cracku - MBA CAT Preparation",
+   "title": "Ratios for CAT Exam | CAT Arithmetic Basics, Concepts & Question Types | Sayali Ma’am"
+  },
+  "QJYT1UPEp3o": {
+   "minutes": 27,
+   "channel": "Unacademy CAT",
+   "title": "CAT 2025 Must-Watch! Crack Sentence Odd One Out with 100% Accuracy | \"CORE\" Method Explained"
+  },
+  "Qt_FK9fWlMg": {
+   "minutes": 26,
+   "channel": "2IIM CAT Preparation",
+   "title": "Cracking RC 101┃ The Ultimate Guide to Acing Reading Comprehension ┃Expert Insights ┃2IIM CAT"
+  },
+  "Rhg1QRLnM8U": {
+   "minutes": 47,
+   "channel": "MBA Wallah",
+   "title": "CAT 2025 | Foundation | VOCABULARY BUILDING-HOW TO READ FROM WORD POWER MADE EASY | MBA Wallah"
+  },
+  "SzseQAYENMc": {
+   "minutes": 24,
+   "channel": "Rodha",
+   "title": "Logarithms 2: Logarithmic Equations with Quadratic Forms | Algebra for CAT 2026 | Ravi Prakash Rodha"
+  },
+  "TBhanaOLNvc": {
+   "minutes": 23,
+   "channel": "Rodha",
+   "title": "Averages 1: Middle Term of an AP Series | Arithmetic for CAT 2026 | Ravi Prakash Rodha"
+  },
+  "TG3M3QFyY0k": {
+   "minutes": 26,
+   "channel": "Rodha",
+   "title": "Simple and Compound Interest 2: SI and CI Difference Formula | Arithmetic for CAT 2026 | Ravi Sir"
+  },
+  "TZadcVDti64": {
+   "minutes": 39,
+   "channel": "Rodha",
+   "title": "Quadrilaterals 1 | Geometry for CAT 2026 | Ravi Prakash Rodha"
+  },
+  "UCjd5d-YZ40": {
+   "minutes": 8,
+   "channel": "Ananta Chhajer",
+   "title": "Trick to Solve Parajumbles in CAT |  CAT Preparation"
+  },
+  "VSFs3JuKafY": {
+   "minutes": 34,
+   "channel": "Rodha",
+   "title": "Remainders 3: Euler's Theorem Cyclicity | Number System for CAT 2026 | Ravi Prakash Rodha"
+  },
+  "W6MKuAnB0h4": {
+   "minutes": 26,
+   "channel": "Rodha",
+   "title": "Simple Equations 1: Linear Equation Solutions | Algebra for CAT 2026 | Ravi Prakash Rodha"
+  },
+  "X3c60CCB18U": {
+   "minutes": 21,
+   "channel": "Rodha",
+   "title": "Quadratic Equation 2: Nature Of Roots | Algebra for CAT 2026 | Ravi Prakash Rodha"
+  },
+  "YEckpCtPo54": {
+   "minutes": 79,
+   "channel": "MBA Pathshala",
+   "title": "Arithmetic Progression AP | Part-1 | CAT Preparation | Quantitative Aptitude | Udit Saini"
+  },
+  "Z3SWdERmAVE": {
+   "minutes": 44,
+   "channel": "BYJU'S Exam Prep: CAT & MBA",
+   "title": "CAT  Caselets: Important CAT DILR Topic | CAT 2023 DILR Preparation"
+  },
+  "_K0ZbySSTzw": {
+   "minutes": 28,
+   "channel": "ACE CAT",
+   "title": "VARC for CAT 2026 | Para Completion  | Lecture #06"
+  },
+  "b6hmLsjbA7E": {
+   "minutes": 22,
+   "channel": "Rodha",
+   "title": "Probability 1: Basics, Coin Tosses and Odds | CAT 2026 | Ravi Sir"
+  },
+  "b72RfaOsAmg": {
+   "minutes": 15,
+   "channel": "Takshzila",
+   "title": "Linear Eqn in 2 variables, Integer solns - 1"
+  },
+  "bC3Wlg6DIRg": {
+   "minutes": 26,
+   "channel": "Rodha",
+   "title": "Games and Tournaments 1 || LR & DI Preparation for CAT || CAT Exam Preparation"
+  },
+  "bigCbKeUPO4": {
+   "minutes": 26,
+   "channel": "Rodha",
+   "title": "Profit and Loss 1: Profit, Loss, Discount, Markup | Arithmetic for CAT 2026 | Ravi Prakash Rodha"
+  },
+  "d38v_cGG0Y0": {
+   "minutes": 13,
+   "channel": "ELITES GRID - CAT PREP",
+   "title": "SELECTIONS & Distibutions | Conventional method | CAT LRDI"
+  },
+  "dRbw57eHvuo": {
+   "minutes": 30,
+   "channel": "Rodha",
+   "title": "Venn Diagrams - 2 |  4 parameter Venn Diagram | CAT Preparation"
+  },
+  "e4Ec4KzqaME": {
+   "minutes": 8,
+   "channel": "CATKing",
+   "title": "Rules To Crack Para Completion Questions In CAT VARC | CAT Exam Verbal Ability Strategy"
+  },
+  "fnFjdi4XbTQ": {
+   "minutes": 59,
+   "channel": "MBA Wallah",
+   "title": "Permutations And Combinations - 1 | Quant Modern Maths 04 | CAT 2024 | MBA Wallah"
+  },
+  "gqYVcVjqW0k": {
+   "minutes": 22,
+   "channel": "Rodha",
+   "title": "Tabular Set || LR & DI Preparation for CAT || CAT exam Preparation"
+  },
+  "hvikOiSu_D4": {
+   "minutes": 22,
+   "channel": "Rodha",
+   "title": "Simple and Compound Interest 1: SI and CI Basic Concepts | Arithmetic for CAT 2026 | Ravi Sir Rodha"
+  },
+  "jXBjJIp3U_A": {
+   "minutes": 67,
+   "channel": "CAT Preparation - iQuanta",
+   "title": "Best Approach to Solve Parajumbles in CAT | VARC Practice for CAT 2025"
+  },
+  "jdusH0OI-jY": {
+   "minutes": 59,
+   "channel": "Rodha",
+   "title": "VENN DIAGRAM SET I CAT PREVIOUS YEAR QUESTION I BY SWAPANIL SIR"
+  },
+  "kbKFCy5HA20": {
+   "minutes": 100,
+   "channel": "CAT Preparation - iQuanta",
+   "title": "CAT 2025 Preparation Playlist: LRDI Caselets – Day 33 (CAT Before CAT)"
+  },
+  "kwO4buoyWHg": {
+   "minutes": 78,
+   "channel": "MBA Wallah",
+   "title": "Pipes & Cistern | Arithmetic  Ep. 04 | The Game Begins | CAT 2025 Preparation"
+  },
+  "lzI_bpPpezE": {
+   "minutes": 23,
+   "channel": "Rodha",
+   "title": "Percentages 2: Successive Percentage Change | Arithmetic for CAT 2026 | Ravi Prakash Rodha"
+  },
+  "oApzHGJNx38": {
+   "minutes": 22,
+   "channel": "Rodha",
+   "title": "Time and Work 1: LCM Method Introduction | Arithmetic for CAT 2026 | Ravi Prakash Rodha"
+  },
+  "p0JbJd5DpWY": {
+   "minutes": 30,
+   "channel": "Rodha",
+   "title": "Divisibility Rules 1 | Number System for CAT 2026 | Ravi Prakash Rodha"
+  },
+  "qQcGkxuf4ws": {
+   "minutes": 24,
+   "channel": "Rodha",
+   "title": "Alligation and Mixture 3: Alligation in Mixtures | Arithmetic for CAT 2026 | Ravi Prakash Rodha"
+  },
+  "rb3Sk_L7vMQ": {
+   "minutes": 25,
+   "channel": "Rodha",
+   "title": "Divisibility Rules 4 | Number System for CAT 2026 | Ravi Prakash Rodha"
+  },
+  "taNnRLuS4pk": {
+   "minutes": 70,
+   "channel": "MBA Wallah",
+   "title": "Remainder Theorem l Quant Number System 06 | CAT 2024 l MBA Wallah"
+  },
+  "w-ez6YnTnJ4": {
+   "minutes": 15,
+   "channel": "Rodha",
+   "title": "INEQUALITIES - 9: Rational Inequality and Quadratic Range | Algebra for CAT 2026 | Ravi Prakash Sir"
+  },
+  "x-k8iSNr85g": {
+   "minutes": 26,
+   "channel": "Rodha",
+   "title": "Percentages 1: Fractions to Percentages | Arithmetic for CAT 2026 | Ravi Prakash Rodha"
+  },
+  "x3SEYdBUGaA": {
+   "minutes": 20,
+   "channel": "Dear Sir",
+   "title": "Pipe and Cisterns Problems Tricks | Pipe and Tanki Shortcuts and Tricks | DSSSB, CTET, Bank PO"
+  },
+  "yVXgLm09yuM": {
+   "minutes": 56,
+   "channel": "CAT Funda by Unacademy",
+   "title": "Number System - Converting from Decimal to Other Bases and Vice Versa l CAT 2021 l Ravi Handa"
+  },
+  "z69ElNGKPFs": {
+   "minutes": 61,
+   "channel": "CAT Funda by Unacademy",
+   "title": "Binary Logic / True Liar - Basic Concepts (English) l CAT 2021 l LRDI l CAT FUNDA l Ravi Handa"
+  },
+  "zIrr1lkvyBY": {
+   "minutes": 19,
+   "channel": "Rodha",
+   "title": "Inequalities 1: Rules and Applications | Algebra for CAT 2026 | Ravi Prakash Rodha"
+  },
+  "zsyDbQwC1Vg": {
+   "minutes": 15,
+   "channel": "ELITES GRID - CAT PREP",
+   "title": "Games & Tournament for CAT 2025 by Gaurav Kapoor"
+  }
+ }
+}

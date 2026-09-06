@@ -3,6 +3,7 @@ import { validateCoverageMatrix, type MatrixEntry } from '@/lib/coverage-validat
 import { TOPIC_METADATA } from '@/lib/topics-constants';
 import { isValidPushEndpoint } from '@/lib/push-validate';
 import { registerSubscription } from '@/lib/push-subscription-registry';
+import { registerWebPushEndpoint, type PushSubscriptionJSON } from '@/lib/notification-endpoints';
 import { isCovered } from '@/lib/coverage-status';
 
 // ── THE ONE PLACE /start ANSWERS BECOME A STUDENT ───────────────────────────
@@ -188,6 +189,8 @@ export async function applyOnboarding(
   // Aug. A brand-new signup has no existing prefs/subscribedAt to
   // preserve, so the merge is a no-op today, but it is no longer a
   // SEPARATE definition that could silently drift from the other one.
+  // Set when a valid subscription arrives, consumed after the profile write.
+  let registerEndpointAfterProfileWrite: PushSubscriptionJSON | null = null;
   const subscription = onboarding.push_subscription as { endpoint?: unknown } | null | undefined;
   if (subscription?.endpoint && isValidPushEndpoint(subscription.endpoint)) {
     const reg = registerSubscription(
@@ -197,6 +200,13 @@ export async function applyOnboarding(
       (onboarding as Record<string, unknown>).push_context
     );
     Object.assign(profileUpdate, reg);
+    // DUAL-WRITE, same as the authenticated toggle: the profile column above
+    // stays authoritative for Step 3's remaining readers, and this gives the
+    // student a registry row so a later second device ADDS instead of
+    // evicting. Deferred until after the profile write below actually
+    // succeeds — an endpoint row for a profile update that failed would be a
+    // device we would push to for an account that never got set up.
+    registerEndpointAfterProfileWrite = subscription as unknown as PushSubscriptionJSON;
   } else if (onboarding.push_prompted === true) {
     profileUpdate.notif_prefs = { push_prompted: true };
   }
@@ -217,6 +227,13 @@ export async function applyOnboarding(
   let completedOnboarding = false;
   if (Object.keys(profileUpdate).length > 0) {
     await admin.from('profiles').update(profileUpdate).eq('id', userId);
+    // Only now, with the profile actually written — see the deferral above.
+    if (registerEndpointAfterProfileWrite) {
+      await registerWebPushEndpoint(admin, userId, registerEndpointAfterProfileWrite, {
+        context: (onboarding as Record<string, unknown>).push_context as string | null,
+        platform: (onboarding as Record<string, unknown>).push_platform as string | null,
+      });
+    }
   }
 
   if (matrixOk) {

@@ -3365,9 +3365,741 @@ flag is not a "no". This is the same failure class as Incident #61 — a query
 that excluded the very rows that carried the answer, then three confident wrong
 diagnoses on top of it.
 
+## Incident #65
+
+**Date:** 2026-09-02
+**Area:** Operator surfaces + crons (every population read)
+**Severity:** P0 (student correctness) / P1 (founder visibility)
+
+### What the founder saw
+
+Three screenshots of the Command Center, a day apart: STUDENTS **1000**, then
+**1000**, then **1000** — while "Studied today" moved 21 → 5 → 16 and
+"Sales-ready" moved 796 → 811 → 803. Every other number breathed. That one did
+not. Production held 1,036 real students (1,058 profiles).
+
+### What was wrong
+
+`getRealStudents` in `lib/admin-filters.ts` — the single source every
+dashboard card derives from, by design ("the count is literally
+`list.length`") — was an unbounded `.select()`:
+
+```ts
+admin.from('profiles').select(...).eq('role','student').not(...).not(...)
+```
+
+PostgREST caps every response at `max-rows` (Supabase default **1000**). It
+returns the first thousand rows and **no error** — no exception, no header
+the client surfaces, nothing in the logs. The page counted what it was given.
+The roster crossed 1,000 real students on or about 26 Aug; from that day the
+tile was a constant.
+
+A client-side `.limit(20000)` (the People page's `daily_routines` read) does
+not help: max-rows is applied **after** the client limit.
+
+### How far it went
+
+The sweep found **134 unbounded reads** of population-scaled tables across
+`app/admin`, `app/api/admin`, `app/api/cron`, `app/sales` and `lib`. Row
+counts read from production on 2 Sep:
+
+| table | rows | read unbounded by |
+|---|---|---|
+| student_events | 237,605 | launch-metrics, mission-queue, capability-health, daily-pick-stats, log-yesterday-reminder |
+| notifications | 100,586 | momentum, mission-queue, notification-health, daily-heartbeat, daily-insight, launch-metrics |
+| topic_coverage | 50,102 | lis-health |
+| funnel_events | 18,901 | growth page |
+| decision_log | 4,162 | compute-dna, dna route |
+| daily_routines | 1,920 | plan-coverage, people page (`.limit(20000)`) |
+| profiles | 1,058 | 60 sites |
+| student_dna | 1,038 | compute-dna, analytics, dna route |
+
+So this was never one tile. The launch metrics, the LIS health score, the
+growth funnel, the notification survival curves and the Student DNA cohort
+view were each computing over a thousand-row sample and presenting it as the
+population — for weeks in some cases.
+
+The student-facing half: every cron that iterates "all students" — compute-dna,
+daily-heartbeat, daily-insight, log-yesterday-reminder, weekly-plan-reconcile,
+check-red-flags, decision-engine, study-companion, nishant-weekly,
+weekly-digest, whatsapp-backfill — read the first 1,000 and skipped the rest.
+Which 36 were skipped follows Postgres heap order, not signup date: it is not
+even the same 36 from one day to the next. A student could be reminded on
+Monday and silently not on Tuesday.
+
+### Why nothing caught it
+
+- The truth boundary (Incident #55, 23 Aug) makes a **failed** read
+  irreducible from an empty one. A capped read is neither — it is a
+  successful VALUE of the wrong population. The boundary did exactly what it
+  was built for and could not see this.
+- `population-read.guard` (B3b gate 1) pins population-scaled reads that feed
+  a **mutation** through `.in(ids)` — the 24 KB request failure. This is the
+  other direction: not too many ids going out, too few rows coming back.
+- One page had already learned the lesson: `admin/analytics/page.tsx` pages
+  `student_events` with `.order().range()` and a loud ceiling, with a comment
+  saying why. The lesson lived in one file and never became a primitive.
+
+### The fix
+
+1. **`lib/supabase/fetch-all.ts`** — the one sanctioned population read.
+   Takes a thunk (a PostgREST builder is mutable and must be rebuilt per
+   page), orders explicitly (`id` by default; `student_id` where that is the
+   key), pages until a **short page proves the end**, and refuses — returns an
+   error, not a shorter array — past 200 pages. Null data with no error is an
+   error, same rule as the truth boundary. Returns `{ data, error }` so a call
+   site changes by one wrapper and nothing downstream.
+2. **`readAllRows`** in `lib/truth/source.ts` — the same, lifted into
+   `Source<T[]>`, for crons that must not act on a partial picture. `readRows`
+   keeps its contract for key-bounded reads.
+3. **88 reads migrated** across 32 files — every founder-visible surface and
+   every roster-iterating cron, plus the student-facing peer-cohort base.
+4. **`lib/truth/population-cap.guard.test.ts`** — lists the 21 tables by
+   evidence, scans the operator/cron tree for an unbounded read of any of
+   them, and holds a **shrink-only** baseline of the 43 files still carrying
+   one (small tables today, bounded subsets). A new file fails the build; a
+   migrated file left in the list fails the build. Mutation-tested: unwrapping
+   the roster, adding `.limit(1000)` to it, adding a fresh unbounded read, and
+   migrating a listed file without delisting it all fail; dropping the order,
+   returning a partial set on error, and truncating silently at the ceiling
+   all fail the helper's tests.
+
+### The lesson, with teeth
+
+**A read that returns the wrong population is not a failed read, and every
+mechanism we had was built to catch failed reads.** The dangerous case is
+the one that succeeds. The only defence is structural: a table that can
+exceed the cap is read through the paging primitive or the build fails.
+
+Second: the fix existed in the codebase for two weeks (`analytics/page.tsx`)
+as a local workaround with a good comment. A lesson that stays in one file is
+a lesson the next file will not have.
+
+## Incident #66
+
+**Date:** 2026-09-02
+**Area:** Sales OS — lead intake (the book, not the queue)
+**Severity:** P1 (founder visibility / conversion) — no student harmed, every new student invisible to sales
+
+### What the founder saw
+
+"Are new students being added to the salesmen's lists daily?" — asked as a
+question, because there was nowhere to look. Both counsellors had been
+working the same 62 students each since 29 Aug.
+
+### What was wrong
+
+Three things, and the first hid the other two.
+
+1. **The book was a one-time load.** `lead_outreach` held 124 rows, all
+   written by `/api/admin/enrol-book` on 29 Aug, and nothing had touched it
+   since (`updated_at` 29 Aug ×123, 30 Aug ×1). 916 real students had never
+   been in any book; 172 of them signed up in the previous seven days; 855 of
+   them were free and reachable. The base grew by ~20 a day and the book grew
+   by zero. The Phase 2A architecture had designed the intake engine and
+   deliberately deferred it (2B-3) until capacity visibility and SLA truth
+   existed — both had existed for days, and nobody had come back for the
+   engine.
+2. **The SLA clock had never started.** All 124 rows had `assigned_at` NULL
+   (enrol-book leaves it NULL on purpose, and it was the only door ever used),
+   so every first-contact SLA read as 'unknown' — which is honest, and which
+   also means speed-to-lead had never been measured for a single student.
+3. **The daily fuse could not bind.** `getTeamCapacity` passed `newToday: 0`
+   with a comment saying it was not instrumented; the capacity panel showed
+   "New today —". Nothing recorded when a student entered a book, so
+   `max_new_per_day` — the safety fuse of Amendment 3 — was a number on a
+   config row and nothing else.
+
+### How far it went
+
+Every student who signed up after 29 Aug (roughly 200 by 2 Sep) was invisible
+to both counsellors. The calling list looked full because 123 of the 124
+were still 'not_contacted', so the frozen book did not read as frozen from
+inside `/sales`.
+
+### Why nothing caught it
+
+The tower reported `newLeadsToday` from `profiles.created_at` — new STUDENTS,
+not new LEADS — so the number the founder read as "leads coming in" measured
+signups. No surface reported "students not in any book", and no cron_runs row
+existed for an intake because there was no intake. A pipeline that has never
+run leaves the same blank as one that ran and found nothing (the same shape
+as #55/#56).
+
+### The fix
+
+- `lib/lead-intake.ts` — the engine, as designed in 2A §5: every real, free
+  student with a phone and no lead row, newest first, dealt across active
+  configured seats by largest-remainder apportionment (ties by rep id, equal
+  seats alternate), fused by `max_new_per_day − newToday` and
+  `MAX_PORTFOLIO_PER_SEAT`, written with ON CONFLICT DO NOTHING, one
+  `sales_activity` row per student carrying the sentence that explains it,
+  one audit row per run, kill switch `SALES_INTAKE_ENABLED`. Reads fail
+  closed. `/api/cron/lead-intake` at 14:30 IST; `/api/admin/lead-intake` for
+  the founder's "Run today's intake now".
+- Migration `20260902a`: `lead_outreach.enrolled_at` (backfilled for the 124),
+  so "new today" is measured and the fuse binds; `sales_activity` may carry
+  an engine assignment with no human actor.
+- `assigned_at` is stamped only for a signup younger than 24 hours. Backlog
+  enrolments keep the clock NULL — the enrol-book reasoning, made a rule.
+- Tower: "Daily intake · today Anshul +x · Neelam +y · last run … ·
+  N still waiting"; never-ran is shown as never-ran.
+- Guards: `lead-intake.test.ts` (determinism, proportionality, fuse, newest
+  first), `lead-intake/mutation-safety.test.ts` (every source fails closed,
+  kill switch, idempotent second run, concurrent claim reported honestly,
+  2,500-student paging).
+
+### The lesson, with teeth
+
+A manual load that is never repeated LOOKS like a pipeline for exactly as
+long as the first load lasts. When a founder asks "is X happening daily?",
+the answer must be readable from a screen, not derived from a query: every
+recurring job gets a "last run / never ran" line on the surface whose numbers
+depend on it. And a ceiling that nothing measures is not a ceiling — the
+capacity panel had said so in its own words ("not instrumented") for nine
+days.
+
+## Incident #67
+
+**Date:** 2026-09-03
+**Area:** Sales OS — the daily list (closing it)
+**Severity:** P1 (founder visibility) — no student harmed
+
+### What the founder saw
+
+"Make sure they mark every list close or something, otherwise it doesn't make
+sense of these lists."
+
+### What was wrong
+
+`sales_opportunity` records what the system OFFERED. A row was marked
+`worked_at` only by a logged disposition, and nothing else ever wrote to it.
+So on the morning of 3 Sep, of 241 cards ever dealt: **240 were still open** —
+58 from 30 Aug, 122 from 2 Sep, 60 from that morning. One card had ever been
+worked.
+
+The real defect was not the number, it was the ambiguity. `worked_at is null`
+was storing three completely different facts in one empty cell:
+
+- the counsellor never got to it (the day ran out);
+- the counsellor looked and chose not to act (deliberate, and often correct);
+- the counsellor could not act (wrong number, not reachable today).
+
+And there was no honest way to record the second or third: the only outcomes
+were call outcomes, so closing a card meant claiming a call that never
+happened. The rational thing for a counsellor to do was leave it open — which
+is exactly what happened, 240 times.
+
+### Why nothing caught it
+
+The checkpoint reported `remaining = surfaced - worked`, which is arithmetically
+true and tells you nothing: it counts a deliberate skip and an ignored student
+identically. Coverage looked like a real measure and was not one. Nothing swept
+the day, so a past day's cards stayed open forever and yesterday was
+indistinguishable from today.
+
+### The fix
+
+- Migration `20260903b`: `closed_at`, `close_reason` (`worked` / `skipped` /
+  `not_marked`), `skip_reason`, with CHECKs tying them to `worked_at` so the
+  two can never disagree. `worked_at` keeps its one meaning — a real
+  disposition — because stamping a skip or a sweep into it would inflate
+  coverage, reached, and every founder-facing number at once.
+- A `skipped` outcome with a required reason. It writes history and closes the
+  card, and touches NOTHING else: no lead state, no clock, no miss count, never
+  counted as reaching anyone. The student returns to tomorrow's queue on the
+  same terms. A skip buys a day, never a disappearance.
+- `/api/cron/day-close` at 21:45 IST sweeps every still-open card from a day
+  that has ended into `not_marked`. Sweeps all past days, so a missed run
+  repairs itself.
+- Backfill recorded the 180 historical cards as `not_marked` rather than
+  deleting them — "we gave these students to somebody and nothing happened" is
+  the most useful thing that table has ever held.
+- The counsellor's header now reads "N marked · N still to mark"; the founder's
+  tower shows worked / skipped / unmarked per counsellor per day.
+
+### The lesson, with teeth
+
+**A queue nobody closes is not a queue, it is a suggestion.** If a surface
+hands somebody a list of work, the list must have a terminal state for every
+item, and the person must have an honest way to reach it — including "I looked
+and chose not to". Without the honest option, the only options are lying or
+leaving it open, and people correctly choose the second.
+
+And the corollary that made the fix safe: **when adding a way to close
+something, never reuse the column that measures whether it was DONE.** A skip
+and a sweep are closes, not work. Two columns, two questions.
+
+## Incident #68
+
+**Date:** 2026-09-03 (found ~23:00 IST, hours after #67 shipped)
+**Area:** Sales OS — the daily day (its size, and its close)
+**Severity:** P1 (founder visibility / counsellor trust) — no student harmed
+
+### What was wrong
+
+Two defects, both in code that had gone live that morning, both found by
+reading production rather than by any test.
+
+**1. The day refilled, so it could never be finished.** `sales_opportunity`
+showed each seat had been offered **97 cards** on 3 Sep against a design
+ceiling of 70 (Anshul 97, Neelam 97; max rank 69, so each individual build
+was correct). The queue is stateless and rebuilt on every page load: a worked
+card dropped out via the same-day cooldown, rotation backfilled to
+`DAY_FLOOR`, and the counsellor was handed fresh students. Work ten, get ten
+more, forever. It also silently violated the founder's 30 Aug ruling —
+"working 5 does not summon 5. Replacement must be signal-driven, not
+quota-driven" — because a floor-backfill is precisely a quota.
+
+It also meant a **skip did not stick**: a skip deliberately writes no
+lead_outreach state (nothing happened to the student), so nothing suppressed
+the card and it returned on the very next page load.
+
+**2. The sweep closed a day late.** `closeDay` swept `ist_day < today`, which
+reads as safe and is off by one: run at 21:45 IST it closed **0 rows**,
+because today is not less than today. Today's 147 open cards would have sat
+until the following night, so the "unmarked" column the founder had just been
+given always reported yesterday.
+
+### Why nothing caught it
+
+Both were provable from the code and neither test asked the question. The day
+tests exercised `assembleDay` on one build, never two — and one build was
+always correct. The sweep test asserted the filter it had been written with
+(`lt:ist_day`) rather than the property that matters ("a day closes the night
+its shift ends"), so it passed while encoding the bug.
+
+### The fix
+
+- **The day is a fixed set.** `buildCallQueue` reads today's `sales_opportunity`
+  rows for the viewing rep. Cards already CLOSED today drop out (which is what
+  finally makes a skip stick), and `assembleDay` takes a `DayContext`:
+  already-open cards are carried, and rotation may only top up to the day's
+  target counting what it already spent. Signals remain the deliberate
+  exception — a promise, an abandoned checkout or a buddy tap at 6pm is real
+  new work and still appears, which is the signal-driven replenishment the
+  30 Aug ruling actually asked for.
+- **A day closes the night its shift ends.** `closeDay` computes the newest
+  CLOSABLE day: today once the IST hour is past `SHIFT_END_HOUR_IST` (21),
+  yesterday before it, then sweeps `ist_day <= that`. Safe to run by hand at
+  any hour: at 11am it still refuses to touch a live day.
+- Tests now pin the properties, not the filters: a rebuild continues today
+  rather than dealing a second day; a signal still arrives mid-day; the sweep
+  before, at and after the shift boundary.
+
+### The lesson, with teeth
+
+**A stateless surface plus a floor equals an infinite list.** Any "give them N
+per day" rule computed fresh on every render will re-give as soon as items
+leave, and the people using it experience a list that grows as they work. If
+a day is supposed to be finishable, the day has to be *recorded*, and the
+rebuild has to read that record.
+
+And: **a test that asserts the implementation it was written against is not a
+guard.** Both of these shipped green. The sweep test asserted `lt:ist_day` —
+the exact expression containing the bug — instead of "a day closes the night
+its shift ends", which would have failed immediately.
+
 ---
 
-## Incident #65
+## Incident #69
+
+**Date:** 4 September 2026
+**Severity:** P1 — Sales (Trust)
+**Found by:** the founder's feature request, not by any alarm.
+
+### What was wrong
+
+The calling card carried a block headed "Last time": the date, the outcome, and
+the student's own words from the previous conversation. It is the single most
+valuable thing on the card — the whole reason a second call is better than a
+first — and it had been shipped, reviewed, tested and used in production.
+
+It was mostly showing our internal lead-distribution ledger.
+
+`buildCallQueue` read `sales_activity` newest-first and kept exactly one row per
+student. `sales_activity` is not a conversation log: lead intake and
+reassignment write their own bookkeeping into the same table. On the morning of
+4 Sep, the newest row for **272 of the 319** touched students was one of those:
+
+```
+"Daily intake -> Neelam Singh: 50 of 50 new-per-day used, book at 500"
+```
+
+Against **47** students whose newest row was a real human disposition. So for
+six students out of seven, the block reserved for what the student said was
+quoting our own distribution engine back at the counsellor.
+
+A second defect sat underneath it and would have outlived the first. `no_answer`
+is the commonest disposition we record, and it carries the auto-note "Did not
+pick up". One unanswered dial therefore replaced the conversation from the call
+before it. The rep dialled again with nothing in front of them, and the student
+explained themselves to the same company twice — the exact harm the block's own
+code comment said it existed to prevent.
+
+### Why nothing caught it
+
+Three guards existed and all three passed:
+
+* A render test proved the block appears when `lastInteraction` is set.
+* A guard test in `sales-objective.test.ts` proved the queue reads
+  `sales_activity` ordered `ascending: false`.
+* A second guard proved the card renders `lead.lastInteraction.note` rather than
+  just the timestamp — written specifically to defeat a `{false && ...}` bypass.
+
+Every one of them asserted that the pipe was **connected**. Not one asserted
+anything about **what came through it**. The fixtures all carried a plausible
+counsellor's remark, because the person writing them was thinking about
+conversations; production carried an intake log line, because a different
+subsystem shares the table.
+
+This is L2 ("no claim about product behaviour from code location alone") in a
+form the file had not yet recorded: the trace PRODUCER → WRITE → CONSUMER →
+SURFACE was followed and was correct. What was skipped is that a table can have
+**more than one producer**, and the consumer had no predicate saying which one
+it wanted.
+
+### The fix
+
+`src/lib/sales-remarks.ts` is now the one place that answers "is this row a
+remark". A remark is a human touch and nothing else: `provenance =
+'self_reported'` AND `actor_id IS NOT NULL`. The predicate is applied **at the
+database**, not in a reducer that a future caller could forget. `isTypedRemark`
+moved here from `sales-yesterday.ts` so the daily snapshot's count of typed
+remarks and the card's lead sentence are computed by the same rule.
+
+The card now carries the newest five remarks, leads with the newest one the rep
+actually typed however old it is, still reports the unanswered dial underneath,
+and expands to the rest in place.
+
+### The lesson, encoded
+
+**A shared table has more than one producer. A read that does not name the
+producer it wants is not reading what it thinks it is.**
+
+`sales_activity` holds dispositions, lead assignments, reassignments, vendor
+imports and enrolment bookkeeping. So does `student_events`. So do
+`notifications` and `intervention_ledger`. Any read that means "what a human
+said" must say so in the query.
+
+With teeth, not just here: `sales-remarks.behaviour.test.ts` pins the exact
+production intake string out of the model, and the guard tests in
+`sales-objective.test.ts` were **rewritten rather than deleted** — the rule they
+protected ("the most recent interaction wins, older rows are ignored") was
+itself the defect, and the rewrite records why, so the next person to widen this
+read learns it from the file instead of from production.
+
+Second lesson, for the test suite: **a fixture that only ever contains the happy
+shape proves the pipe, not the water.** Where a table has several producers, at
+least one fixture must contain a row from a producer the surface must reject.
+
+## Incident #70
+
+**2026-09-04 — Seven hours of no sign-ins, and every dashboard said fine.**
+
+**Area:** Identity/Auth (P0). **Students hit:** everyone, including the founder,
+who could not reach his own admin account.
+
+### What happened
+
+OTP delivery stopped at 09:00 UTC. Nobody found out until the founder tried to
+log in that afternoon and asked whether something was broken.
+
+The shape of it, from `student_events`:
+
+| Window (UTC) | requested | resent | verified |
+|---|---|---|---|
+| 2-3 Sep | 12 | 0 | **12** |
+| 4 Sep, 09:00 onward | 13 | 18 | **0** |
+
+Thirty-one requests to `/api/auth/request-phone-otp`, 18 reaching the SMS hook,
+13 turned away with a 429 as students hammered resend, and exactly **one**
+verification attempt — the signature of an SMS that never arrives.
+
+### Why nothing caught it
+
+Every layer reported success. Supabase called the hook; the hook returned 200
+eighteen times out of eighteen; no error appeared in any log. The cause was one
+line in `src/lib/indiahost-otp.ts`:
+
+```js
+if (/(error|failed|invalid|not found|unauthor)/i.test(text)
+    && !/(success|sent|ok)/i.test(text)) throw
+```
+
+Success was defined as *the absence of five specific words* in the gateway's
+reply. Any failure phrased differently passed through as a good send —
+"insufficient balance", "account suspended", "quota exceeded", "number
+blacklisted", an API key rejection, or an empty body. The hook then told
+Supabase the code was delivered, and Supabase told the student to check their
+phone.
+
+The reply text was read and thrown away. That is the whole incident: the
+gateway was telling us what was wrong on every one of the 18 calls, and we
+discarded the message and returned 200.
+
+### What was NOT the cause
+
+Ruled out before the fix, so the next person does not re-walk it: the OTP path
+had not been modified in weeks (last touch #103/#124); the phone normalizer
+correctly produces `+91XXXXXXXXXX`; the hook signature check was fine; the hook
+URL was right (it was being called); the account had 3,000 OTPs remaining; and
+this provider involves no DLT templates. Three deploys landed that day and all
+three were Sales work.
+
+An early hypothesis — exhausted credits — was stated to the founder and was
+wrong. It is recorded here because the reasoning that produced it was sound and
+the correction came from him, not from the data: the data could not distinguish
+the two, which was itself the defect.
+
+### The fix
+
+`src/lib/indiahost-otp.ts` now returns a verdict instead of guessing:
+
+- the gateway's reply is **always** recorded — masked number and body, never the
+  OTP, never the full number
+- **rejection is checked before success**, so a reply carrying both ("sent: 0,
+  failed: 1") is a failure
+- a rejected send returns **500**, so Supabase surfaces the failure rather than
+  telling a student their code is on the way
+- a reply that cannot be positively classified is reported as **UNKNOWN** and
+  logged at error level, not guessed. We do not know this gateway's exact
+  success format; assuming success hides the next outage, and assuming failure
+  would break every working sign-in. The body is in the log line, so the first
+  real reply settles it.
+
+Twenty-two tests, one per reply that used to pass silently.
+
+### The lesson, and where it has teeth
+
+**A denylist of error words is not a success check.** It fails open, and failing
+open on a delivery path means an outage that looks exactly like a healthy day.
+Any integration whose reply we parse must define success positively, and must
+record what the other side actually said — because the difference between
+"delivered" and "silently dropped" is only ever visible in that text.
+
+Encoded in `src/lib/indiahost-otp.test.ts`: every phrase in this entry is a test
+case, so the specific replies that caused this outage can never again be read as
+a successful send.
+
+### How it ended
+
+Delivery resumed on its own at **4 Sep ~19:00 UTC** (00:30 IST), about ten
+hours after it stopped. The recovery is confirmed by three sources that agree:
+`student_events` shows the first verifications since the outage began (19:00
+UTC: 6 requested, 2 verified — the first non-zero hour since 3 Sep 23:00),
+`auth.users.last_sign_in_at` shows three real sessions created after that
+point, and the founder confirmed codes arriving on a handset. A student typing
+a correct code is proof the SMS reached a phone; no other source can fake it.
+
+**The cause was never explained.** Nothing changed on our side between the
+break and the recovery — no deploy, no config change, no gateway parameter. The
+provider offers no delivery-report endpoint, so we could not observe the failing
+leg while it was failing, and they did not tell us what they fixed. This entry
+therefore closes with the system proven working and the root cause unknown,
+which is an honest state and not a comfortable one: an unexplained outage can
+recur without warning, and the only thing standing between a repeat and another
+silent seven hours is the alarm below.
+
+Do not read the recovery as a fix. The open item this leaves is not "watch the
+gateway" — it is that the front door of the product depends on **one vendor who
+cannot tell us whether a message was delivered**. That was a considered founder
+decision on 5 Sep (wait for the provider's answer before adding a second
+vendor), recorded here so the next person knows it was chosen, not missed.
+
+### The second lesson: nothing was watching the outcome
+
+The parser was the cause, but it is not the only thing that failed. For seven
+hours no alarm fired, and the founder found out by trying to log in himself.
+
+`/api/cron/founder-alerts` runs every fifteen minutes and was working
+perfectly — it just cannot see this. `findSacredFailures` only looks at
+PER-STUDENT states: a paid student stuck after payment, a mentor with no room.
+A student who cannot log in has no state to be stuck in; they never become a
+row. So the one failure that stops **everybody** was structurally invisible to
+the only active alarm we had.
+
+**A per-entity alert system cannot see a platform-wide fault.** The two need
+separate producers, and the platform one must be an OUTCOME check, because
+every layer we control reported success throughout: the route returned 200, the
+hook returned 200, and the gateway said `{"status":"success"}` on all 1,741
+calls. A gateway health-check would have been green the entire time. Codes
+requested is a claim; codes verified is a fact.
+
+`src/lib/os/auth-health.ts` is that producer: over a rolling 60-minute window,
+five or more codes requested with zero verified is a critical system Exception
+that pages the founder. The 4 September window — 21 requested, 0 verified — is
+a test case, so the shape of this outage can never again go unannounced. Below
+five requests it reports `idle`, not healthy: silence is not evidence of
+health, and a pager that cries at 3am over two sleepy students gets muted.
+
+## Incident #71
+
+**Date:** 2026-09-04 (found ~23:00 IST, the first full day the 50–70 rule ran)
+**Area:** Sales OS — the conversion lane
+**Severity:** P1 (founder instruction defeated; counsellor told something untrue)
+
+### What was wrong
+
+The day was supposed to be "a mix of all variety" with "the old students
+rotating" (founder, 2 Sep). On 4 Sep the mix was:
+
+| Rep | conversion | new | attention | retention | promises | **rotation** |
+|---|---|---|---|---|---|---|
+| Anshul | 47 | 17 | 13 | 5 | 5 | **0** |
+| Neelam | 52 | 28 | 9 | 1 | 18 | **0** |
+
+Two thirds of the day was one lane, and the lane whose entire purpose is to
+reach the silent base got nothing — while 243 never-contacted students sat in
+the two books untouched.
+
+The cause was a flag masquerading as a signal.
+`student_engagement.buddy_cta_clicks` is a **cumulative counter that never
+resets**, and the lane fired on `buddyTaps >= 1`. So a single tap put a
+student in the conversion lane permanently: 136 students held it, only 32 had
+tapped within a fortnight, and the oldest still being pitched was from
+**21 July** — six weeks stale. 29 more carried clicks with no timestamp at
+all, because `buddy_cta_last_at` was added after those rows existed.
+
+The card's own words made it worse. It said *"Pitch the single session —
+intent is warm"* about a student who had tapped once, in July, and never
+returned.
+
+### Why nothing caught it
+
+The codebase had already written the warning down. `call-queue.ts` explains,
+in the comment defining RETENTION_LANES, that buddy intent "is measured by
+buddy_cta_clicks, a cumulative counter that never resets. A student who tapped
+the buddy option once in July would sit in the conversion lane forever." That
+sentence was read while building the 50–70 day and its consequence was not
+followed through: ceilings were given to attention (20) and new arrivals (15),
+and conversion — the only unbounded lane fed by a permanent flag — was left
+uncapped.
+
+The lane guard asserted "declared buddy intent is the CONVERSION lane" with no
+date at all, so it encoded the defect as the specification.
+
+### The fix
+
+- **Intent must be datable and fresh.** `classifyLane` takes `intentAt` (the
+  later of `buddy_cta_last_at` and `intent_door_at`) and the lane fires only
+  within `CONVERSION_INTENT_DAYS` (14). The card now says *when*: "Opened the
+  buddy option 2 days ago".
+- **An undateable tap is NOT recent.** The 29 rows with clicks and no
+  timestamp fall out of the lane. "We cannot date this" is not "this is
+  fresh" (L1: a trustworthy UNKNOWN beats a precise lie).
+- **A ceiling as the fuse.** `CONVERSION_CEILING` (12) in `sales-day.ts`, so
+  no single lane can own a day again even if its predicate is right.
+- **The 360 agrees with the queue** — same `intentAt`, so a card opened
+  directly never claims warmth the calling list has stopped believing.
+- Stale-intent students are not deleted: they keep their card through
+  rotation, with a reason that is true.
+
+Effect, measured before shipping: conversion candidates fall from 47/52 to
+13/12 per rep, and ~94 stale students rejoin a never-contacted pool of 188 and
+147 that rotation can finally reach.
+
+### The lesson, with teeth
+
+**A cumulative counter is a flag, not a signal, and a flag never expires.**
+Any lane, filter or score built on a monotonic counter (`*_clicks`, `*_count`,
+`total_*`) selects the same population forever and grows without bound. If a
+predicate is meant to mean "recently", it must read a TIMESTAMP — and a row
+that cannot be dated fails the test rather than passing it.
+
+And the sharper one: **the warning was already in the file.** The comment
+naming this exact hazard was read during the work that introduced it. Reading
+a caveat is not the same as applying it — when a comment says a column never
+resets, every new predicate over that column is suspect on sight.
+
+---
+
+## Incident #72
+
+**Date:** 2026-09-05 (found ~22:00 IST, reading the day the #71 fix went live)
+**Area:** Sales OS — the day's size
+**Severity:** P1 (a list that cannot be finished; coverage reads as failure)
+
+### What was wrong
+
+The two seats were dealt **111 and 174 cards** against a ceiling of 70.
+
+| Rep | given | worked | not marked | attention (ceiling 20) | fresh |
+|---|---|---|---|---|---|
+| Anshul | 111 | 25 | 86 | 45 | 15 |
+| Neelam | 174 | 95 | 59 | 64 | 44 |
+
+The first assembly of the day was **exactly right**: Anshul's 07:00 deck was
+65 cards with attention at 20 and new arrivals at 15, both precisely their
+ceilings. The day then grew on every page load — 20 more attention cards at
+12:00, 11 more at 20:00; for Neelam, 15 fresh students at 00:00, 15 more at
+20:00 and 14 more at 22:00.
+
+### Cause
+
+Every ceiling was measured against the cards **still on screen**, not the cards
+already dealt. A worked card leaves the queue, so the lane has room again and
+the next rebuild deals a fresh full allowance. Three places, one mistake:
+
+- per-lane ceilings counted only the candidates in this assembly;
+- `DAY_CEILING` trimmed against this assembly's signals;
+- rotation's target was `DAY_FLOOR − signals currently open`, which grows as
+  signals get worked, so rotation re-topped even though Incident #68 had
+  supposedly closed exactly this.
+
+That is the sharp part. **Incident #68 is this defect.** It was found on 3 Sep
+(97 cards against a ceiling of 70), root-caused correctly — "the queue is
+rebuilt on every page load and a backfill made that deal MORE cards each time"
+— and then fixed for **rotation alone**, with `rotationUsedToday` as a
+rotation-shaped patch. The general statement was written down in the same
+commit and not acted on. Two days later the same defect returned through the
+five lanes the patch did not cover, larger than the first time.
+
+A second defect in the same read: the sweep closed 5 Sep at 21:45 IST and the
+deck dealt Neelam 20 more cards at 22:00 — 14 of them never-contacted students
+— into a day that was over. Nobody would work them; tomorrow's sweep would file
+them as leakage.
+
+### Fix
+
+- `DayContext.usedToday` is the day's ledger: cards dealt today per section, in
+  every state (worked, skipped, still open). Every ceiling is measured against
+  it and against nothing else.
+- Candidates are split into CARRIED (dealt today, already in the ledger — they
+  pass every gate, because a rebuild may never take back a card the counsellor
+  can already see) and NEW (which spend the day's remaining allowance).
+- The day ceiling trims against `usedTotal + new signals`, so rotation dealt
+  this morning still occupies the day this evening.
+- The short-day backfill measures shortness on the whole day, not the screen.
+- `shiftOver`: past `SHIFT_END_HOUR_IST` the deck shows what was dealt and
+  deals nothing new.
+- `istHour()` is now one exported function instead of the same `% 24`
+  expression written out twice (the midnight-renders-as-24 trap of #68).
+
+### Lesson
+
+**A fix scoped to the lane where the bug was seen is not a fix.** The defect
+was in how the day accounts for itself; it presented in rotation, so it was
+fixed in rotation. When a root cause is stated in general terms — "the queue is
+rebuilt and each rebuild deals more" — the fix has to be general too, or the
+next lane hits it. Before closing an incident, ask which other call sites share
+the cause, and either fix them or write down why they are exempt.
+
+**The second lesson is about verification.** #68 was verified by the tests and
+by a same-day read that looked right. What proves a day-shaped rule is a
+day-shaped test: the replay in `sales-day.test.ts` now deals a morning and
+rebuilds twelve times, working five cards each round, and asserts the seat was
+never offered more than `DAY_CEILING`. A single assembly cannot show this bug —
+the first assembly was correct on both 3 and 5 September.
+
+**And a smaller one:** four deck tests started failing the moment `shiftOver`
+shipped, because CI happened to run at 22:00 IST. A test whose result depends
+on when it runs is not a passing test, it is an unfired one. `test-support/
+mid-shift.ts` pins the hour.
+
+---
+
+## Incident #73
 
 **2026-09-02 · careerrai-test raised `rls_disabled_in_public` a second time ·
 Security (P0 class, zero actual exposure)**

@@ -1,13 +1,14 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { isCallOutcome, isConnectedOutcome, planDisposition, type CallOutcome } from '@/lib/sales-disposition';
+import { isCallOutcome, isConnectedOutcome, isSkipReason, planDisposition, CONNECTED_OUTCOMES, type CallOutcome } from '@/lib/sales-disposition';
+import { contradictsConnectedOutcome, contradictionQuestion, NO_ANSWER_CONTRADICTION_CODE } from '@/lib/no-answer-contradiction';
 import {
   canAccessLead, checkSalesTarget, loadStaffDirectory, resolveLeadOwner, salesPrincipal,
 } from '@/lib/sales-authz';
 import { completeDueFollowups, scheduleFollowup } from '@/lib/sales-followup';
 import { resolveConvertedClaim } from '@/lib/sales-conversion-truth';
-import { markWorked } from '@/lib/sales-opportunity-record';
+import { markSkipped, markWorked } from '@/lib/sales-opportunity-record';
 import { captureStateSnapshot, recordIntervention, interventionTypeForLane } from '@/lib/intervention-ledger';
 import { isReasonCategory, reasonNeedsVerbatim } from '@/lib/intervention-taxonomy';
 
@@ -46,8 +47,12 @@ export async function POST(request: NextRequest) {
   if (!principal) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const body = await request.json().catch(() => ({}));
-  const { studentId, outcome, note, callbackAt, hot,
-          reasonCategory, reasonVerbatim, askMade, microCommitment, channel } = body ?? {};
+  const { studentId, outcome, note, callbackAt, hot, skipReason,
+          reasonCategory, reasonVerbatim, askMade, microCommitment, channel,
+          // The rep's answer to the contradiction question below. Only ever
+          // set by a rep who was SHOWN the contradiction and said "yes, they
+          // really did answer" — never a default, never sent blind.
+          answeredConfirmed } = body ?? {};
   if (!isCallOutcome(outcome)) {
     return NextResponse.json({ error: 'Invalid disposition' }, { status: 400 });
   }
@@ -87,13 +92,91 @@ export async function POST(request: NextRequest) {
   }
 
   const noteText = typeof note === 'string' ? note.trim() : '';
-  // Feedback is mandatory on a connected call (not on a no-answer).
-  if (isConnectedOutcome(outcome) && noteText.length === 0) {
-    return NextResponse.json({ error: 'Feedback is required for a connected call.' }, { status: 400 });
+  // Remarks are mandatory wherever the rep has something only they know
+  // (founder order, 3 Sep - SALES-OS 8 amendment): every connected outcome,
+  // AND a sent message. The auto-note said only that a message was sent,
+  // never WHAT was sent, which made the one-tap the free square of the day.
+  // no_answer keeps its truthful auto-note: there is nothing to say about a
+  // call nobody picked up, and extorting text there breeds the ok/x junk
+  // remarks this rule exists to kill.
+  if ((isConnectedOutcome(outcome) || outcome === 'messaged') && noteText.length === 0) {
+    const msg = outcome === 'messaged'
+      ? 'Say what you messaged them - that is the record.'
+      : 'Feedback is required for a connected call.';
+    return NextResponse.json({ error: msg }, { status: 400 });
   }
+  // ── THE TWO HALVES OF THE ENTRY MUST AGREE (founder, 4 Sep 2026) ────────
+  //
+  // A connected outcome asserts a human spoke. When the rep's own remark says
+  // nobody picked up, the entry contradicts itself, and production shows this
+  // is not rare: roughly 15% of one rep's dispositions over two days, each one
+  // putting a student who never answered into a warm lane with a wrong clock
+  // and inflating the interested/callback counts the founder reads.
+  //
+  // ASKED, NOT REFUSED. "He didn't pick up my first call but rang back and
+  // said interested" is a legitimate connected outcome whose note contains
+  // "didn't pick up" — blocking it would teach the reps to write shorter,
+  // emptier notes and destroy the remark history itself. So the card asks
+  // which one happened and sends the answer back; either way is one tap.
+  //
+  // THE GATE LIVES HERE, not only on the card. The card owns the question;
+  // this owns the rule. A client that never asked cannot write the
+  // contradiction by omitting the flag, because absence is not confirmation.
+  if (answeredConfirmed !== true
+      && contradictsConnectedOutcome(outcome, noteText, CONNECTED_OUTCOMES)) {
+    return NextResponse.json({
+      error: contradictionQuestion(String(outcome).replace(/_/g, ' ')),
+      code: NO_ANSWER_CONTRADICTION_CODE,
+    }, { status: 409 });
+  }
+
   // A callback needs a time.
   if (outcome === 'callback' && !(typeof callbackAt === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(callbackAt))) {
     return NextResponse.json({ error: 'Pick a callback time.' }, { status: 400 });
+  }
+
+  // ── A SKIP CLOSES THE CARD AND TOUCHES NOTHING ELSE ──────────────────────
+  //
+  // Founder, 3 Sep 2026: "make sure they mark every list close." A counsellor
+  // who cannot honestly log a call had no way to close a card, so 240 of the
+  // 241 cards ever dealt sat open forever and "worked_at is null" meant three
+  // different things at once.
+  //
+  // This branch is deliberately the shortest path in the file. A skip is NOT a
+  // contact: no lead_outreach write (so no status, no last_attempt_at, no
+  // clock, no miss count), no follow-up, no intervention ledger, and it never
+  // counts as reaching anybody. Nothing happened to the student, so the
+  // student's state must not change — they return to tomorrow's queue on
+  // exactly the same terms. A skip buys a day, never a disappearance.
+  //
+  // What it DOES do is leave two rows: the history of who skipped what and
+  // why, and the closed card. That is the whole difference between a list and
+  // a suggestion.
+  if (outcome === 'skipped') {
+    if (!isSkipReason(skipReason)) {
+      return NextResponse.json({ error: 'Say why you are skipping this student.' }, { status: 400 });
+    }
+    const { error: skipHistoryError } = await admin.from('sales_activity').insert({
+      student_id: studentId,
+      actor_id: principal.id,
+      activity_type: 'skip',
+      channel: null,
+      provenance: 'self_reported',
+      status: 'skipped',
+      note: noteText || `Skipped: ${skipReason.replace(/_/g, ' ')}`,
+    });
+    if (skipHistoryError) {
+      console.error('[sales/log] skip history insert failed:', skipHistoryError.message);
+      return NextResponse.json({ error: 'Could not record the skip — try again.' }, { status: 500 });
+    }
+    // Checked, unlike markWorked's best-effort call: closing the card IS the
+    // entire point of a skip. If this fails the counsellor must know, because
+    // the card is still open and their screen would otherwise say it is done.
+    const closed = await markSkipped(admin, principal.id, studentId, skipReason);
+    if (!closed) {
+      return NextResponse.json({ error: 'Skip recorded, but the card did not close — refresh and try again.' }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true, skipped: true });
   }
 
   // ── The learning snapshot, taken BEFORE anything is written ───────────────
@@ -133,7 +216,7 @@ export async function POST(request: NextRequest) {
   }
 
   const { data: cur } = await admin.from('lead_outreach')
-    .select('no_answer_count, first_contact_at').eq('student_id', studentId).maybeSingle();
+    .select('no_answer_count, first_contact_at, status, next_action_at, callback_at').eq('student_id', studentId).maybeSingle();
   const prevMisses = (cur?.no_answer_count as number | null) ?? 0;
 
   // ── A CLAIMED CONVERSION IS NOT A CONVERSION (Incident #52) ──────────────
@@ -161,12 +244,24 @@ export async function POST(request: NextRequest) {
   const effectiveOutcome: CallOutcome =
     convertedClaim && convertedClaim.status === 'interested' ? 'interested' : outcome;
 
-  const plan = planDisposition(effectiveOutcome, {
+  let plan = planDisposition(effectiveOutcome, {
     prevMisses,
     hot: hot === true,
     callbackAtLocal: typeof callbackAt === 'string' ? callbackAt : null,
     nowMs: Date.now(),
   });
+  // A MESSAGE NEVER DOWNGRADES A LIVE STATE (2 Sep 2026). A student who said
+  // "interested" or asked for a callback keeps that status and its clock; the
+  // message is recorded as a touch in history and on last_attempt_at only.
+  const LIVE = new Set(['interested', 'follow_up', 'no_answer']);
+  if (outcome === 'messaged' && cur?.status && LIVE.has(cur.status as string)) {
+    plan = {
+      status: cur.status as typeof plan.status,
+      nextActionAt: (cur.next_action_at as string | null) ?? null,
+      callbackAt: (cur.callback_at as string | null) ?? null,
+      noAnswerCount: prevMisses,
+    };
+  }
 
   const now = new Date().toISOString();
 
@@ -199,13 +294,14 @@ export async function POST(request: NextRequest) {
   const { data: activity, error: historyError } = await admin.from('sales_activity').insert({
     student_id: studentId,
     actor_id: principal.id,
-    activity_type: 'call',
-    channel: 'phone',
+    // A WhatsApp message is its own channel and activity (2 Sep 2026).
+    activity_type: outcome === 'messaged' ? 'whatsapp' : 'call',
+    channel: outcome === 'messaged' ? 'whatsapp' : 'phone',
     // The honest default. Nothing in this system independently observes that a
     // call took place — no call id, no duration, no recording.
     provenance: 'self_reported',
     status: outcome,
-    note: noteText || (outcome === 'no_answer' ? 'Did not pick up' : null),
+    note: noteText || (outcome === 'no_answer' ? 'Did not pick up' : outcome === 'messaged' ? 'Sent a WhatsApp message' : null),
     callback_at: plan.callbackAt,
   }).select('id').single();
   if (historyError) {
@@ -259,7 +355,7 @@ export async function POST(request: NextRequest) {
       studentId,
       repId: principal.id,
       activityId: activity?.id as number | undefined,
-      channel: channel === 'whatsapp' ? 'whatsapp' : 'phone',
+      channel: outcome === 'messaged' || channel === 'whatsapp' ? 'whatsapp' : 'phone',
       // Derived from the lane the rep was working, so it stays consistent
       // across reps and is one fewer field to fill.
       interventionType: interventionTypeForLane(snapshot.lane),

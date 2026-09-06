@@ -67,12 +67,16 @@ vi.mock('@/lib/supabase/admin', () => ({
       // both gate-7 cases timed out. That would have read as "chunking is too
       // slow at scale" when it was the stub generating quadratic data.
       let chunk: string[] | null = null;
+      // Paging: fetchAll asks for .range(from, to) per page; a fake that ignores
+      // it would hand back the whole roster on every page and never terminate.
+      let rng: [number, number] | null = null;
+      const page = <T,>(rows: T[]) => (rng ? rows.slice(rng[0], rng[1] + 1) : rows);
       const answer = () => {
         if (m === 'throw') throw new Error(`${table} exploded`);
         if (m === 'error') return Promise.resolve({ data: null, error: { message: `${table} timeout` } });
         if (m === 'null-no-error') return Promise.resolve({ data: null, error: null });
         const all = studentRows(population);
-        if (table === 'profiles') return Promise.resolve({ data: all, error: null });
+        if (table === 'profiles') return Promise.resolve({ data: page(all), error: null });
         const ids = chunk ? all.filter((s) => chunk!.includes(s.id)) : all;
         if (table === 'streak_data') {
           // Logged yesterday → daysSinceLastLog 1 → 'active'.
@@ -101,6 +105,7 @@ vi.mock('@/lib/supabase/admin', () => ({
       for (const k of ['select', 'eq', 'gte', 'lte', 'contains', 'limit', 'order', 'is', 'not']) {
         chain[k] = () => chain;
       }
+      chain.range = (from: number, to: number) => { rng = [from, to]; return chain; };
       chain.in = (_col: string, vals: unknown) => {
         if (Array.isArray(vals) && typeof vals[0] === 'string' && vals[0].startsWith('s')) {
           chunk = vals as string[];

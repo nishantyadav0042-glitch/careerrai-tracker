@@ -10,11 +10,13 @@ import { getChatUnreadCount, getNotifUnreadCount } from '@/lib/chat-unread';
 import PostSignupSequence from '@/components/post-signup-sequence';
 import { InstallPing } from '@/components/install-ping';
 import { StandaloneNotifAsk } from '@/components/standalone-notif-ask';
+import { ReopenAppNudge } from '@/components/reopen-app-nudge';
 import { getStudentProfile } from '@/lib/student-profile';
 import { DailyBuddyNudge } from '@/components/daily-buddy-nudge';
 import { ResourceAnnounce } from '@/components/resource-announce';
 import { InstallJourney } from '@/components/install-journey';
 import { PushHealer } from '@/components/push-healer';
+import { ApnsTokenBridge } from '@/components/apns-token-bridge';
 import { NotificationAttribution } from '@/components/notification-attribution';
 import { pushHealth } from '@/lib/push-state';
 import { OnboardingGate } from './onboarding/onboarding-gate';
@@ -249,6 +251,12 @@ export default async function StudentLayout({ children }: { children: React.Reac
           (profile?.notif_prefs as Record<string, unknown> | null)?.push === true && !profile?.push_subscription
         }
       />
+      {/* Page half of the native APNs token handoff (task #78) — defines the
+          global the App Store shell calls with its device token. Renders
+          nothing; inert on every non-native surface. Mounted inside this
+          authenticated layout ON PURPOSE: the registration it fires must
+          carry the signed-in student's own session, never anyone else's. */}
+      <ApnsTokenBridge />
       <NotificationAttribution />
       <InstallPing />
       <StoreBuildDetector />
@@ -260,6 +268,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
             <NotificationBell userId={user.id} initialUnreadCount={notifUnread} />
           </div>
         </div>
+        {noBlockingModal && !showCoverageReview && <ReopenAppNudge appInstalled={appInstalled} />}
         {children}
       </div>
       <StudentBottomNav chatUnread={chatUnread} />
@@ -285,7 +294,11 @@ export default async function StudentLayout({ children }: { children: React.Reac
         // subscription anywhere but its permanent home. StandaloneNotifAsk also
         // fires when prefs say push=ON but the server holds no live
         // subscription (the reconnect case).
-        <StandaloneNotifAsk pushEnabled={pushEnabled} serverSubDead={!profile?.push_subscription} />
+        <StandaloneNotifAsk
+          pushEnabled={pushEnabled}
+          serverSubDead={!profile?.push_subscription}
+          appInstalled={appInstalled}
+        />
       ) : null}
       {showInstallJourney && <InstallJourney appInstalled={appInstalled} planReady={!showOnboarding} />}
       {showCoverageReview && <CoverageReviewGate />}

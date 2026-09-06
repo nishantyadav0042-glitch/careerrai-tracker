@@ -6,6 +6,7 @@ import type { Profile, DailyReport } from '@/types';
 import { getLogDateString } from '@/lib/streak-utils';
 import { trailingWindow } from '@/lib/facts/window';
 
+import { fetchAll } from '@/lib/supabase/fetch-all';
 // This page used to carry its own getTodayIST(), an en-CA date at IST MIDNIGHT.
 // daily_reports.report_date is written on the STUDY day (05:30 IST rollover,
 // lib/study-day), so from 00:00 to 05:30 IST every night the two disagreed by
@@ -22,7 +23,7 @@ export default async function AdminStudentsPage() {
   const { admin } = await requireAdmin();
 
   // Full onboarding columns — the students list renders complete dossiers.
-  const { data: allProfiles } = await admin.from('profiles').select('id, role, full_name, email, phone, exam_target, buddy_id, cat_percentile, starting_percentile, onboarding_completed, college, category, is_repeater, is_working_professional, work_ex_months, coaching_enrolled, created_at, course_year, attempt_year, target_percentile, hours_available, study_target_hours, baseline_varc, baseline_dilr, baseline_qa, baseline_mocks_taken, dream_colleges, signup_source, strongest_section, student_types_helped, iim_converted, first_attempt_percentile, cat_year, current_company, biggest_mistake, younger_self_advice, how_i_work, linkedin_url, avatar_url, app_installed, notif_prefs, is_premium').order('created_at', { ascending: false });
+  const { data: allProfiles } = await fetchAll(() => admin.from('profiles').select('id, role, full_name, email, phone, exam_target, buddy_id, cat_percentile, starting_percentile, onboarding_completed, college, category, is_repeater, is_working_professional, work_ex_months, coaching_enrolled, created_at, course_year, attempt_year, target_percentile, hours_available, study_target_hours, baseline_varc, baseline_dilr, baseline_qa, baseline_mocks_taken, dream_colleges, signup_source, strongest_section, student_types_helped, iim_converted, first_attempt_percentile, cat_year, current_company, biggest_mistake, younger_self_advice, how_i_work, linkedin_url, avatar_url, app_installed, notif_prefs, is_premium'), { orderBy: 'created_at', ascending: false });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const profiles = (allProfiles ?? []) as any as Profile[];
 

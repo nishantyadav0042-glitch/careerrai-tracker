@@ -310,6 +310,10 @@ export type EventName =
   | 'push_setup_guidance_shown'
   | 'push_ask_shown' | 'push_ask_skipped' | 'push_ask_later'
   | 'push_ask_blocked' | 'push_ask_dismissed' | 'push_ask_failed'
+  // ReopenAppNudge (1 Sep): a student who already installed but landed in a
+  // browser tab this session — distinct from push_ask_*, because nothing
+  // here touches permission or subscription, only navigation.
+  | 'reopen_nudge_shown' | 'reopen_nudge_dismissed'
   | 'shield_intro_shown'
   | 'buddy_plan_click' | 'buddy_unlock_open'
   // Independence Day campaign (12 Aug): one funnel, measured end to end —

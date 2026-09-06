@@ -27,6 +27,8 @@
 // infrastructure failure must never be converted into a negative answer about
 // business state. TRUE / FALSE / UNKNOWN-ERROR.
 
+import { fetchAll, type FetchAllOptions } from '@/lib/supabase/fetch-all';
+
 export type Source<T> =
   | { readonly state: 'value'; readonly value: T }
   | { readonly state: 'no_data' }
@@ -100,4 +102,35 @@ export function rowsOrEmpty<T>(s: Source<T[]>): T[] {
     throw new Error(`refusing to treat an unavailable read as empty — ${s.reason}`);
   }
   return s.state === 'value' ? s.value : [];
+}
+
+/**
+ * Read a WHOLE POPULATION through the truth boundary.
+ *
+ * Incident #65 (2 Sep 2026): an unbounded `.select()` is capped by PostgREST
+ * at max-rows (1000) with no error, so `readRows` over "all students" was a
+ * VALUE of the first thousand — the 36 real students past the cap were
+ * silently absent from every cron that iterated the roster. A capped read is
+ * not an answer about the population; it is a different population.
+ *
+ * `build` must be a thunk returning a fresh query each call — the pages are
+ * fetched with an explicit order and a proven short-page termination
+ * (lib/supabase/fetch-all). A read that exceeds the ceiling comes back
+ * UNAVAILABLE, never as a shorter VALUE. Use this for any read whose size
+ * grows with the student base; keep `readRows` for reads bounded by a key.
+ */
+export async function readAllRows<T>(
+  label: string,
+  build: () => unknown,
+  opts?: FetchAllOptions,
+): Promise<Source<T[]>> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await fetchAll<T>(build as () => any, opts);
+    if (error) return unavailable<T[]>(`${label}: ${error.message}`);
+    if (data === null || data === undefined) return unavailable<T[]>(`${label}: no data and no error`);
+    return data.length === 0 ? noData<T[]>() : value(data);
+  } catch (e) {
+    return unavailable<T[]>(`${label}: ${e instanceof Error ? e.message : 'threw'}`);
+  }
 }

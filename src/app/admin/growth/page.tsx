@@ -3,6 +3,7 @@ import { requireAdmin } from '@/lib/admin-auth';
 import { AD_CHANNELS, CHANNEL_LABEL, type AdChannel } from '@/lib/attribution';
 import { TrendingUp } from 'lucide-react';
 
+import { fetchAll } from '@/lib/supabase/fetch-all';
 export const dynamic = 'force-dynamic';
 
 const DAY = 86_400_000;
@@ -17,10 +18,10 @@ export default async function AdminGrowthPage() {
   const { admin } = await requireAdmin();
 
   const [{ data: profiles }, { data: streaks }, { data: engagement }, { data: funnel }] = await Promise.all([
-    admin.from('profiles').select('id, role, created_at, onboarding_completed, subscription_status, signup_source, is_test_account, attr_channel, attr_source, attr_campaign, attr_stamped_at'),
-    admin.from('streak_data').select('student_id, last_log_date'),
-    admin.from('student_engagement').select('student_id, buddy_cta_clicks'),
-    admin.from('funnel_events').select('step, anon_id').gte('created_at', daysAgoIso(30)),
+    fetchAll(() => admin.from('profiles').select('id, role, created_at, onboarding_completed, subscription_status, signup_source, is_test_account, attr_channel, attr_source, attr_campaign, attr_stamped_at')),
+    fetchAll(() => admin.from('streak_data').select('student_id, last_log_date')),
+    fetchAll(() => admin.from('student_engagement').select('student_id, buddy_cta_clicks'), { orderBy: 'student_id' }),
+    fetchAll(() => admin.from('funnel_events').select('step, anon_id').gte('created_at', daysAgoIso(30))),
   ]);
 
   // Test/friend accounts (is_test_account) are excluded from every funnel

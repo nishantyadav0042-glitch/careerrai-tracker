@@ -1,4 +1,6 @@
 import { getStudentMomentum } from '@/lib/momentum';
+import { loadStaffDirectory } from '@/lib/sales-authz';
+import { profileFacts, type ProfileFact } from '@/lib/sales-profile-facts';
 import { computeTopicMemory } from '@/lib/prep-memory-data';
 import { TOPIC_METADATA } from '@/lib/topics-constants';
 import { bandMeta } from '@/lib/momentum';
@@ -45,6 +47,11 @@ export interface TimelineItem {
   label: string;
   note: string | null;
   provenance: string | null;
+  /** Who at CareerRai recorded it, when we can resolve a name. Null for
+   *  system rows and for an actor no longer in the staff directory. On a
+   *  reassigned lead this is the difference between "somebody wrote this" and
+   *  "Neelam wrote this on the call she had with them". */
+  by: string | null;
 }
 
 export interface ConversionView {
@@ -82,6 +89,9 @@ export interface ConversionView {
   lane: LaneVerdict | null;
   /** What the student said their problem was, in their own words, at signup. */
   painPoints: string[];
+  /** The plain facts of the profile (lib/sales-profile-facts) — who this
+   *  person is, before any judgement about them. Founder, 2 Sep. */
+  profile: ProfileFact[];
 }
 
 
@@ -100,7 +110,7 @@ export async function getSalesConversionView(admin: any, id: string): Promise<Co
     // The baseline + self-report columns are here because the SHARED focus
     // chain needs them (C1) — sales must not answer "what is this student
     // weak at" from a narrower input set than the student's own planner uses.
-    admin.from('profiles').select('id, created_at, full_name, phone, is_premium, buddy_id, is_repeater, is_working_professional, push_subscription, pain_points, baseline_varc, baseline_dilr, baseline_qa, self_reported_weakest_section, self_reported_strongest_section').eq('id', id).single(),
+    admin.from('profiles').select('id, created_at, full_name, phone, is_premium, buddy_id, is_repeater, is_working_professional, push_subscription, pain_points, baseline_varc, baseline_dilr, baseline_qa, self_reported_weakest_section, self_reported_strongest_section, email, exam_target, attempt_year, attempt_number, category, college, course_year, work_ex_months, coaching_enrolled, hours_available, weekend_hours_available, study_target_hours, study_window, study_windows, target_percentile, dream_colleges, starting_percentile, last_year_percentile, previous_percentile, signup_source, attr_channel, app_installed, current_stage, biggest_blocker, success_goal, self_reported_weak_topic, onboarding_completed').eq('id', id).single(),
     getStudentMomentum(admin, id),
     admin.from('student_engagement').select('buddy_cta_clicks, mock_opened, intent_door_at, buddy_cta_last_at').eq('student_id', id).maybeSingle(),
     admin.from('sales_activity').select('created_at, actor_id, activity_type, channel, provenance, status, note').eq('student_id', id).order('created_at', { ascending: false }).limit(20),
@@ -139,6 +149,11 @@ export async function getSalesConversionView(admin: any, id: string): Promise<Co
   }));
 
   // ── Merged interaction timeline (newest first) ──
+  //
+  // Attributed since 4 Sep 2026. The 360 is where a rep goes for the FULL
+  // history — including, on a reassigned lead, conversations somebody else
+  // had. Anonymous notes made that indistinguishable from their own memory.
+  const staff = await loadStaffDirectory(admin);
   const timeline: TimelineItem[] = [];
   for (const a of acts ?? []) {
     timeline.push({
@@ -146,11 +161,12 @@ export async function getSalesConversionView(admin: any, id: string): Promise<Co
       label: a.activity_type === 'assigned' || a.activity_type === 'reassigned'
         ? 'Lead assigned' : `${a.channel === 'whatsapp' ? 'WhatsApp' : 'Call'} — ${String(a.status ?? 'logged').replace(/_/g, ' ')}`,
       note: a.note ?? null, provenance: a.provenance ?? null,
+      by: (a.actor_id && staff?.labelById.get(a.actor_id as string)) ?? null,
     });
   }
   for (const f of followups) {
-    timeline.push({ at: (fups ?? []).find((x: any) => x.id === f.id)?.created_at ?? f.dueAt, kind: 'followup_created', label: `Follow-up promised for ${new Date(f.dueAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata' })}`, note: f.reason, provenance: 'system_generated' });
-    if (f.completedAt) timeline.push({ at: f.completedAt, kind: 'followup_closed', label: `Follow-up ${f.status === 'no_response' ? 'attempted — no response' : f.status}`, note: f.outcome, provenance: 'system_generated' });
+    timeline.push({ at: (fups ?? []).find((x: any) => x.id === f.id)?.created_at ?? f.dueAt, kind: 'followup_created', label: `Follow-up promised for ${new Date(f.dueAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata' })}`, note: f.reason, provenance: 'system_generated', by: null });
+    if (f.completedAt) timeline.push({ at: f.completedAt, kind: 'followup_closed', label: `Follow-up ${f.status === 'no_response' ? 'attempted — no response' : f.status}`, note: f.outcome, provenance: 'system_generated', by: null });
   }
   timeline.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
 
@@ -229,6 +245,14 @@ export async function getSalesConversionView(admin: any, id: string): Promise<Co
     createdAt: (p.created_at as string | null) ?? null,
     logDates: ((strip14 ?? []) as any[]).map((r) => r.report_date as string),
     buddyTaps, intentDoor, momentumScore: momentum.score,
+    // Incident #71: the 360 and the queue must agree on what "intent" means,
+    // or a card opened directly would claim a warm buddy tap the calling list
+    // has already stopped believing.
+    intentAt: (() => {
+      const tap = (eng?.buddy_cta_last_at as string | null) ?? null;
+      const door = (eng?.intent_door_at as string | null) ?? null;
+      return tap && door ? (tap > door ? tap : door) : (tap ?? door);
+    })(),
   });
 
   // ── Objection playbook (tailored) ──
@@ -262,6 +286,7 @@ export async function getSalesConversionView(admin: any, id: string): Promise<Co
   return {
     studentId: id, name: p.full_name ?? 'Student', firstName: first, phone: p.phone ?? null, waNumber: waNumber(p.phone ?? null),
     isPremium: p.is_premium === true, hasBuddy: p.buddy_id != null,
+    profile: profileFacts(p),
     convScore: conv, tier, momentumLabel: bandMeta(momentum.band).label, momentumScore: momentum.score,
     reachable, lastActivity: dsl == null ? 'never logged' : dsl === 0 ? 'logged today' : `${dsl}d since last study`,
     symptoms,

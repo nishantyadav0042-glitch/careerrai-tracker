@@ -1,4 +1,6 @@
 import type { CallLead } from '@/lib/call-queue';
+import { SHIFT_END_HOUR_IST } from '@/lib/os/scale-config';
+import { istHour } from '@/lib/sales-day';
 import type { OpportunityRow } from '@/lib/sales-checkpoint';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -100,7 +102,10 @@ export async function markWorked(
   try {
     const { error } = await admin
       .from('sales_opportunity')
-      .update({ worked_at: now.toISOString(), outcome })
+      // closed_at travels with worked_at, always: a worked card is a closed
+      // card, and letting the two drift would put a row in a state the CHECK
+      // in 20260903b forbids (and the founder's three numbers could not add up).
+      .update({ worked_at: now.toISOString(), outcome, closed_at: now.toISOString(), close_reason: 'worked' })
       .eq('rep_id', repId)
       .eq('student_id', studentId)
       .eq('ist_day', istDay(now))
@@ -125,7 +130,7 @@ export async function readToday(
   try {
     const { data, error } = await admin
       .from('sales_opportunity')
-      .select('student_id, objective, rank, worked_at, outcome')
+      .select('student_id, objective, rank, lane, worked_at, outcome, closed_at, close_reason, skip_reason')
       .eq('rep_id', repId)
       .eq('ist_day', istDay(now))
       .order('rank', { ascending: true });
@@ -137,11 +142,118 @@ export async function readToday(
       studentId: r.student_id as string,
       objective: r.objective as OpportunityRow['objective'],
       rank: Number(r.rank),
+      lane: (r.lane as string | null) ?? null,
       workedAt: (r.worked_at as string | null) ?? null,
       outcome: (r.outcome as string | null) ?? null,
+      closedAt: (r.closed_at as string | null) ?? null,
+      closeReason: (r.close_reason as OpportunityRow['closeReason']) ?? null,
+      skipReason: (r.skip_reason as string | null) ?? null,
     }));
   } catch (e) {
     console.error('[sales-opportunity] read threw:', e instanceof Error ? e.message : String(e));
     return [];
+  }
+}
+
+/**
+ * Close today's card WITHOUT acting on the student (founder, 3 Sep 2026).
+ *
+ * worked_at stays null on purpose — a skip is not work, and coverage must
+ * never count it as one. Scoped to today and to rows that are still open, so
+ * a skip can never overwrite a real disposition that landed first.
+ *
+ * Never throws: failing to record a skip must not cost the counsellor the tap.
+ */
+export async function markSkipped(
+  admin: any,
+  repId: string,
+  studentId: string,
+  skipReason: string,
+  now: Date = new Date(),
+): Promise<boolean> {
+  try {
+    const { error } = await admin
+      .from('sales_opportunity')
+      .update({ closed_at: now.toISOString(), close_reason: 'skipped', skip_reason: skipReason })
+      .eq('rep_id', repId)
+      .eq('student_id', studentId)
+      .eq('ist_day', istDay(now))
+      .is('closed_at', null);
+    if (error) {
+      console.error('[sales-opportunity] could not mark skipped:', error.message);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error('[sales-opportunity] skip threw:', e instanceof Error ? e.message : String(e));
+    return false;
+  }
+}
+
+export interface DayCloseResult {
+  ok: boolean;
+  /** Cards nobody marked, now recorded as such. */
+  closed: number;
+  /** IST days that were swept — normally one, more if a sweep was missed. */
+  days: string[];
+  error?: string;
+}
+
+/**
+ * The end-of-day sweep: every card still open from a day that has ENDED is
+ * stamped `not_marked`.
+ *
+ * This is what turns "the list doesn't make sense" into a number. Until today
+ * an untouched card was an absence — indistinguishable from a card that was
+ * never offered — so nobody, including the counsellor, could tell whether a
+ * day had been worked. Now the day closes itself and the record is total:
+ * every card offered ends as worked, skipped, or not marked.
+ *
+ * Deliberately swept by DAY, not by age in hours: the shift ends at
+ * SHIFT_END_HOUR_IST and the sweep runs after it, so "the day ended" is a
+ * calendar fact both the counsellor and the founder can check. Every day up
+ * to and including the newest CLOSABLE one is swept, so a missed run repairs
+ * itself instead of leaving a permanent hole.
+ *
+ * WHICH DAYS ARE CLOSABLE (fixed 3 Sep 2026, hours after this shipped). The
+ * first version swept `ist_day < today`, which sounds safe and is a day late:
+ * run at 21:45 IST it closed nothing, because today is not less than today.
+ * Today's cards would sit open until the following night, so the founder's
+ * "unmarked" column was always reporting yesterday. The real rule is not
+ * "before today", it is "after the shift" — so today counts once the shift
+ * has ended, and does not before it. That also makes the function safe to run
+ * by hand at any hour: at 11 AM it still refuses to touch today's cards,
+ * which are a counsellor's to mark.
+ */
+export async function closeDay(
+  admin: any,
+  now: Date = new Date(),
+): Promise<DayCloseResult> {
+  // `% 24` is not paranoia: en-GB with hour12:false renders midnight as "24"
+  // in some runtimes, which would make 00:xx IST look like the end of the day.
+  const hour = istHour(now);
+  const today = istDay(now);
+  // The newest day whose shift is over. Before the shift ends, that is
+  // yesterday; after it, today.
+  const newestClosable = hour >= SHIFT_END_HOUR_IST
+    ? today
+    : istDay(new Date(now.getTime() - 86_400_000));
+  try {
+    const { data, error } = await admin
+      .from('sales_opportunity')
+      .update({ closed_at: now.toISOString(), close_reason: 'not_marked' })
+      .is('closed_at', null)
+      .lte('ist_day', newestClosable)
+      .select('ist_day');
+    if (error) {
+      console.error('[sales-opportunity] day close failed:', error.message);
+      return { ok: false, closed: 0, days: [], error: error.message };
+    }
+    const rows = (data ?? []) as { ist_day: string }[];
+    return { ok: true, closed: rows.length, days: [...new Set(rows.map((r) => r.ist_day))].sort() };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error('[sales-opportunity] day close threw:', msg);
+    return { ok: false, closed: 0, days: [], error: msg };
   }
 }

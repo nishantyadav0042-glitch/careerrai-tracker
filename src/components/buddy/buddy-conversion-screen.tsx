@@ -1,8 +1,7 @@
 import { REPEATER_HEADLINE, type CaseFinding } from '@/lib/buddy-case';
 import type { RecommendedBuddyResult } from '@/lib/buddy-match';
 import { BookSessionCard } from '@/components/buddy/book-session-card';
-import { UnlockBuddyButton } from '@/components/unlock-buddy-sheet';
-import { PLANS } from '@/lib/plans';
+import { BuddyPlanLadder } from '@/components/unlock-buddy-sheet';
 
 // ── The Buddy screen: five blocks, pointer-first, zero paragraphs ───────────
 //
@@ -22,7 +21,11 @@ import { PLANS } from '@/lib/plans';
 //   3. THE PERSON — one mentor, why them, and the 5-student cap (enforced by
 //      a DB trigger, so it is a promise and not a poster).
 //   4. One paid session — an audit of the weak spots above.
-//   5. TILL CAT — one line.
+//   5. THE TWO SUBSCRIPTIONS — monthly, then till CAT. Founder, 2 Sep: all
+//      three prices on this screen, ascending (session → monthly → till CAT;
+//      the figures live in lib/plans and nowhere else, comments included).
+//      The 14 Aug version kept one till-CAT line and hid the monthly plan in
+//      a sheet; to a student, a price behind a tap is a price that isn't there.
 //
 // The rule for every line here: minimum words, maximum directness.
 
@@ -145,21 +148,14 @@ export function BuddyConversionScreen({ firstName, findings, bullets, gapCount, 
         hasGaps={gapCount > 0}
       />
 
-      {/* ── 5. TILL CAT — an active choice, not a footnote ─────────────────
-          Pointed at /offer until 25 Aug, which is the Independence Day
-          campaign page. That campaign closes ITSELF after 15 Aug by design, so
-          every student tapping the main upsell landed on "This offer has
-          closed" with nothing to buy — the price was not even the live one.
-          It now opens the real paywall sheet, the same one the timetable and
-          nudge surfaces use, so there is ONE purchase path rather than a
-          campaign fork that can expire. */}
-      <UnlockBuddyButton
-        variant="primary"
-        size="lg"
-        className="w-full rounded-2xl bg-stone-900 px-4 py-3.5 text-[15px] font-extrabold leading-tight text-white active:scale-[0.99]"
-      >
-        {buddyFirst} till CAT — {PLANS.tillcat.display} →
-      </UnlockBuddyButton>
+      {/* ── 5. THE TWO SUBSCRIPTIONS — visible, not one tap away ────────────
+          Until 2 Sep this was a single "till CAT" line that opened the paywall
+          sheet, with the monthly plan discoverable only inside it. (Before 25
+          Aug it pointed at /offer, the Independence Day page that closes
+          itself — the main upsell led to "This offer has closed".) The ladder
+          pays through the same shared checkout as the sheet, so there is still
+          ONE purchase path; it just no longer hides a rung behind a tap. */}
+      <BuddyPlanLadder />
     </div>
   );
 }

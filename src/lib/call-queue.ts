@@ -9,7 +9,13 @@ import {
   GOING_COLD_SILENT_DAYS, GOING_COLD_MIN_PRIOR_DAYS,
   BROKEN_STREAK_MIN_RUN, BROKEN_STREAK_MAX_DAYS_SINCE,
   NEW_LEAD_MIN_AGE_DAYS, NEW_LEAD_MAX_AGE_DAYS,
+  ROTATION_SILENT_DAYS, TOUCH_COOLDOWN_DAYS, ATTENTION_WINDOW_DAYS,
+  CONVERSION_INTENT_DAYS, SHIFT_END_HOUR_IST,
 } from '@/lib/os/scale-config';
+import { assembleDay, dayAnchorMs, istHour, SECTION_OF, type Channel, type DaySection, type DayCounts } from '@/lib/sales-day';
+import { readToday } from '@/lib/sales-opportunity-record';
+import { journeyStage, JOURNEY_NEXT_STEP, type JourneyStage } from '@/lib/sales-messages';
+import { buildRemarkHistories, EMPTY_HISTORY, HUMAN_PROVENANCE, MAX_REMARKS_ON_CARD, type RemarkHistory } from '@/lib/sales-remarks';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -51,7 +57,13 @@ export type DueReason =
   /** Created an order and never paid — the strongest commercial evidence. */
   | 'checkout_abandoned'
   | 'going_cold' | 'broken_streak' | 'new_never_logged'
-  | 'conversion' | 'fresh';
+  | 'conversion'
+  /** Opened the app and did not study, or tapped a notification (2 Sep 2026). */
+  | 'attention'
+  /** Never contacted — first in the rotation order. */
+  | 'fresh'
+  /** Contacted before, silent for ROTATION_SILENT_DAYS — the rotation (2 Sep 2026). */
+  | 'rotation';
 
 export interface CallLead {
   studentId: string; name: string; firstName: string; phone: string | null; waNumber: string | null;
@@ -64,28 +76,48 @@ export interface CallLead {
   /** The other goal, when it also applies. One student is always ONE card. */
   objectiveSecondary: SalesObjective | null;
   /**
-   * What was said last time, ready before the counsellor dials.
+   * EVERY remark anyone has written about this student, newest first.
    *
    * This is the difference between the second call and the first. It lived one
    * tap deeper on the 360, which meant it was read when there was time and
    * skipped when there wasn't — so the student repeated themselves and the
-   * relationship never compounded. NULL only when nobody has spoken to them.
+   * relationship never compounded.
+   *
+   * Until 4 Sep 2026 the card carried exactly ONE row and did not check where
+   * it came from, which broke it two ways at once: an unanswered dial buried
+   * the real conversation before it, and lead-intake bookkeeping — 272 of the
+   * 319 touched students — sat in the slot pretending to be what the student
+   * said. lib/sales-remarks owns both rules now; `remarks` is empty only when
+   * nobody at CareerRai has ever spoken to them.
    */
-  lastInteraction: { atIso: string; outcome: string | null; note: string | null } | null;
+  remarks: RemarkHistory;
   why: string[];                // WHY THIS STUDENT IS HERE — evidence, real numbers
   action: string;               // the recommended move, one line
   status: string | null; noAnswerCount: number;
   buddyTaps: number;
+  /** Which of the day's sections this card sits in (lib/sales-day). */
+  section: DaySection;
+  /** Call, or a one-tap WhatsApp message first (lib/sales-day decides). */
+  channel: Channel;
+  /** Where the student is on the retention journey: install → notifications
+   *  → daily log (founder, 2 Sep: "this is a journey in itself"). */
+  journey: JourneyStage;
+  /** The ONE next step that journey stage asks for. */
+  nextStep: string;
+  /** Days since anyone at CareerRai last touched them. Null = never. */
+  daysSilent: number | null;
 }
 
-export interface CallQueue { queue: CallLead[]; connectedToday: number; dueNow: number; totalOpen: number }
+export interface CallQueue {
+  queue: CallLead[]; connectedToday: number; dueNow: number; totalOpen: number;
+  /** What the day was made of, by section, and what was held back. */
+  counts: DayCounts;
+  band: { floor: number; ceiling: number };
+}
 
-const CAP = 60; // 50–70 band — a real day's dialing list, not the whole base
-// With ~340 signups a week, the never-logged lane alone could fill the whole
-// deck and starve every other lane. Per-lane ceilings keep the day balanced;
-// priority still decides WHICH never-logged students make the cut (newest
-// first — day-1 is when the activation call lands).
-const LANE_CAPS: Partial<Record<DueReason, number>> = { new_never_logged: 25, fresh: 15 };
+// The day's size, floors and ceilings live in lib/sales-day (founder, 2 Sep
+// 2026: 50–70 a day, signals first, rotation fills). Nothing here decides how
+// many; this file decides WHO and WHY.
 
 function waNumber(phone: string | null): string | null {
   if (!phone) return null;
@@ -116,6 +148,19 @@ export interface LaneSignals {
   buddyTaps: number;
   intentDoor: boolean;
   momentumScore: number;
+  /**
+   * When the student last reached for the paid option — the buddy tap or the
+   * intent door, whichever is later. NULL means we cannot date the intent,
+   * and an undateable tap is NOT recent: 29 production rows carry clicks with
+   * no timestamp because the column was added after them, and treating those
+   * as live intent is the same lie as treating a July tap as live.
+   */
+  intentAt?: string | null;
+  /** Attention inputs (2 Sep 2026). Optional so older callers keep compiling;
+   *  the attention lane only fires when `attentionSinceIso` is given. */
+  lastSeenAt?: string | null;
+  notificationTapAt?: string | null;
+  attentionSinceIso?: string;
 }
 
 /**
@@ -140,7 +185,7 @@ export const RETENTION_LANES: ReadonlySet<DueReason> = new Set<DueReason>([
 ]);
 
 export interface LaneVerdict {
-  dueReason: Extract<DueReason, 'going_cold' | 'broken_streak' | 'new_never_logged' | 'conversion' | 'fresh'>;
+  dueReason: Extract<DueReason, 'going_cold' | 'broken_streak' | 'new_never_logged' | 'conversion' | 'attention' | 'fresh'>;
   dueLabel: string;
   why: string[];
   action: string;
@@ -222,10 +267,28 @@ export function classifyLane(s: LaneSignals): LaneVerdict | null {
 
   // Conversion: declared buddy intent. The evidence is the student's own
   // taps, never an inferred "readiness".
-  if (s.buddyTaps >= 1 || s.intentDoor) {
+  // ── CONVERSION: intent, and only while it is still intent ────────────────
+  //
+  // Incident #71 (4 Sep 2026). This branch used to read `buddyTaps >= 1`, and
+  // buddy_cta_clicks is a cumulative counter that never resets — so a single
+  // tap in July put a student in the conversion lane forever. 136 students
+  // held the flag, 32 had tapped within a fortnight, and the lane took 47 and
+  // 52 cards of a 70-card day while rotation got zero and 243 never-contacted
+  // students were never dealt. The card also told the counsellor "intent is
+  // warm", which was untrue for most of them.
+  //
+  // So the lane now requires intent we can DATE and that is still fresh. A
+  // stale tap is not nothing — the student keeps their card through rotation,
+  // with a reason that is true — it is just not a commercial signal any more.
+  const intentAgeDays = s.intentAt
+    ? Math.floor((Date.parse(s.todayIst) - Date.parse(istDateStr(s.intentAt))) / 86_400_000)
+    : null;
+  const intentRecent = intentAgeDays != null && intentAgeDays >= 0 && intentAgeDays <= CONVERSION_INTENT_DAYS;
+  if ((s.buddyTaps >= 1 || s.intentDoor) && intentRecent) {
     const why: string[] = [];
-    if (s.buddyTaps >= 2) why.push(`Tapped the buddy option ${s.buddyTaps}× — actively wants a mentor`);
-    else if (s.buddyTaps === 1) why.push('Opened the buddy option once');
+    const when = intentAgeDays === 0 ? 'today' : intentAgeDays === 1 ? 'yesterday' : `${intentAgeDays} days ago`;
+    if (s.buddyTaps >= 2) why.push(`Tapped the buddy option ${s.buddyTaps}× — most recently ${when}`);
+    else if (s.buddyTaps === 1) why.push(`Opened the buddy option ${when}`);
     if (s.intentDoor) why.push('Came back to the buddy a second time (intent door)');
     if (lastLog != null && lastLog <= 3) why.push(`Active — studied ${fmt(lastLog)}`);
     return {
@@ -234,6 +297,33 @@ export function classifyLane(s: LaneSignals): LaneVerdict | null {
       action: 'Pitch the single session — intent is warm, lead with their prep',
       sortBoost: s.buddyTaps * 1000 + (s.intentDoor ? 500 : 0) + s.momentumScore,
     };
+  }
+
+  // ── ATTENTION (founder, 2 Sep 2026) ─────────────────────────────────────
+  //
+  // The student reached for the product and stopped short of studying:
+  // opened the app inside the window and logged nothing in it, or tapped a
+  // notification. The richest daily signal in the base (90 students in two
+  // days, production, 2 Sep) and the one the queue had never used. Message
+  // first — "what got in the way?" is a question, not a pitch.
+  if (s.attentionSinceIso) {
+    const sinceMs = Date.parse(s.attentionSinceIso);
+    const sinceDay = istDateStr(s.attentionSinceIso);
+    const loggedInWindow = s.logDates.some((d) => d >= sinceDay);
+    const opened = s.lastSeenAt != null && Date.parse(s.lastSeenAt) >= sinceMs;
+    const tapped = s.notificationTapAt != null && Date.parse(s.notificationTapAt) >= sinceMs;
+    if (!loggedInWindow && (opened || tapped)) {
+      const when = (iso: string) => fmt(Math.max(0, daysBetweenIst(istDateStr(iso), s.todayIst)));
+      const why: string[] = [];
+      if (opened) why.push(`Opened the app ${when(s.lastSeenAt as string)} and did not log a study session`);
+      if (tapped) why.push(`Tapped a notification ${when(s.notificationTapAt as string)}`);
+      return {
+        dueReason: 'attention', dueLabel: 'Opened, did not study',
+        why,
+        action: 'Message first — ask what got in the way; call if they reply',
+        sortBoost: (tapped ? 500 : 0) + (opened ? 100 : 0) + s.momentumScore,
+      };
+    }
   }
 
   // ── NO CATCH-ALL LANE (SALES-OS.md §5, added 29 Aug 2026) ────────────────
@@ -340,15 +430,56 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
   const now = Date.now();
   const todayIst = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
   const since30 = new Date(now - 30 * 86_400_000).toISOString().slice(0, 10);
+  // The day is dealt from 4 AM IST (founder, 2 Sep): the attention window
+  // looks back ATTENTION_WINDOW_DAYS from the most recent 4 AM, so "opened
+  // yesterday and did not log" means the same thing all day long.
+  const attentionSinceIso = new Date(dayAnchorMs(now) - ATTENTION_WINDOW_DAYS * 86_400_000).toISOString();
+
+  // ── TODAY'S LIST IS ALREADY DECIDED ──────────────────────────────────────
+  //
+  // The queue is stateless and rebuilt on every page load, and until 3 Sep
+  // that meant each rebuild dealt MORE students: a worked card left, rotation
+  // backfilled to the floor, and each seat was offered 97 cards against a
+  // ceiling of 70. The list could never be finished.
+  //
+  // sales_opportunity already records what was offered today, so the rebuild
+  // reads it instead of starting fresh. Two things come from it: cards already
+  // CLOSED today drop out (which is what finally makes a skip stick for the
+  // rest of the day — a skip deliberately writes no lead state, so nothing
+  // else would suppress it), and rotation knows how much of the day's target
+  // it has already spent.
+  //
+  // Rep-scoped only: an admin viewing the workspace is looking at everybody's
+  // work and has no day of their own. readToday never throws — a failed read
+  // degrades to the old rebuild-fresh behaviour rather than blocking the day.
+  const mine = viewer?.role === 'sales' ? await readToday(db, viewer.id) : [];
+  const closedToday = new Set(mine.filter((r) => r.closedAt).map((r) => r.studentId));
+  const openToday = new Set(mine.filter((r) => !r.closedAt).map((r) => r.studentId));
+  // THE DAY'S LEDGER, section by section (Incident #72). Every ceiling — each
+  // lane's, the day's, and rotation's target — is measured against what has
+  // already been DEALT today, not against what happens to be on screen right
+  // now. Measured on the screen, a ceiling refills every time a card is
+  // worked: on 5 Sep that dealt 111 and 174 cards against a ceiling of 70.
+  const usedToday: Partial<Record<DaySection, number>> = {};
+  for (const r of mine) {
+    const section = r.lane ? SECTION_OF[r.lane as DueReason] : undefined;
+    if (section) usedToday[section] = (usedToday[section] ?? 0) + 1;
+  }
+  // Past the shift the day has been closed by the sweep. Carried cards stay so
+  // a late marking still lands; nothing new is dealt into a day nobody works.
+  const shiftOver = istHour(new Date(now)) >= SHIFT_END_HOUR_IST;
 
   const roster = await getRosterMomentum(db);
   const free = roster.filter((r) => !r.isPremium && !r.hasBuddy);
   const ids = free.map((r) => r.id);
-  if (ids.length === 0) return { queue: [], connectedToday: 0, dueNow: 0, totalOpen: 0 };
+  if (ids.length === 0) {
+    const empty = assembleDay([]);
+    return { queue: [], connectedToday: 0, dueNow: 0, totalOpen: 0, counts: empty.counts, band: empty.band };
+  }
 
-  const [{ data: profs }, { data: eng }, { data: reports }, outreach, { data: paidRows }, { data: unpaidRows }, { data: lastActs }] = await Promise.all([
-    selectInChunks((chunk) => db.from('profiles').select('id, created_at, target_percentile, cat_percentile, starting_percentile, pain_points, dream_colleges, is_repeater').in('id', chunk), ids),
-    selectInChunks((chunk) => db.from('student_engagement').select('student_id, buddy_cta_clicks, mock_opened, intent_door_at').in('student_id', chunk), ids),
+  const [{ data: profs }, { data: eng }, { data: reports }, outreach, { data: paidRows }, { data: unpaidRows }, { data: lastActs }, { data: tapRows }] = await Promise.all([
+    selectInChunks((chunk) => db.from('profiles').select('id, created_at, last_seen_at, app_installed, push_subscription, push_died_at, target_percentile, cat_percentile, starting_percentile, pain_points, dream_colleges, is_repeater').in('id', chunk), ids),
+    selectInChunks((chunk) => db.from('student_engagement').select('student_id, buddy_cta_clicks, mock_opened, intent_door_at, buddy_cta_last_at').in('student_id', chunk), ids),
     selectInChunks((chunk) => db.from('daily_reports').select('student_id, report_date').in('student_id', chunk).gte('report_date', since30), ids),
     // The only read here that decides a business state — checked, retried, or thrown.
     readLeadOutreach(db, ids),
@@ -381,16 +512,34 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
       .in('status', ['created', 'failed'])
       .in('student_id', chunk)
       .order('created_at', { ascending: false }), ids),
-    // WHAT WAS SAID LAST TIME. Bounded and cheap: newest-first across the
-    // whole book, reduced to one row per student below. A counsellor who has
-    // to open another screen to remember the previous conversation will stop
-    // doing it by the second week, and the student ends up repeating
-    // themselves to the same company twice.
+    // WHAT WAS SAID, EVERY TIME IT WAS SAID. A counsellor who has to open
+    // another screen to remember the previous conversation will stop doing it
+    // by the second week, and the student ends up repeating themselves to the
+    // same company twice.
+    //
+    // FILTERED TO HUMAN TOUCHES AT THE DATABASE (4 Sep 2026). Lead intake and
+    // reassignment write their own bookkeeping into this table, and without
+    // this predicate they won — 272 of 319 touched students had an intake log
+    // line as their newest row, so the card showed a rep our internal
+    // distribution ledger in the place reserved for the student's own words.
+    // provenance + actor_id is the definition of a remark (lib/sales-remarks).
+    //
+    // Still newest-first and bounded: if the cap ever bites it drops the
+    // OLDEST activity in the chunk, which is the correct thing to lose.
     selectInChunks((chunk) => db.from('sales_activity')
-      .select('student_id, created_at, status, note')
+      .select('student_id, created_at, status, note, provenance, actor_id')
+      .eq('provenance', HUMAN_PROVENANCE)
+      .not('actor_id', 'is', null)
       .in('student_id', chunk)
       .order('created_at', { ascending: false })
-      .limit(2000), ids),
+      .limit(IN_CHUNK * MAX_REMARKS_ON_CARD * 4), ids),
+    // ATTENTION (2 Sep): who tapped a notification inside the window. Bounded
+    // by the chunk and the window — the notifications table is 100k rows and
+    // is never read whole here.
+    selectInChunks((chunk) => db.from('notifications')
+      .select('user_id, clicked_at')
+      .in('user_id', chunk)
+      .gte('clicked_at', attentionSinceIso), ids),
   ]);
   // ── Who is finished with the sales queue (Incident #52) ─────────────────
   //
@@ -411,16 +560,17 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
     abandonedBy.set(r.student_id, { atIso: r.created_at as string, plan: (r.plan as string | null) ?? null });
   }
 
-  const lastBy = new Map<string, { atIso: string; outcome: string | null; note: string | null }>();
-  for (const a of ((lastActs ?? []) as any[])) {
-    // Ordered newest-first, so the FIRST row seen for a student is their most
-    // recent interaction — later rows are older and deliberately ignored.
-    if (lastBy.has(a.student_id)) continue;
-    lastBy.set(a.student_id, {
-      atIso: a.created_at as string,
-      outcome: (a.status as string | null) ?? null,
-      note: (a.note as string | null) ?? null,
-    });
+  // Grouped, re-sorted and attributed by lib/sales-remarks — including the
+  // "newest TYPED remark", which is deliberately not the same as the newest
+  // row: no_answer is the commonest disposition in production and its
+  // auto-note must never bury the conversation that came before it.
+  const remarksBy = buildRemarkHistories(
+    (lastActs ?? []) as any[], staff?.labelById ?? null, MAX_REMARKS_ON_CARD,
+  );
+  const tapBy = new Map<string, string>();
+  for (const t of ((tapRows ?? []) as any[])) {
+    const prev = tapBy.get(t.user_id);
+    if (!prev || t.clicked_at > prev) tapBy.set(t.user_id, t.clicked_at as string);
   }
   const profById = new Map((profs ?? []).map((p: any) => [p.id, p]));
   const engById = new Map((eng ?? []).map((e: any) => [e.student_id, e]));
@@ -438,13 +588,16 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
     if (o.last_attempt_at && istDateStr(o.last_attempt_at) === todayIst && o.status && o.status !== 'no_answer') connectedToday++;
   }
 
-  const cands: (CallLead & { _sort: number })[] = [];
+  type Cand = Omit<CallLead, 'section' | 'channel'> & { _sort: number };
+  const cands: Cand[] = [];
   let totalOpen = 0;
 
   for (const r of free) {
     const o = outById.get(r.id) as any;
     const status = (o?.status as string | null) ?? null;
     if (isClosedForSales(status, paidIds.has(r.id))) continue;
+    // Marked today — worked or skipped. Done is done until tomorrow.
+    if (closedToday.has(r.id)) continue;
     // A student with no phone cannot be called. They keep their owner and
     // their state — dropping them would make them nobody's problem forever —
     // but they are never dealt as a card. They surface as a data-quality
@@ -478,6 +631,8 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
     if (((o?.no_answer_count as number | null) ?? 0) >= MAX_CONSECUTIVE_NO_ANSWER) continue;
 
     const nextAction = o?.next_action_at ? new Date(o.next_action_at).getTime() : null;
+    const daysSilent: number | null = o?.last_attempt_at
+      ? Math.floor((now - Date.parse(o.last_attempt_at)) / 86_400_000) : null;
     const dueNow = nextAction != null && nextAction <= now;
     const attemptedToday = o?.last_attempt_at && istDateStr(o.last_attempt_at) === todayIst;
     // No repeat calls the same day unless a scheduled action is now due.
@@ -489,6 +644,12 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
     const e = engById.get(r.id) as any;
     const buddyTaps = (e?.buddy_cta_clicks as number | null) ?? 0;
     const intentDoor = e?.intent_door_at != null;
+    // The later of the two intent moments; null when neither can be dated.
+    const tapAt = (e?.buddy_cta_last_at as string | null) ?? null;
+    const doorAt = (e?.intent_door_at as string | null) ?? null;
+    const intentAt = tapAt && doorAt ? (tapAt > doorAt ? tapAt : doorAt) : (tapAt ?? doorAt);
+    const intentIsRecent = intentAt != null
+      && Date.parse(intentAt) >= now - CONVERSION_INTENT_DAYS * 86_400_000;
     const mock = e?.mock_opened === true;
     const dates = logDates.get(r.id) ?? [];
     const nLogs = dates.length;
@@ -575,7 +736,10 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
       // exists at all: retention first, conversion second, fresh last.
       const lane = classifyLane({
         todayIst, createdAt: (prof?.created_at as string | null) ?? null, logDates: dates,
-        buddyTaps, intentDoor, momentumScore: r.score,
+        buddyTaps, intentDoor, momentumScore: r.score, intentAt,
+        lastSeenAt: (prof?.last_seen_at as string | null) ?? null,
+        notificationTapAt: tapBy.get(r.id) ?? null,
+        attentionSinceIso,
       });
       if (lane === null) {
         // NO BEHAVIOURAL SIGNAL. Two very different students land here, and
@@ -590,15 +754,33 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
         // dealt. This is what makes "if there are 42 real opportunities, show
         // 42" true instead of decorative: without it the queue always fills to
         // the cap, because there is always another quiet student to pad with.
-        if (o?.last_attempt_at) continue;
-        dueReason = 'fresh';
-        dueLabel = 'Never contacted';
-        why = ['Nobody at CareerRai has spoken to this student yet'];
-        action = 'Introduction call — learn where they are in prep';
-        sort = conv;
+        if (daysSilent == null) {
+          dueReason = 'fresh';
+          dueLabel = 'Never contacted';
+          why = ['Nobody at CareerRai has spoken to this student yet'];
+          action = 'Introduction — learn where they are in prep';
+          // Never-contacted leads the rotation order; the conversion score
+          // breaks ties so the likeliest conversation goes first.
+          sort = 500_000 + conv;
+        } else {
+          // ── ROTATION (founder, 2 Sep 2026) ──────────────────────────────
+          //
+          // Contacted before, and nothing since. Until today this was
+          // backlog — never dealt again — and with ~400 silent students in
+          // production that meant the base quietly stopped being anyone's.
+          // A student nobody has spoken to in ROTATION_SILENT_DAYS is due a
+          // touch, oldest first. The reason is true, printed on the card, and
+          // expires the moment they are touched.
+          if (daysSilent < ROTATION_SILENT_DAYS) continue;   // resting — backlog
+          dueReason = 'rotation';
+          dueLabel = `Silent ${daysSilent} days`;
+          why = [`Last spoken to ${daysSilent} days ago — nothing since`];
+          action = 'Check in — where is prep now, and what would help';
+          sort = 100_000 + Math.min(99_999, daysSilent);
+        }
       } else {
         dueReason = lane.dueReason; dueLabel = lane.dueLabel; why = lane.why; action = lane.action;
-        const BAND: Record<string, number> = { going_cold: 4_000_000, broken_streak: 3_500_000, new_never_logged: 3_000_000, conversion: 1_000_000, fresh: 0 };
+        const BAND: Record<string, number> = { going_cold: 4_000_000, broken_streak: 3_500_000, new_never_logged: 3_000_000, conversion: 1_000_000, attention: 800_000, fresh: 0 };
         sort = BAND[lane.dueReason] + lane.sortBoost + (lane.dueReason === 'fresh' ? conv : 0);
       }
     }
@@ -607,14 +789,30 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
     // WHICH GOAL IS THIS CALL FOR (§4). A live commercial signal is
     // perishable and takes the primary slot; the retention need still travels
     // with the card as secondary context so one call covers both.
+    // ── ONE TOUCH A WEEK (founder, 2 Sep 2026) ────────────────────────────
+    // After any touch a student is left alone for TOUCH_COOLDOWN_DAYS unless
+    // a promise, money, or a retention lane brings them back. Attention,
+    // buddy intent and rotation all wait their turn.
+    if (daysSilent != null && daysSilent < TOUCH_COOLDOWN_DAYS
+      && (dueReason === 'attention' || dueReason === 'conversion' || dueReason === 'rotation')) continue;
+
+    // WHERE ON THE JOURNEY (founder, 2 Sep): install → notifications → daily
+    // log. The card asks for the next step and nothing beyond it.
+    const journey = journeyStage({
+      appInstalled: prof?.app_installed === true,
+      pushSubscribed: prof?.push_subscription != null,
+      pushDied: prof?.push_died_at != null,
+      daysSinceLastLog: r.daysSinceLastLog ?? null,
+    });
+
     const objectiveVerdict = classifyObjective({
       lane: dueReason,
-      // The commercial signals the queue can actually see today: the student
-      // reached for the paid option, or came back to it a second time. The
-      // abandoned-checkout signal is the strongest one we have and is NOT wired
-      // in yet — it is the next piece of work, and until it lands those 16
-      // students classify on their other signals rather than on the money.
-      hasCommercialSignal: abandonedBy.has(r.id) || buddyTaps >= 1 || intentDoor,
+      // The commercial signals the queue can actually see today, strongest
+      // first: an order the student created and never paid, then the paid
+      // option reached for, then a second visit to it.
+      // Same recency rule as the lane (Incident #71): a six-week-old tap must
+      // never make a card announce PRIMARY OBJECTIVE: CONVERSION.
+      hasCommercialSignal: abandonedBy.has(r.id) || intentIsRecent,
       // Never logged at all counts as retention need — it is activation, which
       // is the most valuable form of retention we have and applies to roughly
       // three-quarters of the base.
@@ -624,54 +822,22 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
     cands.push({
       objective: objectiveVerdict.primary,
       objectiveSecondary: objectiveVerdict.secondary,
-      lastInteraction: lastBy.get(r.id) ?? null,
+      remarks: remarksBy.get(r.id) ?? EMPTY_HISTORY,
       studentId: r.id, name: r.full_name ?? 'Student', firstName: (r.full_name ?? '').trim().split(' ')[0] || 'there',
       phone: r.phone, waNumber: waNumber(r.phone),
       convScore: conv, tier, momentumScore: r.score, momentumBand: bandMeta(r.band).label, hot: tier === 'hot',
       brief, dueReason, dueLabel, why, action, status, noAnswerCount: (o?.no_answer_count as number | null) ?? 0, buddyTaps,
+      journey, nextStep: JOURNEY_NEXT_STEP[journey], daysSilent,
       _sort: sort,
     });
   }
 
-  cands.sort((a, b) => b._sort - a._sort);
+  cands.sort((a, b) => b._sort - a._sort || (a.studentId < b.studentId ? -1 : 1));
   const dueNow = cands.filter((c) => c.dueReason === 'callback' || c.dueReason === 'retry' || c.dueReason === 'followup').length;
-  // Per-lane ceilings (see LANE_CAPS above), then the day cap. Priority
-  // within a lane already decided who makes the cut.
-  const laneCount = new Map<DueReason, number>();
-  const capped: typeof cands = [];
-  const overflow: typeof cands = [];
-  for (const c of cands) {
-    const cap = LANE_CAPS[c.dueReason];
-    const n = laneCount.get(c.dueReason) ?? 0;
-    // Over its lane ceiling — held back, NOT discarded. See the backfill below.
-    if (cap != null && n >= cap) { overflow.push(c); continue; }
-    laneCount.set(c.dueReason, n + 1);
-    capped.push(c);
-    if (capped.length >= CAP) break;
-  }
-  // ── BACKFILL: a lane ceiling protects other lanes, it does not ration work ─
-  //
-  // Founder, 30 Aug 2026: "if there are 23 genuinely important opportunities
-  // today, the counsellor should get 23."
-  //
-  // The ceilings exist because ~340 signups a week could let one lane drown
-  // every due callback. That reasoning only holds while there IS other work to
-  // protect. With 23 never-contacted students and nothing else due, the `fresh`
-  // ceiling of 15 was not balancing the day — it was withholding eight real
-  // opportunities and leaving the deck short for no one's benefit. On day one
-  // of a new book, when every lead is `not_contacted` and no callback exists
-  // yet, that is the ONLY thing the ceiling does.
-  //
-  // So the held-back candidates come back once every lane has had its
-  // protected share and the deck still has room. This can only ever add
-  // students who already passed every eligibility filter — it never
-  // manufactures filler, which is the separate failure the tests above pin.
-  // `cands` is priority-ordered and `overflow` preserves that order, so the
-  // backfill enters exactly where it would have ranked anyway.
-  for (const c of overflow) {
-    if (capped.length >= CAP) break;
-    capped.push(c);
-  }
-  const queue = capped.map(({ _sort, ...c }) => { void _sort; return c; });
-  return { queue, connectedToday, dueNow, totalOpen };
+  // ── THE DAY (lib/sales-day, founder 2 Sep 2026): 50–70, signals first,
+  // rotation fills, per-lane ceilings, channel per card. Pure and proven on
+  // its own; this file decides who and why, that one decides how many.
+  const day = assembleDay(cands, { openToday, usedToday, dealtToday: mine.length, shiftOver });
+  const queue: CallLead[] = day.queue.map(({ _sort, ...c }) => { void _sort; return c as CallLead; });
+  return { queue, connectedToday, dueNow, totalOpen, counts: day.counts, band: day.band };
 }

@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { isValidPushEndpoint } from '@/lib/push-validate';
 import { registerSubscription } from '@/lib/push-subscription-registry';
+import { registerWebPushEndpoint, revokeAllEndpoints } from '@/lib/notification-endpoints';
 import { logConsentEvent } from '@/lib/consent-history';
 
 export async function POST(request: NextRequest) {
@@ -33,6 +34,16 @@ export async function POST(request: NextRequest) {
 
   await admin.from('profiles').update(update).eq('id', user.id);
 
+  // DUAL-WRITE (Step 2 of the endpoint-registry migration). The profile
+  // column above stays the authority for the ~15 modules still reading it;
+  // this adds the row that lets the SAME student hold a second device
+  // instead of the newer subscribe evicting the older one. It never throws —
+  // a registry write must not fail a subscribe that already succeeded.
+  await registerWebPushEndpoint(admin, user.id, subscription, {
+    context: body?.context,
+    platform: body?.platform,
+  });
+
   // First-ever subscription for this student vs. a resubscribe (refresh or
   // recovery) are two different facts worth telling apart in the history —
   // pushSubscribedAt being null means this is the first one.
@@ -51,5 +62,10 @@ export async function DELETE(request: NextRequest) {
 
   const admin = createAdminClient();
   await admin.from('profiles').update({ push_subscription: null }).eq('id', user.id);
+  // Turning push off is a decision about the STUDENT, not about one device,
+  // so every endpoint goes — unlike a 410, which kills only the endpoint that
+  // returned it. Without this, a student who switched reminders off would
+  // keep receiving them on any other registered device.
+  await revokeAllEndpoints(admin, user.id, 'student_disabled_push');
   return NextResponse.json({ ok: true });
 }
