@@ -25,9 +25,9 @@ import { codeOnly } from './test-support/code-only';
 // decideBookability() is now the only place the rule exists. Adapters are
 // allowed; competing definitions are not.
 
-// The BOOKABLE baseline, so each test states only what it is varying. Google
-// connected is part of that baseline as of 27 Aug — it is now the requirement,
-// not one of two ways to satisfy one.
+// The BOOKABLE baseline, so each test states only what it is varying. Both a
+// room and Google are in the baseline; as of 5 Sep either one satisfies the
+// room half, so the tests below vary them independently.
 const facts = (o: Partial<BookabilityFacts> = {}): BookabilityFacts => ({
   availability: { active: true },
   hasRoom: true,
@@ -54,31 +54,46 @@ describe('the six states, enumerated', () => {
     expect(d).toMatchObject({ reason: 'no_meeting_room' });
   });
 
-  it('availability ✓ / room ✓ / google ✗ → NOT bookable — the 27 Aug reversal', () => {
-    // This case flipped. A pasted link used to satisfy the rule on the
-    // reasoning that "a room is a room". Google is now the mentor's
-    // infrastructure — Calendar event, Meet link, reminders — and a pasted URL
-    // provides none of it, so a legacy room no longer makes anyone bookable.
+  it('availability ✓ / room ✓ / google ✗ → BOOKABLE — the 5 Sep restoration', () => {
+    // This case has now flipped TWICE, so the history matters.
     //
-    // The room is still RECORDED, and every session already booked against it
-    // still opens. This is about taking NEW bookings.
+    // Originally a pasted link satisfied the rule ("a room is a room"). On
+    // 27 Aug Google became the sole requirement, knowingly trading away the
+    // risk that booking would be "hostage to Google's verification queue".
+    // The queue never cleared: our OAuth app uses the sensitive
+    // calendar.events scope, so every mentor meets a red "Google hasn't
+    // verified this app" screen. On 5 Sep production had ZERO of seven
+    // mentors connected — every mentor unbookable, every student routed to
+    // "our team will arrange your session".
+    //
+    // So a pasted room counts again. It is worse than Google (no calendar
+    // event, no reminders) but it satisfies the law that protects the
+    // student: validateRoomLink checks it, and TRUST-OS requires that a link
+    // be verifiable, not that Google mint it.
     const d = decideBookability(facts({ hasRoom: true, googleConnected: false }));
+    expect(d.bookable).toBe(true);
+  });
+
+  it('availability ✓ / room ✗ / google ✓ → BOOKABLE', () => {
+    // Google alone still suffices — it mints the room itself.
+    expect(decideBookability(facts({ hasRoom: false, googleConnected: true })).bookable).toBe(true);
+  });
+
+  it('availability ✓ / room ✗ / google ✗ → NOT bookable', () => {
+    // Neither path. This is the only way to fail the room half now, and it is
+    // the state six of seven mentors were in on 5 Sep.
+    const d = decideBookability(facts({ hasRoom: false, googleConnected: false }));
     expect(d.bookable).toBe(false);
     expect(d).toMatchObject({ reason: 'no_meeting_room' });
   });
 
-  it('availability ✓ / room ✗ / google ✓ → BOOKABLE', () => {
-    // Google alone is now the whole requirement: it can mint the room.
+  it('either path satisfies the room half, and neither is required alone', () => {
+    // Stated directly because this is the half that has flipped twice.
+    // Google alone: fine. A room alone: fine. Neither: not bookable.
     expect(decideBookability(facts({ hasRoom: false, googleConnected: true })).bookable).toBe(true);
-  });
-
-  it('hasRoom cannot rescue a mentor, and cannot condemn one either', () => {
-    // Stated directly, because `hasRoom` is still in the facts and a reader
-    // could reasonably assume it still counts. Google decides alone.
-    for (const hasRoom of [true, false]) {
-      expect(decideBookability(facts({ hasRoom, googleConnected: true })).bookable).toBe(true);
-      expect(decideBookability(facts({ hasRoom, googleConnected: false })).bookable).toBe(false);
-    }
+    expect(decideBookability(facts({ hasRoom: true, googleConnected: false })).bookable).toBe(true);
+    expect(decideBookability(facts({ hasRoom: true, googleConnected: true })).bookable).toBe(true);
+    expect(decideBookability(facts({ hasRoom: false, googleConnected: false })).bookable).toBe(false);
   });
 
   it('availability ✗ / room ✗ / google ✓ → not bookable', () => {

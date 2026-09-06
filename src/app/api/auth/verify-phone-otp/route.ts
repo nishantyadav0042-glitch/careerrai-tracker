@@ -102,6 +102,71 @@ export async function POST(request: NextRequest) {
     // (name, email, role, buddy) instead of treating them as a returning user.
     const isStub = !!existing && (!existing.full_name || existing.full_name === 'New User');
 
+    // ── THE PHONE DOOR'S DUPLICATE-ACCOUNT GUARD (Incident #66) ────────────
+    //
+    // `existing` above is looked up by `data.user.id` — the id verifyOtp just
+    // handed us — and NOTHING here ever asked whether this phone already
+    // belongs to somebody. It does not have to. A staff account created by the
+    // founder carries its number in `profiles.phone` while `auth.users.phone`
+    // stays NULL, because nobody ever signed in with it. So verifyOtp finds no
+    // auth user for that number, CREATES one, `handle_new_user` stamps a 'New
+    // User' stub, and this route reads that stub as a first-time signup.
+    //
+    // On 5 Sep 2026 that forked a live sales rep mid-shift: session expired at
+    // 09:32, phone OTP at 09:34 minted a second account, and because he had
+    // tapped "Buddy" on the login picker the branch below handed the fork
+    // role 'buddy' and dropped him in the buddy setup wizard. He reported it as
+    // "I can't log in". He could — just never into his own account.
+    //
+    // This is Incident #62 wearing different clothes. That one was the Google
+    // door and its duplicate-account guard was dead because it tested
+    // `!existing`, which the handle_new_user trigger makes always false. The
+    // fix there never generalised to this door. So this guard tests the fact
+    // that actually matters — does this number already belong to someone —
+    // and it deliberately does NOT test `!existing`, for exactly that reason.
+    //
+    // Scope: only when the account we just resolved is a fresh stub. A real
+    // returning profile keeps signing in normally; a second profile holding
+    // the same number is then a pre-existing data problem, not a fork we are
+    // creating right now, and refusing there would lock out a legitimate user.
+    //
+    // We refuse rather than auto-link. Linking two accounts on a phone match
+    // is how carriers' recycled numbers turn into account takeover — that is a
+    // decision for a human, not a side effect of an OTP.
+    if (isStub || !existing) {
+      const { data: phoneOwners } = await admin
+        .from('profiles')
+        .select('id, role, password_set, email')
+        .eq('phone', e164)
+        .neq('id', data.user.id)
+        .limit(1);
+      const owner = phoneOwners?.[0];
+      if (owner) {
+        await logSecurityEvent(admin, {
+          type: 'otp_duplicate_account_blocked',
+          severity: 'warning',
+          ip,
+          userId: owner.id,
+          metadata: {
+            existingProfile: owner.id,
+            existingRole: owner.role,
+            existingHasPassword: owner.password_set === true,
+            forkedAuthUser: data.user.id,
+          },
+        });
+        console.error(
+          `[verify-phone-otp] BLOCKED FORK: ${e164} already belongs to ${owner.id} (${owner.role}); ` +
+          `verifyOtp minted ${data.user.id}`,
+        );
+        return NextResponse.json({
+          error: owner.password_set
+            ? 'This number already has an account. Please sign in with your email and password instead.'
+            : 'This number already has an account. Please contact support to sign in.',
+          code: 'account_exists_for_phone',
+        }, { status: 409 });
+      }
+    }
+
     // For returning users, trust the role already stored in their profile.
     // entry?.person_type is only reliable for first-time registrations — an
     // existing buddy whose phone isn't in the allowlist would otherwise be

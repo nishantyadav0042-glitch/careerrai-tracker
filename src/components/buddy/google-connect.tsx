@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { Calendar, Check, AlertTriangle, ChevronRight } from 'lucide-react';
 
 // ── ONE mentor setup path: Connect Google ───────────────────────────────────
@@ -149,8 +150,97 @@ export function GoogleConnect({
           >
             Connect Google <ChevronRight className="h-3.5 w-3.5" />
           </a>
+
+          {/* ── THE SECOND PATH (restored 5 Sep 2026) ──────────────────────
+              Google shows a red "hasn't verified this app" screen until our
+              OAuth app clears verification, and a mentor who declines it —
+              which that screen is telling her to do — was left with no way to
+              take bookings at all. Deliberately placed BELOW Google and styled
+              quieter: Google is still the better path when it works, and the
+              27 Aug note was right that two equal-looking answers is a setup
+              question people abandon. This is a way through, not a fork. */}
+          <RoomFallback />
         </div>
       </div>
     </section>
+  );
+}
+
+/** Paste-your-own-room, for a mentor blocked by Google's verification screen. */
+function RoomFallback() {
+  const [open, setOpen] = useState(false);
+  const [link, setLink] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="mt-2.5 w-full text-[12px] font-semibold text-stone-600 underline underline-offset-2"
+      >
+        Can&apos;t connect Google? Use your own meeting link instead
+      </button>
+    );
+  }
+
+  const save = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/buddy/meeting-room', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ link }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        // Show the server's own message — it names the exact problem with the
+        // link (wrong host, a meet.google.com/new that dies on arrival).
+        setError(typeof data?.error === 'string' ? data.error : 'Could not save. Try again.');
+        return;
+      }
+      window.location.reload();
+    } catch {
+      setError('Could not save. Check your connection and try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="mt-3 rounded-xl border border-stone-300 bg-white p-3">
+      <p className="text-[12.5px] font-semibold text-stone-900">Use your own meeting link</p>
+      <p className="mt-0.5 text-[11.5px] leading-relaxed text-stone-600">
+        Paste a Google Meet, Zoom or Teams link you have already created. Students will
+        join this room. You will not get automatic calendar invites or reminders — connect
+        Google later for those.
+      </p>
+      <input
+        type="url"
+        inputMode="url"
+        value={link}
+        onChange={(e) => setLink(e.target.value)}
+        placeholder="meet.google.com/abc-defg-hij"
+        aria-label="Your meeting link"
+        className="mt-2 w-full rounded-lg border border-stone-300 px-3 py-2.5 text-[13px]"
+        style={{ minHeight: 44 }}
+      />
+      {error && (
+        <p className="mt-2 rounded-lg bg-amber-100 px-2.5 py-2 text-[12px] font-medium text-amber-900">
+          {error}
+        </p>
+      )}
+      <button
+        type="button"
+        onClick={save}
+        disabled={busy || link.trim() === ''}
+        className="mt-2.5 flex w-full items-center justify-center rounded-xl bg-stone-900 px-4 py-3 text-[13px] font-bold text-white disabled:opacity-50"
+        style={{ minHeight: 48 }}
+      >
+        {busy ? 'Saving…' : 'Save meeting link'}
+      </button>
+    </div>
   );
 }

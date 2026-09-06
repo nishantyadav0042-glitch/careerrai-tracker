@@ -42,7 +42,18 @@ function mentorSurfaces(): string[] {
   return out;
 }
 
-describe('the manual meeting-room UX is gone from every mentor surface', () => {
+// UPDATED 5 Sep 2026. This suite forbade the manual room UX outright. Its own
+// failure message named the exit: "If meeting infrastructure genuinely needs a
+// second path, that is a product decision for the founder, not a card added
+// back to a screen." The founder made that decision on 5 Sep, after Google's
+// unverified-app screen left ZERO of seven mentors connected and every mentor
+// unbookable.
+//
+// So the bans below now protect the thing that actually mattered — Google stays
+// the ONE obvious primary action — rather than the absence of any fallback. A
+// paste-your-link input is allowed; a screen that presents two co-equal answers,
+// or demotes Google, is not.
+describe('the manual room path never displaces Google as the primary action', () => {
   const files = mentorSurfaces();
 
   it('found mentor surfaces at all — an empty sweep would pass vacuously', () => {
@@ -51,12 +62,14 @@ describe('the manual meeting-room UX is gone from every mentor surface', () => {
 
   // Each pattern is a distinct way the old two-paths screen could come back.
   const BANNED: Array<[string, RegExp]> = [
+    // Still banned: anything that makes the room a co-equal FIRST choice, or
+    // pushes Google into second place.
     ['the room setup heading', /Set your meeting room/i],
     ['the room-is-set confirmation', /(Your|My) meeting room is set/i],
     ['a room change affordance', /Change (my )?(meeting )?room/i],
     ['Google demoted to an alternative', /Or connect Google/i],
-    ['a paste-your-link instruction', /[Pp]aste your (Meet|meeting|Zoom)/],
-    ['a room URL input placeholder', /placeholder=["']meet\.google\.com\//],
+    // Still banned regardless of policy: meet.google.com/new mints a room that
+    // dies immediately, which is a dead link handed to a student.
     ['the make-your-own-room shortcut', /meet\.google\.com\/new/],
   ];
 
@@ -65,9 +78,9 @@ describe('the manual meeting-room UX is gone from every mentor surface', () => {
     expect(
       offenders,
       `manual-room UX reappeared in:\n  ${offenders.join('\n  ')}\n`
-      + 'A mentor must see exactly one setup action: Connect Google. If meeting '
-      + 'infrastructure genuinely needs a second path, that is a product decision '
-      + 'for the founder, not a card added back to a screen.',
+      + 'Connect Google must remain the primary action. The paste-a-room '
+      + 'fallback exists (founder decision, 5 Sep 2026, while the OAuth app is '
+      + 'unverified) but it is subordinate — never a co-equal first choice.',
     ).toEqual([]);
   });
 
