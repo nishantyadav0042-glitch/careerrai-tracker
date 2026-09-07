@@ -4096,3 +4096,100 @@ the first assembly was correct on both 3 and 5 September.
 shipped, because CI happened to run at 22:00 IST. A test whose result depends
 on when it runs is not a passing test, it is an unfired one. `test-support/
 mid-shift.ts` pins the hour.
+
+---
+
+## Incident #73
+
+**Date:** 2026-09-07 (found while answering a question about an unrelated email)
+**Area:** Platform — database capacity / telemetry
+**Severity:** P1 (eight days from a full outage of study logging; no alarm existed)
+
+### What was wrong
+
+Production was **379 MB against the free tier's 500 MB ceiling, growing ~15 MB
+a day**. Roughly eight days from Supabase putting the project into read-only —
+students unable to log study, counsellors unable to mark a card, no writes at
+all. Nothing in the product, the crons or the watches measured database size,
+so the first signal would have been the failure itself.
+
+It surfaced by accident. The founder forwarded a Supabase email warning that a
+project would be paused for inactivity. That project was `careerrai-test`, an
+empty rehearsal database — a non-event. Checking *which* project it was meant
+looking at the organisation, and the organisation was on the free plan.
+
+| Table | Size | Reads it? |
+|---|---|---|
+| `student_events` | 196 MB | partly — see below |
+| `notifications` | 73 MB | yes, many dedupe guards |
+| `perf_events` | 21 MB | `/admin/perf`, one week |
+
+`tap` alone was 41,554 rows a week — half of all telemetry, ~4 MB a day — and
+**nothing reads it**. Outside the writer, the only occurrences in the repo are
+the event-name union in `lib/journey.ts` and the `FORBIDDEN_KINDS` list in
+`os/timeline.ts`, which exists specifically to keep it off the student's
+timeline. It was written, stored, paid for, and never asked a question.
+
+### The trap inside the obvious fix
+
+"Delete telemetry older than N days" would have been a second incident.
+`student_events` is two different things wearing one table name:
+
+- UI instrumentation — `tap`, `screen_view`, `resource_shown` — high volume, no
+  consumer;
+- the LEARNING LOOP — `app_open` feeds `os/activation-funnel.ts`, which compares
+  July's activation cohort against September's and carries **no time filter at
+  all**, deliberately.
+
+An age-based sweep would have destroyed the company's one steering measurement
+silently, months before anyone opened that dashboard and found the early
+cohorts missing. The first instinct written down that evening — "a 90-day
+retention policy" — was also simply wrong on the numbers: the oldest row in the
+table was 54 days old, so it would have deleted nothing at all.
+
+### Fix
+
+- Retention is per EVENT NAME and **the default is KEEP**. An event nobody
+  listed is kept forever; only names written into `RETENTION_RULES` are ever
+  deleted. Adding instrumentation therefore cannot cost data by accident — the
+  failure mode is "kept too much", which is recoverable.
+- Every window is the longest reader window plus real margin, and where the
+  reader has a constant the policy **imports** it (`BUDDY_INTEREST_LOOKBACK_DAYS`).
+  Widen the reader and the guard test fails here, rather than the data going
+  missing in production.
+- The rails live in the DATABASE (`sweep_telemetry`, migration 20260908a), not
+  in the caller: two tables only, `student_events` requires an explicit event
+  list so no bug can sweep it wholesale, the cutoff must be at least 7 days old,
+  and execution is service_role only. All three were verified against
+  production by calling them wrong on purpose.
+- A guard test scans every file that queries the table and fails if a swept
+  event acquires a reader.
+
+Result: 145,125 rows removed, `perf_events` 21 MB to 10 MB, the learning loop
+untouched (22,304 `app_open` rows still reaching back to 15 July).
+
+### Lessons
+
+**A DELETE is only as safe as the audit of who reads the data.** The audit here
+was the whole job; the sweep was twenty lines. What made it safe was reading
+every one of the 30 call sites and finding the one — an unbounded funnel query —
+that nothing about the table's name would have suggested.
+
+**"Old" is not the same as "worthless", and "high volume" is not the same as
+"valuable".** The right axis was neither age nor size, it was *does anything
+ask this data a question*.
+
+**Nothing measured the ground the company stands on.** Every watch built so far
+looks at student behaviour or counsellor behaviour. None looked at whether the
+database could accept another row. A resource ceiling reached is indistinguishable
+from a total outage, and it arrives on a schedule you can calculate in advance —
+which means it is the cheapest kind of failure to prevent and the most
+embarrassing to suffer.
+
+**A deleted row does not return its disk.** `pg_database_size` counts allocated
+files: after removing 145k rows the number did not move. `VACUUM FULL` reclaims
+it but rewrites the table under an exclusive lock and transiently needs space
+for a second copy — on a database this close to its ceiling that is its own
+risk. `perf_events` was small enough to rewrite safely (21 MB to 10 MB);
+`student_events` was left with its freed space marked reusable instead, which
+removes the danger without the spike.

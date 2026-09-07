@@ -88,11 +88,11 @@
       "path": "/api/cron/sales-ready",
       "schedule": "30 9 * * *"
     },
-{
+    {
       "path": "/api/cron/lead-intake",
       "schedule": "30 22 * * *"
     },
-{
+    {
       "path": "/api/cron/day-close",
       "schedule": "15 16 * * *"
     },
@@ -179,6 +179,10 @@
     {
       "path": "/api/cron/notification-reach-watch",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/telemetry-retention",
+      "schedule": "50 21 * * *"
     }
   ]
 }
