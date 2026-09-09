@@ -223,6 +223,19 @@ refund processed ─▶ settleRefund()      ── stamps refunded_at ───�
   a real outcome (`sales-disposition.ts`); `sales-messages.ts` writes the
   one-tap WhatsApp by lane and journey stage. *Guards: `sales-day.test.ts`,
   `sales-messages.test.ts`, the queue doctrine tests.*
+- **`lib/telemetry-retention.ts`** — what we stop keeping (Incident #73).
+  Production is on Supabase free: a 500 MB ceiling that was 8 days away on
+  7 Sep. Retention is per EVENT NAME and **the default is KEEP** — only names in
+  `RETENTION_RULES` are ever deleted, so new instrumentation cannot cost data by
+  accident. `student_events` carries BOTH throwaway UI events (`tap`: half of all
+  telemetry, zero readers) and the learning loop (`app_open` feeds
+  `os/activation-funnel.ts`, which reads all history with no time filter), which
+  is why an age-only sweep would be a data-loss bug. The rails are in the
+  database (`sweep_telemetry`, migration `20260908a`): two tables only, an
+  explicit event list required for `student_events`, cutoff >= 7 days,
+  service_role only. Cron `/api/cron/telemetry-retention` at 03:20 IST;
+  `?dry=1` counts without deleting. *Guards: `telemetry-retention.guard.test.ts`
+  — fails the moment a swept event acquires a reader.*
 - **Closing the day (Incident #67).** Every card dealt ends as `worked`,
   `skipped` (with a reason, and it changes NOTHING about the student) or
   `not_marked` (the 21:45 IST sweep, `api/cron/day-close`). `worked_at` keeps

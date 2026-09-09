@@ -3,7 +3,7 @@ import { assembleDay, dayAnchorMs, istHour, SECTION_OF, SECTION_ORDER, type DayS
 import type { DueReason } from './call-queue';
 import {
   DAY_FLOOR, DAY_CEILING, ROTATION_FLOOR, ATTENTION_CEILING, NEW_ARRIVAL_CEILING, ROTATION_CALL_EVERY,
-  SHIFT_END_HOUR_IST,
+  SHIFT_END_HOUR_IST, RETRY_CEILING,
 } from './os/scale-config';
 
 // ── THE DAY IS 50–70, AND EVERY RULE OF IT IS PROVEN HERE ───────────────────
@@ -224,7 +224,7 @@ describe('the day s ceilings count what was dealt today', () => {
 
   it('new arrivals are capped by the day too, not by the screen', () => {
     const day = assembleDay([...c('new_never_logged', 30), ...c('rotation', 100)], {
-      openToday: new Set(), usedToday: { new: NEW_ARRIVAL_CEILING },
+      openToday: new Set(), usedToday: { new_never_logged: NEW_ARRIVAL_CEILING },
     });
     expect(day.counts.given.new).toBe(0);
   });
@@ -232,7 +232,7 @@ describe('the day s ceilings count what was dealt today', () => {
   it('the DAY ceiling counts the day: 65 dealt leaves room for 5', () => {
     const day = assembleDay([...c('going_cold', 40), ...c('rotation', 100)], {
       openToday: new Set(),
-      usedToday: { attention: 20, new: 15, retention: 10, rotation: 20 },
+      usedToday: { attention: 20, new_never_logged: 15, going_cold: 10, rotation: 20 },
     });
     const dealt = 65 + day.queue.length;
     expect(dealt).toBeLessThanOrEqual(DAY_CEILING);
@@ -245,7 +245,7 @@ describe('the day s ceilings count what was dealt today', () => {
     // 14 more at 22:00: 44 never-contacted students in one day.
     const day = assembleDay([...c('fresh', 200)], {
       openToday: new Set(),
-      usedToday: { promises: 5, attention: 20, new: 15, rotation: ROTATION_FLOOR },
+      usedToday: { callback: 5, attention: 20, new_never_logged: 15, rotation: ROTATION_FLOOR },
     });
     expect(day.counts.given.rotation, 'rotation is done for today').toBe(0);
   });
@@ -263,7 +263,7 @@ describe('the day s ceilings count what was dealt today', () => {
 
   it('a promise still arrives mid-day, on a day already at its ceiling', () => {
     const day = assembleDay([...c('callback', 1), ...c('attention', 20)], {
-      openToday: new Set(), usedToday: { attention: 20, new: 15, retention: 15, rotation: 20 },
+      openToday: new Set(), usedToday: { attention: 20, new_never_logged: 15, going_cold: 15, rotation: 20 },
     });
     expect(day.counts.given.promises, 'never withheld').toBe(1);
     expect(day.counts.given.attention, 'but the lane is spent').toBe(0);
@@ -273,7 +273,7 @@ describe('the day s ceilings count what was dealt today', () => {
     // 60 cards dealt today, 55 of them worked. The day is not short; a
     // held-back card must not be pulled in to "fill" an empty-looking screen.
     const day = assembleDay([...c('attention', 40)], {
-      openToday: new Set(), usedToday: { attention: ATTENTION_CEILING, new: 15, retention: 10, rotation: 15 },
+      openToday: new Set(), usedToday: { attention: ATTENTION_CEILING, new_never_logged: 15, going_cold: 10, rotation: 15 },
     });
     expect(day.queue).toHaveLength(0);
   });
@@ -310,7 +310,7 @@ describe('5 Sep 2026 replayed', () => {
     // Deal the morning, then rebuild twelve times, working five cards each
     // time — exactly what a counsellor's browser did all day.
     const pool = [...c('attention', 120), ...c('new_never_logged', 60), ...c('going_cold', 30), ...c('fresh', 400)];
-    const used: Partial<Record<DaySection, number>> = {};
+    const used: Partial<Record<DueReason, number>> = {};
     const worked = new Set<string>();
     let open = new Set<string>();
     let dealt = 0;
@@ -318,7 +318,7 @@ describe('5 Sep 2026 replayed', () => {
       const day = assembleDay(pool.filter((x) => !worked.has(x.studentId)), { openToday: open, usedToday: used });
       for (const card of day.queue) {
         if (!open.has(card.studentId)) {
-          used[card.section] = (used[card.section] ?? 0) + 1;
+          used[card.dueReason] = (used[card.dueReason] ?? 0) + 1;
           dealt++;
         }
       }
@@ -349,5 +349,74 @@ describe('a card the ledger cannot name still occupies the day', () => {
       openToday: new Set(), usedToday: { attention: 20 }, dealtToday: 60,
     });
     expect(60 + day.queue.length).toBeLessThanOrEqual(DAY_CEILING);
+  });
+});
+
+// ── A RE-DIAL IS NOT A PROMISE (production, 6–9 Sep 2026) ───────────────────
+//
+// Neelam's retry lane ran 60, 51, 73, 83 across four days. On 9 Sep she was
+// dealt 116 cards — every single one a promise, 83 of them retries — worked 72
+// and left 44 unmarked. Zero never-contacted students for the fourth day
+// running, against 250 in her book.
+//
+// The cause was a classification: `retry` sat in UNTRIMMABLE beside `callback`,
+// so the no-answer pile inherited "promises are never bumped" and fed on
+// itself — each unanswered call manufacturing tomorrow's card. A callback is a
+// promise the STUDENT extracted from us. A retry is our own policy.
+describe('retries yield, callbacks do not', () => {
+  it('caps the re-dial pile and holds the rest for tomorrow', () => {
+    const day = assembleDay([...c('retry', 83), ...c('rotation', 200)]);
+    expect(day.counts.given.promises).toBe(RETRY_CEILING);
+  });
+
+  it('does not cap the callbacks sitting in the same section', () => {
+    // THE TRAP. callback, retry and followup all live in the `promises`
+    // section. A ceiling counted per SECTION would silently bump callbacks —
+    // promises a student asked for — the moment retries filled the lane.
+    const day = assembleDay([...c('retry', 40), ...c('callback', 30), ...c('followup', 12)]);
+    const byLane = (l: DueReason) => day.queue.filter((x) => x.dueReason === l).length;
+    expect(byLane('retry')).toBe(RETRY_CEILING);
+    expect(byLane('callback'), 'a callback is never bumped').toBe(30);
+    expect(byLane('followup'), 'nor a follow-up').toBe(12);
+  });
+
+  it('a day of nothing but callbacks is still uncapped', () => {
+    const day = assembleDay([...c('callback', 80), ...c('fresh', 50)]);
+    expect(day.queue).toHaveLength(80);
+  });
+
+  it('the ledger counts retries alone, not the whole promises section', () => {
+    // 20 retries and 15 callbacks already dealt today. Retries are spent;
+    // callbacks are not, and neither state may be read from the other.
+    const day = assembleDay([...c('retry', 30), ...c('callback', 10), ...c('rotation', 100)], {
+      openToday: new Set(), usedToday: { retry: RETRY_CEILING, callback: 15 },
+    });
+    const byLane = (l: DueReason) => day.queue.filter((x) => x.dueReason === l).length;
+    expect(byLane('retry'), 'spent for the day').toBe(0);
+    expect(byLane('callback'), 'unaffected').toBe(10);
+  });
+
+  it('9 Sep replayed: the day becomes finishable and rotation gets the room', () => {
+    // The real shape of that day: 83 retries, 33 other promises, and a deep
+    // never-contacted pool that had been getting nothing.
+    const day = assembleDay([
+      ...c('retry', 83), ...c('callback', 20), ...c('followup', 3), ...c('checkout_abandoned', 2),
+      ...c('fresh', 250),
+    ]);
+    expect(day.queue.length, 'a list a person can finish').toBeLessThanOrEqual(DAY_CEILING);
+    expect(day.counts.given.rotation, 'and the silent base is reached again').toBeGreaterThan(0);
+  });
+
+
+  it('but a held retry still returns rather than let the day end short', () => {
+    // The ceiling is a shape, not a starvation rule: with nothing else to
+    // deal, held retries come back before a counsellor gets a 45-card day.
+    const day = assembleDay([...c('retry', 83)], { openToday: new Set(), usedToday: {} });
+    expect(day.queue.length).toBe(DAY_FLOOR);
+  });
+
+  it('an unreached retry is not dropped — it is simply held', () => {
+    const day = assembleDay([...c('retry', 83)]);
+    expect(day.counts.heldBack).toBeGreaterThan(0);
   });
 });

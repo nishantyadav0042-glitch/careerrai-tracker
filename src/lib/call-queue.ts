@@ -460,10 +460,10 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
   // already been DEALT today, not against what happens to be on screen right
   // now. Measured on the screen, a ceiling refills every time a card is
   // worked: on 5 Sep that dealt 111 and 174 cards against a ceiling of 70.
-  const usedToday: Partial<Record<DaySection, number>> = {};
+  const usedToday: Partial<Record<DueReason, number>> = {};
   for (const r of mine) {
-    const section = r.lane ? SECTION_OF[r.lane as DueReason] : undefined;
-    if (section) usedToday[section] = (usedToday[section] ?? 0) + 1;
+    const lane = r.lane as DueReason | null;
+    if (lane && SECTION_OF[lane]) usedToday[lane] = (usedToday[lane] ?? 0) + 1;
   }
   // Past the shift the day has been closed by the sweep. Carried cards stay so
   // a late marking still lands; nothing new is dealt into a day nobody works.
