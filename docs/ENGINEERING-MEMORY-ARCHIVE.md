@@ -4193,3 +4193,90 @@ for a second copy — on a database this close to its ceiling that is its own
 risk. `perf_events` was small enough to rewrite safely (21 MB to 10 MB);
 `student_events` was left with its freed space marked reusable instead, which
 removes the danger without the spike.
+
+---
+
+## Incident #74
+
+**Date:** 2026-09-09 (fourth night of a pattern first flagged on the 6th)
+**Area:** Sales OS — what counts as a promise
+**Severity:** P1 (an unfinishable list; the silent base unreached for four days)
+
+### What was wrong
+
+| | 6 Sep | 7 Sep | 8 Sep | 9 Sep |
+|---|---|---|---|---|
+| Neelam — cards given | 79 | 107 | 106 | **116** |
+| …of which retries | 60 | 51 | 73 | **83** |
+| …worked | 75 | 70 | 106 | **72** |
+| …unmarked | 4 | 37 | 0 | **44** |
+| …never-contacted reached | 0 | 0 | 0 | **0** |
+
+On 9 September every one of her 116 cards was a promise. She worked 72 and
+forty-four went unmarked — the first list since Incident #67 made the counting
+honest that a person could not finish. Her book holds 250 students nobody has
+ever called, and for four days they got nothing.
+
+### Cause
+
+A classification, not a calculation. `retry` sat in `UNTRIMMABLE` beside
+`callback` and `followup`, so it inherited the founder's 2 Sep rule that
+promises are never bumped. But the two are not the same kind of thing:
+
+- a **callback** is a commitment a STUDENT extracted from us — they named a
+  time and we agreed;
+- a **retry** is our own policy for someone who did not pick up.
+
+Because retries were never bumped and every unanswered call schedules another,
+the lane fed on itself: work the list, get most of it again tomorrow, plus the
+new no-answers. A treadmill with no exit except six strikes.
+
+### The conflict this forced
+
+Two founder instructions collided:
+
+- 2 Sep — "promises are never bumped."
+- 3 Sep — "make sure they mark every list close or something, otherwise it
+  doesn't make sense of these lists."
+
+On 9 Sep the first made the second impossible. It was resolved for the second,
+and the reasoning is worth keeping: **an unfinishable list makes every number
+on it a lie.** Coverage, reached, worked — all of them stop meaning anything
+the moment the denominator is beyond a person's day. The founder was told three
+times across four days (6, 7 and 9 Sep) and the change shipped on the ownership
+he granted on 2 Sep, reversible by one constant.
+
+### Fix
+
+- `retry` leaves `UNTRIMMABLE` and takes `RETRY_CEILING` (20). Callbacks,
+  follow-ups and abandoned checkouts stay untouchable.
+- **The day's ledger is re-keyed from SECTION to LANE.** This is the subtle
+  half. `callback`, `retry` and `followup` all live in the `promises` section,
+  and the per-lane ceilings from Incident #72 were accounted per SECTION. A
+  retry ceiling counted that way would have silently bumped callbacks — real
+  promises to real students — as soon as retries filled the section. Ceilings
+  are per lane, so the ledger has to be too.
+- Nobody is dropped: a held retry waits a day, comes back before the day would
+  end short, and `MAX_CONSECUTIVE_NO_ANSWER` still retires a student for good.
+
+Replayed against 9 Sep: 116 cards become **60**, and rotation reaches **15**
+never-contacted students instead of none.
+
+### Lessons
+
+**A ceiling belongs to a LANE; a ledger keyed by anything coarser will cap the
+wrong thing.** Incident #72 built the ledger by section because section and
+lane happened to be 1:1 for every capped lane at the time. The first cap that
+broke that assumption would have quietly bumped promises. Shape the record by
+the thing the rule is about, not by the thing that is convenient to display.
+
+**Check what a category is doing, not what it is called.** "Promise" was a
+reasonable name for the lane that held callbacks and retries, and the name is
+what carried the never-bump rule across to something that had not earned it.
+The question to ask of any grouping is whether every member deserves every
+privilege the group confers.
+
+**Watch thresholds are worth setting in advance.** The nightly watch carried
+"given > 110 → the list is unfinishable again" written on 7 Sep, before anyone
+knew it would fire. When it did, the argument was already settled — it was a
+number crossed, not a judgement call made under pressure at 22:00.
