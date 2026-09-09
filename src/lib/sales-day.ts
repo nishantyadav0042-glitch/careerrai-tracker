@@ -1,7 +1,7 @@
 import type { DueReason } from '@/lib/call-queue';
 import {
   DAY_FLOOR, DAY_CEILING, ROTATION_FLOOR, ATTENTION_CEILING, NEW_ARRIVAL_CEILING,
-  ROTATION_CALL_EVERY, DAY_ANCHOR_HOUR_IST, CONVERSION_CEILING,
+  ROTATION_CALL_EVERY, DAY_ANCHOR_HOUR_IST, CONVERSION_CEILING, RETRY_CEILING,
 } from '@/lib/os/scale-config';
 
 // ── THE DAY — how 50 to 70 students are dealt from what the book supplies ────
@@ -57,8 +57,18 @@ export const SECTION_OF: Record<DueReason, DaySection> = {
   fresh: 'rotation', rotation: 'rotation',
 };
 
-/** Lanes that are never trimmed or bumped: a promise made, or money on the table. */
-const UNTRIMMABLE: ReadonlySet<DueReason> = new Set<DueReason>(['callback', 'retry', 'followup', 'checkout_abandoned']);
+/**
+ * Lanes that are never trimmed or bumped: a promise a STUDENT extracted from
+ * us, or money on the table.
+ *
+ * `retry` used to sit here and does not any more (9 Sep 2026). A callback is a
+ * promise — the student named a time and we agreed. A retry is our own policy
+ * for someone who did not pick up, and treating it as a promise let the
+ * no-answer pile own whole days: 83 retries in a 116-card day nobody could
+ * finish. It is still a strong signal; it is just not a commitment, so it
+ * takes a ceiling like every other signal lane.
+ */
+const UNTRIMMABLE: ReadonlySet<DueReason> = new Set<DueReason>(['callback', 'followup', 'checkout_abandoned']);
 
 const CEILING: Partial<Record<DueReason, number>> = {
   attention: ATTENTION_CEILING,
@@ -67,6 +77,10 @@ const CEILING: Partial<Record<DueReason, number>> = {
   // rotation completely. Recency in classifyLane is the real fix; the ceiling
   // is the fuse, so no single lane can ever own the day again.
   conversion: CONVERSION_CEILING,
+  // A re-dial to someone who did not answer. Capped so the no-answer backlog
+  // can never own a day again; the overflow waits for tomorrow, and six
+  // no-answers still retires a student for good.
+  retry: RETRY_CEILING,
 };
 
 /** The most recent DAY_ANCHOR_HOUR_IST o'clock IST at or before `nowMs`. */
@@ -112,11 +126,15 @@ export interface DayContext {
   /** Students dealt today and still unmarked. They ARE today's list. */
   openToday?: ReadonlySet<string>;
   /**
-   * THE DAY'S LEDGER: how many cards each section has already been dealt
-   * today, in EVERY state — worked, skipped, still open. A ceiling that is
-   * measured against anything else is not a ceiling (Incident #72).
+   * THE DAY'S LEDGER: how many cards each LANE has already been dealt today,
+   * in EVERY state — worked, skipped, still open. A ceiling that is measured
+   * against anything else is not a ceiling (Incident #72).
+   *
+   * Keyed by lane, not by section, because ceilings are per lane and a section
+   * can hold several: `promises` carries callback, retry and followup, and
+   * capping retries must not cap the callbacks sitting beside them (9 Sep).
    */
-  usedToday?: Partial<Record<DaySection, number>>;
+  usedToday?: Partial<Record<DueReason, number>>;
   /**
    * Total cards dealt today, when the caller knows it independently. The
    * sections above are summed for the day's ceiling, so a row whose lane the
@@ -153,10 +171,11 @@ export function assembleDay<T extends { studentId: string; dueReason: DueReason 
 ): AssembledDay<T> {
   const openToday = ctx.openToday ?? new Set<string>();
   const used = ctx.usedToday ?? {};
-  const usedIn = (s: DaySection): number => used[s] ?? 0;
-  const ledgered = SECTION_ORDER.reduce((n, s) => n + usedIn(s), 0);
+  const usedLane = (l: DueReason): number => used[l] ?? 0;
+  const ledgered = Object.values(used).reduce<number>((n, v) => n + (v ?? 0), 0);
   const usedTotal = Math.max(ledgered, ctx.dealtToday ?? 0);
-  const usedSignals = usedTotal - usedIn('rotation');
+  const usedRotation = usedLane('fresh') + usedLane('rotation');
+  const usedSignals = usedTotal - usedRotation;
   const shiftOver = ctx.shiftOver ?? false;
 
   // Three piles. CARRIED cards were dealt earlier today and are already in the
@@ -166,7 +185,7 @@ export function assembleDay<T extends { studentId: string; dueReason: DueReason 
   const newSignals: T[] = [];
   const newRotation: T[] = [];
   const heldBack: T[] = [];
-  const admitted = new Map<DaySection, number>();
+  const admitted = new Map<DueReason, number>();
 
   for (const c of cands) {
     const section = SECTION_OF[c.dueReason];
@@ -174,8 +193,8 @@ export function assembleDay<T extends { studentId: string; dueReason: DueReason 
     if (shiftOver) continue; // the day is over; they are tomorrow's, not today's held-back
     if (section === 'rotation') { newRotation.push(c); continue; }
     const cap = CEILING[c.dueReason];
-    if (cap != null && usedIn(section) + (admitted.get(section) ?? 0) >= cap) { heldBack.push(c); continue; }
-    admitted.set(section, (admitted.get(section) ?? 0) + 1);
+    if (cap != null && usedLane(c.dueReason) + (admitted.get(c.dueReason) ?? 0) >= cap) { heldBack.push(c); continue; }
+    admitted.set(c.dueReason, (admitted.get(c.dueReason) ?? 0) + 1);
     newSignals.push(c);
   }
 
@@ -199,7 +218,7 @@ export function assembleDay<T extends { studentId: string; dueReason: DueReason 
   const signalsToday = usedSignals + newSignals.length;
   const room = DAY_CEILING - usedTotal - newSignals.length;
   const target = Math.max(ROTATION_FLOOR, DAY_FLOOR - signalsToday);
-  const rotation = newRotation.slice(0, Math.max(0, Math.min(room, target - usedIn('rotation'))));
+  const rotation = newRotation.slice(0, Math.max(0, Math.min(room, target - usedRotation)));
 
   // Short day and real signals held back? Use them before ending short — but
   // "short" is measured on the whole day, not on what is left on screen.

@@ -206,6 +206,17 @@ to in 21 days is due a touch, oldest first; the card says so in words
 ("last spoken to 24 days ago — nothing since"). Signals fill the day first;
 rotation fills the rest, with a floor so the silent book always moves.
 
+**A re-dial is not a promise.** *Amended 9 Sep 2026.* A callback or a
+follow-up is a commitment a STUDENT extracted from us at a named time, and
+those are never bumped. A `retry` after a no-answer is our own policy, and for
+four days it behaved like a promise and ate whole days: one counsellor's retry
+lane ran 60, 51, 73, 83, and on 9 Sep she was dealt 116 cards — every one a
+promise — worked 72 and could not finish. Retries now take a ceiling
+(`RETRY_CEILING`) like every other signal lane. Nobody is dropped: the overflow
+waits a day and six no-answers still retires a student. This resolves a
+conflict between two founder rules in favour of the harder one — a list that
+cannot be closed makes every number on it a lie (3 Sep).
+
 The rest of this section, written before the amendment, stands where it does
 not conflict:
 

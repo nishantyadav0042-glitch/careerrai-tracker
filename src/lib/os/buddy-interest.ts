@@ -16,7 +16,8 @@ type Admin = any;
 
 /** Dwell longer than this per view is a tab left open, not reading — capped. */
 export const DWELL_CAP_SEC = 30 * 60; // 30 minutes
-const LOOKBACK_DAYS = 21;
+export const BUDDY_INTEREST_LOOKBACK_DAYS = 21;
+const LOOKBACK_DAYS = BUDDY_INTEREST_LOOKBACK_DAYS;
 
 export interface BuddySignals {
   opens: number;          // times the buddy screen was opened

@@ -18,7 +18,8 @@ the founder's word.
 
 | # | Lane | Signal | Channel | Floor / ceiling |
 |---|---|---|---|---|
-| 1 | Promises | callback, retry, follow-up due | call | all, never bumped |
+| 1 | Promises | callback, follow-up due | call | all, never bumped |
+| 1b | Re-dials | retry after a no-answer | call | ceiling 20 |
 | 2 | Money | order created and never paid | call | all |
 | 3 | Buddy intent | buddy option tapped or intent door **within `CONVERSION_INTENT_DAYS` (14)** | call | ceiling 12 |
 | 4 | New arrivals | signed up 1–7 days ago, no first log | call | ceiling 15 |
@@ -108,6 +109,15 @@ A card now ends the day in exactly one of three recorded states:
   now the day's ledger — cards DEALT today, in every state — and nothing may be
   measured against anything else. Incident #68 found this defect and fixed it
   for rotation alone; the hole stayed open in every other lane.
+- **A re-dial is not a promise** *(fixed 9 Sep, Incident #74)*. `retry` sat in
+  the untrimmable promise lane, so the no-answer pile inherited "never bumped"
+  and fed on itself — every unanswered call manufacturing tomorrow's card. Over
+  four days one counsellor's retry lane ran 60, 51, 73, 83; on 9 Sep she was
+  dealt 116 cards, every one a promise, worked 72 and left 44 unmarked, with
+  zero never-contacted students for the fourth day running. A callback is a
+  promise a student extracted from us; a retry is our own policy. Retries now
+  take `RETRY_CEILING` (20). Replayed against that day: 116 cards become 60,
+  and 15 never-contacted students get reached instead of none.
 - **A closed day is not re-dealt** *(fixed 5 Sep, Incident #72)*. The sweep
   closed 5 Sep at 21:45 and the deck dealt 20 more cards at 22:00. Past
   `SHIFT_END_HOUR_IST` the deck shows what was already dealt, so a late marking
@@ -146,7 +156,8 @@ A card now ends the day in exactly one of three recorded states:
 `DAY_FLOOR 50 · DAY_CEILING 70 · ROTATION_FLOOR 15 · ROTATION_SILENT_DAYS 21 ·
 TOUCH_COOLDOWN_DAYS 7 · ATTENTION_CEILING 20 · NEW_ARRIVAL_CEILING 15 ·
 ATTENTION_WINDOW_DAYS 2 · DAY_ANCHOR_HOUR_IST 4 · ROTATION_CALL_EVERY 4 ·
-SHIFT_END_HOUR_IST 21 · CONVERSION_INTENT_DAYS 14 · CONVERSION_CEILING 12`
+SHIFT_END_HOUR_IST 21 · CONVERSION_INTENT_DAYS 14 · CONVERSION_CEILING 12 ·
+RETRY_CEILING 20`
 
 ## Proof
 

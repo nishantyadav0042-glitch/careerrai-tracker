@@ -115,6 +115,25 @@ export const ROTATION_CALL_EVERY = 4;
 export const CONVERSION_INTENT_DAYS = 14;
 /** And a ceiling, so even a real spike cannot take the day. */
 export const CONVERSION_CEILING = 12;
+/**
+ * How many RE-DIALS a day may contain (founder mandate, 9 Sep 2026).
+ *
+ * A callback is a promise: the student named a time and we said yes. A retry
+ * is not — it is our own policy for someone who did not pick up. Both were
+ * classified as promises and promises are never bumped, so the no-answer pile
+ * fed on itself: Neelam's retry lane ran 60, 51, 73, 83 across four days, and
+ * on 9 Sep she was dealt 116 cards of which every single one was a promise.
+ * She worked 72. Forty-four went unmarked — the first list since the counting
+ * became honest that could not be finished.
+ *
+ * That put two founder rules in conflict: "promises are never bumped" (2 Sep)
+ * against "make sure they mark every list close, otherwise it doesn't make
+ * sense of these lists" (3 Sep). The second is the harder rule — an
+ * unfinishable list makes every number on it a lie — so retries yield and
+ * callbacks do not. Nobody is dropped: an unreached retry waits a day, and
+ * MAX_CONSECUTIVE_NO_ANSWER still ages a student out for good.
+ */
+export const RETRY_CEILING = 20;
 
 // ── Buddy check-in (founder, 10 Aug) ────────────────────────────────────────
 // "Agar mere paas 5 student assigned hain aur unme se kisi ek ne bhi kal log
