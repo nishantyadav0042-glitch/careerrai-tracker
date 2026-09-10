@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { codeOnly } from './test-support/code-only';
 import {
   RETENTION_RULES, WRITE_ONLY_EVENTS, SCREEN_EVENTS, PERF_READER_DAYS,
-  RETENTION_KILL_SWITCH_KEY, SWEEP_BATCH, cutoffIso, runRetentionSweep,
+  RETENTION_KILL_SWITCH_KEY, SWEEP_BATCH, SWEEP_MAX_BATCHES, cutoffIso, runRetentionSweep,
 } from './telemetry-retention';
 import { BUDDY_INTEREST_LOOKBACK_DAYS } from './os/buddy-interest';
 
@@ -210,5 +210,58 @@ describe('the sweep itself', () => {
     const now = Date.parse('2026-09-08T12:00:00Z');
     expect(cutoffIso({ table: 'perf_events', events: null, keepDays: 21, because: 'x' }, now))
       .toBe('2026-08-18T12:00:00.000Z');
+  });
+});
+
+// ── THE BATCH IS A LATENCY BUDGET (production, 10 Sep 2026) ─────────────────
+//
+// The first live run of the sweep half-failed: the write-only rule returned
+// "canceling statement due to statement timeout" and deleted zero, while the
+// two smaller rules beside it succeeded. `student_events` carries six indexes,
+// so each deleted row costs six index updates — 2,000 rows measured at 486 ms,
+// which puts the original 20,000 at roughly five seconds and over the limit.
+//
+// What worked was the DEGRADATION: one rule failed, the run reported ok:false
+// with the error attached, the other rules still ran, and the nightly watch
+// surfaced it the same morning. What failed was a constant chosen by guess.
+describe('the sweep must fit inside a statement timeout', () => {
+  it('keeps the batch small enough to survive the slowest table', () => {
+    // At the measured ~0.25 ms a row on the six-index table, this is well
+    // under a second per statement. Raising it is how the first run broke.
+    expect(SWEEP_BATCH).toBeLessThanOrEqual(5_000);
+  });
+
+  it('gets its volume from more statements, not bigger ones', () => {
+    // The daily arrival is ~7,500 write-only rows. One run must clear that
+    // several times over, or a backlog builds instead of draining.
+    expect(SWEEP_BATCH * SWEEP_MAX_BATCHES).toBeGreaterThan(50_000);
+  });
+
+  it('a whole run still fits the route budget', () => {
+    // maxDuration is 300s. Three rules x batches x ~0.5s must leave room.
+    const worstCaseSeconds = RETENTION_RULES.length * SWEEP_MAX_BATCHES * 0.5;
+    expect(worstCaseSeconds).toBeLessThan(200);
+  });
+
+  it('one rule timing out does not stop the rules after it', () => {
+    // This is why 5,561 perf rows and 2,294 screen rows were still swept on
+    // the night the first rule died. Pin it so a refactor cannot make one
+    // slow table silently cancel the whole sweep.
+    let call = 0;
+    const db = {
+      rpc: async () => {
+        call++;
+        return call === 1
+          ? { data: null, error: { message: 'canceling statement due to statement timeout' } }
+          : { data: 3, error: null };
+      },
+      from: () => ({ select: () => ({ lt: () => Object.assign(Promise.resolve({ count: 0, error: null }), { in: async () => ({ count: 0, error: null }) }) }) }),
+    } as never;
+    return runRetentionSweep(db).then((r) => {
+      expect(r.ok, 'the run is honestly reported as failed').toBe(false);
+      expect(r.lines[0].error).toMatch(/statement timeout/);
+      expect(r.lines.slice(1).every((l) => l.error === undefined), 'later rules still ran').toBe(true);
+      expect(r.deleted).toBeGreaterThan(0);
+    });
   });
 });

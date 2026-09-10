@@ -90,10 +90,28 @@ export const RETENTION_RULES: readonly RetentionRule[] = [
 
 export const RETENTION_KILL_SWITCH_KEY = 'TELEMETRY_RETENTION_ENABLED';
 
-/** Rows deleted per statement. One bounded statement, no long lock. */
-export const SWEEP_BATCH = 20_000;
-/** Statements per run. Caps a run's work so the function never times out. */
-export const SWEEP_MAX_BATCHES = 12;
+/**
+ * Rows deleted per statement.
+ *
+ * Was 20,000, and the first live run proved that wrong: the write-only rule
+ * came back `canceling statement due to statement timeout` and deleted NOTHING,
+ * while the two smaller rules beside it succeeded. `student_events` carries six
+ * indexes, so a delete pays six index updates per row — measured at 486 ms for
+ * 2,000 rows, which puts 20,000 around five seconds and over the statement
+ * timeout once a cold cache is added.
+ *
+ * The batch is not a throughput knob, it is a LATENCY budget: each statement
+ * must finish comfortably inside the timeout, and volume comes from running
+ * more of them.
+ */
+export const SWEEP_BATCH = 2_000;
+/**
+ * Statements per rule per run. 40 x 2,000 is 80,000 rows a rule — an order of
+ * magnitude above the ~7,500/day this sweep exists to remove, so a backlog
+ * drains rather than creeping. At the measured half-second a batch, a full run
+ * of three rules is about a minute against `maxDuration` 300.
+ */
+export const SWEEP_MAX_BATCHES = 40;
 
 export const cutoffIso = (rule: RetentionRule, nowMs: number): string =>
   new Date(nowMs - rule.keepDays * 86_400_000).toISOString();
