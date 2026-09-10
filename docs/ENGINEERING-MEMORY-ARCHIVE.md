@@ -4186,6 +4186,19 @@ from a total outage, and it arrives on a schedule you can calculate in advance �
 which means it is the cheapest kind of failure to prevent and the most
 embarrassing to suffer.
 
+**Postscript, 10 Sep — the first live run half-failed.** The write-only rule
+came back `canceling statement due to statement timeout` and deleted zero,
+while the two smaller rules beside it succeeded. `student_events` carries six
+indexes, so every deleted row costs six index updates: measured afterwards at
+486 ms for 2,000 rows, which puts the chosen batch of 20,000 at roughly five
+seconds and over the limit. `SWEEP_BATCH` is now 2,000 with 40 batches a rule.
+**A batch size is a latency budget, not a throughput knob** — each statement
+must finish well inside the timeout, and volume comes from running more of
+them. What worked was the shape: one rule failing did not stop the others, the
+run reported `ok: false` with the error attached rather than claiming success,
+and the capacity watch surfaced it the next morning. A guess about how long a
+statement takes is a guess; the only honest number came from running it.
+
 **A deleted row does not return its disk.** `pg_database_size` counts allocated
 files: after removing 145k rows the number did not move. `VACUUM FULL` reclaims
 it but rewrites the table under an exclusive lock and transiently needs space
