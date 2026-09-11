@@ -265,3 +265,48 @@ describe('the sweep must fit inside a statement timeout', () => {
     });
   });
 });
+
+// ── THE LAST BATCH OF A DRAIN IS THE EXPENSIVE ONE (production, 11 Sep) ─────
+//
+// Two nights running the write-only rule returned "canceling statement due to
+// statement timeout". Night one (batch 20,000) deleted 0; night two (batch
+// 2,000) deleted 8,000 — four clean batches — and died on the fifth.
+//
+// Measured, not guessed:
+//   a FULL batch of 2,000 rows     ~0.24 ms/row
+//   the FINAL batch, 556 rows      5.7 SECONDS, ~10 ms/row
+//
+// The cost is not the delete. When fewer rows remain than the limit, the scan
+// cannot stop early — it must traverse the whole qualifying range, through the
+// dead tuples the earlier batches left, to PROVE nothing more matches. So the
+// timeout lands on the last batch of a drain, exactly when the work is done,
+// and it lands there every night the sweep keeps up. Shrinking the batch makes
+// that final scan MORE frequent, not less.
+describe('the function is allowed to finish its last batch', () => {
+  const sql = codeOnly(readFileSync(join(process.cwd(), 'supabase/migrations/20260911a_sweep_statement_timeout.sql'), 'utf8'));
+
+  it('gives the sweep its own statement timeout', () => {
+    expect(sql).toMatch(/set statement_timeout = '25s'/);
+  });
+
+  it('keeps every rail from the original migration', () => {
+    // A CREATE OR REPLACE rewrites the whole body. Losing a rail here would be
+    // silent — the function would simply start accepting what it used to
+    // refuse — so the replacement is checked against all four.
+    expect(sql, 'two tables only').toMatch(/is not sweepable/);
+    expect(sql, 'explicit event list').toMatch(/requires an explicit event list/);
+    expect(sql, 'cutoff at least a week old').toMatch(/cutoff must be at least 7 days old/);
+    expect(sql, 'service_role only').toMatch(/grant execute on function public\.sweep_telemetry[^;]*to service_role/);
+    expect(sql).toMatch(/revoke all on function public\.sweep_telemetry[^;]*from anon/);
+    expect(sql).toMatch(/revoke all on function public\.sweep_telemetry[^;]*from authenticated/);
+    expect(sql, 'search_path still pinned').toMatch(/set search_path/);
+  });
+
+  it('stays well inside the route budget', () => {
+    // maxDuration is 300s. A worst case of every batch taking the full 25s
+    // would blow that, so the batch budget and the timeout have to agree:
+    // only the LAST batch of a rule is slow, so at most one per rule.
+    const slowBatchesWorstCase = RETENTION_RULES.length * 25;
+    expect(slowBatchesWorstCase).toBeLessThan(150);
+  });
+});

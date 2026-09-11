@@ -4199,6 +4199,23 @@ run reported `ok: false` with the error attached rather than claiming success,
 and the capacity watch surfaced it the next morning. A guess about how long a
 statement takes is a guess; the only honest number came from running it.
 
+**Second postscript, 11 Sep — the timeout came back, and the cause was not
+batch size.** Night two (batch 2,000) deleted 8,000 — four clean batches — and
+died on the fifth. Measured on production: a FULL batch of 2,000 runs at
+~0.24 ms/row; the FINAL batch of a drain, 556 rows, took **5.7 seconds**, about
+10 ms/row. The cost is not the delete. When fewer rows remain than the limit
+the scan cannot stop early — it must traverse the whole qualifying range,
+through the dead tuples the earlier batches left, to PROVE nothing more
+matches. So the timeout lands on the last batch, exactly when the work is
+finished, and it lands there every night the sweep keeps up. Shrinking the
+batch makes that final scan MORE frequent, not less. Fixed by giving the
+function its own `statement_timeout = '25s'` — the statement is legitimate and
+bounded by p_limit, it is simply slower than the default cap when it has to
+prove exhaustion. **Two guesses in a row about where the time went; the answer
+only appeared when each batch was timed individually.** A `create or replace`
+rewrites the whole body, so the replacement carries a test asserting all four
+original rails survived — losing one would have been silent.
+
 **A deleted row does not return its disk.** `pg_database_size` counts allocated
 files: after removing 145k rows the number did not move. `VACUUM FULL` reclaims
 it but rewrites the table under an exclusive lock and transiently needs space
