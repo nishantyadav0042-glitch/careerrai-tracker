@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { requireAdmin } from '@/lib/admin-auth';
 import { assembleFounderInbox, type Severity } from '@/lib/os/founder-inbox';
 import { findSacredFailures } from '@/lib/os/sacred-guard';
+import { readDismissedIds, withoutDismissed } from '@/lib/os/alert-dismissal';
+import { DismissAlert } from './dismiss-alert';
 import { getRealStudents, getLoggedToday, getSalesReadyToCall, getWantsBuddy } from '@/lib/admin-filters';
 import { CheckCircle2, ArrowRight, AlertOctagon, AlertTriangle, Circle, ShieldAlert, Phone } from 'lucide-react';
 
@@ -44,10 +46,16 @@ export default async function CommandCenterPage() {
   // Sacred-student failures are computed FIRST and pinned ABOVE everything.
   // Co-founder rule: a paying student in a broken state is a P0 the system
   // surfaces before the founder has to look for it.
-  const [alerts, inbox] = await Promise.all([
+  const [rawAlerts, inbox, dismissedIds] = await Promise.all([
     findSacredFailures(admin, now),
     assembleFounderInbox(admin, now),
+    readDismissedIds(admin),
   ]);
+  // Alerts the founder has already closed ("already assigned", "completed").
+  // Subtracted here rather than inside findSacredFailures so the detector stays
+  // the single authority on what IS wrong, and dismissal stays what it is: the
+  // founder's judgement laid over the top, never a change to the facts.
+  const alerts = withoutDismissed(rawAlerts, dismissedIds);
 
   // Context counts + the revenue-opportunity numbers, after the decisions.
   const students = await getRealStudents(admin);
@@ -87,7 +95,7 @@ export default async function CommandCenterPage() {
                   </p>
                 </div>
               </div>
-              <div className="mt-2.5 flex items-center gap-2 pl-6.5">
+              <div className="mt-2.5 flex flex-wrap items-center gap-2 pl-6.5">
                 <Link href={a.actionRoute} className="inline-flex items-center gap-1 rounded-lg bg-stone-900 px-3 py-1.5 text-[12px] font-bold text-white">
                   {a.actionLabel} <ArrowRight className="h-3 w-3" />
                 </Link>
@@ -96,6 +104,7 @@ export default async function CommandCenterPage() {
                     <Phone className="h-3 w-3" /> Call
                   </a>
                 )}
+                <DismissAlert alertId={a.id} studentId={a.student.id || null} />
               </div>
             </div>
           ))}

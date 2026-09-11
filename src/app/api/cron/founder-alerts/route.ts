@@ -4,6 +4,7 @@ import { authorizedCron } from '@/lib/cron-auth';
 import { withCronTracking } from '@/lib/cron-run-tracker';
 import { sendAdminAlert } from '@/lib/email';
 import { findSacredFailures } from '@/lib/os/sacred-guard';
+import { readDismissedIds, withoutDismissed } from '@/lib/os/alert-dismissal';
 import { findAuthOutage } from '@/lib/os/auth-health';
 
 export const maxDuration = 60;
@@ -48,7 +49,14 @@ export async function GET(request: NextRequest) {
     // in the same cycle, the founder should read this one first.
     const authOutage = await escalateAuthOutage(admin, now);
 
-    const alerts = await findSacredFailures(admin, now);
+    // A closed alert must not page the founder either. Pushing a notification
+    // for something he has already handled by hand is precisely how these
+    // interrupts stop being read.
+    const [rawAlerts, dismissedIds] = await Promise.all([
+      findSacredFailures(admin, now),
+      readDismissedIds(admin),
+    ]);
+    const alerts = withoutDismissed(rawAlerts, dismissedIds);
     const critical = alerts.filter((a) => a.severity === 'critical');
 
     if (critical.length === 0) {

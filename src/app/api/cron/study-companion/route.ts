@@ -10,6 +10,7 @@ import {
   missedCheckInKickoffCopy,
   planMorningCopy, planOpenCopy, planProgressCopy, planLogCopy, classMorningCopy,
   lessonLinkAnnounceCopy, RESOURCE_ANNOUNCE_DAY, RESOURCE_ANNOUNCE_SLOT,
+  isRetiredSlot,
   type CompanionSlot, type SlotCopy,
 } from '@/lib/companion';
 import { computeTodaysPlan, type TodaysPlan } from '@/lib/routine-plan';
@@ -99,6 +100,13 @@ export async function POST(request: NextRequest) {
   const slot = request.nextUrl.searchParams.get('slot') as CompanionSlot | null;
   if (!slot || !COMPANION_SLOTS.includes(slot)) {
     return NextResponse.json({ error: 'Unknown slot' }, { status: 400 });
+  }
+  // A retired slot still has copy and a `case` below, so it would build and
+  // send perfectly well if anything ever called it. Nothing should: it has no
+  // schedule, and BUDGET_ACTIVE = 4 has no room for a fifth. Refuse it here
+  // rather than trust that no one re-adds the cron line.
+  if (isRetiredSlot(slot)) {
+    return NextResponse.json({ error: 'Retired slot', slot, skipped: true }, { status: 410 });
   }
   return withCronTracking(`/api/cron/study-companion?slot=${slot}`, async () => studyCompanionRun(slot));
 }
