@@ -4310,3 +4310,110 @@ privilege the group confers.
 "given > 110 → the list is unfinishable again" written on 7 Sep, before anyone
 knew it would fire. When it did, the argument was already settled — it was a
 number crossed, not a judgement call made under pressure at 22:00.
+
+---
+
+## Incident #75
+
+**Date:** 2026-09-12 (found while running the nightly counsellor-day watch)
+**Area:** Monitoring — the watches that guard the Sales OS
+**Severity:** P2 (no student or counsellor was harmed; the detector was blind, not the system)
+
+### What happened
+
+The 22:10 IST counsellor-day watch ran and reported nothing, correctly by its
+own rules. The day it looked at was the first genuinely clean one since the
+Incident #74 fix: Anshul dealt **70 cards — exactly `DAY_CEILING`** — with
+rotation at **15, exactly `ROTATION_FLOOR`**, every capped lane inside its
+ceiling, and all 70 cards closed (46 worked, 24 swept as `not_marked`).
+
+Neelam had **no day at all**: zero `sales_opportunity` rows, zero
+`sales_activity` touches, last session 11 Sep 18:04 IST. She did not sign in on
+a Saturday, and the deck is built and recorded on page load, so no login means
+no deck. That is an absence, not a fault.
+
+But the watch could not have told the difference, and that is the incident.
+Three defects, all in the detector:
+
+1. **A rep with zero rows disappeared from the result.** The watch's query was
+   `GROUP BY rep_id` over `sales_opportunity`. A rep with no cards produces no
+   group, so she was not a row with zeroes in it — she was **absent from the
+   output entirely**. Every per-rep condition, including F ("rotation = 0 for a
+   rep"), passed silently for the rep in the worst possible state. Had the deck
+   *failed to build* for someone who showed up and sat waiting, the watch would
+   have said exactly what it said on this benign Saturday: nothing.
+
+2. **The watch's frozen facts were three days stale.** It still asserted
+   "Promises (callback, **retry**, followup) and money are UNTRIMMABLE" — the
+   rule Incident #74 reversed on 9 Sep. So condition A carried no `retry`
+   ceiling and could not detect a broken retry cap, and condition D would have
+   excused a retry-inflated day as "explained by promises". The watch was
+   validating production against a rule production no longer follows — and the
+   specific rule it was blind to was the one it had just been rewritten to
+   catch.
+
+3. **Condition G was unreachable.** "Retry above 60 and rising" cannot fire once
+   `RETRY_CEILING` is 20. A condition that can never be true reads, every night,
+   exactly like a condition that is being checked and found false.
+
+### Root cause
+
+A watch prompt is **code duplicated into prose**, and nothing links the two. The
+9 Sep commit changed `UNTRIMMABLE` and added `RETRY_CEILING`; the watch that
+polices `UNTRIMMABLE` and `RETRY_CEILING` lives outside the repo, so it was not
+in the diff, no test covered it, and no reviewer saw it. It went stale in
+silence and kept reporting confidently.
+
+Defect 1 is the sibling of a lesson already paid for. **Incident #70:** "a
+per-entity alert system is structurally blind to a platform-wide fault — a
+student who cannot log in never becomes a row." Here: *a per-entity health check
+driven by a `GROUP BY` over the event table is blind to the entity with zero
+events.* Same shape, different table, three weeks later. The first lesson was
+recorded and did not generalise, because it was written as a fact about
+`founder-alerts` rather than as a fact about aggregation.
+
+### Fix
+
+The watch now drives its per-rep loop from `profiles WHERE role = 'sales'`
+LEFT JOINed to `sales_opportunity`, never from a `GROUP BY` over the offer
+table, with the reason stated in the prompt so it is not quietly refactored
+back. Its frozen facts were corrected to the post-#74 rules, `retry > 20` was
+added to condition A, and dead condition G was replaced by one that can
+actually fire: **retry pinned at exactly its ceiling for three consecutive
+days**, which is what "the backlog is still growing behind the fuse" looks like
+once a cap hides the raw number.
+
+A new condition H disambiguates the zero-deck case, which is the whole point:
+
+- zero cards **and** evidence they showed up (a touch, or a session updated
+  today) → **P0, report immediately**: they came to work and the system gave
+  them no day;
+- zero cards and no evidence → absence, stay silent — *unless* it is the second
+  consecutive day, then one line with the rep, the run of days, and the size of
+  their untouched book.
+
+### Lessons
+
+**A `GROUP BY` cannot see the entity that produced no rows — and that entity is
+usually the one in trouble.** Zero is a state, not an absence of state. Any
+per-entity health check must be driven from the entity table and outer-joined to
+the events, so the broken entity arrives as a row of zeroes instead of vanishing.
+This is Incident #70's lesson in a second costume; it is stated here as a fact
+about aggregation, not about one alerting module, so that it transfers next time.
+
+**Zero rows is ambiguous and must never be read as health.** "No deck because
+nobody asked for one" and "no deck because the build failed" are the same
+silence. A watch that cannot separate them by evidence — did they show up? — is
+not watching.
+
+**A watch prompt is code, and it goes stale in silence.** Every frozen constant
+in a watch is a copy with no compiler, no test, and no reviewer behind it. When
+a commit changes a threshold or a rule that a watch asserts, updating the watch
+belongs in that commit's Definition of Done. A stale watch is worse than no
+watch: it reports "checked, all clear" against a rule that no longer exists.
+
+**A condition that cannot fire is indistinguishable from a condition that
+passes.** Once `retry > 60` became unreachable, three nights of silence from
+condition G meant nothing at all and looked like three nights of good news.
+When a cap is introduced beneath a threshold, the threshold above it is dead and
+must be rewritten to measure the thing the cap now hides.

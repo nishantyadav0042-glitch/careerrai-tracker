@@ -116,6 +116,20 @@ never the gates in §3.
       Type 1 (expensive to undo — schema, taxonomy, stored history) get
       design review BEFORE code, proportional to the cost of being wrong.
 - [ ] Observability wired (§6) — the change is measurable and its failures visible.
+- [ ] **The watches were updated in the same commit.** The nightly watches
+      (counsellor day, database capacity, Daily Pick, forced re-login) carry
+      FROZEN COPIES of thresholds, ceilings and rules — `DAY_CEILING`,
+      `RETRY_CEILING`, what is UNTRIMMABLE, what a healthy lane mix is. They
+      live outside the repo, so no compiler, no test and no reviewer catches
+      them when the code moves. If your change touches a constant or rule a
+      watch asserts, updating that watch is part of THIS change, not a
+      follow-up. Two rules they must always obey, from Incident #75: drive
+      every per-entity check from the ENTITY table outer-joined to the events,
+      never a `GROUP BY` over the events (the entity with zero rows vanishes,
+      and it is usually the one in trouble); and when you put a cap beneath a
+      threshold, rewrite the threshold above it — a condition that can no
+      longer fire is indistinguishable, night after night, from one that is
+      passing.
 - [ ] Tested to the matrix in §5 for what it touches.
 - [ ] Rollback is understood (§7); risky behaviour is behind a flag.
 - [ ] Deployed to `main`, deployment reached `READY`, **verified in production
