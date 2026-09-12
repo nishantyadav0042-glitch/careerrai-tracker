@@ -1,14 +1,32 @@
 name: security
 
-# Continuous security scanning — runs on every PR and push to main so new CVEs,
-# leaked secrets, and risky code patterns are caught before they ship. Mirrors
+# Continuous security scanning — runs on every push to every branch, every PR,
+# and weekly, so new CVEs, leaked secrets, and risky code patterns are caught
+# before they ship and cannot hide on an unscanned branch. Mirrors
 # the one-off audit tooling (Semgrep SAST, Gitleaks secrets, Trivy CVE/secret,
 # npm audit) as a standing gate. Tune the failure thresholds to taste.
 
 on:
   pull_request:
+  # EVERY BRANCH, not just main (12 Sep 2026). This trigger read
+  # `branches: [main]` and that is what let the PR #150 trap below stay open
+  # for two weeks after it was documented: a feature branch was scanned ONLY
+  # if a `pull_request` event happened to fire for its head commit. Push the
+  # commit, open the PR a moment later, and nothing here ran — on a branch
+  # that ci.yml was meanwhile reporting green.
+  #
+  # It is not hypothetical. Two live findings sat unseen behind exactly this
+  # gap — one credential, one critical CVE in a dependency. Gitleaks and Trivy
+  # would each have named one on the push that introduced it. Neither scan was
+  # red; neither scan EXISTED. (Deliberately vague: this repo is PUBLIC, and
+  # until the credential is rotated a comment naming what it is and when it
+  # landed is a search hint. Details are with the founder, not in git.)
+  #
+  # `workflow_dispatch` was the 29 Aug answer and it is the wrong shape: a
+  # manual button closes nothing, because the failure mode is nobody knowing
+  # there is anything to press it for. Matching ci.yml's `'**'` is the fix.
   push:
-    branches: [main]
+    branches: ['**']
   schedule:
     - cron: '0 6 * * 1' # weekly, to catch newly-disclosed CVEs in unchanged deps
   # MANUAL RE-RUN, added 29 Aug 2026 — the only workflow here that lacked it.
@@ -16,14 +34,22 @@ on:
   # PR #150 is why. Its head commit was pushed to the branch moments before the
   # PR was opened, and no `pull_request` event fired for it: ci.yml ran off the
   # `push` trigger (branches: '**') and reported green, while THIS workflow —
-  # which has no push trigger for feature branches — never ran at all. The PR's
-  # checks looked passing because the checks that existed had passed.
+  # which then had no push trigger for feature branches — never ran at all. The
+  # PR's checks looked passing because the checks that existed had passed.
   #
-  # That is the dangerous shape: not a red scan, an ABSENT one. Without a
-  # dispatch trigger there was no way to run the scan on that ref short of
-  # pushing another commit, which is the one thing you should not have to do to
-  # find out whether code is safe to merge.
+  # That is the dangerous shape: not a red scan, an ABSENT one. The push
+  # trigger above is what actually closes it; this button remains for the case
+  # a dispatch is genuinely wanted — re-running a scan against a newly
+  # disclosed advisory without pushing a commit to do it.
   workflow_dispatch: {}
+
+# Scanning every branch means a push and its pull_request event can both fire.
+# Supersede rather than pile up — but keep the weekly CVE sweep out of the same
+# group, so a routine push to main can never cancel the scheduled scan that
+# exists to catch advisories in code nobody touched.
+concurrency:
+  group: security-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
