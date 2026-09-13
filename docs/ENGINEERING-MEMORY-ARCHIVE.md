@@ -4417,3 +4417,107 @@ passes.** Once `retry > 60` became unreachable, three nights of silence from
 condition G meant nothing at all and looked like three nights of good news.
 When a cap is introduced beneath a threshold, the threshold above it is dead and
 must be rewritten to measure the thing the cap now hides.
+
+---
+
+## Incident #76
+
+**Date:** 2026-09-13 (student hit it 11 Sep; reported by a counsellor on the 13th)
+**Area:** Blueprint Builder — the onboarding flow that turns a signup into a student
+**Severity:** P0-shaped, P1 in outcome (one student confirmed hit, recovered himself; the flow is the activation funnel)
+
+### What happened
+
+Aryan Lalwani, on an iPhone, reached the **last screen** of the Blueprint
+Builder — the one that asks him to lock the date he'll finish the CAT syllabus
+— tapped to save, and was shown a red box reading:
+
+> **TypeError: Load failed**
+
+That is WebKit's internal name for a rejected `fetch`. It was rendered
+verbatim into the flow that decides whether somebody ever becomes a student at
+all. He reloaded, the draft in localStorage restored his answers, and he
+finished two minutes later (15:47:42 error → 15:49:05 `log_tour_done`). He is
+onboarded. Nothing was lost.
+
+We only learned of it because a counsellor forwarded a WhatsApp screenshot two
+days later, saying *"the issue keeps coming up again and again."*
+
+### Root cause
+
+Two defects stacked, and the second is the one that matters.
+
+**1. A write that never arrived was treated as a write that was refused.**
+`fetch` RESOLVES on 400/404/500 and only REJECTS on a network fault. Those are
+opposite events. postgrest-js catches the rejection and hands back a
+normal-looking result — `status: 0`, and `error.message` set to
+`` `${err.name}: ${err.message}` `` — so `if (e) throw e` fired on what was
+really a momentary radio drop on Indian mobile data. One dropped packet, and
+the student is told the product broke. No retry existed, though every one of
+these saves sets known columns on one row keyed by id and is therefore
+perfectly idempotent.
+
+**2. A driver's string was rendered as a sentence for a student.**
+`setError(message)` where `message` came straight off the error object. This
+is the SECOND time this exact line has put an engineer's text on a student's
+screen in this exact flow:
+
+| | shown to a student | source |
+|---|---|---|
+| Incident #14 | `permission denied for function is_admin` | Postgres |
+| Incident #76 | `TypeError: Load failed` | WebKit |
+
+Incident #14's fix was to REPORT the error (report-error.ts). That was right
+and it worked — the row is in `client_errors`. But the fix stopped one step
+short: it made sure we see the message, and left the student seeing it too.
+
+`plan-card:tick` had already solved this properly elsewhere in the codebase —
+catch, classify, `reportHandledError`, then a human sentence — and its comment
+records **70 "Load failed" rows since 26 July**. So this is the ordinary
+condition of a phone on Indian mobile data, not an exotic one, and the pattern
+for handling it already existed three files away. Onboarding just never adopted
+it.
+
+### Fix
+
+`src/lib/write-retry.ts` — one rule for "the request never arrived", branching
+on `status === 0` and **never on the message text**, because every engine words
+it differently (Safari "Load failed", Chrome "Failed to fetch", Firefox
+"NetworkError when attempting to fetch resource"). A guard test pins all three.
+
+- `retryOnNetworkFailure` for postgrest writes, `retryFetch` for bare `fetch`.
+  Three bounded attempts, 400ms then 1200ms. A server refusal is **never**
+  retried — a 403 is an answer, and asking again just reprints it slower.
+- All seven `profiles` writes in the Builder now go through one `saveProfile`,
+  plus the coverage grid's `/api/coverage` POST.
+- Neither branch of the catch can render driver text any more. Network →
+  "check your connection"; server → "something went wrong on our side". Both
+  end with **"your answers are saved"**, which is the half that actually stops
+  a student closing the tab, and is true: the localStorage draft is what saved
+  Aryan.
+- `blueprint-save-errors.guard.test.ts` fails if `setError` is ever handed an
+  error's `.message` again, and was verified to fail against the reintroduced
+  bug before being kept.
+
+### Lessons
+
+**"Arrived and was refused" and "never arrived" are different events and must
+never share a code path.** One is a verdict — retrying reprints it. The other
+is weather — retrying usually fixes it. The signal is `status === 0` for
+postgrest and a rejection for bare `fetch`; it is never the message text,
+which is engine-specific and changes under you.
+
+**An error message is UI, and it is written for whoever will read it.** If a
+student can see it, an engineer's words are a bug in the copy, not a debugging
+convenience. Report the real thing and render a human thing — the two are not
+in tension, and Incident #14 got half of this right two months ago.
+
+**A retry is free when the write is idempotent, and every one of these was.**
+Setting known columns on your own row by id costs nothing to repeat. The
+absence of a retry here was not a decision anyone made; it was a question
+nobody asked.
+
+**When a pattern already exists in the codebase, the new code is not the place
+to invent a second one.** `plan-card:tick` had the correct shape AND the
+evidence (70 rows since July) before this happened. The gap was that nothing
+carried the pattern from one surface to the other.
