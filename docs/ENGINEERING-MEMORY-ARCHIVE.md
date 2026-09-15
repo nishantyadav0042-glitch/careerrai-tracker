@@ -4750,3 +4750,71 @@ four properties.
 `complete-orientation` needed no change at all — it asks `canTransition`
 instead of listing statuses itself, so it picked the new transition up for
 free. That is the argument for a shared state machine, made concrete.
+
+## Incident #80
+
+**2026-09-15 · "Daily logs went up" was wrong three ways at once, and the
+number had been quoted for a month · Analytics (P1)**
+
+**What happened.** The founder said he did not trust the log numbers and asked
+for them to be re-analysed. He was right. Weekly `daily_reports` rows ran
+81 → 140 → 124 → **170** → 150, which reads like the product working. Three
+separate things were hiding inside that.
+
+**1. A log is not a study session.** Rows with `study_duration = 0` — the
+student recording that they did NOT study — are roughly half of every week:
+
+| week | log rows | studied >0h | zero hours |
+| --- | --- | --- | --- |
+| 17 Aug | 140 | 84 | 56 |
+| 24 Aug | 124 | 62 | 62 |
+| 31 Aug | **170** | 79 | **91** |
+| 07 Sep | 150 | 85 | 65 |
+
+The best week on record was 54% of rows saying "I did not study". Collecting
+that is right; counting it as studying is not.
+
+**2. Two different actions write the same row.** Ticking a task on the plan
+writes a `daily_reports` row with a credited duration
+(`api/routine/complete-task` → `upsert_log_and_streak`) — the same table the
+daily-log form writes. Task ticks went from 26-48/week in July to **187-211**
+from mid-August. So "logs" silently counts two student actions of very
+different effort, and a product change to either moves the number with nobody
+studying more.
+
+**3. The rise was volume, not behaviour.** Signups over the same weeks: 169,
+324, 218, 164, 78 — then **2**, with the ads off. Logs tracked them one week
+behind; 117 of the 140 logs in the week of 17 Aug came from students less than
+8 days old. Per signup cohort, first-week behaviour barely moved, and "actually
+studied in week one" is still BELOW the 20 July cohort:
+
+| cohort | signups | logged wk1 | studied wk1 | habit (3+ days in 21) |
+| --- | --- | --- | --- | --- |
+| 20 Jul | 120 | 29.2% | **20.8%** | 6.7% |
+| 10 Aug | 169 | 22.5% | 10.7% | **3.0%** |
+| 17 Aug | 324 | 18.2% | 13.3% | 5.2% |
+| 24 Aug | 218 | 17.9% | 14.7% | 6.0% |
+| 31 Aug | 164 | 25.0% | 17.7% | **7.3%** |
+
+**What is actually true.** Habit formation is genuinely improving — 3.0% →
+7.3% per cohort, monotonic since the ad peak. It is small, it is real, and it
+was completely invisible underneath a headline made mostly of ad spend. Weekly
+students-who-studied is already falling with the ads off: 87 → 67.
+
+**The lesson.** Every one of the three is the same mistake this file keeps
+recording: **counting the record instead of the thing.** #77 was "a card dealt
+is not a student reached". #79 was "an empty record is not an empty service".
+This is "a log row is not a study session" — and unlike those two it went
+undetected for a month because the number was going UP, which nobody
+interrogates.
+
+**What was done.** `lib/os/study-truth.ts`, surfaced in the founder digest. It
+counts STUDENTS WHO STUDIED, never rows; reports the subset past their first
+week so an arrival spike cannot masquerade as growth; and carries a caveat
+naming the share of rows that recorded no study, so the number cannot be
+requoted as studying in the next conversation.
+
+Habit rate is reported only for a cohort whose 21-day window has **closed**,
+and one cohort at a time. A cohort mid-window always looks worse than a
+finished one, so quoting the newest beside complete ones is the easiest way to
+manufacture a trend — and the newest is always the one someone wants to quote.
