@@ -251,7 +251,14 @@ export default async function CommandCenterPage() {
           // buddy=wants already excludes premium, so this lists EXACTLY the
           // getWantsBuddy set the count comes from — no extra sub filter that
           // would drop wanting students still stuck in a payment state.
-          { emoji: '🔥', label: 'Want a buddy, not subscribed', value: wantsBuddy.length, href: '/admin/people?buddy=wants' },
+          // NOT a live signal, and the flame said otherwise. This is
+          // `wants_mentor = true` — a box ticked at SIGNUP, for some of these
+          // students months ago. Live commercial intent across the whole base
+          // is 12 buddy taps and 1 intent-door crossing in the last fourteen
+          // days, which is why the conversion lane has been empty since 11 Sep.
+          // Named for what it measures (15 Sep 2026, same pass as the context
+          // tiles); the drill-down behind it is unchanged and still matches.
+          { emoji: '🙋', label: 'Said yes to a mentor at signup', value: wantsBuddy.length, href: '/admin/people?buddy=wants' },
           { emoji: '📞', label: 'Sales-ready to call', value: salesReady.length, href: '/admin/sales-queue' },
           // These are CAPTURED-but-not-unlocked payments (money paid, premium
           // never granted). Such a student derives as sub=free, NOT payment_failed
