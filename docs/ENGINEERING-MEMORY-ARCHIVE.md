@@ -4996,3 +4996,75 @@ than the others: #77 a card dealt is not a student reached · #79 an empty
 record is not an empty service · #80 a log row is not a study session · #81 "I
 could not study" is not silence · #82 a label is not a measurement · #83 **a
 student who does not log is not a student who is gone.**
+
+---
+
+## Incident #84
+
+**2026-09-15 · The best-converting surface in the product went to ZERO for two
+weeks and nothing recorded why · Growth / Notifications (P1)**
+
+**What happened.** Founder: *"buddy CTA wala funnel dekho, kahan drop ho raha
+hai."* The funnel had not dropped. It had **stopped**:
+
+| day | `buddy_nudge_shown` | push-ask events | app opens |
+| --- | --- | --- | --- |
+| 31 Aug | 16 | 0 | 119 |
+| 1 Sep | **0** | 110 | 730 |
+| 5 Sep | **0** | 190 | 1,151 |
+
+`promo_impressions` tells the same story from the server side: the modal
+channel went 37 → 12 → **0 → 0** while the notification channel went
+486 → 875 → **1,029**. 1 Sep is the day the standalone push ask began
+rendering on every app open.
+
+**Why this surface and not another.** All-time, the modal is the best
+commercial surface we have — **28 of 124 shown reached the CTA (22.6%)**
+against **28 of 3,458 evening pushes (0.8%)**. Two weeks of zero modals is not
+a metric dipping; it is the strongest instrument in the product switched off.
+
+**Why nothing said so.** `DailyBuddyNudge` had SIX ways to bail — tour
+unfinished, notif ask on screen, insight on screen, log modal open,
+localStorage slot taken, server claim refused — and **all six were the same
+observable event: silence.** `buddy_nudge_shown` counted the surface working.
+Nothing counted it not working, and nothing distinguished "never mounted" from
+"mounted and bailed at gate 2". The same shape as #83 one layer out: the
+absence of a row was being read as a fact about students, when it was a fact
+about our instrumentation.
+
+The leading hypothesis is that `notifAskVisible()` now holds the gate shut,
+because the push ask renders on every open and ~93% of students have no push.
+**It is a hypothesis and was not shipped as a fix.** Founder's call, and the
+right one: *"pehle mujhe instrument karke exact wajah dikhao."*
+
+**What was done (1) — the silence was made readable, not guessed at.**
+`buddy_nudge_mounted` fires before any gate can bail, so "never rendered" and
+"rendered and bailed" stop being one number. `buddy_nudge_blocked.gate` names
+which of the six closed, on a closed union (`NudgeGate`), deduped per gate per
+mount so three listeners cannot write four identical rows. No priority
+changed, no student sees anything they did not see yesterday. NOTIFICATION-OS
+§8: every stage measured.
+
+**What was done (2) — the evening push stopped competing with the app.**
+NOTIFICATION-OS §10b.1 is law: *a notification exists to bring a student back
+when they're not in the app.* `buddy-evening` was pushing to students who had
+already opened the app that day, and — because the pitch slot is shared — a
+student the modal should have taken was being taken by the 0.8% channel
+instead. It now stands down for anyone with an `app_open` that IST day
+(`lib/in-app-today.ts`), counted as `skipped_in_app` in the run.
+
+**The number that makes this a watch, not a win.** Measured over 45 days with
+opens counted only BEFORE the push (so that a tap, which itself opens the app,
+cannot be mistaken for having opened first): students **already inside the
+app** clicked at **3.17%** (12/379); students who had **not** opened clicked at
+**0.48%** (20/4,191). The slice being stood down is the better-converting slice
+of the push — ~14 students a day, ~8% of the run. The trade is only correct if
+the modal actually takes their place at 22.6%. Until `buddy_nudge_shown` comes
+off zero, this is a loss and not a swap, and `skipped_in_app` against
+`buddy_nudge_shown` is exactly the pair that says which.
+
+**Lesson.** *A surface that can only report success cannot report that it has
+stopped.* Every gate that can silence a student-facing surface names itself, or
+the surface is unmonitorable by construction — and it will be found by a
+founder asking why a number looks odd, weeks late, which is the definition of
+a silent failure (NOTIFICATION-OS §11).

@@ -391,6 +391,15 @@ export type EventName =
   // engagement on the screen as an abandonment.
   | 'buddy_nudge_shown' | 'buddy_nudge_dismissed'
   | 'buddy_nudge_cta' | 'buddy_nudge_rung'
+  // WHY it was silent (15 Sep). `_shown` counted the surface working; nothing
+  // counted it not working. Production: 124 `buddy_nudge_shown` all-time, zero
+  // since 1 Sep — the day the push ask began rendering on every app open — and
+  // six different bail-outs that all look identical from the outside.
+  // `_mounted` fires before any gate, so "never rendered" and "rendered and
+  // bailed" stop being the same number; `_blocked.gate` names which gate.
+  // Neither counts as a pitch: a mount is not an impression, and folding them
+  // into `_shown` would inflate the one number this funnel is judged on.
+  | 'buddy_nudge_mounted' | 'buddy_nudge_blocked'
   // Free external resources attached to a study task (31 Aug). The plan has
   // always been able to say "solve 15 questions" without being able to say
   // where the 15 questions are; these three measure whether closing that gap
