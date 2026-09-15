@@ -94,6 +94,11 @@ export function messageFor(m: MessageInput): string {
       return `${firstName}, you were studying steadily and then it stopped a few days ago. What changed?\n${step()}\n${sign(rep)}`;
     case 'broken_streak':
       return `${firstName}, your streak just broke. The habit is still warm — restart today.\n${step()}\n${sign(rep)}`;
+    // Dealt as a CALL, so this is the fallback for a rep who could not reach
+    // them. Names what the student actually did — they came back on their own
+    // once — and asks, rather than assuming they lost interest.
+    case 'restart':
+      return `${firstName}, you logged your study on CareerRai more than once and then it stopped. What got in the way?\n${step()}\n${sign(rep)}`;
     case 'fresh':
       return `${firstName}, I'm ${rep} from CareerRai. Nobody from our side has spoken to you yet — where are you in CAT prep right now?\n${step()}`;
     case 'rotation': {

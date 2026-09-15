@@ -45,6 +45,25 @@ export function sessionsVisibleFrom(now: number = Date.now()): string {
   return new Date(now - SESSION_GRACE_MS).toISOString();
 }
 
+/**
+ * How far back a close-out may reach for a session nobody recorded.
+ *
+ * 15 Sep 2026. The mentor's close-out takes its sessionId from the
+ * scheduled/active list, so one hour after a call the stale-release cron
+ * expires the session and the id silently becomes null — the debrief saves and
+ * marks nothing delivered. Four sessions a mentor had actually run read as
+ * undelivered that way, and 11 of the first 18 ever created sat expired.
+ *
+ * Thirty days is long enough for a mentor who closes out the next morning or
+ * after a weekend, and short enough that a debrief can never quietly attach
+ * itself to a call from two months ago.
+ */
+export const UNCLOSED_LOOKBACK_MS = 30 * 86_400_000;
+
+export function unclosedSessionsSince(now: number = Date.now()): string {
+  return new Date(now - UNCLOSED_LOOKBACK_MS).toISOString();
+}
+
 /** Whether the Join button should be live for a session. `minsAway` is
  *  negative once the session has started — still joinable, by design. */
 export function isJoinOpen(minsAway: number): boolean {

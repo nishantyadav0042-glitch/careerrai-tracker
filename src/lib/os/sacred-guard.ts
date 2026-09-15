@@ -1,8 +1,12 @@
-import { SELF_HEAL_WINDOW_MIN as CFG_SELF_HEAL_MIN, BUDDY_SLA_HOURS as CFG_BUDDY_SLA_HOURS } from './scale-config';
+import {
+  SELF_HEAL_WINDOW_MIN as CFG_SELF_HEAL_MIN, BUDDY_SLA_HOURS as CFG_BUDDY_SLA_HOURS,
+  MENTORSHIP_UNDELIVERED_DAYS,
+} from './scale-config';
 import {
   burstsFrom, ACTION_LABEL, ACTION_ROUTE, SACRED_FAILURE_WINDOW_MIN,
 } from './sacred-failure';
 import { SESSION_PLAN_ID } from '../session-credit';
+import { fetchAll } from '../supabase/fetch-all';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Admin = any;
@@ -201,6 +205,105 @@ export async function findSacredFailures(admin: Admin, nowMs: number): Promise<F
       actionLabel: 'Open student',
       actionRoute: `/admin/student/${s.id}`,
     });
+  }
+
+  // ── 2b. Paying student whose delivery was never RECORDED ──────────────────
+  //
+  // Alert 2 asks whether a mentor was ASSIGNED, which both paying students
+  // passed while our record of what they received was empty.
+  //
+  // ══ CORRECTED THE SAME DAY, AND THE CORRECTION IS THE POINT ══════════════
+  //
+  // The first version of this alert read an empty delivery record as "this
+  // student received nothing" and fired CRITICAL, naming the mentor's student
+  // to the founder. The founder confirmed the sessions WERE delivered, on
+  // time — they were never closed out in the app.
+  //
+  // `release-stale-sessions` says so in its own words: `expired` means "the
+  // window passed, nobody recorded an outcome", explicitly NOT that the call
+  // failed to happen. It refuses to write `cancelled` for exactly this reason,
+  // because that "asserts it did NOT happen". Reading `expired` as undelivered
+  // made the inference that file exists to refuse — and 11 of the first 18
+  // sessions ever created carry that status.
+  //
+  // So this alert no longer claims anything about what a mentor did. It
+  // reports the only thing we actually know: FOR A STUDENT WHO PAID, WE CANNOT
+  // SAY WHAT THEY RECEIVED. That is worth the founder's attention whichever
+  // way it resolves, and it accuses nobody when it is wrong.
+  // Paged (Incident #65): both reads are population-scaled. Two paying
+  // students today, but a truncated read here would silently stop alerting on
+  // whoever sorted last — and the students this misses are the ones who paid.
+  const { data: servedRows } = await fetchAll<any>(
+    () => admin
+      .from('profiles')
+      .select('id, full_name, phone, premium_since, buddy_id')
+      .eq('role', 'student').eq('is_premium', true).not('buddy_id', 'is', null)
+      .not('is_test_account', 'is', true).not('is_demo', 'is', true),
+    { orderBy: 'id' },
+  );
+
+  const servedIds = [...new Set((servedRows ?? []).map((r: any) => r.id))] as string[];
+  if (servedIds.length) {
+    const { data: delivered } = await fetchAll<any>(
+      () => admin
+        .from('video_sessions')
+        .select('student_id, ended_at')
+        .in('student_id', servedIds)
+        .not('ended_at', 'is', null),
+      { orderBy: 'student_id' },
+    );
+    const everDelivered = new Set(((delivered ?? []) as any[]).map((v) => v.student_id as string));
+
+    // How many sessions went by without an outcome being recorded. This is the
+    // difference between "nobody ever booked anything" and "four calls happened
+    // and nobody pressed the button", and the founder's next action is not the
+    // same in those two cases.
+    const { data: unclosedRows } = await fetchAll<any>(
+      () => admin
+        .from('video_sessions')
+        .select('student_id, session_status')
+        .in('student_id', servedIds)
+        .eq('session_status', 'expired'),
+      { orderBy: 'student_id' },
+    );
+    const unclosedBy = new Map<string, number>();
+    for (const v of (unclosedRows ?? []) as any[]) {
+      unclosedBy.set(v.student_id, (unclosedBy.get(v.student_id) ?? 0) + 1);
+    }
+
+    const undeliveredDeadline = nowMs - MENTORSHIP_UNDELIVERED_DAYS * 86_400_000;
+    for (const s of servedRows ?? []) {
+      if (everDelivered.has(s.id)) continue;
+      const since = s.premium_since ? Date.parse(s.premium_since) : null;
+      // An unknown premium_since is treated as OVERDUE, never as fresh. A
+      // missing date is not evidence that the student was served recently,
+      // and guessing in the student's disfavour is the safe direction here.
+      if (since != null && since >= undeliveredDeadline) continue;
+      const unclosed = unclosedBy.get(s.id) ?? 0;
+      alerts.push({
+        id: `mentorship-unrecorded:${s.id}`,
+        // 'high', not 'critical'. Critical means a paying student is in a
+        // broken state, and we do not know that — an unrecorded session and an
+        // undelivered one look identical from here, and only one of them is an
+        // emergency. Paging the founder on a record-keeping gap spends the
+        // alarm that the money exceptions need.
+        severity: 'high',
+        channel: escalationChannel('high'),
+        title: `No record of what ${s.full_name ?? 'a paying student'} has received`,
+        student: { id: s.id, name: s.full_name ?? 'Student', phone: s.phone ?? null },
+        amountRupees: null,
+        rootCause: unclosed > 0
+          ? `Paid, mentor assigned, and ${unclosed} session${unclosed === 1 ? '' : 's'} `
+            + `passed without being closed out, so nothing here says whether they happened. `
+            + `An expired session means nobody recorded an outcome — not that the call failed. `
+            + `Ask the mentor, then record it.`
+          : `Paid and mentor assigned more than ${MENTORSHIP_UNDELIVERED_DAYS} days ago, `
+            + `with no session ever booked. Nothing here says what this student has received.`,
+        retryAvailable: false,
+        actionLabel: 'Open student',
+        actionRoute: `/admin/student/${s.id}`,
+      });
+    }
   }
 
   // ── 3. A sacred action is FAILING right now (Incident #30) ────────────────

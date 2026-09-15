@@ -1,6 +1,7 @@
 import { assembleFounderInbox } from './founder-inbox';
 import { findSacredFailures } from './sacred-guard';
 import { getAiCost } from './ai-cost';
+import { readStudyTruth, studyHeadline, studyCaveat, type StudyTruth } from './study-truth';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Admin = any;
@@ -25,6 +26,16 @@ export interface DigestBlock {
   critical: { title: string; student: string }[];
   attention: { title: string; count: number }[];
   ai: { rupeesToday: number; spikeRatio: number | null };
+  /**
+   * Whether students are STUDYING — counted as people, not as log rows.
+   *
+   * Added 15 Sep 2026 because the number everyone had been quoting was wrong
+   * in three ways at once: half of all "logs" record no study at all, ticking
+   * a plan task writes the same row type as the daily-log form, and the whole
+   * rise tracked the ad spend rather than any change in behaviour. See
+   * lib/os/study-truth.
+   */
+  study: StudyTruth;
   /** A single opening sentence: the state of the business in one line. */
   headline: string;
 }
@@ -32,10 +43,11 @@ export interface DigestBlock {
 export async function buildFounderDigest(admin: Admin, nowMs: number): Promise<DigestBlock> {
   const dayAgo = new Date(nowMs - 24 * 3_600_000).toISOString();
 
-  const [inbox, alerts, ai, newStudents, newPremium, revenue] = await Promise.all([
+  const [inbox, alerts, ai, study, newStudents, newPremium, revenue] = await Promise.all([
     assembleFounderInbox(admin, nowMs),
     findSacredFailures(admin, nowMs),
     getAiCost(admin, nowMs),
+    readStudyTruth(admin, nowMs),
     admin.from('profiles').select('id', { count: 'exact', head: true })
       .eq('role', 'student').gte('created_at', dayAgo).not('is_test_account', 'is', true),
     admin.from('profiles').select('id', { count: 'exact', head: true })
@@ -63,6 +75,7 @@ export async function buildFounderDigest(admin: Admin, nowMs: number): Promise<D
     critical: critical.map((a) => ({ title: a.title, student: a.student.name })),
     attention: inbox.items.map((i) => ({ title: i.title, count: i.count })),
     ai: { rupeesToday: ai.today.rupees, spikeRatio: ai.spikeRatio },
+    study,
     headline,
   };
 }
@@ -85,6 +98,17 @@ export function digestToHtml(d: DigestBlock): string {
        </div>`
     : '';
 
+  // People, then the caveat. The caveat is not optional decoration: without it
+  // "logs" gets quoted as studying in the next conversation, which is exactly
+  // what happened for a month.
+  const caveat = studyCaveat(d.study);
+  const studyHtml = `
+    <div style="margin-top:12px;padding:10px;border-radius:8px;background:#f5f5f4">
+      <p style="margin:0;font-size:13px;font-weight:700;color:#292524">Are they studying?</p>
+      <p style="margin:4px 0 0;font-size:13px;color:#292524">${studyHeadline(d.study)}</p>
+      ${caveat ? `<p style="margin:4px 0 0;font-size:11px;color:#78716c">${caveat}</p>` : ''}
+    </div>`;
+
   const spike = d.ai.spikeRatio != null && d.ai.spikeRatio > 2
     ? ` — <span style="color:#dc2626;font-weight:600">${d.ai.spikeRatio.toFixed(1)}× the daily norm</span>`
     : '';
@@ -102,6 +126,7 @@ export function digestToHtml(d: DigestBlock): string {
       <div style="margin-top:4px;font-size:13px;color:#292524">
         <b>AI cost today:</b> ₹${d.ai.rupeesToday.toFixed(2)}${spike}
       </div>
+      ${studyHtml}
       ${criticalHtml}
       ${attentionHtml}
     </div>`;

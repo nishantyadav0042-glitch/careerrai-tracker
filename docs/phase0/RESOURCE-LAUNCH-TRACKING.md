@@ -405,3 +405,66 @@ Two things follow, neither urgent at n=1 but both real:
 
 Not fixed tonight — it is one student, and a UI change to the permission flow
 deserves a decision rather than a reflex.
+
+---
+
+### Day 2 — 24 hours of real data, measured 2 Sep 2026 08:31 IST
+
+**P1 check first: the announcement did NOT repeat.**
+
+| ist_day | decided | pushed |
+|---|---|---|
+| 2026-09-01 | 862 | 148 |
+
+Still exactly one row. And the check is **not vacuous** — the kickoff cron ran
+this morning at 08:00 IST (`candidates 922 · sent 790 · skipped 19`) and
+produced zero announcement rows. The job executed, evaluated
+`today === RESOURCE_ANNOUNCE_DAY`, and correctly declined. This is the
+EvidenceAnnounce failure NOT repeating: that one ran for eight days advertising
+a deleted capability because nothing expired it.
+
+**The resource funnel, 1 Sep onward**
+
+| event | events | students |
+|---|---:|---:|
+| `resource_shown` | 1,122 | 77 |
+| `resource_opened` | 37 | 22 |
+| `resource_announce_shown` | 23 | 20 |
+| `resource_announce_dismissed` | 18 | 16 |
+| `resource_verdict` | 11 | 7 |
+
+Read honestly:
+
+- **28.6% of students who saw a link opened one** (22 of 77). Per *impression*
+  it is 3.3% (37 of 1,122) — the link is shown far more often than it is taken,
+  which is the correct design for an optional aid but means impression-rate is
+  the wrong denominator to judge it by.
+- **148 students were pushed the announcement; 20 saw the in-app card.** That
+  gap is app-opens, not the announcement — consistent with the ~11% daily-open
+  rate measured in the notification work.
+- 16 of 20 dismissed the card. Expected for a one-time notice; it is not a
+  rejection signal.
+
+**Verdicts — 11 in total, and NOT yet actionable**
+
+| verdict | n | topics |
+|---|---:|---|
+| `not_opened` | 6 | Charts ×2, Odd One Out, Progressions, Selection & Distribution, Average |
+| `helped` | 3 | Editorial Reading, Para Summary, Triangles |
+| `okay` | 1 | Editorial Reading |
+| `did_not` | 1 | Percentages |
+
+**No topic is accumulating negative verdicts, and nothing should be replaced on
+this data.** The whole sample is 11 verdicts from 7 students spread across 10
+topic/verdict pairs — every cell is n=1 or n=2. The single genuinely negative
+signal is Percentages (`did_not`, n=1), which is noise, not evidence.
+
+The real signal is different and more useful: **`not_opened` is 6 of 11
+verdicts (55%)**. The dominant failure mode so far is students not opening the
+link at all, not the video being wrong once opened. Of the 5 who did open and
+judged it, 4 said helped-or-okay. So the 30 Sep vidIQ decision should be aimed
+at **which topics fail to earn a click**, not at replacing videos students
+disliked — and neither question has enough data yet.
+
+**Next measurement:** re-run these two queries once `resource_verdict` passes
+~50 events, and only then consider a replacement list.

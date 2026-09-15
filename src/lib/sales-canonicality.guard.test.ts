@@ -140,21 +140,25 @@ describe('C3 — one lane authority, thresholds in config', () => {
     const today = '2026-08-24';
     const daysAgo = (n: number) => new Date(Date.parse(today) - n * 86_400_000).toISOString().slice(0, 10);
     // A run one short of the configured minimum is not a broken streak.
+    const shortRun = Array.from({ length: BROKEN_STREAK_MIN_RUN - 1 }, (_, i) => daysAgo(i + 1));
     const short = classifyLane({
       todayIst: today, createdAt: null, buddyTaps: 0, intentDoor: false, momentumScore: 0,
-      logDates: Array.from({ length: BROKEN_STREAK_MIN_RUN - 1 }, (_, i) => daysAgo(i + 1)),
+      // These cases are about streak length, so every logged day is a studied
+      // day — the split added 15 Sep 2026 is exercised in sales-lanes.guard.
+      logDates: shortRun, studiedDates: shortRun,
     });
     expect(short?.dueReason).not.toBe('broken_streak');
     // Exactly the minimum is.
+    const minRun = Array.from({ length: BROKEN_STREAK_MIN_RUN }, (_, i) => daysAgo(i + 1));
     const atMin = classifyLane({
       todayIst: today, createdAt: null, buddyTaps: 0, intentDoor: false, momentumScore: 0,
-      logDates: Array.from({ length: BROKEN_STREAK_MIN_RUN }, (_, i) => daysAgo(i + 1)),
+      logDates: minRun, studiedDates: minRun,
     });
     expect(atMin?.dueReason).toBe('broken_streak');
     // A signup older than the configured window has missed the activation lane.
     const stale = classifyLane({
       todayIst: today, createdAt: new Date(Date.parse(today) - (NEW_LEAD_MAX_AGE_DAYS + 1) * 86_400_000).toISOString(),
-      logDates: [], buddyTaps: 0, intentDoor: false, momentumScore: 0,
+      logDates: [], studiedDates: [], buddyTaps: 0, intentDoor: false, momentumScore: 0,
     });
     // CHANGED 29 Aug 2026 (SALES-OS.md §5). This used to assert 'fresh',
     // because `fresh` was the unconditional fallthrough — every student in the

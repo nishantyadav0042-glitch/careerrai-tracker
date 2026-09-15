@@ -2,6 +2,7 @@ import type { DueReason } from '@/lib/call-queue';
 import {
   DAY_FLOOR, DAY_CEILING, ROTATION_FLOOR, ATTENTION_CEILING, NEW_ARRIVAL_CEILING,
   ROTATION_CALL_EVERY, DAY_ANCHOR_HOUR_IST, CONVERSION_CEILING, RETRY_CEILING,
+  FRESH_PIN_PER_DAY,
 } from '@/lib/os/scale-config';
 
 // ── THE DAY — how 50 to 70 students are dealt from what the book supplies ────
@@ -47,13 +48,53 @@ export const SECTION_LABEL: Record<DaySection, string> = {
   rotation: 'Rotation',
 };
 
+// ── THE FIVE AT THE TOP ─────────────────────────────────────────────────────
+//
+// Founder's call, 15 Sep 2026. Fourteen days measured: 273 never-contacted
+// cards were DEALT across both books and 66 were worked, while promise cards
+// ran at 74-91%. The cold lane was never short of cards — it was short of
+// hours, because promises sort first, get worked first, and the day ends.
+//
+// So a small fixed number of never-contacted students is lifted above the
+// promises, and given the CHANNEL the lane's own action implies: an
+// introduction is a call, not a template. Everything else keeps the queue's
+// rank order exactly — this is one deliberate, bounded exception to "filter,
+// never re-sort", not a new priority scheme.
+//
+// Nothing is dropped and no promise is removed: the five move UP, the rest
+// shift down by five, and the same cards are in the day. A promised callback
+// lands five cards later than it would have, which is minutes.
+export function pinFreshToFront<T extends { dueReason: DueReason; channel: Channel }>(
+  queue: T[], n: number = FRESH_PIN_PER_DAY,
+): T[] {
+  if (n <= 0 || queue.length === 0) return queue;
+  const pinned: T[] = [];
+  const rest: T[] = [];
+  for (const c of queue) {
+    // Only never-contacted. `rotation` is someone we HAVE spoken to before and
+    // is a different promise to the student.
+    if (c.dueReason === 'fresh' && pinned.length < n) {
+      // An introduction is a conversation. A pinned card that arrives as a
+      // template defeats the point of pinning it.
+      pinned.push({ ...c, channel: 'call' });
+      continue;
+    }
+    rest.push(c);
+  }
+  return [...pinned, ...rest];
+}
+
 export const SECTION_OF: Record<DueReason, DaySection> = {
   callback: 'promises', retry: 'promises', followup: 'promises',
   checkout_abandoned: 'money',
   conversion: 'buddy',
   new_never_logged: 'new',
   attention: 'attention',
-  going_cold: 'retention', broken_streak: 'retention',
+  // `restart` is a retention lane and rides the retention section: it is a
+  // CALL (only attention and rotation are messaged) and it takes no ceiling
+  // of its own, because its whole population is 103 students and a lane that
+  // cannot spike does not need a cap.
+  going_cold: 'retention', broken_streak: 'retention', restart: 'retention',
   fresh: 'rotation', rotation: 'rotation',
 };
 
@@ -255,7 +296,9 @@ export function assembleDay<T extends { studentId: string; dueReason: DueReason 
   });
 
   return {
-    queue,
+    // The one deliberate re-order, applied last so counts and channels are
+    // decided on the queue's own ranking and only the ORDER changes.
+    queue: pinFreshToFront(queue),
     counts: { given: counts, heldBack: held.length - backfilled, rotationPool: newRotation.length + carried.filter((c) => SECTION_OF[c.dueReason] === 'rotation').length },
     band: { floor: DAY_FLOOR, ceiling: DAY_CEILING },
   };

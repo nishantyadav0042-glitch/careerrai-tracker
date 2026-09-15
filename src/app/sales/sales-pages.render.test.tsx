@@ -34,6 +34,7 @@ vi.mock('@/components/admin/workspace-shell', () => ({
 
 import SalesEarningsPage from './earnings/page';
 import SalesFollowupsPage from './followups/page';
+import DayClosePage from './day-close/page';
 import PayrollPage from '@/app/admin/sales/payroll/page';
 
 /**
@@ -46,7 +47,11 @@ function makeAdmin(rows: Record<string, unknown>) {
   const chain = (table: string) => {
     const filters: [string, unknown][] = [];
     const c: any = {};
-    for (const m of ['select', 'order', 'limit', 'is', 'not', 'lt', 'gte', 'lte']) c[m] = () => c;
+    // `range` is here because fetchAll REFUSES a builder without order+range
+    // rather than running one capped read (lib/supabase/fetch-all). A mock
+    // missing it turns every paged page into "could not read" — a fake red
+    // that hides whether the page itself works.
+    for (const m of ['select', 'order', 'limit', 'is', 'not', 'lt', 'gte', 'lte', 'range']) c[m] = () => c;
     for (const m of ['eq', 'in']) c[m] = (k: string, v: unknown) => { filters.push([k, v]); return c; };
     for (const m of ['insert', 'update', 'upsert', 'delete']) c[m] = () => c;
 
@@ -308,5 +313,93 @@ describe('/admin/sales/payroll — the founder’s number, with its rows', () =>
     const html = await render(PayrollPage({ searchParams: Promise.resolve({ m: '2026-09' }) }) as any);
     expect(html).toMatch(/1 refunded/);
     expect(html).toContain('₹999');
+  });
+});
+
+// ── /sales/day-close — the shift-end screenshot ─────────────────────────────
+//
+// Founder, 15 Sep 2026: each counsellor sends a short summary when they close.
+// A screenshot travels without its context, so these tests hold the card to
+// three promises: it names who and when, it never hides the unfinished half,
+// and it never dresses up an empty day.
+describe('/sales/day-close — the card a counsellor screenshots', () => {
+  const DAY = '2026-09-15T15:30:00.000Z';   // 21:00 IST, shift end
+
+  // profiles is asked TWICE here with different intents — once for the rep's
+  // own name (eq id) and once for the students named on the card (in id). The
+  // shared profilesFor helper keys on `role`, which neither of these carries,
+  // so this one answers by the id filter the way the database would.
+  const PEOPLE: Record<string, string> = {
+    anshul: 'Anshul Yadav', s1: 'Riya Sharma', s2: 'Karan Mehta', s3: 'Aditi Rao',
+  };
+  const peopleByIdFilter = (filters: [string, unknown][]) => {
+    const [, want] = filters.find(([k]) => k === 'id') ?? [];
+    const ids = Array.isArray(want) ? want : want ? [want] : Object.keys(PEOPLE);
+    return (ids as string[]).filter((id) => PEOPLE[id]).map((id) => ({ id, full_name: PEOPLE[id] }));
+  };
+
+  const dayAdmin = (activity: unknown[], deck: unknown[], overdue: unknown[] = []) => makeAdmin({
+    sales_activity: activity,
+    sales_opportunity: deck,
+    lead_outreach: overdue,
+    profiles: peopleByIdFilter,
+  });
+
+  it('leads with what the day produced and names the rep and the date', async () => {
+    vi.setSystemTime(new Date(DAY));
+    currentAdmin = dayAdmin(
+      [
+        { student_id: 's1', status: 'interested', note: 'Wants a mentor for DILR before October.', callback_at: null, created_at: DAY },
+        { student_id: 's2', status: 'callback', note: 'In class till 7, asked me to ring after.', callback_at: DAY, created_at: DAY },
+        { student_id: 's1', status: 'no_answer', note: 'not pick', callback_at: null, created_at: DAY },
+      ],
+      [{ student_id: 's1', outcome: 'interested' }, { student_id: 's2', outcome: 'callback' }],
+    );
+    const html = await render(DayClosePage() as any);
+    expect(html).toContain('Anshul Yadav');
+    expect(html).toMatch(/15 Sept? 2026/);
+    expect(html).toContain('2 conversations');
+    expect(html).toContain('1 interested');
+    // The student's own words, which is the part the founder asked for by name.
+    expect(html).toContain('Wants a mentor for DILR before October.');
+    expect(html).toContain('Riya Sharma');
+    vi.useRealTimers();
+  });
+
+  it('never hides the unfinished half of the day', async () => {
+    vi.setSystemTime(new Date(DAY));
+    currentAdmin = dayAdmin(
+      [{ student_id: 's1', status: 'no_answer', note: 'not pick', callback_at: null, created_at: DAY }],
+      [{ student_id: 's1', outcome: 'no_answer' }, { student_id: 's2', outcome: null }, { student_id: 's3', outcome: null }],
+      [{ student_id: 's2' }, { student_id: 's3' }],
+    );
+    const html = await render(DayClosePage() as any);
+    expect(html).toContain('2 of 3 cards still open');
+    expect(html).toContain('2 promised callbacks not kept');
+    vi.useRealTimers();
+  });
+
+  it('says plainly that nobody picked up rather than dressing it up', async () => {
+    vi.setSystemTime(new Date(DAY));
+    currentAdmin = dayAdmin(
+      [{ student_id: 's1', status: 'no_answer', note: 'not pick', callback_at: null, created_at: DAY }],
+      [{ student_id: 's1', outcome: 'no_answer' }],
+    );
+    const html = await render(DayClosePage() as any);
+    expect(html).toContain('nobody picked up today');
+    expect(html).toContain('No conversations to report today.');
+    vi.useRealTimers();
+  });
+
+  // The screenshot must carry its own evidence class: SALES-OS records every
+  // rep entry as self_reported, and an image detached from the app could
+  // otherwise be read as an observed call log.
+  it('states on the card itself that this is self-reported', async () => {
+    vi.setSystemTime(new Date(DAY));
+    currentAdmin = dayAdmin([], []);
+    const html = await render(DayClosePage() as any);
+    expect(html).toContain('Self-reported');
+    expect(html).toContain('no call recording');
+    vi.useRealTimers();
   });
 });

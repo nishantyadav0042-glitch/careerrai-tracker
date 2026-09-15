@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { SESSION_PRICING } from '@/lib/plans';
 import Link from 'next/link';
 import { X } from 'lucide-react';
@@ -25,8 +25,24 @@ import { TOUR_DONE_EVENT, NOTIF_ASK_SETTLED_EVENT, INSIGHT_DONE_EVENT, tourDone,
 // free text.
 type DismissVia = 'backdrop' | 'close' | 'maybe_tomorrow';
 
+// Which gate stopped the pitch. Closed union for the same reason DismissVia is
+// one: these names are the whole answer to "why is this surface silent?", and a
+// free-text gate would let two spellings of the same cause look like two causes.
+// Ordered as the code checks them.
+type NudgeGate =
+  | 'tour_unfinished'      // the app tour is still running
+  | 'notif_ask_open'       // the push permission ask owns the screen
+  | 'insight_open'         // the day-1 Career Insight owns the screen
+  | 'log_modal_open'       // the student is logging — never interrupt that
+  | 'daily_slot_taken'     // localStorage: another auto-modal has today
+  | 'already_pitched_today'// the SERVER says this study day is already pitched
+  | 'claim_failed'         // the claim errored and failed closed — a lost pitch
+  | 'claim_unreachable';   // the request never produced an answer at all
+
 export function DailyBuddyNudge({ fullName }: { fullName?: string }) {
   const [show, setShow] = useState(false);
+  const mounted = useRef(false);
+  const lastGate = useRef<NudgeGate | null>(null);
 
   // The single-session rung also calls setShow(false) and is NOT one of these — it is a
   // conversion, and counting it as an exit would make the rung look like it
@@ -37,6 +53,29 @@ export function DailyBuddyNudge({ fullName }: { fullName?: string }) {
   };
 
   useEffect(() => {
+    // WHY THE NUDGE DID NOTHING (15 Sep). Production: 124 `buddy_nudge_shown`
+    // all-time and ZERO since 1 Sep — the day the push ask began rendering on
+    // every app open. Six different bail-outs share one symptom (silence), and
+    // the conversion at stake is the best surface we have: 28 of 124 shown
+    // modals reached the CTA (22.6%), against 28 of 3,458 evening pushes
+    // (0.8%). Nothing stored could say WHICH gate was closing, so any fix
+    // would have been a guess dressed as a decision.
+    //
+    // The mount now reports itself before any gate can bail, and every bail
+    // names its gate — the same shape as `push_ask_mounted`
+    // (NOTIFICATION-OS §8: every stage measured). This changes no priority and
+    // shows the modal to no student it did not already reach; it only makes
+    // the silence readable. The fix comes after the data, not before it.
+    if (!mounted.current) { mounted.current = true; track('buddy_nudge_mounted', {}); }
+    // At most one row per distinct gate per mount: attempt() re-runs on each of
+    // three first-run events, and a student whose tour is unfinished must not
+    // write four identical rows for one page view.
+    const blocked = (gate: NudgeGate) => {
+      if (lastGate.current === gate) return;
+      lastGate.current = gate;
+      track('buddy_nudge_blocked', { gate });
+    };
+
     let timer: ReturnType<typeof setTimeout> | null = null;
     let shown = false;
     const attempt = () => {
@@ -45,7 +84,12 @@ export function DailyBuddyNudge({ fullName }: { fullName?: string }) {
       // 1.4s settle: lets the notif ask evaluate and the first-log prompt
       // (700ms after tour) claim the screen first if it's going to.
       timer = setTimeout(() => {
-        if (shown || !tourDone() || notifAskVisible() || insightVisible() || logModalOpen()) return;
+        if (shown) return;
+        // Unchanged order, unchanged verdicts — each one now says its name.
+        if (!tourDone()) return blocked('tour_unfinished');
+        if (notifAskVisible()) return blocked('notif_ask_open');
+        if (insightVisible()) return blocked('insight_open');
+        if (logModalOpen()) return blocked('log_modal_open');
 
         // TWO gates, in order, and only the second one is the law.
         //
@@ -60,15 +104,20 @@ export function DailyBuddyNudge({ fullName }: { fullName?: string }) {
         // notification). It fails CLOSED: no proof the day is unpitched, no
         // pitch. Claimed only here, at the moment of showing, so a mount that
         // never happens cannot burn the day's slot.
-        if (!claimDailyModal()) return;
+        if (!claimDailyModal()) return blocked('daily_slot_taken');
         void fetch('/api/promo/claim', { method: 'POST' })
           .then((r) => r.json())
-          .then((claim: { show?: boolean }) => {
+          .then((claim: { show?: boolean; reason?: string }) => {
             if (claim?.show === true && !shown) {
               shown = true; setShow(true); track('buddy_nudge_shown', {});
+              return;
             }
+            // The server's own two answers, kept apart: a day already pitched
+            // (the rule working) is not a claim that errored (the rule
+            // failing closed and costing a pitch nobody made).
+            blocked(claim?.reason === 'claim_failed' ? 'claim_failed' : 'already_pitched_today');
           })
-          .catch(() => { /* fail closed: no proof, no pitch */ });
+          .catch(() => { blocked('claim_unreachable'); /* fail closed: no proof, no pitch */ });
       }, 1400);
     };
     attempt();

@@ -14,6 +14,7 @@ const TIER: Record<string, string> = { hot: 'bg-rose-50 text-rose-700', warm: 'b
 const DUE_CLS: Record<string, string> = {
   callback: 'bg-sky-600 text-white', retry: 'bg-orange-500 text-white', followup: 'bg-amber-500 text-white',
   going_cold: 'bg-rose-600 text-white', broken_streak: 'bg-violet-600 text-white',
+  restart: 'bg-fuchsia-600 text-white',
   new_never_logged: 'bg-teal-600 text-white', conversion: 'bg-emerald-600 text-white',
   attention: 'bg-indigo-600 text-white',
   fresh: 'bg-stone-200 text-stone-600', rotation: 'bg-stone-300 text-stone-700',
@@ -55,6 +56,19 @@ export function CallDeck({ queue, repFirstName }: { queue: CallLead[]; repFirstN
   // the one-tap auto-note said a message existed, never what it said.
   const [msgOpenId, setMsgOpenId] = useState<string | null>(null);
   const [msgNote, setMsgNote] = useState('');
+  // ── THE CLAIM MUST FOLLOW THE ACTION (founder, 15 Sep 2026) ───────────────
+  //
+  // "Messaged" and the green WA link were independent: the record could be
+  // written without WhatsApp ever opening, and production says it was —
+  // 277 of one rep's 316 messages landed under ten seconds apart, 22 of them
+  // inside 2m06s carrying one template. So the button now follows the tap that
+  // actually opens WhatsApp for THAT student.
+  //
+  // Per-student and per-session by design. It is a prompt, not a proof: the
+  // rep can still open WhatsApp and not send, and the server keeps the real
+  // floor (lib/sales-message-cadence). What it removes is the path where a
+  // message gets logged without the rep ever leaving this screen.
+  const [waOpened, setWaOpened] = useState<Record<string, boolean>>({});
   const [errorById, setErrorById] = useState<Record<string, string>>({});
   // ── THE CONTRADICTION QUESTION (founder, 4 Sep 2026) ──────────────────────
   // Held per student, with the exact arguments the rep tried to save, so
@@ -228,6 +242,7 @@ export function CallDeck({ queue, repFirstName }: { queue: CallLead[]; repFirstN
                   firstName: lead.firstName, repFirstName, lane: lead.dueReason, stage: lead.journey ?? null, daysSilent: lead.daysSilent ?? null,
                 }))}`}
                 target="_blank" rel="noopener noreferrer"
+                onClick={() => setWaOpened((w) => ({ ...w, [lead.studentId]: true }))}
                 className={`flex items-center justify-center gap-1 bg-[#25d366] px-3 py-3 text-[12px] font-bold text-[#04331c] active:scale-95 ${lead.channel === 'message' ? 'flex-1' : ''}`}>
                 <MessageCircle className="h-4 w-4" /> {lead.channel === 'message' ? 'Message' : 'WA'}
               </a>
@@ -235,8 +250,12 @@ export function CallDeck({ queue, repFirstName }: { queue: CallLead[]; repFirstN
             {/* A message is a touch the day must record (2 Sep) - and since
                 3 Sep it must record WHAT was sent (founder order): the tap
                 opens a one-line box instead of firing an empty note. */}
+            {/* Gated only where a WhatsApp number exists to open. A student we
+                cannot reach on WhatsApp must still be loggable — otherwise the
+                rule would trap the rep on the one card they cannot satisfy. */}
             <button onClick={() => { setMsgOpenId(msgOpenId === lead.studentId ? null : lead.studentId); setMsgNote(''); }}
-              disabled={inFlight[lead.studentId]}
+              disabled={inFlight[lead.studentId] || (!!lead.waNumber && !waOpened[lead.studentId])}
+              title={lead.waNumber && !waOpened[lead.studentId] ? 'Open WhatsApp first, then log what you sent' : undefined}
               className="flex items-center justify-center gap-1 bg-white px-3 py-3 text-[12px] font-semibold text-amber-800 active:scale-95 disabled:opacity-50">
               <Send className="h-4 w-4" /> Messaged
             </button>

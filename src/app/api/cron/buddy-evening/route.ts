@@ -5,6 +5,7 @@ import { authorizedCron } from '@/lib/cron-auth';
 import { dispatch, BUDGET_ACTIVE } from '@/lib/notification-os';
 import { fetchEligibleBuddies, fetchFocusInputsBulk, recommendFor } from '@/lib/buddy-match';
 import { withCronTracking } from '@/lib/cron-run-tracker';
+import { studentsInsideAppSince } from '@/lib/in-app-today';
 
 import { fetchAll } from '@/lib/supabase/fetch-all';
 // Every invocation of this route walks the whole student roster. Vercel's
@@ -70,7 +71,39 @@ async function buddyEveningRun(): Promise<NextResponse> {
     .map((s) => s.id);
   const focusInputs = await fetchFocusInputsBulk(admin, eligibleIds);
 
+  // ── THE PUSH IS FOR THE STUDENTS WE COULD NOT REACH ANY OTHER WAY ─────────
+  //
+  // Founder's call, 15 Sep: "Jo student aaj app mein aaya hai use in-app modal
+  // mile, jo nahi aaya use hi evening push mile." NOTIFICATION-OS §10b.1 says
+  // the same thing as law — a notification exists to bring a student back when
+  // they are NOT in the app — and §2c prices it: a push spent on a student who
+  // already came back is budget the next real reach needed.
+  //
+  // Measured before shipping, 45 days of sends, opens counted only BEFORE the
+  // push so a tap that opens the app cannot count as having opened it first:
+  // 379 sends to students already inside the app that day drew 12 clicks
+  // (3.17%); 4,191 to students who had not opened drew 20 (0.48%). So this
+  // stands down the BETTER-converting slice of the push — roughly 14 students
+  // a day, ~8% of the run. That trade is only worth making because the surface
+  // taking their place converts far better still (28 of 124 shown modals
+  // reached the CTA, 22.6%), and it is worth watching for exactly that reason:
+  // if the in-app modal is not reaching them, this is a loss, not a swap.
+  // `skipped_in_app` is in the response so that stays a number, not a belief.
+  //
+  // A read we could not do is NOT an empty set: on failure every student stays
+  // eligible (the day still reaches them) and the run says so out loud.
+  let insideAppToday = new Set<string>();
+  let reachReadFailed = false;
+  try {
+    insideAppToday = await studentsInsideAppSince(admin, eligibleIds, todayStart);
+  } catch (e) {
+    reachReadFailed = true;
+    console.error('[buddy-evening] could not tell who is inside the app today — sending to all:',
+      e instanceof Error ? e.message : String(e));
+  }
+
   let sent = 0;
+  let skippedInApp = 0;
 
   let released = 0;
   for (const s of students) {
@@ -78,6 +111,8 @@ async function buddyEveningRun(): Promise<NextResponse> {
     if (sentToday.has(s.id)) continue;                 // already nudged today
     const prefs = (s.notif_prefs ?? {}) as { push?: boolean };
     if (prefs.push === false) continue;                // respect an explicit opt-out
+    // Already inside the app today — the in-app surface owns them, not this.
+    if (insideAppToday.has(s.id)) { skippedInApp++; continue; }
 
     // Identical call to the page's. If this ever diverges again, the guard in
     // cron-page-agreement.test.ts fails before it reaches a student.
@@ -141,7 +176,7 @@ async function buddyEveningRun(): Promise<NextResponse> {
     else if (await settleBuddyPitch(admin, s.id, 'buddy_evening', pitch, outcome) === 'released') released++;
   }
 
-  return NextResponse.json({ ok: true, sent, released });
+  return NextResponse.json({ ok: true, sent, released, skipped_in_app: skippedInApp, reach_read_failed: reachReadFailed });
 }
 
 // Vercel Cron invokes endpoints via GET; every other cron route aliases POST

@@ -57,9 +57,27 @@ export function StandaloneNotifAsk({ pushEnabled, serverSubDead = false, appInst
   // evaluate() re-runs on every foreground, so the same outcome would other-
   // wise be written once per app switch. Only a CHANGE is worth a row.
   const lastOutcome = useRef<string | null>(null);
+  // One row per mount, never per re-render or foreground.
+  const mounted = useRef(false);
 
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect -- capability detection must run client-side after mount */
+    // ── DID THIS EVEN MOUNT? (15 Sep) ──────────────────────────────────────
+    //
+    // Every path out of evaluate() reports, and yet 65 students opened
+    // /student/tracker with no subscription and emitted no push_* row at all.
+    // Reading the code could not tell whether the component never mounted,
+    // never reached evaluate(), or reached it and the write was lost — three
+    // very different bugs with one appearance. So the mount says so itself,
+    // once, before any decision is taken. NOTIFICATION-OS §8: every stage
+    // measured, and this was the unmeasured one.
+    //
+    // It is NOT an ask and must never be counted as one — it fires even when
+    // the answer is "do nothing".
+    if (!mounted.current) {
+      mounted.current = true;
+      track('push_ask_mounted', { context: detectDisplayMode() });
+    }
     // Emit once per distinct outcome. `why` is the whole point of this
     // instrumentation: it is what separates "never asked" from "said no".
     const report = (outcome: string, why?: string) => {

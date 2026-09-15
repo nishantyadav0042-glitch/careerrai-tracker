@@ -5,11 +5,14 @@ import { scoreConversion, conversionTier } from '@/lib/sales-score';
 import { isClosedForSales } from '@/lib/sales-conversion-truth';
 import { MAX_CONSECUTIVE_NO_ANSWER } from '@/lib/sales-disposition';
 import { classifyObjective, type SalesObjective } from '@/lib/sales-objective';
+import { attemptYearBoost } from '@/lib/sales-attempt-year';
+import { alivenessBoost } from '@/lib/sales-liveness';
 import {
   GOING_COLD_SILENT_DAYS, GOING_COLD_MIN_PRIOR_DAYS,
   BROKEN_STREAK_MIN_RUN, BROKEN_STREAK_MAX_DAYS_SINCE,
   NEW_LEAD_MIN_AGE_DAYS, NEW_LEAD_MAX_AGE_DAYS,
   ROTATION_SILENT_DAYS, TOUCH_COOLDOWN_DAYS, ATTENTION_WINDOW_DAYS,
+  RESTART_MIN_LOG_DAYS, RESTART_MIN_SILENT_DAYS,
   CONVERSION_INTENT_DAYS, SHIFT_END_HOUR_IST,
 } from '@/lib/os/scale-config';
 import { assembleDay, dayAnchorMs, istHour, SECTION_OF, type Channel, type DaySection, type DayCounts } from '@/lib/sales-day';
@@ -57,6 +60,17 @@ export type DueReason =
   /** Created an order and never paid — the strongest commercial evidence. */
   | 'checkout_abandoned'
   | 'going_cold' | 'broken_streak' | 'new_never_logged'
+  /**
+   * Logged on two or more separate days and then stopped (15 Sep 2026).
+   *
+   * Founder: "jis bhi student ne ek se zyada din log kiya hai, wo students
+   * hamari pehli priority hain calling ke liye." A second log day is the only
+   * unpaid evidence we ever get that a student CHOSE to come back — the first
+   * is onboarding carrying them, the second is them. `going_cold` and
+   * `broken_streak` already catch the strong end of this (a 3-of-7 rhythm, a
+   * 5-day run); this is the tail they were built to miss.
+   */
+  | 'restart'
   | 'conversion'
   /** Opened the app and did not study, or tapped a notification (2 Sep 2026). */
   | 'attention'
@@ -145,6 +159,17 @@ export interface LaneSignals {
   todayIst: string;             // 'YYYY-MM-DD' in Asia/Kolkata
   createdAt: string | null;     // profiles.created_at (ISO)
   logDates: string[];           // daily_reports.report_date values, last 30d
+  /**
+   * The subset of logDates on which the student actually STUDIED (>0 hours).
+   *
+   * Added 15 Sep 2026. A daily_reports row is written whether the student
+   * studied or told us they could not, and roughly half of every week is the
+   * second kind. The attention lane asked "did they log?", so a student who
+   * opened the app and honestly recorded "I did not study today" was counted
+   * as having studied and dropped out of the queue entirely — the single
+   * clearest signal we get, made invisible by the record of it.
+   */
+  studiedDates: string[];
   buddyTaps: number;
   intentDoor: boolean;
   momentumScore: number;
@@ -181,11 +206,11 @@ export interface LaneSignals {
  * events that end, rather than a flag that never does.
  */
 export const RETENTION_LANES: ReadonlySet<DueReason> = new Set<DueReason>([
-  'going_cold', 'broken_streak', 'new_never_logged',
+  'going_cold', 'broken_streak', 'new_never_logged', 'restart',
 ]);
 
 export interface LaneVerdict {
-  dueReason: Extract<DueReason, 'going_cold' | 'broken_streak' | 'new_never_logged' | 'conversion' | 'attention' | 'fresh'>;
+  dueReason: Extract<DueReason, 'going_cold' | 'broken_streak' | 'new_never_logged' | 'restart' | 'conversion' | 'attention' | 'fresh'>;
   dueLabel: string;
   why: string[];
   action: string;
@@ -253,6 +278,48 @@ export function classifyLane(s: LaneSignals): LaneVerdict | null {
     };
   }
 
+  // ── CAME BACK ONCE, THEN STOPPED (founder, 15 Sep 2026) ─────────────────
+  //
+  // "Jis bhi student ne ek se zyada din log kiya hai, wo students hamari
+  // pehli priority hain calling ke liye."
+  //
+  // The two lanes above already take the strong end of this student: a 3-of-7
+  // rhythm gone quiet (going_cold) and a 5-day run just broken
+  // (broken_streak). Both need a HABIT to have existed. This is the tail they
+  // were built to miss, and it is the bigger half of it: of 103 free students
+  // who logged on 2+ days in the last 30, 47 have studied nothing in the last
+  // 15 — and they were falling through to `null`, which means backlog, which
+  // means rotation, which means "eventually".
+  //
+  // Why a second day is the line and not the first. Day one is us: onboarding
+  // walks the student into the log and most of the way through it. Day two is
+  // the student deciding, on their own, on a different day, to come back — the
+  // only unpaid evidence of intent the free product ever produces. 186 free
+  // students logged exactly one day and stopped; 103 logged two or more. The
+  // second group already answered the question the first group never reached.
+  //
+  // And the call has something true to open with, which is the whole reason it
+  // lands: we are not asking a stranger to try the app, we are asking someone
+  // who used it twice what got in the way. Directionally the numbers agree —
+  // of students called since 1 Aug, those with 2+ prior log days studied again
+  // within a fortnight at 8.3% (4/48) against 4.1% (5/123) for the
+  // never-logged — but that is FOUR revivals and is nowhere near proof. The
+  // reason to do this is the evidence the student gave us, not that stat.
+  if (daysAgo.length >= RESTART_MIN_LOG_DAYS && lastLog != null && lastLog >= RESTART_MIN_SILENT_DAYS) {
+    return {
+      dueReason: 'restart', dueLabel: 'Came back once, then stopped',
+      why: [
+        `Logged on ${daysAgo.length} separate days — they chose to come back at least once`,
+        `Then stopped: last log ${fmt(lastLog)}`,
+      ],
+      action: 'Call — ask what changed after those days, not whether they want the app',
+      // More days = more of a habit to restart. Recency breaks the tie, so a
+      // student who stopped last week is asked before one who stopped a month
+      // ago and has had longer to leave.
+      sortBoost: daysAgo.length * 1000 + Math.max(0, 30 - lastLog) * 10 + s.momentumScore,
+    };
+  }
+
   // New and never logged: the activation call. 1-day grace after signup (a
   // call two hours after joining reads as surveillance, not help); after 7
   // days they fall through to fresh — the moment has passed.
@@ -309,19 +376,32 @@ export function classifyLane(s: LaneSignals): LaneVerdict | null {
   if (s.attentionSinceIso) {
     const sinceMs = Date.parse(s.attentionSinceIso);
     const sinceDay = istDateStr(s.attentionSinceIso);
-    const loggedInWindow = s.logDates.some((d) => d >= sinceDay);
+    // STUDIED, not "logged". A zero-hour row is the student telling us they
+    // could not study — which is the reason to reach out, not a reason to skip
+    // them. Asking `logDates` here silently excluded every student who
+    // answered honestly (51 of them in the week of 15 Sep alone).
+    const studiedInWindow = s.studiedDates.some((d) => d >= sinceDay);
+    const toldUsTheyCouldNot = !studiedInWindow && s.logDates.some((d) => d >= sinceDay);
     const opened = s.lastSeenAt != null && Date.parse(s.lastSeenAt) >= sinceMs;
     const tapped = s.notificationTapAt != null && Date.parse(s.notificationTapAt) >= sinceMs;
-    if (!loggedInWindow && (opened || tapped)) {
+    if (!studiedInWindow && (opened || tapped || toldUsTheyCouldNot)) {
       const when = (iso: string) => fmt(Math.max(0, daysBetweenIst(istDateStr(iso), s.todayIst)));
       const why: string[] = [];
+      // The declared case leads, because it is the student's own words and it
+      // changes what the counsellor should open with.
+      if (toldUsTheyCouldNot) why.push('Opened the app and recorded that they could not study');
       if (opened) why.push(`Opened the app ${when(s.lastSeenAt as string)} and did not log a study session`);
       if (tapped) why.push(`Tapped a notification ${when(s.notificationTapAt as string)}`);
       return {
-        dueReason: 'attention', dueLabel: 'Opened, did not study',
+        dueReason: 'attention',
+        dueLabel: toldUsTheyCouldNot ? 'Told us they could not study' : 'Opened, did not study',
         why,
-        action: 'Message first — ask what got in the way; call if they reply',
-        sortBoost: (tapped ? 500 : 0) + (opened ? 100 : 0) + s.momentumScore,
+        action: toldUsTheyCouldNot
+          ? 'They answered honestly — ask what got in the way, and believe the answer'
+          : 'Message first — ask what got in the way; call if they reply',
+        // A student who answered outranks one who was merely seen: they have
+        // already chosen to tell us something.
+        sortBoost: (toldUsTheyCouldNot ? 800 : 0) + (tapped ? 500 : 0) + (opened ? 100 : 0) + s.momentumScore,
       };
     }
   }
@@ -478,9 +558,11 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
   }
 
   const [{ data: profs }, { data: eng }, { data: reports }, outreach, { data: paidRows }, { data: unpaidRows }, { data: lastActs }, { data: tapRows }] = await Promise.all([
-    selectInChunks((chunk) => db.from('profiles').select('id, created_at, last_seen_at, app_installed, push_subscription, push_died_at, target_percentile, cat_percentile, starting_percentile, pain_points, dream_colleges, is_repeater').in('id', chunk), ids),
+    selectInChunks((chunk) => db.from('profiles').select('id, created_at, last_seen_at, app_installed, push_subscription, push_died_at, target_percentile, cat_percentile, starting_percentile, pain_points, dream_colleges, is_repeater, attempt_year').in('id', chunk), ids),
     selectInChunks((chunk) => db.from('student_engagement').select('student_id, buddy_cta_clicks, mock_opened, intent_door_at, buddy_cta_last_at').in('student_id', chunk), ids),
-    selectInChunks((chunk) => db.from('daily_reports').select('student_id, report_date').in('student_id', chunk).gte('report_date', since30), ids),
+    // study_duration comes too: a row exists whether the student studied or
+    // told us they could not, and the lanes must be able to tell those apart.
+    selectInChunks((chunk) => db.from('daily_reports').select('student_id, report_date, study_duration').in('student_id', chunk).gte('report_date', since30), ids),
     // The only read here that decides a business state — checked, retried, or thrown.
     readLeadOutreach(db, ids),
     // THE PAYMENT LEDGER IS THE CONVERSION TRUTH (Incident #52). The roster
@@ -577,9 +659,17 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
   // Per-student log DATES, not just counts — the lane classifier reads the
   // pattern ("5 of the previous 7 → 0 of the last 3"), not the total.
   const logDates = new Map<string, string[]>();
+  // Days the student actually STUDIED — a strict subset of logDates. Kept
+  // separate rather than replacing it: the momentum and streak lanes reason
+  // about whether the student SHOWED UP, which a zero-hour row still proves.
+  const studiedDates = new Map<string, string[]>();
   for (const r of reports ?? []) {
     if (!logDates.has(r.student_id)) logDates.set(r.student_id, []);
     logDates.get(r.student_id)!.push(r.report_date);
+    if (Number(r.study_duration ?? 0) > 0) {
+      if (!studiedDates.has(r.student_id)) studiedDates.set(r.student_id, []);
+      studiedDates.get(r.student_id)!.push(r.report_date);
+    }
   }
   const outById = new Map((outreach ?? []).map((o: any) => [o.student_id, o]));
 
@@ -736,6 +826,7 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
       // exists at all: retention first, conversion second, fresh last.
       const lane = classifyLane({
         todayIst, createdAt: (prof?.created_at as string | null) ?? null, logDates: dates,
+        studiedDates: studiedDates.get(r.id) ?? [],
         buddyTaps, intentDoor, momentumScore: r.score, intentAt,
         lastSeenAt: (prof?.last_seen_at as string | null) ?? null,
         notificationTapAt: tapBy.get(r.id) ?? null,
@@ -780,10 +871,37 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
         }
       } else {
         dueReason = lane.dueReason; dueLabel = lane.dueLabel; why = lane.why; action = lane.action;
-        const BAND: Record<string, number> = { going_cold: 4_000_000, broken_streak: 3_500_000, new_never_logged: 3_000_000, conversion: 1_000_000, attention: 800_000, fresh: 0 };
+        // `restart` sits under the two lanes that need a HABIT to have existed
+        // and above everything else that is not a promise — the founder's
+        // "pehli priority", read precisely: a student who logged 3 of 7 days
+        // and went quiet is the same student further along, not a different
+        // one, so going_cold and broken_streak keep their place above it.
+        const BAND: Record<string, number> = { going_cold: 4_000_000, broken_streak: 3_500_000, restart: 3_250_000, new_never_logged: 3_000_000, conversion: 1_000_000, attention: 800_000, fresh: 0 };
         sort = BAND[lane.dueReason] + lane.sortBoost + (lane.dueReason === 'fresh' ? conv : 0);
       }
     }
+
+    // WHOSE EXAM IS THIS YEAR (founder, 15 Sep 2026). Only 703 of 1,208
+    // students are sitting CAT 2026; 201 are sitting 2027 and are not failing
+    // to study — their exam is next year. This orders WITHIN the discretionary
+    // lanes and never touches a promise (lib/sales-attempt-year).
+    sort += attemptYearBoost({
+      lane: dueReason,
+      attemptYear: (prof?.attempt_year as number | null) ?? null,
+    });
+
+    // WHO IS STILL IN THE APP. Of the 401 CAT-2026 students never called, 15
+    // were in the app this week and 220 had opened once and never returned —
+    // and the fresh lane ranked them identically, because its only recency
+    // signal was daysSinceLastLog and neither group logs. A call to a student
+    // who is alive but not logging revived them at 11.5% against 0.8% for a
+    // matched control, so this is the cheapest ordering available to us
+    // (lib/sales-liveness). Lifts the present; never pushes the quiet down.
+    sort += alivenessBoost({
+      lane: dueReason,
+      lastSeenAt: (prof?.last_seen_at as string | null) ?? null,
+      nowMs: now,
+    });
 
 
     // WHICH GOAL IS THIS CALL FOR (§4). A live commercial signal is
@@ -793,8 +911,19 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
     // After any touch a student is left alone for TOUCH_COOLDOWN_DAYS unless
     // a promise, money, or a retention lane brings them back. Attention,
     // buddy intent and rotation all wait their turn.
+    //
+    // `restart` waits its turn too, and that is not a detail. The other
+    // retention lanes are exempt because they EXPIRE by themselves — going
+    // cold is a 10-day window, a broken streak is three days old at most — so
+    // a student cannot sit in them. `restart` has no such clock: two logged
+    // days stay two logged days, so an exempt restart card would be re-dealt
+    // every morning until the student logged again. That is precisely the
+    // never-refreshing list that took 115 of 121 worked cards back into the
+    // next day's deck before 10 Sep, and it is not coming back through a lane
+    // I added.
     if (daysSilent != null && daysSilent < TOUCH_COOLDOWN_DAYS
-      && (dueReason === 'attention' || dueReason === 'conversion' || dueReason === 'rotation')) continue;
+      && (dueReason === 'attention' || dueReason === 'conversion' || dueReason === 'rotation'
+        || dueReason === 'restart')) continue;
 
     // WHERE ON THE JOURNEY (founder, 2 Sep): install → notifications → daily
     // log. The card asks for the next step and nothing beyond it.
@@ -817,6 +946,9 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
       // is the most valuable form of retention we have and applies to roughly
       // three-quarters of the base.
       hasRetentionNeed: RETENTION_LANES.has(dueReason) || dates.length === 0,
+      // Premium students entered the books on 15 Sep (founder's call: retention
+      // is a P0 and had no owner). A paying student's card is never a pitch.
+      alreadyPaying: prof?.is_premium === true,
     });
 
     cands.push({

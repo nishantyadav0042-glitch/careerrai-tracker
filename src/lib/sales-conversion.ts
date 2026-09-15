@@ -117,7 +117,7 @@ export async function getSalesConversionView(admin: any, id: string): Promise<Co
     admin.from('lead_outreach').select('status').eq('student_id', id).maybeSingle(),
     // PRODUCT FACTS for the 360 (24 Aug foundation): the day-by-day pattern,
     // the latest mock, and the promise history. All read-only to sales.
-    admin.from('daily_reports').select('report_date').eq('student_id', id).gte('report_date', since14),
+    admin.from('daily_reports').select('report_date, study_duration').eq('student_id', id).gte('report_date', since14),
     // Several debriefs, not one: the shared chain applies its own recency and
     // completeness rules, and reading only the newest row would quietly make
     // sales stricter than the planner.
@@ -244,6 +244,11 @@ export async function getSalesConversionView(admin: any, id: string): Promise<Co
     todayIst: new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }),
     createdAt: (p.created_at as string | null) ?? null,
     logDates: ((strip14 ?? []) as any[]).map((r) => r.report_date as string),
+    // A zero-hour row is the student saying they could not study. The lanes
+    // must not read that as studying (15 Sep 2026).
+    studiedDates: ((strip14 ?? []) as any[])
+      .filter((r) => Number(r.study_duration ?? 0) > 0)
+      .map((r) => r.report_date as string),
     buddyTaps, intentDoor, momentumScore: momentum.score,
     // Incident #71: the 360 and the queue must agree on what "intent" means,
     // or a card opened directly would claim a warm buddy tap the calling list

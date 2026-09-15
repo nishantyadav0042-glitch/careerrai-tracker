@@ -1,18 +1,27 @@
 // The Study Companion cadence — the founder's Inshorts insight made real:
-// the notification tray becomes a study surface. Seven daily touches, five
-// after 5pm (when CAT students actually study), and every push must pass
-// the gift-vs-demand test: it delivers value readable in the tray, from
-// THIS student's own data or real exam craft — never an invented statistic,
+// the notification tray becomes a study surface. Every push must pass the
+// gift-vs-demand test: it delivers value readable in the tray, from THIS
+// student's own data or real exam craft — never an invented statistic,
 // never a sell, and only ONE demand per day (the 21:30 log reminder).
 //
-// Slots (IST): 09:30 plan · 13:00 micro-tip · 17:00 study window ·
-// [20:00 decision-engine — already live, the smart-insight slot] ·
-// 20:30 progress · 21:30 log reminder · 22:00 close.
+// THE CANONICAL SCHEDULE IS vercel.json. Four slots run (IST):
+//   08:00 kickoff · 11:00 spark · 20:30 progress · 21:30 log
+// plus 20:00 decision-engine, which is a separate job, not a slot here.
+//
+// Four, not nine, because BUDGET_ACTIVE = 4 (notification-os): an engaged
+// logger may receive four student-budget notifications a day. A fifth slot
+// would be built, dispatched, and then refused as `budget_exhausted` — work
+// that produces silence. The cadence is sized to the budget on purpose.
+//
+// The other five slots ran in production 13–27 July 2026 and were retired
+// on 27 July; see RETIRED_COMPANION_SLOTS below. Their copy is kept (it is
+// good, and a future budget could earn it back) but the route refuses them,
+// so "has copy" can never again be mistaken for "is scheduled".
 //
 // State gating (see notification-os): only students who CAN study today get
 // the cadence — active loggers and Day 1-7 arc students. Slipping/inactive
-// students stay on the recovery ladder; sending seven gifts to someone five
-// days silent is noise, not help. The per-student cooldown stays on: an
+// students stay on the recovery ladder; sending a fistful of gifts to
+// someone five days silent is noise, not help. The per-student cooldown stays on: an
 // active logger never trips it, a student who stops logging AND stops
 // tapping gets automatically quieter. Measurement decides the rest —
 // every slot is a distinct type on /admin/notification-health.
@@ -22,6 +31,34 @@ import type { ExpectedAction } from './notification-os';
 export type CompanionSlot = 'kickoff' | 'morning' | 'spark' | 'fact' | 'open' | 'wind' | 'progress' | 'log' | 'close';
 
 export const COMPANION_SLOTS: readonly CompanionSlot[] = ['kickoff', 'morning', 'spark', 'fact', 'open', 'wind', 'progress', 'log', 'close'];
+
+// ── Retired slots — proven, not assumed ─────────────────────────────────────
+// These five carry copy and a `case` in the cron route but have no schedule
+// in vercel.json and MUST NOT be run. The evidence they were retired rather
+// than lost, read from production on 2 Sep 2026:
+//
+//   companion_morning  1,814 rows · 13 Jul → 27 Jul 09:32 · then nothing
+//   companion_fact     1,943 rows · 13 Jul → 27 Jul 13:01 · then nothing
+//   companion_open     1,952 rows · 13 Jul → 27 Jul 17:01 · then nothing
+//   companion_wind     1,884 rows · 13 Jul → 27 Jul 18:31 · then nothing
+//   companion_close       21 rows · 13 Jul → 25 Jul 22:00 · then nothing
+//
+// against the four that never stopped (kickoff 17,177 · spark 17,584 ·
+// progress 17,359 · log 16,663, all still firing today). Five slots ending
+// on one day while four continue is a decision, not a scheduler failure —
+// and the count it lands on is exactly BUDGET_ACTIVE.
+//
+// This list plus vercel.json must together account for every slot, exactly
+// once — enforced by companion-schedule.guard.test.ts. That guard is the
+// reason a slot can no longer be quietly unscheduled: nothing else notices,
+// because cron liveness alerting keys on the ROUTE, so the four live slots
+// mask the absence of any fifth.
+export const RETIRED_COMPANION_SLOTS: readonly CompanionSlot[] = ['morning', 'fact', 'open', 'wind', 'close'];
+
+/** Slots that may actually be dispatched. The route refuses everything else. */
+export function isRetiredSlot(slot: CompanionSlot): boolean {
+  return RETIRED_COMPANION_SLOTS.includes(slot);
+}
 
 export function companionType(slot: CompanionSlot): string {
   return `companion_${slot}`;

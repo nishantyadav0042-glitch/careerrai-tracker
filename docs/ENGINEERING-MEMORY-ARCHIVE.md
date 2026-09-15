@@ -4310,3 +4310,849 @@ privilege the group confers.
 "given > 110 → the list is unfinishable again" written on 7 Sep, before anyone
 knew it would fire. When it did, the argument was already settled — it was a
 number crossed, not a judgement call made under pressure at 22:00.
+
+
+---
+
+## Incident #75
+
+**2026-09-02 · careerrai-test raised `rls_disabled_in_public` a second time ·
+Security (P0 class, zero actual exposure)**
+
+**What happened.** Supabase Security Advisor emailed a CRITICAL finding on
+careerrai-test (`endycmkdphymmhzniaih`): table `public._probe` had RLS
+disabled while `anon` held INSERT, SELECT, UPDATE, DELETE and TRUNCATE. The
+anon key ships to every browser by design, so anyone holding the test project
+URL could read or destroy its contents.
+
+**What was actually at risk: nothing.** Read before acting — 8 rows,
+`(n int, probe text, result text)`, holding sales-conversion invariant probe
+results ("P1 same payment credited twice" -> "PASS - rejected 23505"). No
+student data, no PII, no credentials, no production reference.
+
+**Production was never affected**, verified read-only before touching test:
+101 of 101 public tables RLS-enabled, zero disabled.
+
+**The real lesson — fixing the census never fixes the default.**
+`20260826f_rls_parity_from_production.sql` (Incident from 26 Aug) enabled RLS
+on the 91 tables that were unprotected *at that moment*. It was a correct fix
+and it was structurally incapable of preventing the recurrence, because
+`_probe` did not exist yet. careerrai-test is a scratch database where
+creating ad-hoc tables during verification is the entire point, so "audit the
+tables that exist" was always going to be outrun by the next probe run. Six
+days later it was.
+
+This is the same shape as the companion-slot defect closed the same week: a
+per-item audit that passes today and cannot notice tomorrow's new item. In
+both cases the durable fix was to make the *absence* of the safe state
+impossible to reach silently, not to re-run the census.
+
+**The fix, with teeth.** `20260902a` drops `_probe` (disposable scratch,
+referenced by nothing — the checked-in `supabase/tests/*_probes.sql` create
+and drop their own `public.__probe(text)` FUNCTION; this TABLE was ad hoc).
+`20260902b` installs an event trigger on `ddl_command_end` that enables RLS on
+every newly created `public` table. Service role and table owners bypass RLS,
+so app queries, migrations and probe runs are unaffected; RLS with no policies
+denies anon/authenticated by default, which is the correct posture for a table
+nobody designed access for.
+
+**Verified, not assumed.** After applying, `create table
+public._rls_trigger_selftest (id int)` came out with `relrowsecurity = true`
+without being asked, and was dropped. Project state after: 100 public tables,
+100 RLS-enabled, 0 disabled, **0 ERROR-level advisor findings** (was 1).
+
+**Scoped to test deliberately.** Production is already 101/101 and has
+migration review as its control; installing a DDL event trigger there is a
+behaviour change nobody asked for. Extending it is the founder's call, not a
+side effect of a test-project fix.
+
+**Checked while there, and left alone:** production has three SECURITY
+DEFINER functions reachable by `anon`/`authenticated`. Two
+(`enforce_sales_seat_cap`, `sync_student_crm`) return `trigger`, so PostgREST
+cannot invoke them as RPC at all; `is_admin(uuid)` is authenticated-only,
+returns a boolean, and is called by RLS policies — revoking EXECUTE could
+break those policies. Not a vulnerability, and not touched.
+
+**Rule to carry forward:** when a security finding is "this object is
+misconfigured", ask whether the *class* of object can be created again
+tomorrow. If it can, the fix is a default or a guard, not a corrected census.
+
+## Incident #76
+
+**2026-09-15 · Four different 422s wore one face, so a 46% scanner failure ran
+seven weeks undiagnosed — and the error text sent students to a screen that
+does not exist · Learning (P0 student correctness)**
+
+**What happened.** Three students told a counsellor, independently, that the
+app's plan did not match their coaching: *"his schedule is different and
+doesn't match the application"*, *"the schedule is not in sync"*, *"topic and
+schedule are not synced so she is trying to customize it but is facing
+difficulties"*. The complaint read like a plan-engine bug. It was not.
+
+`lib/timetable-day` is correct: when a timetable is saved, the sheet owns the
+day and the coverage matrix goes dead. The engine had nothing to sync to,
+because almost no timetable ever gets in.
+
+| coaching students | 357 |
+| with a saved timetable | 17 (4.8%) |
+| dismissed the ask | 280 |
+| tried to upload | 62 |
+| parse failures | 32 (46% of tries) |
+| saved | 26 |
+
+**Why it survived seven weeks.** Of the failures, 23 across 12 distinct
+students were 422s, spread 25 Jul - 8 Sep. `api/timetable/parse` had four ways
+to answer 422 and recorded which one to **nothing** — the client logged
+`{ status }` and the server logged no reason at all:
+
+- the workbook would not open (corrupt / password-protected)
+- the workbook had no readable rows
+- the model judged the image not to be a timetable
+- the model answered and `extractJson` could not read the reply
+
+Only the last-but-one branch writes a timeline row, and production holds
+**zero** `ocr_failed` rows (checked: no constraint blocks that kind, the table
+is live with five other kinds). So the 23 came from the other branches,
+indistinguishable. Twelve real students hit a dead end and we could not say
+which wall they hit.
+
+**The second defect, found while fixing the first.** Three of those messages
+ended *"…or add your classes by hand."* **There is no by-hand path.** The
+phrase appeared nowhere in the product outside those three strings. A student
+whose photo was rejected was told to do something the app has never offered,
+and then handed back the same upload button. Compare `MockDebriefModal`, which
+says "fill in manually" and has the form behind it — the repo already knew the
+standard.
+
+**The lesson — a refusal that cannot be named cannot be counted, and a count
+that cannot be read is a failure that never gets fixed.** The status code was
+never the information; four distinct causes shared three status codes. This is
+the Scale Contract's drill-down rule applied to errors: an exception you cannot
+drill into is a chart, and a 422 you cannot attribute is worse — it is a chart
+with one bar.
+
+The second lesson is narrower and sharper: **never write an instruction into an
+error message without checking the door exists.** It costs nothing to write and
+it cost twelve students their upload.
+
+**What was done.** `lib/timetable-refusal.ts` names all eleven ways the scanner
+can refuse, each with a stable code and its production status unchanged (seven
+weeks of old rows keep their meaning). `not_a_timetable` and
+`model_reply_unreadable` are split deliberately — one is a photo problem and
+one is our own extractor, and counted together they would point the next
+investigation at the wrong half. Every refusal returns `{ error, reason }` and
+the client records `reason` on `timetable_parse_failed`.
+
+The phantom door is gone from the copy, and `PHANTOM_DOORS` in
+`timetable-refusal.test.ts` fails the build if `by hand` / `manually` / `type
+them in` reappears in any refusal message. If manual entry is ever built, the
+pattern is deleted in the same commit that ships the screen — that is the only
+way back in.
+
+**What is NOT fixed, and is the real conversion problem.** 340 of 357 coaching
+students still have no timetable, and the only door in is a file upload. The
+280 who dismissed the ask were never offered another way to tell us when their
+classes are. Naming the failures makes the next week readable; it does not add
+the missing door. That decision is open — see the note to the founder, 15 Sep,
+on whether a by-hand schedule should REPLACE the generated day (as an uploaded
+sheet does) or only constrain it, because the two produce materially different
+plans and the wrong choice would hand a student a two-hour topic-less day.
+
+## Incident #77
+
+**2026-09-15 · 609 of 1,138 students in the two books had never been dealt a
+single card, and the counsellor holding the larger pile was dealt zero of them
+on nine of ten days · Sales (Trust) (P1)**
+
+**What happened.** Asked to surface "the 38 untouched Tier-A students", the
+number did not survive checking. Of 79 students with 3+ log days, only **6**
+had never been dealt a card, and 5 of those had been in a book less than a
+week. The 38 was wrong and is corrected here.
+
+The real number was an order of magnitude larger and had nothing to do with
+tiers:
+
+| rep | book | never dealt a single card |
+| --- | --- | --- |
+| Neelam | 583 | 333 |
+| Anshul | 555 | 277 |
+
+**More than half the base the founder wants to convert had never once appeared
+on a counsellor's screen** — not skipped, not refused, never dealt.
+
+**And it was not spread evenly.** Never-contacted (`fresh`) cards actually
+dealt per day: Anshul 14, 15, 25, 15, 21, 17, 47 across 6-15 Sep; Neelam
+**0, 0, 0, 0, 0, 0** and then 8 today. (12-14 Sep was approved leave.)
+
+**The mechanism — a floor that is not a floor.** On 15 Sep Neelam's 73 cards
+were callback 35, retry 20, attention 6, new_never_logged 3, going_cold 1,
+fresh 8. Anshul's 70 were fresh 47, callback 11, retry 7.
+
+`assembleDay` computes `target = Math.max(ROTATION_FLOOR, DAY_FLOOR -
+signalsToday)` and then `Math.min(room, target - usedRotation)`.
+`ROTATION_FLOOR` is written as a floor — *"so the silent book always moves"* —
+but the untrimmable lanes are counted first, so `room` crushes it toward zero.
+A counsellor who books many callbacks fills tomorrow with them, and the
+students nobody has EVER called are the only lane with no claim on the day:
+they lose every tie, and **the more promises a counsellor makes the more
+completely they lose**.
+
+This is Incident #74's sibling. That one capped `retry` at `RETRY_CEILING`
+(20) after the retry lane ate whole days. Her retries now sit at exactly 20 —
+at the ceiling — and the day is eaten by `callback` instead, which has no
+ceiling by deliberate design (promises are a commitment a student extracted
+from us, 2 Sep). **Capping one untrimmable lane moved the starvation to the
+next one.** The general lesson: a per-lane ceiling cannot protect a lane that
+is last in priority; only a reserved share or an explicit decision can.
+
+**Why the obvious fix is wrong.** Forcing N never-contacted cards into every
+day breaks SALES-OS §5 ("a day the book cannot fill is reported short, never
+padded") and trades a kept promise for a cold call. Neelam already had 30
+promised callbacks she had not kept — her day is not underfull, it is overfull
+of commitments already made. Whether the answer is fewer callbacks, a third
+seat, or splitting the book is a founder decision about capacity, not a
+constant to tune.
+
+**What was done.** `lib/os/book-starvation.ts` reports it as one Exception
+(`book_never_reached`, severity high) that drills into the rep's own activity
+view — per SCALE-CONTRACT, not a new dashboard. It fires only on both
+conditions (≥50 never dealt AND ≥3 consecutive **working** days at zero), and
+**days with no cards dealt are skipped rather than counted as zeros** — Neelam
+was on approved leave 12-14 Sep, and a streak counted in calendar days would
+have turned her holiday into evidence against her on the day the founder read
+it. Both reads are paged (Incident #65); any read failure returns `[]`.
+
+The sentence names the arithmetic and nobody's character, and the suggested
+action is *"Decide what gives"*, never "deal more" — a test asserts both.
+Booking callbacks is the job, and the counsellor doing it well is the one who
+produces this exception; SALES-OS §0 forbids it becoming a judgement.
+
+**Still open.** The two premium students are both silent 7+ days and one of
+them — 14 log days, paying — is **in no book at all**, because `lead-intake`
+excludes `is_premium === true` from the pool. That is correct for *lead*
+intake and leaves retention, the other P0, with no book. Not fixed here.
+
+**Corrected the same day.** The first version counted cards DEALT. Measured
+over 14 days: Anshul was dealt 229 never-contacted cards and worked **65**;
+Neelam was dealt 44 and worked **1** — against promise cards worked at 91% and
+74%. Both counsellors work promises and skip cold cards, which means "the deck
+dealt them" says almost nothing about whether anybody was reached: v1 would
+have stayed silent on a book where 164 cold cards were dealt and never touched.
+The reading now counts never-contacted students actually WORKED. A student is
+reached when someone calls them, not when a card appears on a screen.
+
+The sentence still names no work rate and no percentage — a test forbids `%`
+in it. The gap is real and the founder must see it, but a per-rep work rate is
+a quota wearing a number's clothes (SALES-OS §0), and a counsellor judged on
+cold-call volume will pad it.
+
+## Incident #78
+
+**2026-09-15 · An unkept promise is redealt every morning forever, so one
+counsellor's day became 100% promise cards and 333 students in her book were
+never dealt anything · Sales (Trust) (P1)**
+
+**What happened.** Asked to split Neelam's book so every student gets tapped,
+the measurement said the book was not the problem. Both books are the same
+size — Neelam 583, Anshul 555. The difference is the DAY.
+
+Cards dealt, 7-14 Sep:
+
+| day | Anshul dealt | fresh dealt → worked | Neelam dealt | fresh dealt | promise cards |
+| --- | --- | --- | --- | --- | --- |
+| 11 Sep | 66 | 17 → 2 | 69 | **0** | 45 |
+| 10 Sep | 59 | 21 → 4 | 69 | **0** | 52 |
+| 09 Sep | 84 | 15 → 3 | 114 | **0** | **113** |
+| 08 Sep | 84 | 25 → 0 | 104 | **0** | 99 |
+
+Neelam's day is **one hundred percent promise cards** — not most of it, all of
+it. Nine working days without a single never-contacted student.
+
+**The mechanism.** `sales-day.ts` holds `UNTRIMMABLE = {callback, followup,
+checkout_abandoned}`. Incident #74 gave `retry` a ceiling (`RETRY_CEILING`, 20)
+after the retry lane ate whole days. `callback` never got one, deliberately: a
+callback is a time a STUDENT asked us to ring back, and promises are never
+bumped (founder, 2 Sep). That rule is right.
+
+But **an overdue promise is redealt every morning until it is worked, and
+nothing ages it out**, so a promise that is never kept becomes a permanent
+standing charge against the day:
+
+| rep | callbacks set | overdue | 3+ days | 7+ days | oldest |
+| --- | --- | --- | --- | --- | --- |
+| Anshul | 13 | 1 | 0 | 0 | today |
+| Neelam | 30 | **24** | 15 | 10 | 7 Sep |
+
+Twenty-four of her ~70 daily slots are committed before the day begins, to the
+same twenty-four students, every morning.
+
+**Why the requested fix would not have worked.** Moving students out of her
+book changes none of this — the debt travels with the promises, not with the
+book size. Her day would still open with 24 committed slots, and Anshul's
+fresh lane is capped by his own day, so his throughput would not rise either;
+his 277 never-contacted would simply start competing with her 333. Splitting
+the book is **neutral** for "tap every student", and the exception's own
+sentence says so where the founder reads it, because otherwise he moves 333
+students and nothing changes.
+
+**The third lesson in the same family.** #74: the retry lane ate the day, so
+retry got a ceiling. #77: capping one untrimmable lane moved the starvation to
+`callback`. #78: the reason `callback` grows without bound is that nothing
+ages an unkept promise out. Each fix was correct and each was outrun, because
+the shape — *a lane with no ceiling and no expiry, counted before the lane
+that has no claim on the day* — was never addressed directly.
+
+**What was done.** `lib/os/promise-debt.ts` reports it as one Exception
+(`promises_overdue_blocking_day`, severity high) drilling into the rep's
+activity view. It fires only on both conditions (≥10 overdue AND at least one
+past 3 days), so an ordinary busy week where everything slipped this morning
+never trips it.
+
+The suggested action is **"Clear the overdue promises — those students are
+still waiting"**, never cancel, drop, bump or expire, and a test asserts those
+words are absent. A promise a student is owed is not ours to delete because it
+has become inconvenient to our throughput — the debt is the founder's to
+decide about, not the system's to quietly resolve.
+
+**Not done, and deliberately.** No ceiling or expiry was added to `callback`.
+That would override a commitment made to a student, and it is the founder's
+rule to change, not a constant to tune.
+
+## Incident #79
+
+**2026-09-15 · Both paying students had a mentor assigned and had received zero
+sessions; the sacred alert checked assignment, not delivery · Trust (P0)**
+
+**What happened.** Asked to give premium students an owner, because one looked
+like they were in nobody's book. The premise was wrong and the truth was worse.
+
+Both paying students DO have an owner — the same mentor. `call-queue` excludes
+`isPremium` and `hasBuddy` from the sales roster on purpose: a paying student
+with a mentor is the mentor's to retain, not a counsellor's. Retention was not
+unowned.
+
+What it had delivered was nothing:
+
+| student | paid | mentor | sessions booked | ever started | ever ended | last study log |
+| --- | --- | --- | --- | --- | --- | --- |
+| Arnav Badaya | yes | yes | 5 (9-22 Aug) — **4 expired, 1 cancelled** | **0** | **0** | 4 Sep |
+| Monu singh | yes | yes | 1 request, never became a session | **0** | **0** | 6 Sep |
+
+Both then stopped studying.
+
+**Why nothing fired.** `sacred-guard` alert 2 is "paying student with no mentor
+past SLA" — `.is('buddy_id', null)`. Both had a mentor, so it was silent. Its
+own root-cause text reads *"The one thing they paid for, undelivered"*, which
+was exactly true of both students and exactly what the test could not see.
+**Assignment was being counted as delivery.**
+
+This is the shape of Incident #75 again, and of #77: a census that passes while
+the thing itself never happens. There, RLS was enabled on the tables that
+existed; here, a mentor exists. In both the audit is of the wrong noun.
+
+**What was done.** A fourth sacred alert (`mentorship-undelivered:<id>`,
+critical): premium, mentor assigned, and **not one `video_sessions` row with an
+`ended_at`**, more than `MENTORSHIP_UNDELIVERED_DAYS` (7) after
+`premium_since`.
+
+Delivery is defined as a session that ENDED, deliberately. Booked, scheduled
+and assigned are all things WE did; `ended_at` is the only column that means a
+human spent time with the student, which is what the money bought. Filtering on
+`session_status` was rejected — it would need a list of every failure word, and
+Arnav's five were 4 `expired` plus 1 `cancelled`; the positive fact cannot be
+fooled by a status nobody thought of.
+
+An unknown `premium_since` is treated as OVERDUE rather than fresh: a missing
+date is not evidence a student was served, and the safe direction to guess is
+the student's.
+
+Both reads are paged (Incident #65) — caught by the unbounded-read ratchet in
+the same commit, which refused the new reads and said "find it, do not raise
+the number".
+
+**Also corrected in the same work.** `classifyObjective` had no notion of a
+student who already pays: a payer in the `fresh` lane with no visible retention
+need classified as CONVERSION, reason *"this is a commercial conversation"* —
+a counsellor phoning to sell the product to somebody who had already bought it.
+`alreadyPaying` is now checked FIRST, above every commercial signal, because
+those signals are precisely what would get it wrong: a paying student
+revisiting the paid page looks identical to a free one reaching for it. It was
+unreachable in production (payers are not in the roster) and is now a
+standing interlock for the day they are.
+
+**CORRECTED THE SAME DAY — the sessions WERE delivered.** The founder confirmed
+Shreya ran them, on time. They were never closed out in the app, and this entry
+originally read the empty record as an empty service. That was wrong, it named
+a real person, and the codebase had already said why it was wrong:
+`release-stale-sessions` documents `expired` as *"the window passed, nobody
+recorded an outcome"* and explicitly refuses to write `cancelled` because that
+*"asserts it did NOT happen"*. Reading `expired` as undelivered is exactly the
+inference that file exists to refuse — on a status carried by 11 of the first
+18 sessions ever created.
+
+**The lesson is the one this file keeps relearning, turned on myself.** #77 was
+"a card dealt is not a student reached". This is its twin: *an empty record is
+not an empty service*. Both times I read our own bookkeeping as though it were
+an observation of the world. The alert now reports only what is knowable — for
+a paying student, WE CANNOT SAY WHAT THEY RECEIVED — at severity `high`, not
+`critical`, and it distinguishes "nothing was ever booked" from "sessions
+passed without being closed out", because the founder's next action differs.
+
+**The real defect this exposed, still open.** `expired` is TERMINAL, enforced by
+two triggers (`video_session_lifecycle_guard`, `video_session_terminal_reassert`).
+So `release-stale-sessions`' own promise — *"A mentor can still mark it
+completed afterwards"* — **is false**: once the cron expires a session there is
+no legal path to ever record that it happened. Terminality is right for
+`completed` and `cancelled`, which are human assertions; `expired` is the cron
+saying "I don't know", and making "I don't know" permanent means the unknown can
+never be resolved. Delivery data is therefore permanently understated, and
+`completionRate()` — the founder's MIS number — with it.
+
+**Resolved, 15 Sep.** `expired` is no longer terminal (`20260915a`). Terminal
+now means what it always should have: a HUMAN ASSERTION — `completed` ("it
+did") and `cancelled` ("it did not"), both still absolutely immutable.
+`expired` is the cron saying "I don't know", and one transition out of it is
+allowed: `expired -> completed`. Not `-> active` (nothing live to resume), not
+`-> cancelled` (nobody called it off at the time; leaving it expired is the
+honest record of an absence), and still nothing at all out of `cancelled`.
+
+Three layers had to be opened, and finding all three is the lesson: the DB
+trigger, the close-out API's `.in('session_status', [...])` guard, and the
+mentor's own session list. A capability that exists in only two of the three is
+a door that does not open.
+
+Arnav's four delivered sessions are now recorded, with `ended_at` reconstructed
+from the scheduled slot and `started_at` deliberately left NULL — so
+`deliveryCounts` reports them as `completedStartUnknown` ("real delivery,
+weaker evidence") rather than as sessions the system watched. The note on each
+row says it was attested, not observed. That distinction is the only reason
+this is safe to allow at all.
+
+**The door, built the same day.** The mentor's close-out took its `sessionId`
+from `nextSession`, which the page filters to `scheduled`/`active`. So one hour
+after a call the cron expired the session and the id silently became NULL: the
+mentor could fill in the entire debrief and it marked nothing as delivered.
+That is the mechanism behind all of this — not a mentor forgetting, a form that
+quietly did nothing.
+
+`BuddyCockpit` now falls back to the most recent session nobody closed out
+(30 days, `unclosedSessionsSince`), scoped to that mentor and that student, and
+says which one it is: *"Your 22 Aug 16:00 session with Arnav was never closed
+out. If it happened, closing out below records it."* The mentor can decline by
+not closing out — a form that attaches itself silently is the defect, not the
+fix.
+
+It is only ever a FALLBACK: `p.nextSession ? null : unclosedSession`. While a
+session is booked or live the close-out targets that one exactly as before, so
+tonight's debrief can never land on last week's call. A guard test pins all
+four properties.
+
+`complete-orientation` needed no change at all — it asks `canTransition`
+instead of listing statuses itself, so it picked the new transition up for
+free. That is the argument for a shared state machine, made concrete.
+
+## Incident #80
+
+**2026-09-15 · "Daily logs went up" was wrong three ways at once, and the
+number had been quoted for a month · Analytics (P1)**
+
+**What happened.** The founder said he did not trust the log numbers and asked
+for them to be re-analysed. He was right. Weekly `daily_reports` rows ran
+81 → 140 → 124 → **170** → 150, which reads like the product working. Three
+separate things were hiding inside that.
+
+**1. A log is not a study session.** Rows with `study_duration = 0` — the
+student recording that they did NOT study — are roughly half of every week:
+
+| week | log rows | studied >0h | zero hours |
+| --- | --- | --- | --- |
+| 17 Aug | 140 | 84 | 56 |
+| 24 Aug | 124 | 62 | 62 |
+| 31 Aug | **170** | 79 | **91** |
+| 07 Sep | 150 | 85 | 65 |
+
+The best week on record was 54% of rows saying "I did not study". Collecting
+that is right; counting it as studying is not.
+
+**2. Two different actions write the same row.** Ticking a task on the plan
+writes a `daily_reports` row with a credited duration
+(`api/routine/complete-task` → `upsert_log_and_streak`) — the same table the
+daily-log form writes. Task ticks went from 26-48/week in July to **187-211**
+from mid-August. So "logs" silently counts two student actions of very
+different effort, and a product change to either moves the number with nobody
+studying more.
+
+**3. The rise was volume, not behaviour.** Signups over the same weeks: 169,
+324, 218, 164, 78 — then **2**, with the ads off. Logs tracked them one week
+behind; 117 of the 140 logs in the week of 17 Aug came from students less than
+8 days old. Per signup cohort, first-week behaviour barely moved, and "actually
+studied in week one" is still BELOW the 20 July cohort:
+
+| cohort | signups | logged wk1 | studied wk1 | habit (3+ days in 21) |
+| --- | --- | --- | --- | --- |
+| 20 Jul | 120 | 29.2% | **20.8%** | 6.7% |
+| 10 Aug | 169 | 22.5% | 10.7% | **3.0%** |
+| 17 Aug | 324 | 18.2% | 13.3% | 5.2% |
+| 24 Aug | 218 | 17.9% | 14.7% | 6.0% |
+| 31 Aug | 164 | 25.0% | 17.7% | **7.3%** |
+
+**What is actually true.** Habit formation is genuinely improving — 3.0% →
+7.3% per cohort, monotonic since the ad peak. It is small, it is real, and it
+was completely invisible underneath a headline made mostly of ad spend. Weekly
+students-who-studied is already falling with the ads off: 87 → 67.
+
+**The lesson.** Every one of the three is the same mistake this file keeps
+recording: **counting the record instead of the thing.** #77 was "a card dealt
+is not a student reached". #79 was "an empty record is not an empty service".
+This is "a log row is not a study session" — and unlike those two it went
+undetected for a month because the number was going UP, which nobody
+interrogates.
+
+**What was done.** `lib/os/study-truth.ts`, surfaced in the founder digest. It
+counts STUDENTS WHO STUDIED, never rows; reports the subset past their first
+week so an arrival spike cannot masquerade as growth; and carries a caveat
+naming the share of rows that recorded no study, so the number cannot be
+requoted as studying in the next conversation.
+
+Habit rate is reported only for a cohort whose 21-day window has **closed**,
+and one cohort at a time. A cohort mid-window always looks worse than a
+finished one, so quoting the newest beside complete ones is the easiest way to
+manufacture a trend — and the newest is always the one someone wants to quote.
+
+## Incident #81
+
+**2026-09-15 · The clearest signal students give us was invisible because it
+had been recorded; and this year's calls were being spent on next year's
+students · Sales (Trust) (P1)**
+
+**What happened.** The founder pushed back on the log analysis: *"atleast
+students are active and responding, kyuki they are mentioning ki we are active
+but we are not able to study."* He was right, and two separate things were
+wrong underneath it.
+
+**Measured first, with ads at zero for a full week** — so every number below is
+the existing base, not arrivals:
+
+| | |
+| --- | --- |
+| active students, last 7d | **160** (155 of them 8+ days old) |
+| actually studied | 42 |
+| explicitly recorded "did not study" | **51** |
+| opened and logged nothing | 102 |
+
+And mature weekly actives, students who signed up before each window opened:
+35 → 58 → 95 → 143 → **155**, rising again in the zero-ad week. As a RATE
+against a pool that grew 272 → 1203 it is flat at ~13% — so retention did not
+improve, but it did not decay while volume tripled, which is the harder thing.
+
+**1. The queue threw away every student who answered honestly.** The attention
+lane asked `logDates.some(...)` — does a row exist for that day. A
+`daily_reports` row exists whether the student studied or recorded that they
+could not, and roughly half of every week is the second kind. So a student who
+opened the app and wrote "I could not study today" was counted as having
+studied and dropped out of the queue entirely.
+
+That is the same mistake as #77 ("a card dealt is not a student reached"), #79
+("an empty record is not an empty service") and #80 ("a log row is not a study
+session") — **counting the record instead of the thing** — and this one is the
+worst of the four, because the students it silenced were the ones who had
+answered.
+
+`LaneSignals` now carries `studiedDates` beside `logDates`, and the lane asks
+whether they STUDIED. A declared answer gets its own label ("Told us they could
+not study"), outranks a student who was merely seen, and the action says
+*believe the answer* rather than pitch. `logDates` keeps its meaning for the
+streak and momentum lanes, which reason about whether the student SHOWED UP —
+a zero-hour row still proves that.
+
+**2. Only 703 of 1,208 students are sitting CAT 2026.**
+
+| attempt year | students | active 7d | studied 7d |
+| --- | --- | --- | --- |
+| 2026 | **703** | 119 | 33 |
+| 2027 | 201 | 31 | 8 |
+| never set | 299 | **10** | **1** |
+| 2028 | 5 | 0 | 0 |
+
+The counsellors' notes said it in the students' own words — *"2nd year college,
+will prepare for 2027"* — and `call-queue`, `lead-intake` and `sales-day`
+contained no reference to `attempt_year` at all. This year's scarce calls were
+going at equal priority to next year's students and to 299 accounts that never
+answered the question.
+
+`lib/sales-attempt-year.ts` weights the sort: current year up, future year
+down, never-answered in the middle (a missing answer is not a verdict, and the
+first conversation settles it). It applies ONLY to the discretionary lanes —
+**a callback owed to a 2027 student is owed exactly as much**, and reordering
+commitments by how commercially interesting someone is, is what SALES-OS §0
+exists to forbid. Nobody leaves anyone's book and the free product does not
+change by a pixel: a 2027 aspirant is a 2026 student who arrived early.
+
+**The denominator was also wrong everywhere.** "1,200 students" understates the
+product: against the 703 who are actually sitting this year, 2 payers is 0.28%
+and 79 habit-formed students is 11%.
+
+## Incident #82
+
+**2026-09-15 · The Command Center's "sales-ready to call" said 1,098 when 423
+of them had already been called; and three tiles labelled "Studied"/"Active"
+were all counting log rows · Analytics (P1)**
+
+**What happened.** The founder looked at the Command Center and asked "are
+these numbers real?". Two were not.
+
+**1. `getSalesReadyToCall` computed the exclusion and threw it away.** The
+function built `ids` — the flagged students with no prior call outcome — and
+then returned `rows`, the FULL sales-ready list, filtered only by real-student
+and premium. `ids` was used solely to fetch profile/streak/door lookups.
+
+| | |
+| --- | --- |
+| flagged `sales_ready = true` | 1,098 |
+| already worked | 423 |
+| genuinely uncalled | **675** |
+| **card showed** | **1,098** |
+
+Two counsellors were being pointed at 423 students they had already spoken to.
+
+The read underneath was broken independently: a single
+`.in('student_id', flagged)` over ~1,100 ids against a table returning **1,411**
+matching rows — past PostgREST's 1,000-row cap (Incident #65) and a URL long
+enough to be refused outright — with its `error` discarded, so a total failure
+would have reported everybody as uncalled. Now chunked, paged, and it THROWS:
+the same rule `getRealStudents` states ten lines above it, which this function
+did not follow.
+
+**2. Three tiles said "Studied" and "Active" while counting log rows.** All
+three read `daily_reports`, and a row is written whether the student studied or
+recorded that they could not:
+
+| tile | showed | truth |
+| --- | --- | --- |
+| Studied today | 9 | 9 studied — correct by coincidence |
+| Studied yesterday | **29** | **11** actually studied |
+| Active this week | **67** | **166** opened the app |
+
+Overstating study by 2.6x and understating activity by 2.5x, on one screen.
+
+Relabelled to "Logged today / yesterday / this week" rather than re-pointed:
+the counts and the People lists behind them come from the same filter, which is
+the rule `admin-filters` exists for, and the People page derives its own
+activity states from logging as well. A line under the grid now says a log is a
+student answering, not a student studying, and points at the digest
+(`lib/os/study-truth`) for the split.
+
+**The lesson, for the fifth time today.** #77 a card dealt is not a student
+reached · #79 an empty record is not an empty service · #80 a log row is not a
+study session · #81 "I could not study" is not silence · #82 a label is not a
+measurement. Every one is the same move: **the name of the record got used as
+the name of the thing.**
+
+## Incident #83
+
+**2026-09-15 · The call deck could not tell a student who was in the app this
+week from one who vanished a month ago · Sales (Trust) (P1)**
+
+**What happened.** Asked how to get the 675 uncalled students actually called,
+the base was counted first. Of the **401 CAT-2026** students who are
+sales-ready and have never been called:
+
+| tier | students | in coaching |
+| --- | --- | --- |
+| T1 · in the app this week | **15** | 3 |
+| T2 · in the app this month | **113** | 46 |
+| T3 · logged once, now gone | 52 | 20 |
+| T4 · opened once, never logged | **220** | 74 |
+| T5 · never opened since signup | 1 | 0 |
+
+128 alive, 221 close to cold — and **the deck was dealing both kinds in the
+same breath.**
+
+**Why.** The fresh lane ranks on `scoreConversion`, whose only recency signal
+is `activeRecently: daysSinceLastLog <= 3` — LOGGING. A T1 student who opened
+the app three times this week and never logged scores exactly what a T4 student
+who vanished a month ago scores: zero. Neither group logs, so the one signal
+that separates them was the one signal the ranking did not read.
+
+`profiles.last_seen_at` is written on every app open and was already loaded in
+the queue. The answer was in the room.
+
+**Why it matters more than any script.** Measured on this base with a control
+matched on prior activity, a call to a student who was ALIVE but not logging
+revived them at **11.5%** against **0.8%**. Ordering the 128 ahead of the 220
+is worth more than anything a counsellor could say differently.
+
+**What was done.** `lib/sales-liveness.ts` adds an ordering term from
+`last_seen_at`: seen within 7 days lifts most, within 21 days lifts less,
+older lifts nothing. It only ever LIFTS — being unreachable is not a fault, and
+a student who went quiet is exactly who retention exists for; they are simply
+not the cheapest conversation available today. Bounded at 30,000 against lane
+bands of up to 4,000,000, so it orders WITHIN a lane and can never promote
+somebody out of one. Discretionary lanes only: a promise is a promise whether
+the student has opened the app or not.
+
+**The sixth instance of the same mistake in one day**, one layer further in
+than the others: #77 a card dealt is not a student reached · #79 an empty
+record is not an empty service · #80 a log row is not a study session · #81 "I
+could not study" is not silence · #82 a label is not a measurement · #83 **a
+student who does not log is not a student who is gone.**
+
+---
+
+## Incident #84
+
+**2026-09-15 · The best-converting surface in the product went to ZERO for two
+weeks and nothing recorded why · Growth / Notifications (P1)**
+
+**What happened.** Founder: *"buddy CTA wala funnel dekho, kahan drop ho raha
+hai."* The funnel had not dropped. It had **stopped**:
+
+| day | `buddy_nudge_shown` | push-ask events | app opens |
+| --- | --- | --- | --- |
+| 31 Aug | 16 | 0 | 119 |
+| 1 Sep | **0** | 110 | 730 |
+| 5 Sep | **0** | 190 | 1,151 |
+
+`promo_impressions` tells the same story from the server side: the modal
+channel went 37 → 12 → **0 → 0** while the notification channel went
+486 → 875 → **1,029**. 1 Sep is the day the standalone push ask began
+rendering on every app open.
+
+**Why this surface and not another.** All-time, the modal is the best
+commercial surface we have — **28 of 124 shown reached the CTA (22.6%)**
+against **28 of 3,458 evening pushes (0.8%)**. Two weeks of zero modals is not
+a metric dipping; it is the strongest instrument in the product switched off.
+
+**Why nothing said so.** `DailyBuddyNudge` had SIX ways to bail — tour
+unfinished, notif ask on screen, insight on screen, log modal open,
+localStorage slot taken, server claim refused — and **all six were the same
+observable event: silence.** `buddy_nudge_shown` counted the surface working.
+Nothing counted it not working, and nothing distinguished "never mounted" from
+"mounted and bailed at gate 2". The same shape as #83 one layer out: the
+absence of a row was being read as a fact about students, when it was a fact
+about our instrumentation.
+
+The leading hypothesis is that `notifAskVisible()` now holds the gate shut,
+because the push ask renders on every open and ~93% of students have no push.
+**It is a hypothesis and was not shipped as a fix.** Founder's call, and the
+right one: *"pehle mujhe instrument karke exact wajah dikhao."*
+
+**What was done (1) — the silence was made readable, not guessed at.**
+`buddy_nudge_mounted` fires before any gate can bail, so "never rendered" and
+"rendered and bailed" stop being one number. `buddy_nudge_blocked.gate` names
+which of the six closed, on a closed union (`NudgeGate`), deduped per gate per
+mount so three listeners cannot write four identical rows. No priority
+changed, no student sees anything they did not see yesterday. NOTIFICATION-OS
+§8: every stage measured.
+
+**What was done (2) — the evening push stopped competing with the app.**
+NOTIFICATION-OS §10b.1 is law: *a notification exists to bring a student back
+when they're not in the app.* `buddy-evening` was pushing to students who had
+already opened the app that day, and — because the pitch slot is shared — a
+student the modal should have taken was being taken by the 0.8% channel
+instead. It now stands down for anyone with an `app_open` that IST day
+(`lib/in-app-today.ts`), counted as `skipped_in_app` in the run.
+
+**The number that makes this a watch, not a win.** Measured over 45 days with
+opens counted only BEFORE the push (so that a tap, which itself opens the app,
+cannot be mistaken for having opened first): students **already inside the
+app** clicked at **3.17%** (12/379); students who had **not** opened clicked at
+**0.48%** (20/4,191). The slice being stood down is the better-converting slice
+of the push — ~14 students a day, ~8% of the run. The trade is only correct if
+the modal actually takes their place at 22.6%. Until `buddy_nudge_shown` comes
+off zero, this is a loss and not a swap, and `skipped_in_app` against
+`buddy_nudge_shown` is exactly the pair that says which.
+
+**Lesson.** *A surface that can only report success cannot report that it has
+stopped.* Every gate that can silence a student-facing surface names itself, or
+the surface is unmonitorable by construction — and it will be found by a
+founder asking why a number looks odd, weeks late, which is the definition of
+a silent failure (NOTIFICATION-OS §11).
+
+---
+
+## Incident #85
+
+**2026-09-15 · The clearest evidence a free product can produce was
+classified as "no signal today" · Sales (Trust) (P1)**
+
+**What happened.** Founder: *"jis bhi student ne ek se zyada din log kiya hai,
+wo students hamari pehli priority hain calling ke liye — reasoning bhi do ki
+unhone ek ya do din log karke dobara log karna kyun chhod diya."*
+
+Counted first. Free students, with a phone, by how many separate days they
+have ever logged:
+
+| logged on | students | quiet 7d+ | never called |
+| --- | --- | --- | --- |
+| 0 days | 816 | 816 | 557 |
+| exactly 1 day | 186 | 169 | 118 |
+| **2–3 days** | **76** | 56 | 19 |
+| **4–7 days** | **37** | 26 | 10 |
+| **8+ days** | **20** | 4 | 0 |
+
+103 free students have logged on two or more days in the last 30. **47 of them
+have studied nothing in the last 15**, and `classifyLane` returned **`null`**
+for them — no signal today, backlog, reachable "eventually" through rotation.
+
+**Why the lanes missed them.** Every retention lane required a HABIT to have
+existed first: `going_cold` needs 3 of the prior 7 days, `broken_streak` needs
+a 5-day run, `new_never_logged` needs zero logs. Two days a fortnight ago is
+none of those. The lanes were built around the strong end of the distribution
+and the tail — which is the bigger half of it — fell through the catch-all
+removal of 29 Aug, which is working exactly as designed: `null` means backlog,
+and backlog was the wrong answer here.
+
+**Why the second day is the line.** Day one is us — onboarding walks the
+student into the log and most of the way through it. **Day two is the student
+deciding, on a different day, on their own, to come back.** It is the only
+unpaid evidence of intent the free product ever produces. 186 students logged
+exactly one day and stopped; 103 logged two or more. The first group never
+reached the question; the second answered it.
+
+It also changes what the call can honestly open with, which is the whole
+reason it lands: not *"would you like to try the app"* to a stranger, but
+*"what changed after those days"* to somebody who already used it twice.
+
+**The number that does NOT prove it, stated as such.** Of students called
+since 1 Aug, those with 2+ prior log days studied again within a fortnight at
+**8.3% (4 of 48)**, against **4.1% (5 of 123)** for the never-logged and
+**0% (0 of 30)** for one-day loggers. Four revivals is not evidence, it is a
+direction. The reason to prioritise these students is the evidence the
+STUDENT gave us, not that statistic — and the entry says so where the next
+person will read it (L1: a trustworthy unknown beats a precise lie).
+
+**What was done.** A `restart` lane — *"Came back once, then stopped"* — at
+`RESTART_MIN_LOG_DAYS = 2` separate days and `RESTART_MIN_SILENT_DAYS = 3`
+days of silence. Band 3,250,000: below `going_cold` and `broken_streak`
+(the same student further along, and more urgent) and above everything that
+is not a promise. Dealt as a CALL, under retention; the objective is
+retention, never a pitch.
+
+**And the one thing that would have made it a nuisance.** The other retention
+lanes are exempt from `TOUCH_COOLDOWN_DAYS` because they EXPIRE on their own
+— going cold is a 10-day window, a broken streak is three days old at most.
+Two logged days never expire, so an exempt `restart` card would be re-dealt
+every single morning until the student logged again — exactly the
+never-refreshing deck of #74, which put **115 of 121 worked cards back into
+the next day's list on 8 Sep**. `restart` waits out the cooldown like
+attention and rotation, and a guard test holds that shut.
+
+**Sizing, so tomorrow is not a surprise.** 68 students match the lane today;
+26 are dealt at once and the rest are inside somebody's 7-day cooldown; 19
+have never been called by anyone.
+
+**The refresh question, answered with data.** Founder also asked whether a
+rep's ~70 names actually refresh once calls are completed. They do, and they
+did not until 10 Sep. Students WORKED on a day, and re-dealt the next day:
+**8 Sep 115 of 121 · 9 Sep 49 of 110 — then 10 Sep 1 of 56 · 13 Sep 3 of 32 ·
+15 Sep 1 of 77.** #74's fix (9 Sep, a re-dial is not a promise) is what turned
+it. Every remaining next-day re-deal is `callback` (the student named the
+time) or `retry` (nobody picked up — not a completed call), which is what both
+lanes are for.
+
+**Lesson.** *A lane built from the strong end of a distribution silently
+classifies its tail as nothing.* `null` is a real answer and must stay one —
+which is exactly why every predicate that produces it has to be counted
+against the population it is rejecting, not just tested on the cases it was
+written for.

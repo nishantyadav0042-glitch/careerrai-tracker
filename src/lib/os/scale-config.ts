@@ -18,6 +18,25 @@ export const MENTOR_OVERLOAD_THRESHOLD = 8;
 export const BUDDY_SLA_HOURS = 24;
 
 /**
+ * Days a paying student may have a mentor and no delivered session.
+ *
+ * Found 15 Sep 2026, and it is the reason this constant exists. Both paying
+ * students had a mentor assigned, so the "no mentor past SLA" alert was
+ * silent — while what they actually paid for had happened ZERO times:
+ *
+ *   Arnav Badaya   5 sessions booked 9-22 Aug: 4 expired, 1 cancelled.
+ *                  None ever started. None ever ended. Last study log 4 Sep.
+ *   Monu singh     1 session request, never became a session at all.
+ *                  Last study log 6 Sep.
+ *
+ * Assignment was being counted as delivery. Seven days, because one expired
+ * booking is a missed calendar slot and two is bad luck, but a week of a paid
+ * mentorship with nothing delivered is the exact state the sacred rule exists
+ * to catch — and both of these students then stopped studying.
+ */
+export const MENTORSHIP_UNDELIVERED_DAYS = 7;
+
+/**
  * reconcile-payments runs every 15 min; a stuck payment is only surfaced after
  * this window, so an alert means "automatic recovery has already run and failed",
  * not "first attempt failed". (minutes)
@@ -55,6 +74,20 @@ export const GOING_COLD_SILENT_DAYS = 3;
 export const GOING_COLD_MIN_PRIOR_DAYS = 3;
 
 /** A daily run at least this long is a habit worth winning back by name. */
+/**
+ * How many separate logged days make a student "came back once" (15 Sep 2026).
+ *
+ * TWO, and the number is the whole idea. Day one is onboarding walking them
+ * into the log; day two is the student choosing, on a different day, to come
+ * back. 186 free students logged exactly one day and stopped; 103 logged two
+ * or more — only the second group answered the question.
+ */
+export const RESTART_MIN_LOG_DAYS = 2;
+/** ...and how long they must have been silent before we call about it. Three
+ *  days, the same silence `going_cold` uses, so a student who simply has not
+ *  logged since yesterday is not chased. */
+export const RESTART_MIN_SILENT_DAYS = 3;
+
 export const BROKEN_STREAK_MIN_RUN = 5;
 
 /** How recently the run must have ended to still be warm enough to recover. */
@@ -84,6 +117,31 @@ export const DAY_CEILING = 70;
 export const ROTATION_FLOOR = 15;
 /** A student nobody has spoken to in this many days is due a rotation touch. */
 export const ROTATION_SILENT_DAYS = 21;
+
+/**
+ * Never-contacted students pinned to the TOP of the day, above the promises.
+ *
+ * Founder's call, 15 Sep 2026, against the fourteen-day measurement:
+ *
+ *   rep      cold cards dealt   cold cards WORKED   promise cards worked
+ *   Anshul        229               65  (28%)              91%
+ *   Neelam         44                1  ( 2%)              74%
+ *
+ * The deck was already dealing cold cards; 273 were dealt and 66 worked. The
+ * lane was not starved of cards at the bottom of the day — it was starved of
+ * the hours that were gone by the time anyone reached it. Promises sort first
+ * and are worked first, and a day runs out.
+ *
+ * FIVE, not fifty. Five of roughly seventy delays no promised callback in any
+ * way a student would notice, and it is a test rather than a redesign: if the
+ * pinned five are worked next week, position was the cause and we can talk
+ * about six; if they are skipped at the top of an empty day, position was
+ * never the problem and nothing has been broken finding out.
+ *
+ * This is NOT a quota and may never be reported as one (SALES-OS §0). It
+ * changes what the day OFFERS first, never what anyone is measured on.
+ */
+export const FRESH_PIN_PER_DAY = 5;
 /** After any touch, a student is left alone this long unless a promise, a
  *  money signal or a retention lane brings them back. */
 export const TOUCH_COOLDOWN_DAYS = 7;
