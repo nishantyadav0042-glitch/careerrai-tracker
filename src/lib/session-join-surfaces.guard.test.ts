@@ -125,3 +125,44 @@ describe('Start is the mentor’s act, gated to the real call window', () => {
     expect(START).toMatch(/if \(status !== 'scheduled'\) return null;/);
   });
 });
+
+// ── The close-out must not lose the session it is closing ───────────────────
+//
+// 15 Sep 2026, the same lesson one state later. `nextSession` is filtered to
+// scheduled/active, so one hour after a call the stale-release cron expires
+// the session and the close-out's sessionId silently became null: a mentor
+// could fill in the whole debrief and it marked NOTHING as delivered.
+//
+// That is how four sessions a mentor had actually run came to read as
+// undelivered, and how 11 of the first 18 ever created sat expired. The
+// close-out now falls back to the most recent unclosed session.
+describe('a session that expired unrecorded can still be closed out', () => {
+  const COCKPIT = readFileSync('src/components/buddy/cockpit.tsx', 'utf8');
+
+  it('looks for the recent session nobody closed out', () => {
+    expect(COCKPIT).toMatch(/session_status['"]?\s*,\s*['"]expired['"]/);
+    expect(COCKPIT, 'must be bounded — a debrief may not attach to an ancient call')
+      .toMatch(/unclosedSessionsSince\(\)/);
+  });
+
+  it('scopes it to this mentor and this student', () => {
+    const q = COCKPIT.slice(COCKPIT.indexOf("'video_sessions'"));
+    expect(q).toMatch(/eq\('buddy_id', p\.buddyId\)/);
+    expect(q).toMatch(/eq\('student_id', p\.studentId\)/);
+  });
+
+  // The whole point of a fallback: it must be unreachable while a real session
+  // is scheduled or live, or a debrief for tonight's call could silently land
+  // on last week's.
+  it('never competes with a live or booked session', () => {
+    expect(COCKPIT).toMatch(/const unclosed = p\.nextSession \? null : \(unclosedSession \?\? null\)/);
+    expect(COCKPIT).toMatch(/sessionId=\{p\.nextSession\?\.id \?\? unclosed\?\.id \?\? null\}/);
+  });
+
+  it('tells the mentor which session they are recording', () => {
+    // A close-out that silently attaches to something is the defect, not the
+    // fix. The mentor has to be able to say "no, that one did not happen".
+    expect(COCKPIT).toMatch(/was never closed out/);
+    expect(COCKPIT).toMatch(/If it happened/);
+  });
+});

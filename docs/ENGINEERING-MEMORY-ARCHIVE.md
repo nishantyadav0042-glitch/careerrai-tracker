@@ -4728,7 +4728,25 @@ weaker evidence") rather than as sessions the system watched. The note on each
 row says it was attested, not observed. That distinction is the only reason
 this is safe to allow at all.
 
-**Still open:** the mentor's session list filters to `['scheduled','active']`,
-so an expired session never appears and there is still no SCREEN from which a
-late close-out can be started. The capability is real and unreachable — the
-same phantom-door shape as Incident #76, caught before it was claimed as fixed.
+**The door, built the same day.** The mentor's close-out took its `sessionId`
+from `nextSession`, which the page filters to `scheduled`/`active`. So one hour
+after a call the cron expired the session and the id silently became NULL: the
+mentor could fill in the entire debrief and it marked nothing as delivered.
+That is the mechanism behind all of this — not a mentor forgetting, a form that
+quietly did nothing.
+
+`BuddyCockpit` now falls back to the most recent session nobody closed out
+(30 days, `unclosedSessionsSince`), scoped to that mentor and that student, and
+says which one it is: *"Your 22 Aug 16:00 session with Arnav was never closed
+out. If it happened, closing out below records it."* The mentor can decline by
+not closing out — a form that attaches itself silently is the defect, not the
+fix.
+
+It is only ever a FALLBACK: `p.nextSession ? null : unclosedSession`. While a
+session is booked or live the close-out targets that one exactly as before, so
+tonight's debrief can never land on last week's call. A guard test pins all
+four properties.
+
+`complete-orientation` needed no change at all — it asks `canTransition`
+instead of listing statuses itself, so it picked the new transition up for
+free. That is the argument for a shared state machine, made concrete.

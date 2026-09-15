@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { computeBreach } from '@/lib/plan-breach';
 import { computeRequiredPace, remainingSyllabusHours, remainingMockHours, studentEffortMultiplier } from '@/lib/study-pace';
 import { CallCloseout } from './call-closeout';
+import { unclosedSessionsSince } from '@/lib/session-window';
 import { QuickNote } from './quick-note';
 import { SessionStart } from './session-start';
 import { joinState, canJoinNow, countdownLabel } from '@/lib/session-link';
@@ -68,8 +69,26 @@ export async function BuddyCockpit(p: CockpitProps) {
   const admin = createAdminClient();
   const first = p.fullName.split(' ')[0];
 
-  const [{ data: coverage }, { data: logs }, { data: streak }, { data: notes }, { data: openCommit }] =
-    await Promise.all([
+  // ── THE SESSION NOBODY CLOSED OUT (15 Sep 2026) ──────────────────────────
+  //
+  // The close-out's sessionId came from `nextSession`, which the page filters
+  // to scheduled/active. So one hour after a call, the stale-release cron
+  // expires the session and the sessionId silently becomes null: the mentor
+  // can still fill in the debrief, and it marks NOTHING as delivered.
+  //
+  // That is how four sessions a mentor had actually run came to read as
+  // undelivered, and how 11 of the first 18 ever created sat expired. Since
+  // 20260915a `expired -> completed` is legal, so the close-out can finally
+  // reach them — but only if it is handed the id, which is this query.
+  //
+  // Thirty days: long enough for a mentor who closes out the next morning or
+  // after a weekend, short enough that a debrief never silently attaches
+  // itself to some call from two months ago.
+  const unclosedSince = unclosedSessionsSince();
+  const [
+    { data: coverage }, { data: logs }, { data: streak }, { data: notes }, { data: openCommit },
+    { data: unclosedSession },
+  ] = await Promise.all([
       admin.from('topic_coverage').select('topic, status').eq('student_id', p.studentId),
       admin.from('daily_reports').select('report_date, study_duration')
         .eq('student_id', p.studentId).order('report_date', { ascending: false }).limit(21),
@@ -80,7 +99,17 @@ export async function BuddyCockpit(p: CockpitProps) {
       admin.from('session_commitments').select('id, commitment, created_at')
         .eq('buddy_id', p.buddyId).eq('student_id', p.studentId).is('outcome', null)
         .order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      admin.from('video_sessions').select('id, scheduled_at, session_type')
+        .eq('buddy_id', p.buddyId).eq('student_id', p.studentId)
+        .eq('session_status', 'expired')
+        .gte('scheduled_at', unclosedSince)
+        .order('scheduled_at', { ascending: false }).limit(1).maybeSingle(),
     ]);
+
+  // Only ever a FALLBACK. When a session is scheduled or live, the close-out
+  // targets that one exactly as before — this changes nothing about the normal
+  // path, which is the flow the whole cockpit exists for.
+  const unclosed = p.nextSession ? null : (unclosedSession ?? null);
 
   const rows = coverage ?? [];
   const done = rows.filter((r) => isCovered(r.status)).length;
@@ -279,10 +308,19 @@ export async function BuddyCockpit(p: CockpitProps) {
       </div>
 
       {/* 6 · Close the call */}
+      {unclosed && (
+        <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[13px] text-amber-900">
+          Your{' '}
+          {new Date(unclosed.scheduled_at as string).toLocaleString('en-IN', {
+            timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+          })}{' '}
+          session with {first} was never closed out. If it happened, closing out below records it.
+        </p>
+      )}
       <CallCloseout
         studentId={p.studentId}
         studentFirstName={first}
-        sessionId={p.nextSession?.id ?? null}
+        sessionId={p.nextSession?.id ?? unclosed?.id ?? null}
         openCommitment={openCommit ? { id: openCommit.id, commitment: openCommit.commitment } : null}
         suggestions={suggestions.slice(0, 4)}
       />
