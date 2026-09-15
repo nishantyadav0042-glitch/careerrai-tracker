@@ -20,9 +20,11 @@ import {
 //      short, and it comes back tomorrow regardless.
 //   3. Signals fill first. Rotation gets whatever is left up to the ceiling,
 //      and never fewer than ROTATION_FLOOR, so the silent book always moves.
-//   4. The day is at least DAY_FLOOR when the book can supply it, and at most
-//      DAY_CEILING — except promises, which are never bumped: a callback the
-//      student asked for makes the day seventy-one, not a different seventy.
+//   4. The day is built to DAY_CEILING whenever the book can supply it
+//      (founder, 15 Sep) and is never below DAY_FLOOR while it can — except
+//      promises, which are never bumped: a callback the student asked for
+//      makes the day seventy-one, not a different seventy. A book that cannot
+//      fill seventy reports short; it is never padded and never capped early.
 //   5. Channel is decided here too: rotation is messaged (every
 //      ROTATION_CALL_EVERY-th card is a call) and everything else, attention
 //      included since 15 Sep 2026, is a call.
@@ -254,11 +256,31 @@ export function assembleDay<T extends { studentId: string; dueReason: DueReason 
   }
   const held = [...trimmed, ...heldBack];
 
-  // Rotation: what is left of the DAY up to the ceiling, never below the
-  // floor while the pool can supply it, minus what the day already spent.
+  // ── ROTATION FILLS TO THE CEILING, NOT THE FLOOR (founder, 15 Sep 2026) ──
+  //
+  // This line read `DAY_FLOOR - signalsToday` until tonight, and that one word
+  // was the whole reason a counsellor's day was fifty cards instead of
+  // seventy. With 23 signal cards the target came out at 27, so 27 rotation
+  // cards were dealt and the day ended at exactly DAY_FLOOR — while 319
+  // never-contacted students sat in that same rep's book, dealable, with
+  // phone numbers, waiting.
+  //
+  // "50-70" (2 Sep) was a BAND, and building to the bottom of a band every
+  // day is not a range, it is a cap wearing a range's clothes. The cost is
+  // measurable: on 14 Sep Anshul WORKED 65 cards. A fifty-card day would have
+  // taken fifteen conversations off him for no reason other than arithmetic.
+  //
+  // Founder tonight: "I want ki dono reps ko daily 70 relevant students milne
+  // chahiye... naye students ko bhi daily add karte jao jinko touch hi nahi
+  // kiya, unki quantity bhi badhate jao."
+  //
+  // DAY_CEILING is unchanged and still binding — `room` below caps this at the
+  // same 70 it always did. What changed is that a day no longer STOPS at 50
+  // when the book has more to give. A book that cannot supply seventy still
+  // reports short (SALES-OS §5); it is simply no longer made short on purpose.
   const signalsToday = usedSignals + newSignals.length;
   const room = DAY_CEILING - usedTotal - newSignals.length;
-  const target = Math.max(ROTATION_FLOOR, DAY_FLOOR - signalsToday);
+  const target = Math.max(ROTATION_FLOOR, DAY_CEILING - signalsToday);
   const rotation = newRotation.slice(0, Math.max(0, Math.min(room, target - usedRotation)));
 
   // Short day and real signals held back? Use them before ending short — but

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { pinMidShiftClock } from './test-support/mid-shift';
-import { FRESH_PIN_PER_DAY } from './os/scale-config';
+import { FRESH_PIN_PER_DAY, DAY_CEILING } from './os/scale-config';
 
 // ── THE QUEUE IS AN OPPORTUNITY LIST, NOT A QUOTA ───────────────────────────
 //
@@ -97,8 +97,12 @@ describe('the cap is a ceiling, not a target', () => {
   it('more opportunities than the cap are prioritised, never all shown', async () => {
     for (let i = 0; i < 200; i++) ROSTER.push(student(i));
     const n = await queueSize([]);
-    expect(n, 'a 200-card deck is not a working day').toBeLessThanOrEqual(60);
+    // The invariant is "the declared ceiling", not a number typed here: the
+    // literal 60 predated DAY_CEILING becoming 70 and would have gone stale
+    // again. 200 candidates must produce a day, never a list.
+    expect(n, 'a 200-card deck is not a working day').toBeLessThanOrEqual(DAY_CEILING);
     expect(n, 'but it must still be a full day of real work').toBeGreaterThan(0);
+    expect(n, 'and 200 real candidates must not come back as a short day').toBe(DAY_CEILING);
   });
 
   // Non-vacuity for the tests above: the roster CAN produce more than 23, so
@@ -149,7 +153,7 @@ describe('backfilling never starves a protected lane', () => {
   it('the deck still respects the overall ceiling after backfill', async () => {
     for (let i = 0; i < 300; i++) ROSTER.push(student(i));
     expect(await queueSize([]), 'backfill fills the day, it does not remove the limit')
-      .toBeLessThanOrEqual(60);
+      .toBeLessThanOrEqual(DAY_CEILING);
   });
 
   it('backfill only ever adds students who passed every filter', async () => {

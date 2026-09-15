@@ -5156,3 +5156,73 @@ classifies its tail as nothing.* `null` is a real answer and must stay one —
 which is exactly why every predicate that produces it has to be counted
 against the population it is rejecting, not just tested on the cases it was
 written for.
+
+---
+
+## Incident #86
+
+**2026-09-15 · The counsellors' day was built to the BOTTOM of its band, and
+a rep got 50 cards while 319 never-contacted students sat in his book ·
+Sales (Trust) (P1)**
+
+**What happened.** Founder, going to bed: *"main cheez ye check karni hai ki
+daily dono reps ko 70 students display ho rahe hain ya nahi, aur wo students
+refresh bhi hone chahiye."*
+
+Checked. Two of the three were already true. The third was not.
+
+| | | |
+| --- | --- | --- |
+| Deck size in band (50-70) since 10 Sep | ✅ | 59-73 daily; 84-170 before, which #72/#74 fixed |
+| Worked cards refresh out of tomorrow's deck | ✅ | 115 of 121 returned on 8 Sep; **1 of 77** on 15 Sep |
+| Callbacks land at the promised time | ✅ | 46 callbacks: **0** with no clock, **0** where the clock disagreed with the promise, **0** with the wrong status |
+| **Seventy students a day** | ❌ | Anshul's 16 Sep deck: **50** |
+
+**The line.** `assembleDay`:
+
+```ts
+const target = Math.max(ROTATION_FLOOR, DAY_FLOOR - signalsToday);
+```
+
+`DAY_FLOOR`, not `DAY_CEILING`. With 23 signal cards (retry 20 at its own
+ceiling, attention 2, callback 1) the target came out at 27, 27 rotation cards
+were dealt, and the day ended at exactly 50. Every day. **A band built to its
+bottom is not a range, it is a cap wearing a range's clothes.**
+
+**What was behind it.** Not a capacity limit — his book held **319
+never-contacted students**, every one of them a real student, with a phone, not
+premium, not assigned, not closed for sales. Neelam's held 387. The day stopped
+at fifty with 319 dealable students behind it.
+
+**The cost, measured.** On 14 Sep that rep WORKED 65 cards. A fifty-card day
+takes fifteen conversations off him for no reason but arithmetic. The
+never-contacted share per day goes 27 → ~47 with the same ceiling and the same
+lanes.
+
+**What was done.** `DAY_FLOOR` → `DAY_CEILING` in that one expression. Nothing
+else moved: `room` still caps the day at 70, every lane ceiling still binds, a
+worked card still frees no slot (#72), and a book that cannot fill seventy is
+still reported short (SALES-OS §5) — eleven real opportunities are still
+eleven cards. Filling a day with real rotation candidates is not padding;
+padding is dealing a student with no reason to be dealt, and no lane invents
+one.
+
+**Four tests had the old rule written into them as the expected answer**, which
+is why it survived a fortnight of work on this exact file. Two more carried a
+literal `60` as "the ceiling" — stale since DAY_CEILING became 70, and quietly
+loosening as the real ceiling rose. They now read `DAY_CEILING`, so they cannot
+go stale again.
+
+**The refresh question, answered properly.** A card the rep WORKED does not
+come back — that has been true since #74's fix on 9 Sep, and 15 Sep is 1
+re-deal out of 77 worked. Cards that repeat are cards that were dealt and NOT
+worked, which is correct: a student who was not called has not been called.
+What was making that look like a stuck list is this same defect — a 50-card day
+plus ~38 worked leaves 12 slots of genuinely new work, so the deck read as
+mostly yesterday's. At 70 the same effort turns over far more of the book.
+
+**Lesson.** *A floor and a ceiling are not interchangeable, and the test that
+asserts the floor will defend the bug.* Every one of the four tests that broke
+had been written deliberately, described the behaviour accurately, and was
+wrong about what the behaviour should be — which is what a founder's
+"70 milne chahiye" resolves and a test suite never can.
