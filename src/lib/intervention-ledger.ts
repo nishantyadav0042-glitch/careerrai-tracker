@@ -191,6 +191,7 @@ export function interventionTypeForLane(lane: string | null): InterventionType {
     case 'new_never_logged': return 'activation';
     case 'going_cold':
     case 'broken_streak':
+    case 'restart':
     case 'retry':
     case 'callback':
     case 'followup': return 'restart';

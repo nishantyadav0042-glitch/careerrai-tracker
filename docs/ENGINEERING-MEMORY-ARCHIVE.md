@@ -5068,3 +5068,91 @@ stopped.* Every gate that can silence a student-facing surface names itself, or
 the surface is unmonitorable by construction — and it will be found by a
 founder asking why a number looks odd, weeks late, which is the definition of
 a silent failure (NOTIFICATION-OS §11).
+
+---
+
+## Incident #85
+
+**2026-09-15 · The clearest evidence a free product can produce was
+classified as "no signal today" · Sales (Trust) (P1)**
+
+**What happened.** Founder: *"jis bhi student ne ek se zyada din log kiya hai,
+wo students hamari pehli priority hain calling ke liye — reasoning bhi do ki
+unhone ek ya do din log karke dobara log karna kyun chhod diya."*
+
+Counted first. Free students, with a phone, by how many separate days they
+have ever logged:
+
+| logged on | students | quiet 7d+ | never called |
+| --- | --- | --- | --- |
+| 0 days | 816 | 816 | 557 |
+| exactly 1 day | 186 | 169 | 118 |
+| **2–3 days** | **76** | 56 | 19 |
+| **4–7 days** | **37** | 26 | 10 |
+| **8+ days** | **20** | 4 | 0 |
+
+103 free students have logged on two or more days in the last 30. **47 of them
+have studied nothing in the last 15**, and `classifyLane` returned **`null`**
+for them — no signal today, backlog, reachable "eventually" through rotation.
+
+**Why the lanes missed them.** Every retention lane required a HABIT to have
+existed first: `going_cold` needs 3 of the prior 7 days, `broken_streak` needs
+a 5-day run, `new_never_logged` needs zero logs. Two days a fortnight ago is
+none of those. The lanes were built around the strong end of the distribution
+and the tail — which is the bigger half of it — fell through the catch-all
+removal of 29 Aug, which is working exactly as designed: `null` means backlog,
+and backlog was the wrong answer here.
+
+**Why the second day is the line.** Day one is us — onboarding walks the
+student into the log and most of the way through it. **Day two is the student
+deciding, on a different day, on their own, to come back.** It is the only
+unpaid evidence of intent the free product ever produces. 186 students logged
+exactly one day and stopped; 103 logged two or more. The first group never
+reached the question; the second answered it.
+
+It also changes what the call can honestly open with, which is the whole
+reason it lands: not *"would you like to try the app"* to a stranger, but
+*"what changed after those days"* to somebody who already used it twice.
+
+**The number that does NOT prove it, stated as such.** Of students called
+since 1 Aug, those with 2+ prior log days studied again within a fortnight at
+**8.3% (4 of 48)**, against **4.1% (5 of 123)** for the never-logged and
+**0% (0 of 30)** for one-day loggers. Four revivals is not evidence, it is a
+direction. The reason to prioritise these students is the evidence the
+STUDENT gave us, not that statistic — and the entry says so where the next
+person will read it (L1: a trustworthy unknown beats a precise lie).
+
+**What was done.** A `restart` lane — *"Came back once, then stopped"* — at
+`RESTART_MIN_LOG_DAYS = 2` separate days and `RESTART_MIN_SILENT_DAYS = 3`
+days of silence. Band 3,250,000: below `going_cold` and `broken_streak`
+(the same student further along, and more urgent) and above everything that
+is not a promise. Dealt as a CALL, under retention; the objective is
+retention, never a pitch.
+
+**And the one thing that would have made it a nuisance.** The other retention
+lanes are exempt from `TOUCH_COOLDOWN_DAYS` because they EXPIRE on their own
+— going cold is a 10-day window, a broken streak is three days old at most.
+Two logged days never expire, so an exempt `restart` card would be re-dealt
+every single morning until the student logged again — exactly the
+never-refreshing deck of #74, which put **115 of 121 worked cards back into
+the next day's list on 8 Sep**. `restart` waits out the cooldown like
+attention and rotation, and a guard test holds that shut.
+
+**Sizing, so tomorrow is not a surprise.** 68 students match the lane today;
+26 are dealt at once and the rest are inside somebody's 7-day cooldown; 19
+have never been called by anyone.
+
+**The refresh question, answered with data.** Founder also asked whether a
+rep's ~70 names actually refresh once calls are completed. They do, and they
+did not until 10 Sep. Students WORKED on a day, and re-dealt the next day:
+**8 Sep 115 of 121 · 9 Sep 49 of 110 — then 10 Sep 1 of 56 · 13 Sep 3 of 32 ·
+15 Sep 1 of 77.** #74's fix (9 Sep, a re-dial is not a promise) is what turned
+it. Every remaining next-day re-deal is `callback` (the student named the
+time) or `retry` (nobody picked up — not a completed call), which is what both
+lanes are for.
+
+**Lesson.** *A lane built from the strong end of a distribution silently
+classifies its tail as nothing.* `null` is a real answer and must stay one —
+which is exactly why every predicate that produces it has to be counted
+against the population it is rejecting, not just tested on the cases it was
+written for.

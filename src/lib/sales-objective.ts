@@ -39,6 +39,11 @@ export type SalesObjective = 'retention' | 'conversion';
  */
 const RETENTION_LANES: ReadonlySet<string> = new Set<DueReason>([
   'going_cold', 'broken_streak', 'new_never_logged',
+  // Came back once, then stopped (15 Sep 2026). The student has already shown
+  // us the product works for them — twice. Getting them studying again is
+  // retention in its purest form, and a card that opened with a pitch would
+  // waste the one thing that makes this call land.
+  'restart',
   // Attention (2 Sep 2026): opened the app and did not log, or tapped a
   // notification. The student reached for the product and stopped short of
   // studying — activation work, which is retention.

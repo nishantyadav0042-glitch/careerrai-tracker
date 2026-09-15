@@ -74,6 +74,20 @@ export const GOING_COLD_SILENT_DAYS = 3;
 export const GOING_COLD_MIN_PRIOR_DAYS = 3;
 
 /** A daily run at least this long is a habit worth winning back by name. */
+/**
+ * How many separate logged days make a student "came back once" (15 Sep 2026).
+ *
+ * TWO, and the number is the whole idea. Day one is onboarding walking them
+ * into the log; day two is the student choosing, on a different day, to come
+ * back. 186 free students logged exactly one day and stopped; 103 logged two
+ * or more — only the second group answered the question.
+ */
+export const RESTART_MIN_LOG_DAYS = 2;
+/** ...and how long they must have been silent before we call about it. Three
+ *  days, the same silence `going_cold` uses, so a student who simply has not
+ *  logged since yesterday is not chased. */
+export const RESTART_MIN_SILENT_DAYS = 3;
+
 export const BROKEN_STREAK_MIN_RUN = 5;
 
 /** How recently the run must have ended to still be warm enough to recover. */

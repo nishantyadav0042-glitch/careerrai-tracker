@@ -90,7 +90,11 @@ export const SECTION_OF: Record<DueReason, DaySection> = {
   conversion: 'buddy',
   new_never_logged: 'new',
   attention: 'attention',
-  going_cold: 'retention', broken_streak: 'retention',
+  // `restart` is a retention lane and rides the retention section: it is a
+  // CALL (only attention and rotation are messaged) and it takes no ceiling
+  // of its own, because its whole population is 103 students and a lane that
+  // cannot spike does not need a cap.
+  going_cold: 'retention', broken_streak: 'retention', restart: 'retention',
   fresh: 'rotation', rotation: 'rotation',
 };
 

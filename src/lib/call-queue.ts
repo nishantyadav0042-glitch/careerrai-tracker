@@ -12,6 +12,7 @@ import {
   BROKEN_STREAK_MIN_RUN, BROKEN_STREAK_MAX_DAYS_SINCE,
   NEW_LEAD_MIN_AGE_DAYS, NEW_LEAD_MAX_AGE_DAYS,
   ROTATION_SILENT_DAYS, TOUCH_COOLDOWN_DAYS, ATTENTION_WINDOW_DAYS,
+  RESTART_MIN_LOG_DAYS, RESTART_MIN_SILENT_DAYS,
   CONVERSION_INTENT_DAYS, SHIFT_END_HOUR_IST,
 } from '@/lib/os/scale-config';
 import { assembleDay, dayAnchorMs, istHour, SECTION_OF, type Channel, type DaySection, type DayCounts } from '@/lib/sales-day';
@@ -59,6 +60,17 @@ export type DueReason =
   /** Created an order and never paid — the strongest commercial evidence. */
   | 'checkout_abandoned'
   | 'going_cold' | 'broken_streak' | 'new_never_logged'
+  /**
+   * Logged on two or more separate days and then stopped (15 Sep 2026).
+   *
+   * Founder: "jis bhi student ne ek se zyada din log kiya hai, wo students
+   * hamari pehli priority hain calling ke liye." A second log day is the only
+   * unpaid evidence we ever get that a student CHOSE to come back — the first
+   * is onboarding carrying them, the second is them. `going_cold` and
+   * `broken_streak` already catch the strong end of this (a 3-of-7 rhythm, a
+   * 5-day run); this is the tail they were built to miss.
+   */
+  | 'restart'
   | 'conversion'
   /** Opened the app and did not study, or tapped a notification (2 Sep 2026). */
   | 'attention'
@@ -194,11 +206,11 @@ export interface LaneSignals {
  * events that end, rather than a flag that never does.
  */
 export const RETENTION_LANES: ReadonlySet<DueReason> = new Set<DueReason>([
-  'going_cold', 'broken_streak', 'new_never_logged',
+  'going_cold', 'broken_streak', 'new_never_logged', 'restart',
 ]);
 
 export interface LaneVerdict {
-  dueReason: Extract<DueReason, 'going_cold' | 'broken_streak' | 'new_never_logged' | 'conversion' | 'attention' | 'fresh'>;
+  dueReason: Extract<DueReason, 'going_cold' | 'broken_streak' | 'new_never_logged' | 'restart' | 'conversion' | 'attention' | 'fresh'>;
   dueLabel: string;
   why: string[];
   action: string;
@@ -263,6 +275,48 @@ export function classifyLane(s: LaneSignals): LaneVerdict | null {
       why: [`${run}-day streak ended ${fmt(lastLog)}`, 'The habit is still warm — this is the win-back window'],
       action: 'Win-back call — name the streak, help restart today',
       sortBoost: run * 1000,
+    };
+  }
+
+  // ── CAME BACK ONCE, THEN STOPPED (founder, 15 Sep 2026) ─────────────────
+  //
+  // "Jis bhi student ne ek se zyada din log kiya hai, wo students hamari
+  // pehli priority hain calling ke liye."
+  //
+  // The two lanes above already take the strong end of this student: a 3-of-7
+  // rhythm gone quiet (going_cold) and a 5-day run just broken
+  // (broken_streak). Both need a HABIT to have existed. This is the tail they
+  // were built to miss, and it is the bigger half of it: of 103 free students
+  // who logged on 2+ days in the last 30, 47 have studied nothing in the last
+  // 15 — and they were falling through to `null`, which means backlog, which
+  // means rotation, which means "eventually".
+  //
+  // Why a second day is the line and not the first. Day one is us: onboarding
+  // walks the student into the log and most of the way through it. Day two is
+  // the student deciding, on their own, on a different day, to come back — the
+  // only unpaid evidence of intent the free product ever produces. 186 free
+  // students logged exactly one day and stopped; 103 logged two or more. The
+  // second group already answered the question the first group never reached.
+  //
+  // And the call has something true to open with, which is the whole reason it
+  // lands: we are not asking a stranger to try the app, we are asking someone
+  // who used it twice what got in the way. Directionally the numbers agree —
+  // of students called since 1 Aug, those with 2+ prior log days studied again
+  // within a fortnight at 8.3% (4/48) against 4.1% (5/123) for the
+  // never-logged — but that is FOUR revivals and is nowhere near proof. The
+  // reason to do this is the evidence the student gave us, not that stat.
+  if (daysAgo.length >= RESTART_MIN_LOG_DAYS && lastLog != null && lastLog >= RESTART_MIN_SILENT_DAYS) {
+    return {
+      dueReason: 'restart', dueLabel: 'Came back once, then stopped',
+      why: [
+        `Logged on ${daysAgo.length} separate days — they chose to come back at least once`,
+        `Then stopped: last log ${fmt(lastLog)}`,
+      ],
+      action: 'Call — ask what changed after those days, not whether they want the app',
+      // More days = more of a habit to restart. Recency breaks the tie, so a
+      // student who stopped last week is asked before one who stopped a month
+      // ago and has had longer to leave.
+      sortBoost: daysAgo.length * 1000 + Math.max(0, 30 - lastLog) * 10 + s.momentumScore,
     };
   }
 
@@ -817,7 +871,12 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
         }
       } else {
         dueReason = lane.dueReason; dueLabel = lane.dueLabel; why = lane.why; action = lane.action;
-        const BAND: Record<string, number> = { going_cold: 4_000_000, broken_streak: 3_500_000, new_never_logged: 3_000_000, conversion: 1_000_000, attention: 800_000, fresh: 0 };
+        // `restart` sits under the two lanes that need a HABIT to have existed
+        // and above everything else that is not a promise — the founder's
+        // "pehli priority", read precisely: a student who logged 3 of 7 days
+        // and went quiet is the same student further along, not a different
+        // one, so going_cold and broken_streak keep their place above it.
+        const BAND: Record<string, number> = { going_cold: 4_000_000, broken_streak: 3_500_000, restart: 3_250_000, new_never_logged: 3_000_000, conversion: 1_000_000, attention: 800_000, fresh: 0 };
         sort = BAND[lane.dueReason] + lane.sortBoost + (lane.dueReason === 'fresh' ? conv : 0);
       }
     }
@@ -852,8 +911,19 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
     // After any touch a student is left alone for TOUCH_COOLDOWN_DAYS unless
     // a promise, money, or a retention lane brings them back. Attention,
     // buddy intent and rotation all wait their turn.
+    //
+    // `restart` waits its turn too, and that is not a detail. The other
+    // retention lanes are exempt because they EXPIRE by themselves — going
+    // cold is a 10-day window, a broken streak is three days old at most — so
+    // a student cannot sit in them. `restart` has no such clock: two logged
+    // days stay two logged days, so an exempt restart card would be re-dealt
+    // every morning until the student logged again. That is precisely the
+    // never-refreshing list that took 115 of 121 worked cards back into the
+    // next day's deck before 10 Sep, and it is not coming back through a lane
+    // I added.
     if (daysSilent != null && daysSilent < TOUCH_COOLDOWN_DAYS
-      && (dueReason === 'attention' || dueReason === 'conversion' || dueReason === 'rotation')) continue;
+      && (dueReason === 'attention' || dueReason === 'conversion' || dueReason === 'rotation'
+        || dueReason === 'restart')) continue;
 
     // WHERE ON THE JOURNEY (founder, 2 Sep): install → notifications → daily
     // log. The card asks for the next step and nothing beyond it.

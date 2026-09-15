@@ -14,6 +14,7 @@ const TIER: Record<string, string> = { hot: 'bg-rose-50 text-rose-700', warm: 'b
 const DUE_CLS: Record<string, string> = {
   callback: 'bg-sky-600 text-white', retry: 'bg-orange-500 text-white', followup: 'bg-amber-500 text-white',
   going_cold: 'bg-rose-600 text-white', broken_streak: 'bg-violet-600 text-white',
+  restart: 'bg-fuchsia-600 text-white',
   new_never_logged: 'bg-teal-600 text-white', conversion: 'bg-emerald-600 text-white',
   attention: 'bg-indigo-600 text-white',
   fresh: 'bg-stone-200 text-stone-600', rotation: 'bg-stone-300 text-stone-700',
