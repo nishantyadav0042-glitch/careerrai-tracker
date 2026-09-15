@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isCallOutcome, isConnectedOutcome, isSkipReason, planDisposition, CONNECTED_OUTCOMES, type CallOutcome } from '@/lib/sales-disposition';
 import { contradictsConnectedOutcome, contradictionQuestion, NO_ANSWER_CONTRADICTION_CODE } from '@/lib/no-answer-contradiction';
+import { messageCadenceVerdict, MESSAGE_TOO_SOON_CODE } from '@/lib/sales-message-cadence';
 import {
   canAccessLead, checkSalesTarget, loadStaffDirectory, resolveLeadOwner, salesPrincipal,
 } from '@/lib/sales-authz';
@@ -105,6 +106,44 @@ export async function POST(request: NextRequest) {
       : 'Feedback is required for a connected call.';
     return NextResponse.json({ error: msg }, { status: 400 });
   }
+  // ── A MESSAGE MUST BE ONE THAT COULD HAVE BEEN SENT (founder, 15 Sep 2026) ─
+  //
+  // The rule and the evidence behind it live in lib/sales-message-cadence.
+  // Short version: 277 of one rep's 316 `messaged` rows landed less than ten
+  // seconds after the one before — one burst put 22 of them in 2m06s, all
+  // carrying the same template. A WhatsApp send means leaving the app and
+  // coming back; it is not a four-second round trip.
+  //
+  // THE GATE LIVES HERE, not only on the card, for the same reason as the
+  // contradiction question above: the card owns the prompt, the server owns
+  // the rule. A client that skips the WhatsApp tap cannot write the claim
+  // anyway.
+  //
+  // This reads only the actor's own previous message, so one rep's pace never
+  // blocks the other's. A failed read does NOT block: the counsellor loses
+  // nothing to our database having a bad moment.
+  if (outcome === 'messaged') {
+    const { data: prevMsg, error: prevErr } = await admin
+      .from('sales_activity')
+      .select('created_at')
+      .eq('actor_id', principal.id)
+      .eq('status', 'messaged')
+      .eq('provenance', 'self_reported')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (prevErr) {
+      console.error('[sales/log] message cadence read failed, allowing:', prevErr.message);
+    } else {
+      const verdict = messageCadenceVerdict(prevMsg?.created_at ?? null);
+      if (!verdict.ok) {
+        return NextResponse.json({
+          error: verdict.message, code: MESSAGE_TOO_SOON_CODE, waitSeconds: verdict.waitSeconds,
+        }, { status: 429 });
+      }
+    }
+  }
+
   // ── THE TWO HALVES OF THE ENTRY MUST AGREE (founder, 4 Sep 2026) ────────
   //
   // A connected outcome asserts a human spoke. When the rep's own remark says
