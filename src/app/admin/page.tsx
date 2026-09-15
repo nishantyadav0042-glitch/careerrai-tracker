@@ -3,9 +3,11 @@ import { requireAdmin } from '@/lib/admin-auth';
 import { assembleFounderInbox, type Severity } from '@/lib/os/founder-inbox';
 import { findSacredFailures } from '@/lib/os/sacred-guard';
 import { readDismissedIds, withoutDismissed } from '@/lib/os/alert-dismissal';
+import { findCadenceBursts } from '@/lib/os/rep-cadence';
+import { findUncorroboratedReps } from '@/lib/os/rep-corroboration';
 import { DismissAlert } from './dismiss-alert';
 import { getRealStudents, getLoggedToday, getSalesReadyToCall, getWantsBuddy } from '@/lib/admin-filters';
-import { CheckCircle2, ArrowRight, AlertOctagon, AlertTriangle, Circle, ShieldAlert, Phone } from 'lucide-react';
+import { CheckCircle2, ArrowRight, AlertOctagon, AlertTriangle, Circle, ShieldAlert, Phone, SearchCheck } from 'lucide-react';
 
 import { fetchAll } from '@/lib/supabase/fetch-all';
 // Always render live — a cached inbox showing work that is already cleared, or
@@ -46,11 +48,28 @@ export default async function CommandCenterPage() {
   // Sacred-student failures are computed FIRST and pinned ABOVE everything.
   // Co-founder rule: a paying student in a broken state is a P0 the system
   // surfaces before the founder has to look for it.
-  const [rawAlerts, inbox, dismissedIds] = await Promise.all([
+  const [rawAlerts, inbox, dismissedIds, cadenceBursts, uncorroborated] = await Promise.all([
     findSacredFailures(admin, now),
     assembleFounderInbox(admin, now),
     readDismissedIds(admin),
+    // ── RECORD-INTEGRITY WATCHES (founder, 15 Sep 2026) ────────────────────
+    //
+    // Every sales number is self_reported. These two ask whether a record
+    // could be true at all — one from the clock, one from the student's side.
+    // Both return [] on any read failure: they exist to question a record,
+    // never to manufacture a doubt out of our database having a bad moment.
+    //
+    // They are NOT productivity measures and must never be presented as one
+    // (SALES-OS §0). Rendered BELOW the sacred alerts, because a paying
+    // student in a broken state outranks a counsellor's paperwork every time.
+    findCadenceBursts(admin, now).catch((e) => {
+      console.error('[command-center] cadence watch failed:', e); return [];
+    }),
+    findUncorroboratedReps(admin, now).catch((e) => {
+      console.error('[command-center] corroboration watch failed:', e); return [];
+    }),
   ]);
+  const integrity = [...cadenceBursts, ...uncorroborated];
   // Alerts the founder has already closed ("already assigned", "completed").
   // Subtracted here rather than inside findSacredFailures so the detector stays
   // the single authority on what IS wrong, and dismissal stays what it is: the
@@ -105,6 +124,33 @@ export default async function CommandCenterPage() {
                   </a>
                 )}
                 <DismissAlert alertId={a.id} studentId={a.student.id || null} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* RECORD INTEGRITY — "can this record be true at all?" Never a
+          performance panel: it carries no rate, no comparison between the two
+          counsellors, and no target. One line saying what the clock or the
+          student side shows, and where to look. */}
+      {integrity.length > 0 && (
+        <div className="mb-4 space-y-2">
+          {integrity.map((x) => (
+            <div key={x.id} className="rounded-2xl border border-stone-300 bg-white p-3.5">
+              <div className="flex items-start gap-2.5">
+                <SearchCheck className="mt-0.5 h-4 w-4 shrink-0 text-stone-500" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400">
+                    Record check · {x.entity.label}
+                  </p>
+                  <p className="mt-1 text-[13.5px] leading-snug text-stone-800">{x.reason}</p>
+                </div>
+              </div>
+              <div className="mt-2.5 pl-6.5">
+                <Link href={x.destination} className="inline-flex items-center gap-1 rounded-lg border border-stone-300 px-3 py-1.5 text-[12px] font-bold text-stone-800">
+                  {x.suggestedAction.label} <ArrowRight className="h-3 w-3" />
+                </Link>
               </div>
             </div>
           ))}
