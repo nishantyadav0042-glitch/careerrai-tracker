@@ -23,9 +23,9 @@ import {
 //   4. The day is at least DAY_FLOOR when the book can supply it, and at most
 //      DAY_CEILING — except promises, which are never bumped: a callback the
 //      student asked for makes the day seventy-one, not a different seventy.
-//   5. Channel is decided here too: attention and rotation are messages;
-//      every ROTATION_CALL_EVERY-th rotation card is a call; everything else
-//      is a call.
+//   5. Channel is decided here too: rotation is messaged (every
+//      ROTATION_CALL_EVERY-th card is a call) and everything else, attention
+//      included since 15 Sep 2026, is a call.
 //
 // What this module never does: invent a candidate. Every card it returns was
 // classified by the queue with a true printed reason. A day can still be
@@ -286,9 +286,21 @@ export function assembleDay<T extends { studentId: string; dueReason: DueReason 
   const queue = day.map((c) => {
     const section = SECTION_OF[c.dueReason];
     counts[section]++;
+    // ── ATTENTION IS A CALL NOW (founder, 15 Sep 2026) ───────────────────
+    //
+    // It was a message from 2 Sep: "what got in the way?" is a question, and a
+    // question is cheap to send. But the student it goes to opened the app and
+    // stopped short of studying — often having recorded, in their own words,
+    // that they could not — and a template is the wrong instrument for the one
+    // moment they told us something. Founder: "un sabhi students ko jaldi se
+    // jaldi call karna hai."
+    //
+    // The price is paid in ATTENTION_CEILING, halved to 10 in the same breath,
+    // because a call costs what a template does not and this lane must not
+    // take the day from `restart`. Rotation stays messaged: there the volume
+    // IS the point.
     let channel: Channel = 'call';
-    if (section === 'attention') channel = 'message';
-    else if (section === 'rotation') {
+    if (section === 'rotation') {
       channel = rotationIndex % ROTATION_CALL_EVERY === 0 ? 'call' : 'message';
       rotationIndex++;
     }

@@ -125,12 +125,16 @@ describe('order and channel', () => {
     expect(day.queue[0].section).toBe('promises');
   });
 
-  it('attention is a message; every Nth rotation card is a call; everything else is a call', () => {
+  it('only rotation is messaged, and there only every Nth card is a call', () => {
     const day = assembleDay([...c('callback', 1), ...c('attention', 2), ...c('going_cold', 1), ...c('fresh', 20)]);
     const by = (s: string) => day.queue.filter((x) => x.section === s);
     expect(by('promises').every((x) => x.channel === 'call')).toBe(true);
     expect(by('retention').every((x) => x.channel === 'call')).toBe(true);
-    expect(by('attention').every((x) => x.channel === 'message')).toBe(true);
+    // Attention was a message from 2 Sep and is a CALL from 15 Sep (founder).
+    // The student it goes to opened the app and stopped short of studying,
+    // often having said so in their own words; a template is the wrong reply
+    // to that. The cost was paid in ATTENTION_CEILING, not in the channel.
+    expect(by('attention').every((x) => x.channel === 'call')).toBe(true);
     // The pinned never-contacted cards are CALLS, whatever the rotation cycle
     // would have given them: an introduction that arrives as a template
     // defeats the point of pinning it.
