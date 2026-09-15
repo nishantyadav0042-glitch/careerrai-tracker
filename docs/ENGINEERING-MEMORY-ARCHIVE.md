@@ -4947,3 +4947,52 @@ reached · #79 an empty record is not an empty service · #80 a log row is not a
 study session · #81 "I could not study" is not silence · #82 a label is not a
 measurement. Every one is the same move: **the name of the record got used as
 the name of the thing.**
+
+## Incident #83
+
+**2026-09-15 · The call deck could not tell a student who was in the app this
+week from one who vanished a month ago · Sales (Trust) (P1)**
+
+**What happened.** Asked how to get the 675 uncalled students actually called,
+the base was counted first. Of the **401 CAT-2026** students who are
+sales-ready and have never been called:
+
+| tier | students | in coaching |
+| --- | --- | --- |
+| T1 · in the app this week | **15** | 3 |
+| T2 · in the app this month | **113** | 46 |
+| T3 · logged once, now gone | 52 | 20 |
+| T4 · opened once, never logged | **220** | 74 |
+| T5 · never opened since signup | 1 | 0 |
+
+128 alive, 221 close to cold — and **the deck was dealing both kinds in the
+same breath.**
+
+**Why.** The fresh lane ranks on `scoreConversion`, whose only recency signal
+is `activeRecently: daysSinceLastLog <= 3` — LOGGING. A T1 student who opened
+the app three times this week and never logged scores exactly what a T4 student
+who vanished a month ago scores: zero. Neither group logs, so the one signal
+that separates them was the one signal the ranking did not read.
+
+`profiles.last_seen_at` is written on every app open and was already loaded in
+the queue. The answer was in the room.
+
+**Why it matters more than any script.** Measured on this base with a control
+matched on prior activity, a call to a student who was ALIVE but not logging
+revived them at **11.5%** against **0.8%**. Ordering the 128 ahead of the 220
+is worth more than anything a counsellor could say differently.
+
+**What was done.** `lib/sales-liveness.ts` adds an ordering term from
+`last_seen_at`: seen within 7 days lifts most, within 21 days lifts less,
+older lifts nothing. It only ever LIFTS — being unreachable is not a fault, and
+a student who went quiet is exactly who retention exists for; they are simply
+not the cheapest conversation available today. Bounded at 30,000 against lane
+bands of up to 4,000,000, so it orders WITHIN a lane and can never promote
+somebody out of one. Discretionary lanes only: a promise is a promise whether
+the student has opened the app or not.
+
+**The sixth instance of the same mistake in one day**, one layer further in
+than the others: #77 a card dealt is not a student reached · #79 an empty
+record is not an empty service · #80 a log row is not a study session · #81 "I
+could not study" is not silence · #82 a label is not a measurement · #83 **a
+student who does not log is not a student who is gone.**

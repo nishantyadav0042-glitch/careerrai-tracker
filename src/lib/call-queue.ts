@@ -6,6 +6,7 @@ import { isClosedForSales } from '@/lib/sales-conversion-truth';
 import { MAX_CONSECUTIVE_NO_ANSWER } from '@/lib/sales-disposition';
 import { classifyObjective, type SalesObjective } from '@/lib/sales-objective';
 import { attemptYearBoost } from '@/lib/sales-attempt-year';
+import { alivenessBoost } from '@/lib/sales-liveness';
 import {
   GOING_COLD_SILENT_DAYS, GOING_COLD_MIN_PRIOR_DAYS,
   BROKEN_STREAK_MIN_RUN, BROKEN_STREAK_MAX_DAYS_SINCE,
@@ -828,6 +829,19 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
     sort += attemptYearBoost({
       lane: dueReason,
       attemptYear: (prof?.attempt_year as number | null) ?? null,
+    });
+
+    // WHO IS STILL IN THE APP. Of the 401 CAT-2026 students never called, 15
+    // were in the app this week and 220 had opened once and never returned —
+    // and the fresh lane ranked them identically, because its only recency
+    // signal was daysSinceLastLog and neither group logs. A call to a student
+    // who is alive but not logging revived them at 11.5% against 0.8% for a
+    // matched control, so this is the cheapest ordering available to us
+    // (lib/sales-liveness). Lifts the present; never pushes the quiet down.
+    sort += alivenessBoost({
+      lane: dueReason,
+      lastSeenAt: (prof?.last_seen_at as string | null) ?? null,
+      nowMs: now,
     });
 
 
