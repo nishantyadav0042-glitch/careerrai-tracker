@@ -18,7 +18,14 @@ import { CONVERSION_INTENT_DAYS } from './os/scale-config';
 
 const TODAY = '2026-08-24';
 function base(over: Partial<LaneSignals>): LaneSignals {
-  return { todayIst: TODAY, createdAt: null, logDates: [], buddyTaps: 0, intentDoor: false, momentumScore: 0, ...over };
+  const b: LaneSignals = {
+    todayIst: TODAY, createdAt: null, logDates: [], studiedDates: [],
+    buddyTaps: 0, intentDoor: false, momentumScore: 0, ...over,
+  };
+  // Unless a case says otherwise, a log IS a study day — which is what every
+  // case written before 15 Sep 2026 meant. Only the cases that deliberately
+  // set studiedDates exercise the "told us they could not study" split.
+  return over.studiedDates === undefined ? { ...b, studiedDates: b.logDates } : b;
 }
 /** Log dates n days ago (IST). */
 function days(...ago: number[]): string[] {
@@ -184,5 +191,64 @@ describe('queue-level wiring (source-pinned)', () => {
     const deck = readFileSync('src/components/call-deck.tsx', 'utf8');
     expect(deck).toContain('lead.why');
     expect(deck).toContain('lead.action');
+  });
+});
+
+// ── "I COULDN'T STUDY TODAY" IS AN ANSWER, NOT A SKIP ───────────────────────
+//
+// Founder, 15 Sep 2026: "atleast students are active and responding, kyuki
+// they are mentioning ki we are active but we are not able to study."
+//
+// He was right, and the queue was throwing exactly those students away. The
+// attention lane asked `logDates.some(...)` — did a row exist — and a row
+// exists whether the student studied or told us they could not. Roughly half
+// of every week is the second kind; 51 students in the week of 15 Sep alone.
+// So the clearest signal we get was invisible BECAUSE it had been recorded.
+//
+// Same mistake as Incidents #77, #79 and #80: counting the record, not the
+// thing.
+describe('a student who says they could not study is surfaced, not skipped', () => {
+  const YESTERDAY = days(1)[0];
+  const attention = { attentionSinceIso: `${YESTERDAY}T00:00:00.000Z`, lastSeenAt: `${YESTERDAY}T10:00:00.000Z` };
+
+  it('surfaces the student who logged zero hours', () => {
+    const v = classifyLane(base({ ...attention, logDates: days(1), studiedDates: [] }));
+    expect(v?.dueReason).toBe('attention');
+    expect(v?.dueLabel).toBe('Told us they could not study');
+  });
+
+  it('still skips the student who actually studied', () => {
+    // The whole point of the lane: someone who studied needs nothing from us.
+    const v = classifyLane(base({ ...attention, logDates: days(1), studiedDates: days(1) }));
+    expect(v?.dueReason).not.toBe('attention');
+  });
+
+  it('keeps the old silent case working', () => {
+    const v = classifyLane(base({ ...attention, logDates: [], studiedDates: [] }));
+    expect(v?.dueReason).toBe('attention');
+    expect(v?.dueLabel).toBe('Opened, did not study');
+  });
+
+  it('ranks the student who answered above the one who only appeared', () => {
+    const answered = classifyLane(base({ ...attention, logDates: days(1), studiedDates: [] }));
+    const silent = classifyLane(base({ ...attention, logDates: [], studiedDates: [] }));
+    expect(answered!.sortBoost).toBeGreaterThan(silent!.sortBoost);
+  });
+
+  it('tells the counsellor to believe the answer, not to pitch', () => {
+    const v = classifyLane(base({ ...attention, logDates: days(1), studiedDates: [] }));
+    expect(v?.action).toContain('believe the answer');
+    expect(v?.why.join(' ')).toContain('recorded that they could not study');
+  });
+
+  // A student who says "I could not study" and never opened the app is not a
+  // real case — the row can only exist if they were there. But the lane must
+  // not depend on last_seen_at being present, or a missing timestamp loses them.
+  it('does not need an app-open timestamp to surface a declared answer', () => {
+    const v = classifyLane(base({
+      attentionSinceIso: `${YESTERDAY}T00:00:00.000Z`,
+      logDates: days(1), studiedDates: [],
+    }));
+    expect(v?.dueReason).toBe('attention');
   });
 });

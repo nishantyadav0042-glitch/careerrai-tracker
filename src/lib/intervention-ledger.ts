@@ -60,13 +60,20 @@ export async function captureStateSnapshot(admin: any, studentId: string, nowMs 
   const [{ data: prof }, { data: reports }, { data: streak }, { data: eng }, { count: priorCount }] =
     await Promise.all([
       admin.from('profiles').select('created_at, push_subscription').eq('id', studentId).maybeSingle(),
-      admin.from('daily_reports').select('report_date').eq('student_id', studentId).gte('report_date', since30),
+      admin.from('daily_reports').select('report_date, study_duration').eq('student_id', studentId).gte('report_date', since30),
       admin.from('streak_data').select('current_streak, last_log_date').eq('student_id', studentId).maybeSingle(),
       admin.from('student_engagement').select('buddy_cta_clicks, intent_door_at').eq('student_id', studentId).maybeSingle(),
       admin.from('intervention_ledger').select('id', { count: 'exact', head: true }).eq('student_id', studentId),
     ]);
 
   const logDates: string[] = (reports ?? []).map((r: any) => r.report_date as string);
+  // Days the student actually studied. A daily_reports row is written whether
+  // they studied or recorded that they could not, and the lanes must tell
+  // those apart (15 Sep 2026) — reading the column here rather than defaulting
+  // keeps this caller and the queue on the same facts.
+  const studiedDates: string[] = (reports ?? [])
+    .filter((r: any) => Number(r.study_duration ?? 0) > 0)
+    .map((r: any) => r.report_date as string);
   const lastLog = (streak?.last_log_date as string | null) ?? (logDates.length ? logDates.slice().sort().at(-1)! : null);
   const daysSinceLastLog = lastLog
     ? Math.round((Date.parse(todayIst) - Date.parse(lastLog)) / 86_400_000)
@@ -80,6 +87,7 @@ export async function captureStateSnapshot(admin: any, studentId: string, nowMs 
     todayIst,
     createdAt: (prof?.created_at as string | null) ?? null,
     logDates,
+    studiedDates,
     buddyTaps: (eng?.buddy_cta_clicks as number | null) ?? 0,
     intentDoor: eng?.intent_door_at != null,
     momentumScore: 0,

@@ -5,6 +5,7 @@ import { scoreConversion, conversionTier } from '@/lib/sales-score';
 import { isClosedForSales } from '@/lib/sales-conversion-truth';
 import { MAX_CONSECUTIVE_NO_ANSWER } from '@/lib/sales-disposition';
 import { classifyObjective, type SalesObjective } from '@/lib/sales-objective';
+import { attemptYearBoost } from '@/lib/sales-attempt-year';
 import {
   GOING_COLD_SILENT_DAYS, GOING_COLD_MIN_PRIOR_DAYS,
   BROKEN_STREAK_MIN_RUN, BROKEN_STREAK_MAX_DAYS_SINCE,
@@ -145,6 +146,17 @@ export interface LaneSignals {
   todayIst: string;             // 'YYYY-MM-DD' in Asia/Kolkata
   createdAt: string | null;     // profiles.created_at (ISO)
   logDates: string[];           // daily_reports.report_date values, last 30d
+  /**
+   * The subset of logDates on which the student actually STUDIED (>0 hours).
+   *
+   * Added 15 Sep 2026. A daily_reports row is written whether the student
+   * studied or told us they could not, and roughly half of every week is the
+   * second kind. The attention lane asked "did they log?", so a student who
+   * opened the app and honestly recorded "I did not study today" was counted
+   * as having studied and dropped out of the queue entirely — the single
+   * clearest signal we get, made invisible by the record of it.
+   */
+  studiedDates: string[];
   buddyTaps: number;
   intentDoor: boolean;
   momentumScore: number;
@@ -309,19 +321,32 @@ export function classifyLane(s: LaneSignals): LaneVerdict | null {
   if (s.attentionSinceIso) {
     const sinceMs = Date.parse(s.attentionSinceIso);
     const sinceDay = istDateStr(s.attentionSinceIso);
-    const loggedInWindow = s.logDates.some((d) => d >= sinceDay);
+    // STUDIED, not "logged". A zero-hour row is the student telling us they
+    // could not study — which is the reason to reach out, not a reason to skip
+    // them. Asking `logDates` here silently excluded every student who
+    // answered honestly (51 of them in the week of 15 Sep alone).
+    const studiedInWindow = s.studiedDates.some((d) => d >= sinceDay);
+    const toldUsTheyCouldNot = !studiedInWindow && s.logDates.some((d) => d >= sinceDay);
     const opened = s.lastSeenAt != null && Date.parse(s.lastSeenAt) >= sinceMs;
     const tapped = s.notificationTapAt != null && Date.parse(s.notificationTapAt) >= sinceMs;
-    if (!loggedInWindow && (opened || tapped)) {
+    if (!studiedInWindow && (opened || tapped || toldUsTheyCouldNot)) {
       const when = (iso: string) => fmt(Math.max(0, daysBetweenIst(istDateStr(iso), s.todayIst)));
       const why: string[] = [];
+      // The declared case leads, because it is the student's own words and it
+      // changes what the counsellor should open with.
+      if (toldUsTheyCouldNot) why.push('Opened the app and recorded that they could not study');
       if (opened) why.push(`Opened the app ${when(s.lastSeenAt as string)} and did not log a study session`);
       if (tapped) why.push(`Tapped a notification ${when(s.notificationTapAt as string)}`);
       return {
-        dueReason: 'attention', dueLabel: 'Opened, did not study',
+        dueReason: 'attention',
+        dueLabel: toldUsTheyCouldNot ? 'Told us they could not study' : 'Opened, did not study',
         why,
-        action: 'Message first — ask what got in the way; call if they reply',
-        sortBoost: (tapped ? 500 : 0) + (opened ? 100 : 0) + s.momentumScore,
+        action: toldUsTheyCouldNot
+          ? 'They answered honestly — ask what got in the way, and believe the answer'
+          : 'Message first — ask what got in the way; call if they reply',
+        // A student who answered outranks one who was merely seen: they have
+        // already chosen to tell us something.
+        sortBoost: (toldUsTheyCouldNot ? 800 : 0) + (tapped ? 500 : 0) + (opened ? 100 : 0) + s.momentumScore,
       };
     }
   }
@@ -478,9 +503,11 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
   }
 
   const [{ data: profs }, { data: eng }, { data: reports }, outreach, { data: paidRows }, { data: unpaidRows }, { data: lastActs }, { data: tapRows }] = await Promise.all([
-    selectInChunks((chunk) => db.from('profiles').select('id, created_at, last_seen_at, app_installed, push_subscription, push_died_at, target_percentile, cat_percentile, starting_percentile, pain_points, dream_colleges, is_repeater').in('id', chunk), ids),
+    selectInChunks((chunk) => db.from('profiles').select('id, created_at, last_seen_at, app_installed, push_subscription, push_died_at, target_percentile, cat_percentile, starting_percentile, pain_points, dream_colleges, is_repeater, attempt_year').in('id', chunk), ids),
     selectInChunks((chunk) => db.from('student_engagement').select('student_id, buddy_cta_clicks, mock_opened, intent_door_at, buddy_cta_last_at').in('student_id', chunk), ids),
-    selectInChunks((chunk) => db.from('daily_reports').select('student_id, report_date').in('student_id', chunk).gte('report_date', since30), ids),
+    // study_duration comes too: a row exists whether the student studied or
+    // told us they could not, and the lanes must be able to tell those apart.
+    selectInChunks((chunk) => db.from('daily_reports').select('student_id, report_date, study_duration').in('student_id', chunk).gte('report_date', since30), ids),
     // The only read here that decides a business state — checked, retried, or thrown.
     readLeadOutreach(db, ids),
     // THE PAYMENT LEDGER IS THE CONVERSION TRUTH (Incident #52). The roster
@@ -577,9 +604,17 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
   // Per-student log DATES, not just counts — the lane classifier reads the
   // pattern ("5 of the previous 7 → 0 of the last 3"), not the total.
   const logDates = new Map<string, string[]>();
+  // Days the student actually STUDIED — a strict subset of logDates. Kept
+  // separate rather than replacing it: the momentum and streak lanes reason
+  // about whether the student SHOWED UP, which a zero-hour row still proves.
+  const studiedDates = new Map<string, string[]>();
   for (const r of reports ?? []) {
     if (!logDates.has(r.student_id)) logDates.set(r.student_id, []);
     logDates.get(r.student_id)!.push(r.report_date);
+    if (Number(r.study_duration ?? 0) > 0) {
+      if (!studiedDates.has(r.student_id)) studiedDates.set(r.student_id, []);
+      studiedDates.get(r.student_id)!.push(r.report_date);
+    }
   }
   const outById = new Map((outreach ?? []).map((o: any) => [o.student_id, o]));
 
@@ -736,6 +771,7 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
       // exists at all: retention first, conversion second, fresh last.
       const lane = classifyLane({
         todayIst, createdAt: (prof?.created_at as string | null) ?? null, logDates: dates,
+        studiedDates: studiedDates.get(r.id) ?? [],
         buddyTaps, intentDoor, momentumScore: r.score, intentAt,
         lastSeenAt: (prof?.last_seen_at as string | null) ?? null,
         notificationTapAt: tapBy.get(r.id) ?? null,
@@ -784,6 +820,15 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
         sort = BAND[lane.dueReason] + lane.sortBoost + (lane.dueReason === 'fresh' ? conv : 0);
       }
     }
+
+    // WHOSE EXAM IS THIS YEAR (founder, 15 Sep 2026). Only 703 of 1,208
+    // students are sitting CAT 2026; 201 are sitting 2027 and are not failing
+    // to study — their exam is next year. This orders WITHIN the discretionary
+    // lanes and never touches a promise (lib/sales-attempt-year).
+    sort += attemptYearBoost({
+      lane: dueReason,
+      attemptYear: (prof?.attempt_year as number | null) ?? null,
+    });
 
 
     // WHICH GOAL IS THIS CALL FOR (§4). A live commercial signal is

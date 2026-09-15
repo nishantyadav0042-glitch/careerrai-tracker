@@ -4818,3 +4818,76 @@ Habit rate is reported only for a cohort whose 21-day window has **closed**,
 and one cohort at a time. A cohort mid-window always looks worse than a
 finished one, so quoting the newest beside complete ones is the easiest way to
 manufacture a trend — and the newest is always the one someone wants to quote.
+
+## Incident #81
+
+**2026-09-15 · The clearest signal students give us was invisible because it
+had been recorded; and this year's calls were being spent on next year's
+students · Sales (Trust) (P1)**
+
+**What happened.** The founder pushed back on the log analysis: *"atleast
+students are active and responding, kyuki they are mentioning ki we are active
+but we are not able to study."* He was right, and two separate things were
+wrong underneath it.
+
+**Measured first, with ads at zero for a full week** — so every number below is
+the existing base, not arrivals:
+
+| | |
+| --- | --- |
+| active students, last 7d | **160** (155 of them 8+ days old) |
+| actually studied | 42 |
+| explicitly recorded "did not study" | **51** |
+| opened and logged nothing | 102 |
+
+And mature weekly actives, students who signed up before each window opened:
+35 → 58 → 95 → 143 → **155**, rising again in the zero-ad week. As a RATE
+against a pool that grew 272 → 1203 it is flat at ~13% — so retention did not
+improve, but it did not decay while volume tripled, which is the harder thing.
+
+**1. The queue threw away every student who answered honestly.** The attention
+lane asked `logDates.some(...)` — does a row exist for that day. A
+`daily_reports` row exists whether the student studied or recorded that they
+could not, and roughly half of every week is the second kind. So a student who
+opened the app and wrote "I could not study today" was counted as having
+studied and dropped out of the queue entirely.
+
+That is the same mistake as #77 ("a card dealt is not a student reached"), #79
+("an empty record is not an empty service") and #80 ("a log row is not a study
+session") — **counting the record instead of the thing** — and this one is the
+worst of the four, because the students it silenced were the ones who had
+answered.
+
+`LaneSignals` now carries `studiedDates` beside `logDates`, and the lane asks
+whether they STUDIED. A declared answer gets its own label ("Told us they could
+not study"), outranks a student who was merely seen, and the action says
+*believe the answer* rather than pitch. `logDates` keeps its meaning for the
+streak and momentum lanes, which reason about whether the student SHOWED UP —
+a zero-hour row still proves that.
+
+**2. Only 703 of 1,208 students are sitting CAT 2026.**
+
+| attempt year | students | active 7d | studied 7d |
+| --- | --- | --- | --- |
+| 2026 | **703** | 119 | 33 |
+| 2027 | 201 | 31 | 8 |
+| never set | 299 | **10** | **1** |
+| 2028 | 5 | 0 | 0 |
+
+The counsellors' notes said it in the students' own words — *"2nd year college,
+will prepare for 2027"* — and `call-queue`, `lead-intake` and `sales-day`
+contained no reference to `attempt_year` at all. This year's scarce calls were
+going at equal priority to next year's students and to 299 accounts that never
+answered the question.
+
+`lib/sales-attempt-year.ts` weights the sort: current year up, future year
+down, never-answered in the middle (a missing answer is not a verdict, and the
+first conversation settles it). It applies ONLY to the discretionary lanes —
+**a callback owed to a 2027 student is owed exactly as much**, and reordering
+commitments by how commercially interesting someone is, is what SALES-OS §0
+exists to forbid. Nobody leaves anyone's book and the free product does not
+change by a pixel: a 2027 aspirant is a 2026 student who arrived early.
+
+**The denominator was also wrong everywhere.** "1,200 students" understates the
+product: against the 703 who are actually sitting this year, 2 payers is 0.28%
+and 79 habit-formed students is 11%.
