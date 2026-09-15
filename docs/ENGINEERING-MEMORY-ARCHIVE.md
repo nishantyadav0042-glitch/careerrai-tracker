@@ -4679,3 +4679,31 @@ those signals are precisely what would get it wrong: a paying student
 revisiting the paid page looks identical to a free one reaching for it. It was
 unreachable in production (payers are not in the roster) and is now a
 standing interlock for the day they are.
+
+**CORRECTED THE SAME DAY — the sessions WERE delivered.** The founder confirmed
+Shreya ran them, on time. They were never closed out in the app, and this entry
+originally read the empty record as an empty service. That was wrong, it named
+a real person, and the codebase had already said why it was wrong:
+`release-stale-sessions` documents `expired` as *"the window passed, nobody
+recorded an outcome"* and explicitly refuses to write `cancelled` because that
+*"asserts it did NOT happen"*. Reading `expired` as undelivered is exactly the
+inference that file exists to refuse — on a status carried by 11 of the first
+18 sessions ever created.
+
+**The lesson is the one this file keeps relearning, turned on myself.** #77 was
+"a card dealt is not a student reached". This is its twin: *an empty record is
+not an empty service*. Both times I read our own bookkeeping as though it were
+an observation of the world. The alert now reports only what is knowable — for
+a paying student, WE CANNOT SAY WHAT THEY RECEIVED — at severity `high`, not
+`critical`, and it distinguishes "nothing was ever booked" from "sessions
+passed without being closed out", because the founder's next action differs.
+
+**The real defect this exposed, still open.** `expired` is TERMINAL, enforced by
+two triggers (`video_session_lifecycle_guard`, `video_session_terminal_reassert`).
+So `release-stale-sessions`' own promise — *"A mentor can still mark it
+completed afterwards"* — **is false**: once the cron expires a session there is
+no legal path to ever record that it happened. Terminality is right for
+`completed` and `cancelled`, which are human assertions; `expired` is the cron
+saying "I don't know", and making "I don't know" permanent means the unknown can
+never be resolved. Delivery data is therefore permanently understated, and
+`completionRate()` — the founder's MIS number — with it.
