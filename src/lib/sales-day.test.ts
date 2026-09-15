@@ -17,16 +17,24 @@ const c = (dueReason: DueReason, n = 1) =>
   Array.from({ length: n }, () => ({ studentId: `s${++seq}`, dueReason }));
 
 describe('the band', () => {
-  it('signals short of the floor: rotation fills up to the floor', () => {
+  // ── 15 Sep 2026: the band is built to the TOP, not the bottom ────────────
+  //
+  // These two cases asserted DAY_FLOOR until tonight, and that assertion was
+  // the bug: with 23 signal cards a rep's day came out at exactly 50 while
+  // 319 never-contacted students sat in his book with phone numbers. A band
+  // built to its bottom every day is a cap, not a range. Founder: "dono reps
+  // ko daily 70 relevant students milne chahiye."
+  it('signals short of the ceiling: rotation fills the day to the ceiling', () => {
     const day = assembleDay([...c('going_cold', 5), ...c('conversion', 5), ...c('fresh', 100)]);
-    expect(day.queue).toHaveLength(DAY_FLOOR);
-    expect(day.counts.given.rotation).toBe(DAY_FLOOR - 10);
+    expect(day.queue).toHaveLength(DAY_CEILING);
+    expect(day.counts.given.rotation).toBe(DAY_CEILING - 10);
   });
 
-  it('signals near the floor: rotation still gets its floor, up to the ceiling', () => {
-    const day = assembleDay([...c('going_cold', 45), ...c('fresh', 100)]);
-    expect(day.queue).toHaveLength(45 + ROTATION_FLOOR);
-    expect(day.counts.given.rotation).toBe(ROTATION_FLOOR);
+  it('signals near the ceiling: rotation still gets its floor, up to the ceiling', () => {
+    const signals = DAY_CEILING - ROTATION_FLOOR;
+    const day = assembleDay([...c('going_cold', signals), ...c('fresh', 100)]);
+    expect(day.queue).toHaveLength(DAY_CEILING);
+    expect(day.counts.given.rotation, 'the silent book moves even on a loud day').toBe(ROTATION_FLOOR);
   });
 
   it('signals above the floor: rotation takes only the room left under the ceiling', () => {
@@ -125,12 +133,16 @@ describe('order and channel', () => {
     expect(day.queue[0].section).toBe('promises');
   });
 
-  it('attention is a message; every Nth rotation card is a call; everything else is a call', () => {
+  it('only rotation is messaged, and there only every Nth card is a call', () => {
     const day = assembleDay([...c('callback', 1), ...c('attention', 2), ...c('going_cold', 1), ...c('fresh', 20)]);
     const by = (s: string) => day.queue.filter((x) => x.section === s);
     expect(by('promises').every((x) => x.channel === 'call')).toBe(true);
     expect(by('retention').every((x) => x.channel === 'call')).toBe(true);
-    expect(by('attention').every((x) => x.channel === 'message')).toBe(true);
+    // Attention was a message from 2 Sep and is a CALL from 15 Sep (founder).
+    // The student it goes to opened the app and stopped short of studying,
+    // often having said so in their own words; a template is the wrong reply
+    // to that. The cost was paid in ATTENTION_CEILING, not in the channel.
+    expect(by('attention').every((x) => x.channel === 'call')).toBe(true);
     // The pinned never-contacted cards are CALLS, whatever the rotation cycle
     // would have given them: an introduction that arrives as a template
     // defeats the point of pinning it.
@@ -183,31 +195,43 @@ describe('order and channel', () => {
 // the quota-driven replenishment the founder ruled out on 30 Aug.
 describe('a rebuild continues today, it does not deal a second day', () => {
   it('rotation does not re-top after cards are worked', () => {
-    // Morning: 50 rotation cards dealt. By evening 30 are marked and 20 remain
-    // open. A rebuild must show those 20 — not 20 plus 30 replacements.
+    // THE INCIDENT #72 INVARIANT, unchanged: morning deals 50 rotation cards,
+    // by evening 30 are marked and 20 remain open. A rebuild must never treat
+    // the 30 worked ones as free slots and deal 30 replacements.
+    //
+    // What the 15 Sep target change does alter is the arithmetic around it:
+    // the day's target is DAY_CEILING now, so after 50 dealt there are 20 more
+    // to give — and the rebuild gives exactly those 20, never 50 again. The
+    // worked cards still free nothing.
     const remaining = c('rotation', 20);
     const openToday = new Set(remaining.map((x) => x.studentId));
     const day = assembleDay([...remaining, ...c('rotation', 200)], {
       openToday, usedToday: { rotation: 50 },
     });
-    expect(day.queue).toHaveLength(20);
-    expect(day.queue.every((x) => openToday.has(x.studentId))).toBe(true);
+    const newlyDealt = day.queue.filter((x) => !openToday.has(x.studentId)).length;
+    expect(newlyDealt, 'only the room left under the ceiling').toBe(DAY_CEILING - 50);
+    expect(50 + newlyDealt, 'the day still stops at the ceiling').toBe(DAY_CEILING);
+    expect(day.queue.filter((x) => openToday.has(x.studentId)),
+      'every open card survives the rebuild').toHaveLength(20);
   });
 
   it('rotation tops up only to the day-s target, counting what it already spent', () => {
-    // 10 dealt this morning, 4 still open: the target is 50, so at most 40 new.
+    // 10 dealt this morning, 4 still open: the target is the ceiling, so at
+    // most DAY_CEILING - 10 new. The invariant under test is unchanged — what
+    // was already DEALT is subtracted, so a worked card never frees a slot
+    // (Incident #72). Only the target moved.
     const remaining = c('rotation', 4);
     const openToday = new Set(remaining.map((x) => x.studentId));
     const day = assembleDay([...remaining, ...c('rotation', 200)], {
       openToday, usedToday: { rotation: 10 },
     });
-    expect(day.counts.given.rotation).toBe(4 + (DAY_FLOOR - 10));
+    expect(day.counts.given.rotation).toBe(4 + (DAY_CEILING - 10));
   });
 
   it('a genuinely new SIGNAL still arrives mid-day — that is the point of the exception', () => {
     // A promise coming due at 6pm, on a rotation target already fully spent.
     const day = assembleDay([...c('callback', 1), ...c('rotation', 50)], {
-      openToday: new Set(), usedToday: { rotation: DAY_FLOOR },
+      openToday: new Set(), usedToday: { rotation: DAY_CEILING },
     });
     expect(day.counts.given.promises, 'a promise is never withheld').toBe(1);
     expect(day.counts.given.rotation, 'but rotation is done for today').toBe(0);
@@ -215,7 +239,7 @@ describe('a rebuild continues today, it does not deal a second day', () => {
 
   it('with no context it behaves exactly as before — nothing else changes', () => {
     const cands = [...c('going_cold', 5), ...c('rotation', 100)];
-    expect(assembleDay(cands).queue).toHaveLength(DAY_FLOOR);
+    expect(assembleDay(cands).queue).toHaveLength(DAY_CEILING);
   });
 });
 
@@ -285,7 +309,8 @@ describe('the day s ceilings count what was dealt today', () => {
     // 14 more at 22:00: 44 never-contacted students in one day.
     const day = assembleDay([...c('fresh', 200)], {
       openToday: new Set(),
-      usedToday: { callback: 5, attention: 20, new_never_logged: 15, rotation: ROTATION_FLOOR },
+      // 40 signals dealt + rotation already at the day's remaining room.
+      usedToday: { callback: 5, attention: 20, new_never_logged: 15, rotation: DAY_CEILING - 40 },
     });
     expect(day.counts.given.rotation, 'rotation is done for today').toBe(0);
   });
@@ -452,6 +477,9 @@ describe('retries yield, callbacks do not', () => {
     // The ceiling is a shape, not a starvation rule: with nothing else to
     // deal, held retries come back before a counsellor gets a 45-card day.
     const day = assembleDay([...c('retry', 83)], { openToday: new Set(), usedToday: {} });
+    // Retries are capped at RETRY_CEILING and the rest are HELD; the backfill
+    // that saves the day from being short still stops at DAY_FLOOR, because a
+    // held card returning is a rescue, not the day's target.
     expect(day.queue.length).toBe(DAY_FLOOR);
   });
 

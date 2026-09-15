@@ -13,10 +13,12 @@ import {
   NEW_LEAD_MIN_AGE_DAYS, NEW_LEAD_MAX_AGE_DAYS,
   ROTATION_SILENT_DAYS, TOUCH_COOLDOWN_DAYS, ATTENTION_WINDOW_DAYS,
   RESTART_MIN_LOG_DAYS, RESTART_MIN_SILENT_DAYS,
+  // The escalation threshold lives with the debt reading, not with the deck.
   CONVERSION_INTENT_DAYS, SHIFT_END_HOUR_IST,
 } from '@/lib/os/scale-config';
 import { assembleDay, dayAnchorMs, istHour, SECTION_OF, type Channel, type DaySection, type DayCounts } from '@/lib/sales-day';
 import { readToday } from '@/lib/sales-opportunity-record';
+import { PROMISE_STALE_DAYS } from '@/lib/os/promise-debt';
 import { journeyStage, JOURNEY_NEXT_STEP, type JourneyStage } from '@/lib/sales-messages';
 import { buildRemarkHistories, EMPTY_HISTORY, HUMAN_PROVENANCE, MAX_REMARKS_ON_CARD, type RemarkHistory } from '@/lib/sales-remarks';
 
@@ -371,8 +373,14 @@ export function classifyLane(s: LaneSignals): LaneVerdict | null {
   // The student reached for the product and stopped short of studying:
   // opened the app inside the window and logged nothing in it, or tapped a
   // notification. The richest daily signal in the base (90 students in two
-  // days, production, 2 Sep) and the one the queue had never used. Message
-  // first — "what got in the way?" is a question, not a pitch.
+  // days, production, 2 Sep) and the one the queue had never used.
+  //
+  // A MESSAGE until 15 Sep 2026, a CALL since (founder). "What got in the
+  // way?" is still a question and not a pitch — it is just asked in a voice
+  // now, because the student it goes to often told us in their own words that
+  // they could not study, and answering that with a template wastes the one
+  // moment they chose to tell us something. The cost is paid in
+  // ATTENTION_CEILING, halved to 10 in the same change.
   if (s.attentionSinceIso) {
     const sinceMs = Date.parse(s.attentionSinceIso);
     const sinceDay = istDateStr(s.attentionSinceIso);
@@ -397,8 +405,8 @@ export function classifyLane(s: LaneSignals): LaneVerdict | null {
         dueLabel: toldUsTheyCouldNot ? 'Told us they could not study' : 'Opened, did not study',
         why,
         action: toldUsTheyCouldNot
-          ? 'They answered honestly — ask what got in the way, and believe the answer'
-          : 'Message first — ask what got in the way; call if they reply',
+          ? 'Call — they answered honestly, so ask what got in the way and believe the answer'
+          : 'Call — ask what got in the way, do not open with a pitch',
         // A student who answered outranks one who was merely seen: they have
         // already chosen to tell us something.
         sortBoost: (toldUsTheyCouldNot ? 800 : 0) + (tapped ? 500 : 0) + (opened ? 100 : 0) + s.momentumScore,
@@ -788,9 +796,27 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
     let sort: number;
     const minutesOverdue = () => Math.min(999_999, Math.max(0, Math.round((now - nextAction!) / 60_000)));
     if (dueNow && status === 'follow_up') {
-      dueReason = 'callback'; dueLabel = `Callback due ${o.callback_at ? istTime(o.callback_at) : 'now'}`;
+      // ── A PROMISE PAST A WEEK SAYS SO (founder, 15 Sep 2026) ───────────
+      //
+      // "7 din se zyada overdue ho to wo alag dikhe... par deck se hate na."
+      // Nothing about the ordering, the ceiling or the untrimmable rule
+      // changes here — the card is dealt exactly when it was before, at
+      // exactly the same rank. What changes is that it stops looking like
+      // today's callback. Ten of Neelam's thirty promises were more than a
+      // week old and every one of them read "Callback due 4:30 PM", which is
+      // how a student waiting since 7 Sep became indistinguishable from one
+      // who asked this morning.
+      const promisedDaysAgo = o.callback_at
+        ? Math.floor((now - Date.parse(o.callback_at as string)) / 86_400_000)
+        : 0;
+      const stale = promisedDaysAgo >= PROMISE_STALE_DAYS;
+      dueReason = 'callback';
+      dueLabel = stale
+        ? `Callback ${promisedDaysAgo} days overdue`
+        : `Callback due ${o.callback_at ? istTime(o.callback_at) : 'now'}`;
       why = [`They asked to be called${o.callback_at ? ` at ${istTime(o.callback_at)}` : ' back'} — a promise was made`];
-      action = 'Call now — keep the promise';
+      if (stale) why.push(`Still waiting ${promisedDaysAgo} days later — open with the apology, not the pitch`);
+      action = stale ? `Call first — this promise is ${promisedDaysAgo} days old` : 'Call now — keep the promise';
       sort = 7_000_000 + minutesOverdue();
     } else if (dueNow && status === 'no_answer') {
       dueReason = 'retry'; dueLabel = `Retry — no answer${o.no_answer_count > 1 ? ` (${o.no_answer_count}×)` : ''}`;

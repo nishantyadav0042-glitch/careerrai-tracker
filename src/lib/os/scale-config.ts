@@ -145,9 +145,19 @@ export const FRESH_PIN_PER_DAY = 5;
 /** After any touch, a student is left alone this long unless a promise, a
  *  money signal or a retention lane brings them back. */
 export const TOUCH_COOLDOWN_DAYS = 7;
-/** Attention (opened the app, did not log; tapped a notification) is capped
- *  so a busy evening cannot eat the day; the rest waits for tomorrow. */
-export const ATTENTION_CEILING = 20;
+/**
+ * Attention (opened the app, did not log; tapped a notification) is capped so
+ * a busy evening cannot eat the day; the rest waits for tomorrow.
+ *
+ * TWENTY until 15 Sep 2026, then TEN — because the lane became a CALL that
+ * day and a call costs what a template does not. Founder's call, made on the
+ * arithmetic: 107 free students opened the app without studying in fifteen
+ * days, a day is 50-70 cards, and two part-time counsellors work it. At 20
+ * calls this lane would have taken a third of every day from the `restart`
+ * students he had just named first priority. Ten leaves the room; the rest
+ * spill to tomorrow, as they always did.
+ */
+export const ATTENTION_CEILING = 10;
 /** New arrivals are capped the same way; a signup spike spills to tomorrow. */
 export const NEW_ARRIVAL_CEILING = 15;
 /** How far back "opened but did not log" looks, counted from the 4 AM anchor. */

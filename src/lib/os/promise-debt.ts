@@ -64,6 +64,32 @@ export const PROMISE_DEBT_MIN_OVERDUE = 10;
  */
 export const PROMISE_STUCK_DAYS = 3;
 
+/**
+ * Days past due before a promise is STALE — old enough that the founder is
+ * told the student's name (15 Sep 2026).
+ *
+ * Seven, and the founder's instruction was precise about what happens then:
+ * *"ek escalation lagao — 7 din se zyada overdue ho to wo alag dikhe aur
+ * founder digest mein naam ke saath aaye, par deck se hate na."*
+ *
+ * So this threshold changes nothing about who is dealt or in what order. A
+ * promise a student is owed is not ours to expire, bump or cap because it has
+ * become inconvenient. The only thing that changes is that it stops being a
+ * number: after a week the student has a name, and the name is in the email
+ * the founder reads in the morning.
+ */
+export const PROMISE_STALE_DAYS = 7;
+
+/** A promise old enough to be named, with the student it was made to. */
+export interface StalePromise {
+  studentId: string;
+  studentName: string;
+  daysOverdue: number;
+}
+
+/** How many names the founder reads before the rest become a count. */
+export const STALE_NAMES_SHOWN = 10;
+
 export interface PromiseDebtReading {
   repId: string;
   repName: string;
@@ -71,6 +97,12 @@ export interface PromiseDebtReading {
   overdue: number;
   /** Of those, past PROMISE_STUCK_DAYS. */
   stuck: number;
+  /**
+   * Of those, past PROMISE_STALE_DAYS — the ones the founder is told by name.
+   * Oldest first, because the student who has been waiting longest is the one
+   * the escalation exists for.
+   */
+  stale: StalePromise[];
   /** Age of the oldest overdue promise, in days. null when none. */
   oldestDays: number | null;
   isInDebt: boolean;
@@ -79,6 +111,10 @@ export interface PromiseDebtReading {
 export interface PromiseRow {
   /** ISO timestamp the callback was promised for. */
   callbackAt: string;
+  /** Who we promised. Present from 15 Sep 2026 — a promise past a week is
+   *  reported as a person, not as a tally. */
+  studentId?: string;
+  studentName?: string | null;
 }
 
 export function readPromiseDebt(args: {
@@ -88,6 +124,7 @@ export function readPromiseDebt(args: {
   let overdue = 0;
   let stuck = 0;
   let oldestMs: number | null = null;
+  const stale: StalePromise[] = [];
 
   for (const r of rows) {
     const at = Date.parse(r.callbackAt);
@@ -95,19 +132,47 @@ export function readPromiseDebt(args: {
     overdue += 1;
     const ageDays = (nowMs - at) / 86_400_000;
     if (ageDays >= PROMISE_STUCK_DAYS) stuck += 1;
+    if (ageDays >= PROMISE_STALE_DAYS) {
+      // Named only when we actually know the name. "Student" is not a name and
+      // would read, in the founder's email, as though we had lost track of who
+      // we owed — the opposite of what the escalation is for.
+      stale.push({
+        studentId: r.studentId ?? '',
+        studentName: (r.studentName ?? '').trim() || 'Name missing',
+        daysOverdue: Math.floor(ageDays),
+      });
+    }
     if (oldestMs == null || at < oldestMs) oldestMs = at;
   }
+  stale.sort((a, b) => b.daysOverdue - a.daysOverdue);
 
   return {
     repId,
     repName,
     overdue,
     stuck,
+    stale,
     oldestDays: oldestMs == null ? null : Math.floor((nowMs - oldestMs) / 86_400_000),
     // Both, never either. Ten promises that all slipped this morning is a busy
     // day, not a debt; one promise from last month is untidy, not a blockage.
     isInDebt: overdue >= PROMISE_DEBT_MIN_OVERDUE && stuck > 0,
   };
+}
+
+/**
+ * The escalation line: who has been waiting more than a week, by name.
+ *
+ * Empty string when nothing is stale — an escalation that prints "0 students"
+ * every morning is training the founder to skip the paragraph that will one
+ * day matter.
+ */
+export function stalePromiseLine(r: PromiseDebtReading): string {
+  if (r.stale.length === 0) return '';
+  const shown = r.stale.slice(0, STALE_NAMES_SHOWN);
+  const names = shown.map((s) => `${s.studentName} (${s.daysOverdue}d)`).join(', ');
+  const rest = r.stale.length - shown.length;
+  return `${r.stale.length} of them have been waiting more than ${PROMISE_STALE_DAYS} days: `
+    + names + (rest > 0 ? `, and ${rest} more` : '') + '.';
 }
 
 /** The sentence the founder reads. Arithmetic, not character. */
@@ -117,7 +182,8 @@ export function promiseDebtReason(r: PromiseDebtReading): string {
     + (r.oldestDays != null ? ` (the oldest is ${r.oldestDays} days old)` : '')
     + `. A promise is never bumped, so each one is dealt again every morning until it is worked — `
     + `${r.overdue} of the day's slots are committed before it starts, to the same ${r.overdue} students. `
-    + `That is why new students are not being reached, and moving the book would not change it.`;
+    + `That is why new students are not being reached, and moving the book would not change it.`
+    + (r.stale.length > 0 ? ` ${stalePromiseLine(r)}` : '');
 }
 
 /**
@@ -141,6 +207,14 @@ export function promiseDebtException(r: PromiseDebtReading, detectedAtMs: number
       stuck_threshold_days: PROMISE_STUCK_DAYS,
       oldest_overdue_days: r.oldestDays,
       min_overdue: PROMISE_DEBT_MIN_OVERDUE,
+      stale_past_days: PROMISE_STALE_DAYS,
+      stale_promises: r.stale.length,
+      // The drill-down SCALE-CONTRACT asks for: the count above resolves to
+      // these exact students, not to a number the founder has to trust.
+      // Flattened to a string because `evidence` is scalars only — the typed
+      // list lives on the reading, and the digest reads it from there.
+      stale_students: r.stale.length === 0 ? null
+        : r.stale.map((p) => `${p.studentName} (${p.daysOverdue}d)`).join(', '),
     },
     // The action is to CLEAR them — ring the students who were promised a
     // call — never to cancel them. A promise the student is owed is not ours
@@ -166,6 +240,20 @@ type Admin = { from: (t: string) => any };   // eslint-disable-line @typescript-
  * this exists to report. Any read failure returns nothing rather than a flag.
  */
 export async function findPromiseDebt(admin: Admin, nowMs: number): Promise<Exception[]> {
+  return (await readAllPromiseDebt(admin, nowMs))
+    .filter((r) => r.isInDebt)
+    .map((r) => promiseDebtException(r, nowMs));
+}
+
+/**
+ * Every active seat's reading, in debt or not.
+ *
+ * Split out from findPromiseDebt on 15 Sep 2026 so the founder digest can name
+ * the students who have been waiting more than a week. The exception carries
+ * them as a flattened string because `evidence` is scalars only; the digest
+ * needs the typed list, and neither should be reading the database twice.
+ */
+export async function readAllPromiseDebt(admin: Admin, nowMs: number): Promise<PromiseDebtReading[]> {
   const { data: seats, error: seatErr } = await admin
     .from('sales_rep_config').select('rep_id').eq('active', true);
   if (seatErr || !seats?.length) return [];
@@ -175,22 +263,38 @@ export async function findPromiseDebt(admin: Admin, nowMs: number): Promise<Exce
   const nameOf = new Map(((people ?? []) as Array<{ id: string; full_name: string | null }>)
     .map((p) => [p.id, p.full_name ?? 'Counsellor']));
 
-  const { data: rows, error: rowErr } = await fetchAll<{ owner_id: string; callback_at: string | null }>(
+  const { data: rows, error: rowErr } = await fetchAll<{ student_id: string; owner_id: string; callback_at: string | null }>(
     () => admin.from('lead_outreach').select('student_id, owner_id, callback_at')
       .in('owner_id', repIds).not('callback_at', 'is', null),
     { orderBy: 'student_id' },
   );
   if (rowErr || !rows) return [];
 
-  const out: Exception[] = [];
+  // The students behind the overdue promises, so a week-old one can be
+  // reported by name. Paged for the same reason the promises are: a truncated
+  // read here would silently rename students to "Name missing" rather than
+  // fail, which is the worst of both.
+  const studentIds = [...new Set(rows.map((r) => r.student_id).filter(Boolean))];
+  const studentName = new Map<string, string | null>();
+  if (studentIds.length > 0) {
+    const { data: studs } = await fetchAll<{ id: string; full_name: string | null }>(
+      () => admin.from('profiles').select('id, full_name').in('id', studentIds),
+    );
+    for (const s of studs ?? []) studentName.set(s.id, s.full_name);
+  }
+
+  const out: PromiseDebtReading[] = [];
   for (const repId of repIds) {
     const mine = rows
       .filter((r) => r.owner_id === repId && r.callback_at)
-      .map((r) => ({ callbackAt: r.callback_at as string }));
-    const reading = readPromiseDebt({
+      .map((r) => ({
+        callbackAt: r.callback_at as string,
+        studentId: r.student_id,
+        studentName: studentName.get(r.student_id) ?? null,
+      }));
+    out.push(readPromiseDebt({
       repId, repName: nameOf.get(repId) ?? 'Counsellor', rows: mine, nowMs,
-    });
-    if (reading.isInDebt) out.push(promiseDebtException(reading, nowMs));
+    }));
   }
   return out;
 }

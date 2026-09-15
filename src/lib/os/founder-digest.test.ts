@@ -14,6 +14,10 @@ describe('the daily digest tells the founder the state before they open anything
       lastWeek: { studied: 35, matureStudied: 20, logRows: 140, zeroHourRows: 60 },
       habit: { cohortWeek: '2026-08-24', signups: 218, ratePct: 6 },
     },
+    promises: [{
+      rep: 'Neelam Singh', overdue: 24, stale: 2,
+      line: '2 of them have been waiting more than 7 days: Aarav (9d), Ishita (8d).',
+    }],
     headline: '1 critical issue needs you today — paid students at risk.',
   };
 
@@ -67,6 +71,7 @@ describe('the digest says whether students are studying, not how many rows exist
       lastWeek: { studied: 35, matureStudied: 20, logRows: 140, zeroHourRows: 60 },
       habit: { cohortWeek: '2026-08-24', signups: 218, ratePct: 6 },
     },
+    promises: [],
     headline: 'All clear.',
   };
 
