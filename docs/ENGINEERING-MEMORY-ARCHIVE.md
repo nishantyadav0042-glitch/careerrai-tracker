@@ -4531,3 +4531,75 @@ produces this exception; SALES-OS §0 forbids it becoming a judgement.
 them — 14 log days, paying — is **in no book at all**, because `lead-intake`
 excludes `is_premium === true` from the pool. That is correct for *lead*
 intake and leaves retention, the other P0, with no book. Not fixed here.
+
+## Incident #78
+
+**2026-09-15 · An unkept promise is redealt every morning forever, so one
+counsellor's day became 100% promise cards and 333 students in her book were
+never dealt anything · Sales (Trust) (P1)**
+
+**What happened.** Asked to split Neelam's book so every student gets tapped,
+the measurement said the book was not the problem. Both books are the same
+size — Neelam 583, Anshul 555. The difference is the DAY.
+
+Cards dealt, 7-14 Sep:
+
+| day | Anshul dealt | fresh dealt → worked | Neelam dealt | fresh dealt | promise cards |
+| --- | --- | --- | --- | --- | --- |
+| 11 Sep | 66 | 17 → 2 | 69 | **0** | 45 |
+| 10 Sep | 59 | 21 → 4 | 69 | **0** | 52 |
+| 09 Sep | 84 | 15 → 3 | 114 | **0** | **113** |
+| 08 Sep | 84 | 25 → 0 | 104 | **0** | 99 |
+
+Neelam's day is **one hundred percent promise cards** — not most of it, all of
+it. Nine working days without a single never-contacted student.
+
+**The mechanism.** `sales-day.ts` holds `UNTRIMMABLE = {callback, followup,
+checkout_abandoned}`. Incident #74 gave `retry` a ceiling (`RETRY_CEILING`, 20)
+after the retry lane ate whole days. `callback` never got one, deliberately: a
+callback is a time a STUDENT asked us to ring back, and promises are never
+bumped (founder, 2 Sep). That rule is right.
+
+But **an overdue promise is redealt every morning until it is worked, and
+nothing ages it out**, so a promise that is never kept becomes a permanent
+standing charge against the day:
+
+| rep | callbacks set | overdue | 3+ days | 7+ days | oldest |
+| --- | --- | --- | --- | --- | --- |
+| Anshul | 13 | 1 | 0 | 0 | today |
+| Neelam | 30 | **24** | 15 | 10 | 7 Sep |
+
+Twenty-four of her ~70 daily slots are committed before the day begins, to the
+same twenty-four students, every morning.
+
+**Why the requested fix would not have worked.** Moving students out of her
+book changes none of this — the debt travels with the promises, not with the
+book size. Her day would still open with 24 committed slots, and Anshul's
+fresh lane is capped by his own day, so his throughput would not rise either;
+his 277 never-contacted would simply start competing with her 333. Splitting
+the book is **neutral** for "tap every student", and the exception's own
+sentence says so where the founder reads it, because otherwise he moves 333
+students and nothing changes.
+
+**The third lesson in the same family.** #74: the retry lane ate the day, so
+retry got a ceiling. #77: capping one untrimmable lane moved the starvation to
+`callback`. #78: the reason `callback` grows without bound is that nothing
+ages an unkept promise out. Each fix was correct and each was outrun, because
+the shape — *a lane with no ceiling and no expiry, counted before the lane
+that has no claim on the day* — was never addressed directly.
+
+**What was done.** `lib/os/promise-debt.ts` reports it as one Exception
+(`promises_overdue_blocking_day`, severity high) drilling into the rep's
+activity view. It fires only on both conditions (≥10 overdue AND at least one
+past 3 days), so an ordinary busy week where everything slipped this morning
+never trips it.
+
+The suggested action is **"Clear the overdue promises — those students are
+still waiting"**, never cancel, drop, bump or expire, and a test asserts those
+words are absent. A promise a student is owed is not ours to delete because it
+has become inconvenient to our throughput — the debt is the founder's to
+decide about, not the system's to quietly resolve.
+
+**Not done, and deliberately.** No ceiling or expiry was added to `callback`.
+That would override a commitment made to a student, and it is the founder's
+rule to change, not a constant to tune.

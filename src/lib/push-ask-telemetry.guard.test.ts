@@ -59,6 +59,38 @@ describe('every path out of the push ask is counted', () => {
     expect(evaluateBody()).toContain("report('shown')");
   });
 
+  // ── THE STAGE THAT WAS NOT MEASURED (15 Sep) ──────────────────────────────
+  //
+  // 65 students opened /student/tracker with no push subscription and emitted
+  // no push_* row at all, while every path out of evaluate() reports. Never
+  // mounted, never reached evaluate(), or the write was lost — three different
+  // bugs wearing one face, and nothing stored could separate them.
+  //
+  // The mount now says so itself, before any decision. NOTIFICATION-OS §8:
+  // every stage measured.
+  it('says it mounted before it decides anything', () => {
+    const s = code(ASK);
+    expect(s, 'the mount must be recorded exactly once').toContain("track('push_ask_mounted'");
+    expect(s.match(/'push_ask_mounted'/g)?.length).toBe(1);
+    // Guarded by a ref, or a foreground re-render writes a row per app switch.
+    expect(s).toMatch(/mounted\.current\s*=\s*true/);
+    // Before the first early return, or it cannot answer the question it
+    // exists for: a component that bails immediately still mounted.
+    const body = s.slice(s.indexOf('useEffect(() => {'));
+    expect(body.indexOf("track('push_ask_mounted'"))
+      .toBeLessThan(body.indexOf('const evaluate = () => {'));
+  });
+
+  // NOTIFICATION-OS §7: "we never optimize the permission-rate vanity number."
+  // The mount fires even when the answer is to do nothing, so counting it as
+  // an ask would inflate exactly that number.
+  it('does not let the mount masquerade as an ask', () => {
+    const s = code(ASK);
+    const mountLine = s.split('\n').find((l) => l.includes("track('push_ask_mounted'")) ?? '';
+    expect(mountLine).not.toContain('push_ask_shown');
+    expect(s).not.toMatch(/report\('mounted'/);
+  });
+
   it('counts the outcomes a student drives, not just success', () => {
     const s = code(ASK);
     for (const ev of ['push_ask_later', 'push_ask_blocked', 'push_ask_dismissed', 'push_ask_failed']) {

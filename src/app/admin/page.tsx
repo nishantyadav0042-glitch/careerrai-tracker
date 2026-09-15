@@ -6,6 +6,7 @@ import { readDismissedIds, withoutDismissed } from '@/lib/os/alert-dismissal';
 import { findCadenceBursts } from '@/lib/os/rep-cadence';
 import { findUncorroboratedReps } from '@/lib/os/rep-corroboration';
 import { findStarvedBooks } from '@/lib/os/book-starvation';
+import { findPromiseDebt } from '@/lib/os/promise-debt';
 import { DismissAlert } from './dismiss-alert';
 import { getRealStudents, getLoggedToday, getSalesReadyToCall, getWantsBuddy } from '@/lib/admin-filters';
 import { CheckCircle2, ArrowRight, AlertOctagon, AlertTriangle, Circle, ShieldAlert, Phone, SearchCheck } from 'lucide-react';
@@ -49,7 +50,7 @@ export default async function CommandCenterPage() {
   // Sacred-student failures are computed FIRST and pinned ABOVE everything.
   // Co-founder rule: a paying student in a broken state is a P0 the system
   // surfaces before the founder has to look for it.
-  const [rawAlerts, inbox, dismissedIds, cadenceBursts, uncorroborated, starvedBooks] = await Promise.all([
+  const [rawAlerts, inbox, dismissedIds, cadenceBursts, uncorroborated, starvedBooks, promiseDebt] = await Promise.all([
     findSacredFailures(admin, now),
     assembleFounderInbox(admin, now),
     readDismissedIds(admin),
@@ -76,8 +77,15 @@ export default async function CommandCenterPage() {
     findStarvedBooks(admin, now).catch((e) => {
       console.error('[command-center] book starvation watch failed:', e); return [];
     }),
+    // WHY the book is not moving, which is a different question from THAT it
+    // is not moving. An overdue promise is redealt every morning and nothing
+    // ages it out, so unkept promises become a standing charge against the
+    // day — 24 of ~70 slots on 15 Sep (lib/os/promise-debt).
+    findPromiseDebt(admin, now).catch((e) => {
+      console.error('[command-center] promise debt watch failed:', e); return [];
+    }),
   ]);
-  const integrity = [...cadenceBursts, ...uncorroborated, ...starvedBooks];
+  const integrity = [...cadenceBursts, ...uncorroborated, ...starvedBooks, ...promiseDebt];
   // Alerts the founder has already closed ("already assigned", "completed").
   // Subtracted here rather than inside findSacredFailures so the detector stays
   // the single authority on what IS wrong, and dismissal stays what it is: the

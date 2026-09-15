@@ -308,6 +308,15 @@ export type EventName =
   // Deliberately a separate name from push_ask_shown: no permission prompt is
   // involved, so counting it as an ask would inflate the acquisition funnel.
   | 'push_setup_guidance_shown'
+  // Fired once per mount, BEFORE any decision. Production, 15 Sep: 65 students
+  // opened /student/tracker with no push subscription and emitted no push_*
+  // row at all — yet every path out of evaluate() reports. Either the
+  // component never mounted for them or it never reached evaluate(), and
+  // nothing we stored could tell the two apart. NOTIFICATION-OS §8 is "every
+  // stage measured"; the mount was the one stage that was not. This does NOT
+  // count as an ask (see push_setup_guidance_shown above for why that
+  // distinction is load-bearing).
+  | 'push_ask_mounted'
   | 'push_ask_shown' | 'push_ask_skipped' | 'push_ask_later'
   | 'push_ask_blocked' | 'push_ask_dismissed' | 'push_ask_failed'
   // ReopenAppNudge (1 Sep): a student who already installed but landed in a
