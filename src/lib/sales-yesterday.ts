@@ -25,21 +25,38 @@ import { isTypedRemark } from '@/lib/sales-remarks';
 const IST_OFFSET_MS = 5.5 * 3600_000;
 const DAY_MS = 24 * 3600_000;
 
+export interface DayWindow { startIso: string; endIso: string; label: string }
+
+/** Midnight of the current IST day, expressed back in real UTC ms. */
+function istMidnightUtcMs(nowMs: number): number {
+  const istNow = new Date(nowMs + IST_OFFSET_MS);
+  return Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), istNow.getUTCDate()) - IST_OFFSET_MS;
+}
+
+function windowFrom(startMs: number, endMs: number): DayWindow {
+  return {
+    startIso: new Date(startMs).toISOString(),
+    endIso: new Date(endMs).toISOString(),
+    label: new Date(startMs + IST_OFFSET_MS).toISOString().slice(0, 10),
+  };
+}
+
 /** The IST calendar day that ended most recently, as a UTC half-open window.
  *  The sales team lives in IST; "yesterday" at 00:30 IST must mean the day
  *  that just closed, not a UTC day that still has 5½ hours to run. */
-export function istYesterdayWindow(nowMs: number = Date.now()): { startIso: string; endIso: string; label: string } {
-  const istNow = new Date(nowMs + IST_OFFSET_MS);
-  // Midnight of the CURRENT IST day, expressed back in real UTC ms.
-  const istMidnightUtcMs =
-    Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), istNow.getUTCDate()) - IST_OFFSET_MS;
-  const startMs = istMidnightUtcMs - DAY_MS;
-  const labelDate = new Date(startMs + IST_OFFSET_MS);
-  return {
-    startIso: new Date(startMs).toISOString(),
-    endIso: new Date(istMidnightUtcMs).toISOString(),
-    label: labelDate.toISOString().slice(0, 10),
-  };
+export function istYesterdayWindow(nowMs: number = Date.now()): DayWindow {
+  const midnight = istMidnightUtcMs(nowMs);
+  return windowFrom(midnight - DAY_MS, midnight);
+}
+
+/** The IST day in progress, ending at `nowMs` rather than at midnight.
+ *
+ *  The day-close card runs at the END of a shift, not after it — a rep closing
+ *  at 21:00 IST must read the day they just worked, and asking for "yesterday"
+ *  would hand them the wrong one. Keeping the same window shape means
+ *  repDaySnapshot serves both without knowing which it was given. */
+export function istTodaySoFarWindow(nowMs: number = Date.now()): DayWindow {
+  return windowFrom(istMidnightUtcMs(nowMs), nowMs);
 }
 
 /** Rows the sales day is made of. 'reassigned' is bookkeeping, not work. */

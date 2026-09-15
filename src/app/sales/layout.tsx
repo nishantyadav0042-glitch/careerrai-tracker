@@ -24,6 +24,9 @@ export default async function SalesLayout({ children }: { children: React.ReactN
           <Link href="/sales/followups" className="rounded-full bg-white px-3.5 py-1.5 text-[13px] font-semibold text-stone-500 ring-1 ring-stone-200 hover:text-stone-800">Follow-ups</Link>
           <Link href="/sales/earnings" className="rounded-full bg-white px-3.5 py-1.5 text-[13px] font-semibold text-stone-500 ring-1 ring-stone-200 hover:text-stone-800">Earnings</Link>
           <Link href="/sales/summary" className="rounded-full bg-white px-3.5 py-1.5 text-[13px] font-semibold text-stone-500 ring-1 ring-stone-200 hover:text-stone-800">My summary</Link>
+          {/* The shift-end screenshot (founder, 15 Sep). Last in the row
+              because it is the last thing done in a day. */}
+          <Link href="/sales/day-close" className="rounded-full bg-white px-3.5 py-1.5 text-[13px] font-semibold text-stone-500 ring-1 ring-stone-200 hover:text-stone-800">Day close</Link>
         </nav>
         {children}
       </div>
