@@ -4891,3 +4891,59 @@ change by a pixel: a 2027 aspirant is a 2026 student who arrived early.
 **The denominator was also wrong everywhere.** "1,200 students" understates the
 product: against the 703 who are actually sitting this year, 2 payers is 0.28%
 and 79 habit-formed students is 11%.
+
+## Incident #82
+
+**2026-09-15 · The Command Center's "sales-ready to call" said 1,098 when 423
+of them had already been called; and three tiles labelled "Studied"/"Active"
+were all counting log rows · Analytics (P1)**
+
+**What happened.** The founder looked at the Command Center and asked "are
+these numbers real?". Two were not.
+
+**1. `getSalesReadyToCall` computed the exclusion and threw it away.** The
+function built `ids` — the flagged students with no prior call outcome — and
+then returned `rows`, the FULL sales-ready list, filtered only by real-student
+and premium. `ids` was used solely to fetch profile/streak/door lookups.
+
+| | |
+| --- | --- |
+| flagged `sales_ready = true` | 1,098 |
+| already worked | 423 |
+| genuinely uncalled | **675** |
+| **card showed** | **1,098** |
+
+Two counsellors were being pointed at 423 students they had already spoken to.
+
+The read underneath was broken independently: a single
+`.in('student_id', flagged)` over ~1,100 ids against a table returning **1,411**
+matching rows — past PostgREST's 1,000-row cap (Incident #65) and a URL long
+enough to be refused outright — with its `error` discarded, so a total failure
+would have reported everybody as uncalled. Now chunked, paged, and it THROWS:
+the same rule `getRealStudents` states ten lines above it, which this function
+did not follow.
+
+**2. Three tiles said "Studied" and "Active" while counting log rows.** All
+three read `daily_reports`, and a row is written whether the student studied or
+recorded that they could not:
+
+| tile | showed | truth |
+| --- | --- | --- |
+| Studied today | 9 | 9 studied — correct by coincidence |
+| Studied yesterday | **29** | **11** actually studied |
+| Active this week | **67** | **166** opened the app |
+
+Overstating study by 2.6x and understating activity by 2.5x, on one screen.
+
+Relabelled to "Logged today / yesterday / this week" rather than re-pointed:
+the counts and the People lists behind them come from the same filter, which is
+the rule `admin-filters` exists for, and the People page derives its own
+activity states from logging as well. A line under the grid now says a log is a
+student answering, not a student studying, and points at the digest
+(`lib/os/study-truth`) for the split.
+
+**The lesson, for the fifth time today.** #77 a card dealt is not a student
+reached · #79 an empty record is not an empty service · #80 a log row is not a
+study session · #81 "I could not study" is not silence · #82 a label is not a
+measurement. Every one is the same move: **the name of the record got used as
+the name of the thing.**

@@ -3,6 +3,7 @@ import { GOING_COLD_DAYS } from '@/lib/os/people-filter';
 import { CALL_OUTCOMES } from '@/lib/sales-disposition';
 
 import { fetchAll } from '@/lib/supabase/fetch-all';
+import { chunkIds } from '@/lib/truth/batch';
 // ── The dashboard's single source of truth ───────────────────────────────────
 //
 // Founder rule (20 July): every dashboard card is ONE precise filter. The
@@ -187,14 +188,32 @@ export async function getSalesReadyToCall(admin: any, students?: RealStudent[]):
     .eq('sales_ready', true), { orderBy: 'student_id' });
   const flagged = (rows ?? []).map((r: any) => r.student_id as string).filter((id: string) => byId.has(id));
   if (flagged.length === 0) return [];
-  const { data: worked } = await admin
-    .from('sales_activity')
-    .select('student_id')
-    .in('student_id', flagged)
-    .in('status', CALL_OUTCOMES as unknown as string[]);
-  const workedIds = new Set((worked ?? []).map((w: any) => w.student_id as string));
+  // ── WHO HAS ALREADY BEEN CALLED ──────────────────────────────────────────
+  //
+  // 15 Sep 2026. This read was a single `.in('student_id', flagged)` over
+  // ~1,100 ids with its `error` discarded, against a table that returns 1,411
+  // matching rows — past PostgREST's 1,000-row cap, and a URL long enough to
+  // be refused outright. Chunked and paged now, and a failure THROWS rather
+  // than quietly reporting everybody as uncalled (the same rule getRealStudents
+  // above already states: returning [] on a failed read is the bug).
+  const workedIds = new Set<string>();
+  for (const chunk of chunkIds(flagged)) {
+    const { data: worked, error: workedErr } = await fetchAll<{ student_id: string }>(() => admin
+      .from('sales_activity')
+      .select('student_id')
+      .in('student_id', chunk)
+      .in('status', CALL_OUTCOMES as unknown as string[]), { orderBy: 'student_id' });
+    if (workedErr) throw new Error(`getSalesReadyToCall: could not read prior contact: ${workedErr.message}`);
+    for (const w of worked ?? []) workedIds.add(w.student_id);
+  }
   const ids = flagged.filter((id: string) => !workedIds.has(id));
   if (ids.length === 0) return [];
+  // The set the card is actually about. Until 15 Sep the exclusion above was
+  // computed and then never applied — the return filtered `rows`, which is
+  // every sales-ready student — so the Command Center read 1,098 "sales-ready
+  // to call" when 423 of them had already been called and the true number was
+  // 675. The counsellors were being pointed at students they had spoken to.
+  const unworked = new Set(ids);
   const [{ data: profs }, { data: streaks }, { data: doors }] = await Promise.all([
     admin.from('profiles').select('id, is_premium').in('id', ids),
     admin.from('streak_data').select('student_id, current_streak, last_log_date, shields').in('student_id', ids),
@@ -204,7 +223,7 @@ export async function getSalesReadyToCall(admin: any, students?: RealStudent[]):
   const streakById = new Map<string, any>((streaks ?? []).map((s: any) => [s.student_id as string, s]));
   const doorById = new Map<string, 'history' | 'intent'>((doors ?? []).map((d: any) => [d.student_id as string, d.door as 'history' | 'intent']));
   return (rows ?? [])
-    .filter((r: any) => byId.has(r.student_id) && !premiumIds.has(r.student_id))
+    .filter((r: any) => unworked.has(r.student_id) && byId.has(r.student_id) && !premiumIds.has(r.student_id))
     .map((r: any): SalesReadyRow => {
       const s = byId.get(r.student_id)!;
       const st = streakById.get(r.student_id) as any;

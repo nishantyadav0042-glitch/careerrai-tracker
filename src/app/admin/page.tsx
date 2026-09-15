@@ -279,12 +279,30 @@ export default async function CommandCenterPage() {
       <div className="mb-2 px-1">
         <p className="text-[11px] font-semibold uppercase tracking-widest text-stone-400">Today, for context</p>
       </div>
+      {/* ── SAY WHAT IS MEASURED (15 Sep 2026) ──────────────────────────────
+          These three read `daily_reports`, so every one of them counts a LOG,
+          and a log row is written whether the student studied or recorded that
+          they could not. On 14 Sep the tiles said "Studied yesterday 29" when
+          11 students had actually studied, and "Active this week 67" when 166
+          had opened the app — overstating study by 2.6x and understating
+          activity by 2.5x, on the same screen.
+
+          Relabelled rather than re-pointed: these counts and the People lists
+          behind them come from the same filter, which is the rule this whole
+          file exists for, and the People page derives activity from logging
+          too. The honest split — students who STUDIED, the share of rows that
+          recorded no study, and the count an arrival spike cannot explain —
+          is in the founder digest (lib/os/study-truth). */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         <ContextTile label="Students" value={students.length} href="/admin/people" />
-        <ContextTile label="Studied today" value={`${logged.length}/${students.length}`} href="/admin/people?activity=today" />
-        <ContextTile label="Studied yesterday" value={yesterdayCount} href="/admin/people?activity=yesterday" />
-        <ContextTile label="Active this week" value={weekCount} href="/admin/people?activity=this_week" />
+        <ContextTile label="Logged today" value={`${logged.length}/${students.length}`} href="/admin/people?activity=today" />
+        <ContextTile label="Logged yesterday" value={yesterdayCount} href="/admin/people?activity=yesterday" />
+        <ContextTile label="Logged this week" value={weekCount} href="/admin/people?activity=this_week" />
       </div>
+      <p className="mt-2 px-1 text-[11px] leading-relaxed text-stone-400">
+        A log is a student answering, not a student studying — roughly half record no study time.
+        The daily digest carries how many actually studied.
+      </p>
     </div>
   );
 }
