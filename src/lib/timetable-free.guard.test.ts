@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { refusal } from './timetable-refusal';
 
 // ── "The machine is free. The human is paid." ───────────────────────────────
 //
@@ -70,6 +71,11 @@ describe('the quota that replaced the paywall', () => {
     // because this is a once-or-twice-a-week action for a real student.
     expect(src).toMatch(/lastHour/);
     expect(src).toMatch(/lastDay/);
-    expect(src).toMatch(/429/);
+    // The status used to be spelled here. Since 15 Sep every refusal carries a
+    // named code (lib/timetable-refusal) so the failures can be counted apart,
+    // so the guarantee is checked in two halves: the route refuses the quota
+    // breach, and that refusal is still a 429.
+    expect(src).toMatch(/refuse\('quota_exceeded'\)/);
+    expect(refusal('quota_exceeded').status).toBe(429);
   });
 });

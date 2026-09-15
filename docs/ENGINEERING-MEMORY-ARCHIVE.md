@@ -4376,3 +4376,84 @@ break those policies. Not a vulnerability, and not touched.
 **Rule to carry forward:** when a security finding is "this object is
 misconfigured", ask whether the *class* of object can be created again
 tomorrow. If it can, the fix is a default or a guard, not a corrected census.
+
+## Incident #76
+
+**2026-09-15 · Four different 422s wore one face, so a 46% scanner failure ran
+seven weeks undiagnosed — and the error text sent students to a screen that
+does not exist · Learning (P0 student correctness)**
+
+**What happened.** Three students told a counsellor, independently, that the
+app's plan did not match their coaching: *"his schedule is different and
+doesn't match the application"*, *"the schedule is not in sync"*, *"topic and
+schedule are not synced so she is trying to customize it but is facing
+difficulties"*. The complaint read like a plan-engine bug. It was not.
+
+`lib/timetable-day` is correct: when a timetable is saved, the sheet owns the
+day and the coverage matrix goes dead. The engine had nothing to sync to,
+because almost no timetable ever gets in.
+
+| coaching students | 357 |
+| with a saved timetable | 17 (4.8%) |
+| dismissed the ask | 280 |
+| tried to upload | 62 |
+| parse failures | 32 (46% of tries) |
+| saved | 26 |
+
+**Why it survived seven weeks.** Of the failures, 23 across 12 distinct
+students were 422s, spread 25 Jul - 8 Sep. `api/timetable/parse` had four ways
+to answer 422 and recorded which one to **nothing** — the client logged
+`{ status }` and the server logged no reason at all:
+
+- the workbook would not open (corrupt / password-protected)
+- the workbook had no readable rows
+- the model judged the image not to be a timetable
+- the model answered and `extractJson` could not read the reply
+
+Only the last-but-one branch writes a timeline row, and production holds
+**zero** `ocr_failed` rows (checked: no constraint blocks that kind, the table
+is live with five other kinds). So the 23 came from the other branches,
+indistinguishable. Twelve real students hit a dead end and we could not say
+which wall they hit.
+
+**The second defect, found while fixing the first.** Three of those messages
+ended *"…or add your classes by hand."* **There is no by-hand path.** The
+phrase appeared nowhere in the product outside those three strings. A student
+whose photo was rejected was told to do something the app has never offered,
+and then handed back the same upload button. Compare `MockDebriefModal`, which
+says "fill in manually" and has the form behind it — the repo already knew the
+standard.
+
+**The lesson — a refusal that cannot be named cannot be counted, and a count
+that cannot be read is a failure that never gets fixed.** The status code was
+never the information; four distinct causes shared three status codes. This is
+the Scale Contract's drill-down rule applied to errors: an exception you cannot
+drill into is a chart, and a 422 you cannot attribute is worse — it is a chart
+with one bar.
+
+The second lesson is narrower and sharper: **never write an instruction into an
+error message without checking the door exists.** It costs nothing to write and
+it cost twelve students their upload.
+
+**What was done.** `lib/timetable-refusal.ts` names all eleven ways the scanner
+can refuse, each with a stable code and its production status unchanged (seven
+weeks of old rows keep their meaning). `not_a_timetable` and
+`model_reply_unreadable` are split deliberately — one is a photo problem and
+one is our own extractor, and counted together they would point the next
+investigation at the wrong half. Every refusal returns `{ error, reason }` and
+the client records `reason` on `timetable_parse_failed`.
+
+The phantom door is gone from the copy, and `PHANTOM_DOORS` in
+`timetable-refusal.test.ts` fails the build if `by hand` / `manually` / `type
+them in` reappears in any refusal message. If manual entry is ever built, the
+pattern is deleted in the same commit that ships the screen — that is the only
+way back in.
+
+**What is NOT fixed, and is the real conversion problem.** 340 of 357 coaching
+students still have no timetable, and the only door in is a file upload. The
+280 who dismissed the ask were never offered another way to tell us when their
+classes are. Naming the failures makes the next week readable; it does not add
+the missing door. That decision is open — see the note to the founder, 15 Sep,
+on whether a by-hand schedule should REPLACE the generated day (as an uploaded
+sheet does) or only constrain it, because the two produce materially different
+plans and the wrong choice would hand a student a two-hour topic-less day.
