@@ -5184,20 +5184,49 @@ Checked. Two of the three were already true. The third was not.
 const target = Math.max(ROTATION_FLOOR, DAY_FLOOR - signalsToday);
 ```
 
-`DAY_FLOOR`, not `DAY_CEILING`. With 23 signal cards (retry 20 at its own
-ceiling, attention 2, callback 1) the target came out at 27, 27 rotation cards
-were dealt, and the day ended at exactly 50. Every day. **A band built to its
-bottom is not a range, it is a cap wearing a range's clothes.**
+`DAY_FLOOR`, not `DAY_CEILING`. **A band built to its bottom is not a range, it
+is a cap wearing a range's clothes.**
+
+**CORRECTION, same night, before this entry was an hour old.** The first draft
+of this incident said "the day ended at exactly 50, every day". That was wrong,
+and the check-in that verified the fix is what caught it: days ended at 59-73.
+The true statement is narrower and worse, and it took looking at
+`min(surfaced_at)` per day to see it.
+
+**What the target actually decided.** The deck a counsellor OPENS was exactly
+`DAY_FLOOR`. Not "usually around fifty" — the FIRST BUILD of Anshul's day:
+
+| day | first opened (IST) | cards in that first build | fresh in it | day ended at |
+| --- | --- | --- | --- | --- |
+| 16 Sep | 00:07 | **50** | **27** | 50 |
+| 15 Sep | 06:50 | **50** | 47 | 70 |
+| 14 Sep | 00:08 | **50** | 49 | 71 |
+| 13 Sep | 07:42 | **50** | 43 | 70 |
+| 12 Sep | 02:16 | 53 | **15** | 70 |
+| 11 Sep | 00:01 | **50** | 17 | 66 |
+| 10 Sep | 09:13 | **50** | 21 | 59 |
+
+Days reached 59-73 only because signals arriving LATER were added on top —
+they were never bound by this target. The rep's morning was fifty cards, every
+morning, and on 14 Sep he WORKED 65 of them.
+
+**And the part that no one could have seen.** The never-contacted share was
+frozen at whatever signals happened to exist the moment the page was FIRST
+opened, because `usedRotation` has already spent the target by then and
+rotation never tops up again. Same rep, same book, same week: **06:50 → 47
+fresh · 00:07 with the retry lane already full → 27 · 02:16 → 15.** How many
+students got a first conversation was set by the clock time at which somebody
+happened to load a page.
 
 **What was behind it.** Not a capacity limit — his book held **319
 never-contacted students**, every one of them a real student, with a phone, not
 premium, not assigned, not closed for sales. Neelam's held 387. The day stopped
 at fifty with 319 dealable students behind it.
 
-**The cost, measured.** On 14 Sep that rep WORKED 65 cards. A fifty-card day
-takes fifteen conversations off him for no reason but arithmetic. The
-never-contacted share per day goes 27 → ~47 with the same ceiling and the same
-lanes.
+**The cost, measured.** On 14 Sep that rep WORKED 65 cards against a morning
+deck of 50. Against `DAY_CEILING` the first build is seventy and the
+never-contacted share is the whole remaining room whenever the page is opened —
+so the 15-to-49 lottery becomes a floor of roughly 47.
 
 **What was done.** `DAY_FLOOR` → `DAY_CEILING` in that one expression. Nothing
 else moved: `room` still caps the day at 70, every lane ceiling still binds, a
@@ -5226,3 +5255,10 @@ asserts the floor will defend the bug.* Every one of the four tests that broke
 had been written deliberately, described the behaviour accurately, and was
 wrong about what the behaviour should be — which is what a founder's
 "70 milne chahiye" resolves and a test suite never can.
+
+**Second lesson, from the correction.** *A daily total can hide a defect that
+the FIRST reading of the day shows plainly.* `count(*) per day` said 59-73 and
+looked healthy; `min(surfaced_at)` said 50 every morning. When a surface is
+rebuilt through the day, the number a person actually saw is the first one, not
+the sum — and the first draft of this entry got the claim wrong by reading the
+sum.

@@ -7,14 +7,21 @@
  * nahi kiya, unki quantity bhi badhate jao."
  *
  * Between those two sentences the rotation target read `DAY_FLOOR -
- * signalsToday`. With 23 signal cards it came out at 27, so 27 rotation cards
- * were dealt and the day ended at exactly 50 — while 319 never-contacted
- * students sat in that same rep's book, dealable, with phone numbers. The
- * number was not a capacity limit. It was the bottom of a band, reached on
- * purpose, every day.
+ * signalsToday`, and it decided two things nobody chose.
  *
- * The measurable cost: on 14 Sep that rep WORKED 65 cards. A fifty-card day
- * takes fifteen conversations off him for no reason but arithmetic.
+ * The deck a counsellor OPENS was always exactly DAY_FLOOR — the first build
+ * of that rep's day was 50 cards on 10, 11, 13, 14, 15 and 16 Sep (53 on the
+ * 12th). Days later ended at 59-73, but only because signals arriving through
+ * the day were added on top, never bound by this target. His morning was fifty
+ * cards, every morning, and on 14 Sep he WORKED 65.
+ *
+ * Worse, the never-contacted share was frozen at whatever signals existed when
+ * the page was FIRST opened, because `usedRotation` has spent the target by
+ * then and rotation never tops up again. Same rep, same book, same week:
+ * 06:50 → 47 fresh · 00:07 with the retry lane full → 27 · 02:16 → 15. The
+ * number of introductions a student cohort got was set by the clock time
+ * somebody happened to load a page, while 319 never-contacted students sat in
+ * that book with phone numbers.
  *
  * What must NOT change, and is asserted here beside it: the ceiling still
  * binds, and a short book still reports short. Filling a day with real
@@ -33,8 +40,10 @@ const c = (dueReason: DueReason, n = 1) =>
 
 describe('the day is built to the ceiling when the book can supply it', () => {
   it('reproduces the exact production shape that came out at fifty', () => {
-    // Anshul, 16 Sep 01:00 IST: retry 20 (at its own ceiling), attention 2,
-    // callback 1 — and a book with 319 never-contacted students behind it.
+    // Anshul's FIRST BUILD of 16 Sep, 00:07 IST: retry 20 (at its own
+    // ceiling), attention 2, callback 1 — and a book with 319 never-contacted
+    // students behind it. This is the deck he would have opened in the
+    // morning.
     const day = assembleDay([
       ...c('callback', 1), ...c('retry', 20), ...c('attention', 2), ...c('fresh', 319),
     ]);

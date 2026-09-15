@@ -259,16 +259,36 @@ export function assembleDay<T extends { studentId: string; dueReason: DueReason 
   // ── ROTATION FILLS TO THE CEILING, NOT THE FLOOR (founder, 15 Sep 2026) ──
   //
   // This line read `DAY_FLOOR - signalsToday` until tonight, and that one word
-  // was the whole reason a counsellor's day was fifty cards instead of
-  // seventy. With 23 signal cards the target came out at 27, so 27 rotation
-  // cards were dealt and the day ended at exactly DAY_FLOOR — while 319
-  // never-contacted students sat in that same rep's book, dealable, with
-  // phone numbers, waiting.
+  // decided two things nobody chose.
   //
-  // "50-70" (2 Sep) was a BAND, and building to the bottom of a band every
-  // day is not a range, it is a cap wearing a range's clothes. The cost is
-  // measurable: on 14 Sep Anshul WORKED 65 cards. A fifty-card day would have
-  // taken fifteen conversations off him for no reason other than arithmetic.
+  // FIRST, the deck a counsellor opens in the morning was always exactly
+  // DAY_FLOOR. Not "usually around fifty" — the first build of Anshul's day
+  // was 50 cards on 10, 11, 13, 14, 15 and 16 Sep, and 53 on the 12th. Days
+  // later ENDED at 59-73, but only because signals arriving through the day
+  // were added on top; they were never bound by this target. The rep's
+  // morning was fifty cards, every morning.
+  //
+  // SECOND, and worse, the never-contacted share was frozen at whatever
+  // signals happened to exist at the moment the page was FIRST opened —
+  // because `usedRotation` has already spent the target by then and rotation
+  // never tops up again. Same rep, same book, same week:
+  //
+  //   15 Sep, first opened 06:50, few signals yet  -> 47 fresh cards
+  //   16 Sep, first opened 00:07, retry lane full  -> 27 fresh cards
+  //   12 Sep, first opened 02:16, signals waiting  -> 15 fresh cards
+  //
+  // Fifteen to forty-nine never-contacted students a day, decided by the CLOCK
+  // TIME AT WHICH SOMEBODY HAPPENED TO LOAD THE PAGE, while 319 of them sat in
+  // that book with phone numbers. No one would have chosen that, and nothing
+  // surfaced it.
+  //
+  // "50-70" (2 Sep) was a BAND, and building to the bottom of a band is not a
+  // range, it is a cap wearing a range's clothes. The cost is measurable: on
+  // 14 Sep Anshul WORKED 65 cards against a morning deck of 50.
+  //
+  // Against DAY_CEILING both go away: the first build is seventy, and the
+  // never-contacted share is the whole remaining room whenever the page is
+  // opened.
   //
   // Founder tonight: "I want ki dono reps ko daily 70 relevant students milne
   // chahiye... naye students ko bhi daily add karte jao jinko touch hi nahi
