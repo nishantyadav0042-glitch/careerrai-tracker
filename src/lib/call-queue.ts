@@ -817,6 +817,9 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
       // is the most valuable form of retention we have and applies to roughly
       // three-quarters of the base.
       hasRetentionNeed: RETENTION_LANES.has(dueReason) || dates.length === 0,
+      // Premium students entered the books on 15 Sep (founder's call: retention
+      // is a P0 and had no owner). A paying student's card is never a pitch.
+      alreadyPaying: prof?.is_premium === true,
     });
 
     cands.push({

@@ -73,3 +73,53 @@ describe('the escalation cron does not become a pager storm', () => {
     expect(cron).toContain('sendAdminAlert');
   });
 });
+
+// ── ASSIGNMENT IS NOT DELIVERY (15 Sep 2026) ────────────────────────────────
+//
+// Alert 2 asks whether a mentor was ASSIGNED. Both paying students passed that
+// test while having received nothing at all:
+//
+//   Arnav Badaya   5 sessions booked 9-22 Aug — 4 expired, 1 cancelled. None
+//                  ever started, none ever ended. Last study log 4 Sep.
+//   Monu singh     1 session request that never became a session.
+//                  Last study log 6 Sep.
+//
+// So the one alert that exists to catch "the thing they paid for, undelivered"
+// stayed silent through exactly that, and both students then stopped studying.
+describe('a paying student with a mentor and no session is still undelivered', () => {
+  const src = readFileSync('src/lib/os/sacred-guard.ts', 'utf8');
+
+  it('looks at students who DO have a mentor, not only those who do not', () => {
+    // Alert 2 is `.is('buddy_id', null)`. This one is its mirror — without it,
+    // having a mentor assigned is enough to be counted as served forever.
+    expect(src).toContain("not('buddy_id', 'is', null)");
+  });
+
+  it('counts only a session that actually ENDED as delivery', () => {
+    // Booked, scheduled and assigned are all things WE did. `ended_at` is the
+    // only one that means a human spent time with the student.
+    expect(src).toMatch(/video_sessions[\s\S]{0,200}ended_at/);
+    expect(src).toContain("not('ended_at', 'is', null)");
+  });
+
+  it('does not treat an expired or cancelled booking as a session', () => {
+    // Arnav's five were 4 expired + 1 cancelled. Filtering on session_status
+    // would have needed a list of every failure word; ending is the positive
+    // fact, so the query cannot be fooled by a status nobody thought of.
+    expect(src).not.toMatch(/session_status['"]?\s*,\s*['"](expired|cancelled)/);
+  });
+
+  it('is critical — a paid student receiving nothing is the sacred case', () => {
+    expect(src).toMatch(/mentorship-undelivered[\s\S]{0,400}severity: 'critical'/);
+  });
+
+  it('says plainly that a booking is not a delivery', () => {
+    expect(src).toContain('Bookings that expire or cancel are not delivery');
+  });
+
+  it('treats an unknown premium_since as overdue, never as fresh', () => {
+    // A missing date is not evidence the student was served recently, and
+    // guessing in the student's disfavour is the safe direction.
+    expect(src).toMatch(/since != null && since >= undeliveredDeadline/);
+  });
+});

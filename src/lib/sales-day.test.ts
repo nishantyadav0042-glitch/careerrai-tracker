@@ -3,7 +3,7 @@ import { assembleDay, dayAnchorMs, istHour, SECTION_OF, SECTION_ORDER, type DayS
 import type { DueReason } from './call-queue';
 import {
   DAY_FLOOR, DAY_CEILING, ROTATION_FLOOR, ATTENTION_CEILING, NEW_ARRIVAL_CEILING, ROTATION_CALL_EVERY,
-  SHIFT_END_HOUR_IST, RETRY_CEILING,
+  SHIFT_END_HOUR_IST, RETRY_CEILING, FRESH_PIN_PER_DAY,
 } from './os/scale-config';
 
 // ── THE DAY IS 50–70, AND EVERY RULE OF IT IS PROVEN HERE ───────────────────
@@ -88,13 +88,41 @@ describe('ceilings hold back, never discard', () => {
 });
 
 describe('order and channel', () => {
-  it('the ranked order is preserved: promises first, rotation last', () => {
+  // ── THE ONE DELIBERATE EXCEPTION (founder, 15 Sep 2026) ───────────────────
+  //
+  // Fourteen days: 273 never-contacted cards DEALT across both books, 66
+  // worked, while promise cards ran at 74-91%. The cold lane was never short
+  // of cards — it was short of hours, because promises sort first, get worked
+  // first, and the day ends. So FRESH_PIN_PER_DAY never-contacted students sit
+  // above the promises, and everything below them keeps the queue's ranking
+  // exactly. Nothing is dropped; the rest shift down by five.
+  it('pins the first few never-contacted students above the promises', () => {
     const day = assembleDay([...c('callback', 2), ...c('checkout_abandoned', 1), ...c('attention', 3), ...c('fresh', 60)]);
     const sections = day.queue.map((x) => x.section);
+    expect(sections.slice(0, FRESH_PIN_PER_DAY).every((s) => s === 'rotation')).toBe(true);
+    expect(day.queue.slice(0, FRESH_PIN_PER_DAY).every((x) => x.dueReason === 'fresh')).toBe(true);
+  });
+
+  it('keeps the queue ranking for everything below the pinned few', () => {
+    const day = assembleDay([...c('callback', 2), ...c('checkout_abandoned', 1), ...c('attention', 3), ...c('fresh', 60)]);
+    const sections = day.queue.map((x) => x.section).slice(FRESH_PIN_PER_DAY);
     const firstRotation = sections.indexOf('rotation');
     expect(sections.slice(0, 2)).toEqual(['promises', 'promises']);
     expect(sections[2]).toBe('money');
     expect(sections.slice(firstRotation).every((s) => s === 'rotation')).toBe(true);
+  });
+
+  it('drops nothing and duplicates nothing when it pins', () => {
+    // A re-order that loses a promise is a broken commitment, not a tweak.
+    const day = assembleDay([...c('callback', 2), ...c('checkout_abandoned', 1), ...c('attention', 3), ...c('fresh', 60)]);
+    const ids = day.queue.map((x) => x.studentId);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(day.queue.filter((x) => x.section === 'promises')).toHaveLength(2);
+  });
+
+  it('pins nothing when the day holds no never-contacted student', () => {
+    const day = assembleDay([...c('callback', 2), ...c('attention', 3), ...c('rotation', 20)]);
+    expect(day.queue[0].section).toBe('promises');
   });
 
   it('attention is a message; every Nth rotation card is a call; everything else is a call', () => {
@@ -103,15 +131,27 @@ describe('order and channel', () => {
     expect(by('promises').every((x) => x.channel === 'call')).toBe(true);
     expect(by('retention').every((x) => x.channel === 'call')).toBe(true);
     expect(by('attention').every((x) => x.channel === 'message')).toBe(true);
-    const rot = by('rotation');
-    rot.forEach((x, i) => expect(x.channel).toBe(i % ROTATION_CALL_EVERY === 0 ? 'call' : 'message'));
+    // The pinned never-contacted cards are CALLS, whatever the rotation cycle
+    // would have given them: an introduction that arrives as a template
+    // defeats the point of pinning it.
+    const pinned = day.queue.slice(0, FRESH_PIN_PER_DAY);
+    expect(pinned.every((x) => x.dueReason === 'fresh' && x.channel === 'call')).toBe(true);
+    // Below the pin the every-Nth-is-a-call cycle carries on from where the
+    // pinned cards left it. They were rotation cards too, so they spent the
+    // first FRESH_PIN_PER_DAY positions of the cycle before being lifted out
+    // and made calls — the cycle is not restarted, which would quietly turn
+    // extra rotation cards into calls the founder never asked for.
+    const rot = by('rotation').slice(FRESH_PIN_PER_DAY);
+    rot.forEach((x, i) => expect(x.channel)
+      .toBe((i + FRESH_PIN_PER_DAY) % ROTATION_CALL_EVERY === 0 ? 'call' : 'message'));
   });
 
-  it('never contacted (fresh) comes before the long-silent (rotation) within the rotation section', () => {
-    // The queue ranks them; assembleDay must not reorder.
+  it('never contacted comes before the long-silent, even when the queue ranked it lower', () => {
+    // `rotation` is someone we HAVE spoken to; `fresh` is someone nobody ever
+    // has. The pin is only ever spent on the second kind.
     const cands = [...c('rotation', 3), ...c('fresh', 3)];
     const day = assembleDay(cands);
-    expect(day.queue.map((x) => x.dueReason).slice(0, 3)).toEqual(['rotation', 'rotation', 'rotation']);
+    expect(day.queue.map((x) => x.dueReason).slice(0, 3)).toEqual(['fresh', 'fresh', 'fresh']);
   });
 
   it('the counts add up to the queue, section by section', () => {

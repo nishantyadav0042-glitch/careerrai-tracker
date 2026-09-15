@@ -1,8 +1,12 @@
-import { SELF_HEAL_WINDOW_MIN as CFG_SELF_HEAL_MIN, BUDDY_SLA_HOURS as CFG_BUDDY_SLA_HOURS } from './scale-config';
+import {
+  SELF_HEAL_WINDOW_MIN as CFG_SELF_HEAL_MIN, BUDDY_SLA_HOURS as CFG_BUDDY_SLA_HOURS,
+  MENTORSHIP_UNDELIVERED_DAYS,
+} from './scale-config';
 import {
   burstsFrom, ACTION_LABEL, ACTION_ROUTE, SACRED_FAILURE_WINDOW_MIN,
 } from './sacred-failure';
 import { SESSION_PLAN_ID } from '../session-credit';
+import { fetchAll } from '../supabase/fetch-all';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Admin = any;
@@ -201,6 +205,73 @@ export async function findSacredFailures(admin: Admin, nowMs: number): Promise<F
       actionLabel: 'Open student',
       actionRoute: `/admin/student/${s.id}`,
     });
+  }
+
+  // ── 2b. Paying student WITH a mentor and nothing delivered ────────────────
+  //
+  // Alert 2 asks whether a mentor was ASSIGNED. On 15 Sep both paying students
+  // passed that test and had received nothing at all:
+  //
+  //   Arnav Badaya   5 sessions booked 9-22 Aug — 4 expired, 1 cancelled.
+  //                  None ever started, none ever ended. Last study log 4 Sep.
+  //   Monu singh     1 session request that never became a session.
+  //                  Last study log 6 Sep.
+  //
+  // Assignment was being counted as delivery, so the one alert that exists to
+  // catch "the thing they paid for, undelivered" stayed silent through exactly
+  // that — and both students then stopped studying. Same failure shape as
+  // Incident #75: a census that passes while the thing itself never happened.
+  //
+  // DELIVERY IS A SESSION THAT ENDED. Not booked, not scheduled, not assigned.
+  // `ended_at` is the only column here that means a human actually spent time
+  // with this student, which is what the money bought.
+  // Paged (Incident #65): both reads are population-scaled. Two paying
+  // students today, but a truncated read here would silently stop alerting on
+  // whoever sorted last — and the students this misses are the ones who paid.
+  const { data: servedRows } = await fetchAll<any>(
+    () => admin
+      .from('profiles')
+      .select('id, full_name, phone, premium_since, buddy_id')
+      .eq('role', 'student').eq('is_premium', true).not('buddy_id', 'is', null)
+      .not('is_test_account', 'is', true).not('is_demo', 'is', true),
+    { orderBy: 'id' },
+  );
+
+  const servedIds = [...new Set((servedRows ?? []).map((r: any) => r.id))] as string[];
+  if (servedIds.length) {
+    const { data: delivered } = await fetchAll<any>(
+      () => admin
+        .from('video_sessions')
+        .select('student_id, ended_at')
+        .in('student_id', servedIds)
+        .not('ended_at', 'is', null),
+      { orderBy: 'student_id' },
+    );
+    const everDelivered = new Set(((delivered ?? []) as any[]).map((v) => v.student_id as string));
+
+    const undeliveredDeadline = nowMs - MENTORSHIP_UNDELIVERED_DAYS * 86_400_000;
+    for (const s of servedRows ?? []) {
+      if (everDelivered.has(s.id)) continue;
+      const since = s.premium_since ? Date.parse(s.premium_since) : null;
+      // An unknown premium_since is treated as OVERDUE, never as fresh. A
+      // missing date is not evidence that the student was served recently,
+      // and guessing in the student's disfavour is the safe direction here.
+      if (since != null && since >= undeliveredDeadline) continue;
+      alerts.push({
+        id: `mentorship-undelivered:${s.id}`,
+        severity: 'critical',
+        channel: escalationChannel('critical'),
+        title: `${s.full_name ?? 'A paying student'} has a mentor and has never had a session`,
+        student: { id: s.id, name: s.full_name ?? 'Student', phone: s.phone ?? null },
+        amountRupees: null,
+        rootCause: `Paid, mentor assigned, and not one session has ever ended — `
+          + `more than ${MENTORSHIP_UNDELIVERED_DAYS} days on. Bookings that expire or cancel are not delivery. `
+          + `The one thing they paid for, undelivered.`,
+        retryAvailable: false,
+        actionLabel: 'Open student',
+        actionRoute: `/admin/student/${s.id}`,
+      });
+    }
   }
 
   // ── 3. A sacred action is FAILING right now (Incident #30) ────────────────

@@ -4617,3 +4617,65 @@ decide about, not the system's to quietly resolve.
 **Not done, and deliberately.** No ceiling or expiry was added to `callback`.
 That would override a commitment made to a student, and it is the founder's
 rule to change, not a constant to tune.
+
+## Incident #79
+
+**2026-09-15 · Both paying students had a mentor assigned and had received zero
+sessions; the sacred alert checked assignment, not delivery · Trust (P0)**
+
+**What happened.** Asked to give premium students an owner, because one looked
+like they were in nobody's book. The premise was wrong and the truth was worse.
+
+Both paying students DO have an owner — the same mentor. `call-queue` excludes
+`isPremium` and `hasBuddy` from the sales roster on purpose: a paying student
+with a mentor is the mentor's to retain, not a counsellor's. Retention was not
+unowned.
+
+What it had delivered was nothing:
+
+| student | paid | mentor | sessions booked | ever started | ever ended | last study log |
+| --- | --- | --- | --- | --- | --- | --- |
+| Arnav Badaya | yes | yes | 5 (9-22 Aug) — **4 expired, 1 cancelled** | **0** | **0** | 4 Sep |
+| Monu singh | yes | yes | 1 request, never became a session | **0** | **0** | 6 Sep |
+
+Both then stopped studying.
+
+**Why nothing fired.** `sacred-guard` alert 2 is "paying student with no mentor
+past SLA" — `.is('buddy_id', null)`. Both had a mentor, so it was silent. Its
+own root-cause text reads *"The one thing they paid for, undelivered"*, which
+was exactly true of both students and exactly what the test could not see.
+**Assignment was being counted as delivery.**
+
+This is the shape of Incident #75 again, and of #77: a census that passes while
+the thing itself never happens. There, RLS was enabled on the tables that
+existed; here, a mentor exists. In both the audit is of the wrong noun.
+
+**What was done.** A fourth sacred alert (`mentorship-undelivered:<id>`,
+critical): premium, mentor assigned, and **not one `video_sessions` row with an
+`ended_at`**, more than `MENTORSHIP_UNDELIVERED_DAYS` (7) after
+`premium_since`.
+
+Delivery is defined as a session that ENDED, deliberately. Booked, scheduled
+and assigned are all things WE did; `ended_at` is the only column that means a
+human spent time with the student, which is what the money bought. Filtering on
+`session_status` was rejected — it would need a list of every failure word, and
+Arnav's five were 4 `expired` plus 1 `cancelled`; the positive fact cannot be
+fooled by a status nobody thought of.
+
+An unknown `premium_since` is treated as OVERDUE rather than fresh: a missing
+date is not evidence a student was served, and the safe direction to guess is
+the student's.
+
+Both reads are paged (Incident #65) — caught by the unbounded-read ratchet in
+the same commit, which refused the new reads and said "find it, do not raise
+the number".
+
+**Also corrected in the same work.** `classifyObjective` had no notion of a
+student who already pays: a payer in the `fresh` lane with no visible retention
+need classified as CONVERSION, reason *"this is a commercial conversation"* —
+a counsellor phoning to sell the product to somebody who had already bought it.
+`alreadyPaying` is now checked FIRST, above every commercial signal, because
+those signals are precisely what would get it wrong: a paying student
+revisiting the paid page looks identical to a free one reaching for it. It was
+unreachable in production (payers are not in the roster) and is now a
+standing interlock for the day they are.

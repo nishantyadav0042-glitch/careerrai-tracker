@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { pinMidShiftClock } from './test-support/mid-shift';
+import { FRESH_PIN_PER_DAY } from './os/scale-config';
 
 // ── THE QUEUE IS REBUILT, NOT CARRIED FORWARD ──────────────────────────────
 //
@@ -230,7 +231,16 @@ describe('capacity, not a target', () => {
       last_attempt_at: iso(Date.now() - 30 * HOUR), no_answer_count: 0, owner: null, owner_id: REP,
     };
     const { queue } = await build([promise, ...Array.from({ length: 99 }, (_, k) => untouched(k < 50 ? k : k + 1))]);
-    expect(queue[0].studentId).toBe('s50');
-    expect(queue[0].dueReason).toBe('callback');
+    // Since 15 Sep the day opens with FRESH_PIN_PER_DAY never-contacted
+    // students (founder's call: 273 cold cards were dealt in 14 days and 66
+    // worked — the lane was short of hours, not cards). The promise is no
+    // longer literally first, and the guarantee this protects is unchanged:
+    // it outranks every cold card that is NOT one of the pinned few.
+    const _idx = queue.findIndex((l) => l.studentId === 's50');
+    expect(_idx, 'the promise must still be in the deck').toBeGreaterThanOrEqual(0);
+    expect(_idx, 'a promise may never fall below the pinned few').toBeLessThanOrEqual(FRESH_PIN_PER_DAY);
+    expect(queue.slice(0, _idx).every((l) => l.dueReason === 'fresh'),
+      'only pinned never-contacted cards may sit above a promise').toBe(true);
+    expect(queue[_idx].dueReason).toBe('callback');
   });
 });

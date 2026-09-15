@@ -29,6 +29,7 @@ vi.mock('@/lib/momentum', async (orig) => ({
 }));
 
 import { buildCallQueue } from './call-queue';
+import { FRESH_PIN_PER_DAY } from './os/scale-config';
 
 // R3 (23 Aug): identity is profiles.id. The staff directory is a real query
 // now (lib/sales-authz), so the fake DB must serve it. PRIYA deliberately has
@@ -142,7 +143,17 @@ describe('Scenario B — the call is recorded and the state moves', () => {
     }]), asAdmin);
     const lead = due.queue.find((l) => l.studentId === 'fresh-1');
     expect(lead!.dueReason).toBe('retry');
-    expect(due.queue[0].studentId).toBe('fresh-1');
+    // Since 15 Sep the day opens with FRESH_PIN_PER_DAY never-contacted
+    // students (founder's call: 273 cold cards were dealt in 14 days and 66
+    // worked — the lane was short of hours, not cards). The promise is no
+    // longer literally first, and the guarantee this protects is unchanged:
+    // it outranks every cold card that is NOT one of the pinned few.
+    const _idx = due.queue.findIndex((l) => l.studentId === 'fresh-1');
+    expect(_idx, 'the promise must still be in the deck').toBeGreaterThanOrEqual(0);
+    expect(_idx, 'a promise may never fall below the pinned few').toBeLessThanOrEqual(FRESH_PIN_PER_DAY);
+    expect(due.queue.slice(0, _idx).every((l) => l.dueReason === 'fresh'),
+      'only pinned never-contacted cards may sit above a promise').toBe(true);
+    expect(due.queue[_idx].dueReason).toBe('retry');
     expect(due.dueNow).toBe(1);
   });
 
@@ -172,8 +183,14 @@ describe('Scenario C — a promised follow-up never disappears', () => {
     }]), asAdmin);
     const lead = due.queue.find((l) => l.studentId === 'lead-2')!;
     expect(lead.dueReason).toBe('callback');
-    // A promise to a student outranks any cold lead, however hot the cold one is.
-    expect(due.queue[0].studentId).toBe('lead-2');
+    // A promise to a student outranks any cold lead, however hot the cold one
+    // is — below the FRESH_PIN_PER_DAY never-contacted students the day now
+    // opens with (founder, 15 Sep). The promise keeps its place above every
+    // other cold card; it simply is not literally first any more.
+    const idx = due.queue.findIndex((l) => l.studentId === 'lead-2');
+    expect(idx, 'a promise may never fall below the pinned few').toBeLessThanOrEqual(FRESH_PIN_PER_DAY);
+    expect(due.queue.slice(0, idx).every((l) => l.dueReason === 'fresh'),
+      'only pinned never-contacted cards may sit above a promise').toBe(true);
   });
 
   it('an interested lead returns as a scheduled follow-up, not as a new lead', async () => {
