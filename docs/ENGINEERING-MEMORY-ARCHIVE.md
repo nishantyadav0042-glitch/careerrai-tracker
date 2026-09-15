@@ -4457,3 +4457,77 @@ the missing door. That decision is open — see the note to the founder, 15 Sep,
 on whether a by-hand schedule should REPLACE the generated day (as an uploaded
 sheet does) or only constrain it, because the two produce materially different
 plans and the wrong choice would hand a student a two-hour topic-less day.
+
+## Incident #77
+
+**2026-09-15 · 609 of 1,138 students in the two books had never been dealt a
+single card, and the counsellor holding the larger pile was dealt zero of them
+on nine of ten days · Sales (Trust) (P1)**
+
+**What happened.** Asked to surface "the 38 untouched Tier-A students", the
+number did not survive checking. Of 79 students with 3+ log days, only **6**
+had never been dealt a card, and 5 of those had been in a book less than a
+week. The 38 was wrong and is corrected here.
+
+The real number was an order of magnitude larger and had nothing to do with
+tiers:
+
+| rep | book | never dealt a single card |
+| --- | --- | --- |
+| Neelam | 583 | 333 |
+| Anshul | 555 | 277 |
+
+**More than half the base the founder wants to convert had never once appeared
+on a counsellor's screen** — not skipped, not refused, never dealt.
+
+**And it was not spread evenly.** Never-contacted (`fresh`) cards actually
+dealt per day: Anshul 14, 15, 25, 15, 21, 17, 47 across 6-15 Sep; Neelam
+**0, 0, 0, 0, 0, 0** and then 8 today. (12-14 Sep was approved leave.)
+
+**The mechanism — a floor that is not a floor.** On 15 Sep Neelam's 73 cards
+were callback 35, retry 20, attention 6, new_never_logged 3, going_cold 1,
+fresh 8. Anshul's 70 were fresh 47, callback 11, retry 7.
+
+`assembleDay` computes `target = Math.max(ROTATION_FLOOR, DAY_FLOOR -
+signalsToday)` and then `Math.min(room, target - usedRotation)`.
+`ROTATION_FLOOR` is written as a floor — *"so the silent book always moves"* —
+but the untrimmable lanes are counted first, so `room` crushes it toward zero.
+A counsellor who books many callbacks fills tomorrow with them, and the
+students nobody has EVER called are the only lane with no claim on the day:
+they lose every tie, and **the more promises a counsellor makes the more
+completely they lose**.
+
+This is Incident #74's sibling. That one capped `retry` at `RETRY_CEILING`
+(20) after the retry lane ate whole days. Her retries now sit at exactly 20 —
+at the ceiling — and the day is eaten by `callback` instead, which has no
+ceiling by deliberate design (promises are a commitment a student extracted
+from us, 2 Sep). **Capping one untrimmable lane moved the starvation to the
+next one.** The general lesson: a per-lane ceiling cannot protect a lane that
+is last in priority; only a reserved share or an explicit decision can.
+
+**Why the obvious fix is wrong.** Forcing N never-contacted cards into every
+day breaks SALES-OS §5 ("a day the book cannot fill is reported short, never
+padded") and trades a kept promise for a cold call. Neelam already had 30
+promised callbacks she had not kept — her day is not underfull, it is overfull
+of commitments already made. Whether the answer is fewer callbacks, a third
+seat, or splitting the book is a founder decision about capacity, not a
+constant to tune.
+
+**What was done.** `lib/os/book-starvation.ts` reports it as one Exception
+(`book_never_reached`, severity high) that drills into the rep's own activity
+view — per SCALE-CONTRACT, not a new dashboard. It fires only on both
+conditions (≥50 never dealt AND ≥3 consecutive **working** days at zero), and
+**days with no cards dealt are skipped rather than counted as zeros** — Neelam
+was on approved leave 12-14 Sep, and a streak counted in calendar days would
+have turned her holiday into evidence against her on the day the founder read
+it. Both reads are paged (Incident #65); any read failure returns `[]`.
+
+The sentence names the arithmetic and nobody's character, and the suggested
+action is *"Decide what gives"*, never "deal more" — a test asserts both.
+Booking callbacks is the job, and the counsellor doing it well is the one who
+produces this exception; SALES-OS §0 forbids it becoming a judgement.
+
+**Still open.** The two premium students are both silent 7+ days and one of
+them — 14 log days, paying — is **in no book at all**, because `lead-intake`
+excludes `is_premium === true` from the pool. That is correct for *lead*
+intake and leaves retention, the other P0, with no book. Not fixed here.
