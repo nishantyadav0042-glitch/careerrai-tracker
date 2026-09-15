@@ -4707,3 +4707,28 @@ no legal path to ever record that it happened. Terminality is right for
 saying "I don't know", and making "I don't know" permanent means the unknown can
 never be resolved. Delivery data is therefore permanently understated, and
 `completionRate()` — the founder's MIS number — with it.
+
+**Resolved, 15 Sep.** `expired` is no longer terminal (`20260915a`). Terminal
+now means what it always should have: a HUMAN ASSERTION — `completed` ("it
+did") and `cancelled` ("it did not"), both still absolutely immutable.
+`expired` is the cron saying "I don't know", and one transition out of it is
+allowed: `expired -> completed`. Not `-> active` (nothing live to resume), not
+`-> cancelled` (nobody called it off at the time; leaving it expired is the
+honest record of an absence), and still nothing at all out of `cancelled`.
+
+Three layers had to be opened, and finding all three is the lesson: the DB
+trigger, the close-out API's `.in('session_status', [...])` guard, and the
+mentor's own session list. A capability that exists in only two of the three is
+a door that does not open.
+
+Arnav's four delivered sessions are now recorded, with `ended_at` reconstructed
+from the scheduled slot and `started_at` deliberately left NULL — so
+`deliveryCounts` reports them as `completedStartUnknown` ("real delivery,
+weaker evidence") rather than as sessions the system watched. The note on each
+row says it was attested, not observed. That distinction is the only reason
+this is safe to allow at all.
+
+**Still open:** the mentor's session list filters to `['scheduled','active']`,
+so an expired session never appears and there is still no SCREEN from which a
+late close-out can be started. The capability is real and unreachable — the
+same phantom-door shape as Incident #76, caught before it was claimed as fixed.

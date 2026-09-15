@@ -16,8 +16,19 @@ export const SESSION_STATUSES = [
 ] as const;
 export type SessionStatus = (typeof SESSION_STATUSES)[number];
 
-/** Reached and never left. A terminal session is history, not state. */
-export const TERMINAL_STATUSES = ['completed', 'cancelled', 'expired'] as const;
+/**
+ * Reached and never left. A terminal session is history, not state.
+ *
+ * `expired` was here until 15 Sep 2026 and should never have been. Terminal
+ * means a HUMAN ASSERTION about what happened — `completed` ("it did") and
+ * `cancelled` ("it did not"). `expired` is the stale-release cron saying "I
+ * don't know": the window passed and nobody recorded an outcome. Storing an
+ * absence of evidence as a verdict meant that when the founder confirmed four
+ * delivered sessions, there was no legal way anywhere in the system to record
+ * that they had happened — and 11 of the first 18 sessions ever created carry
+ * that status.
+ */
+export const TERMINAL_STATUSES = ['completed', 'cancelled'] as const;
 
 /**
  * The transition table. Mirrors the DB trigger exactly — the guard test reads
@@ -26,13 +37,19 @@ export const TERMINAL_STATUSES = ['completed', 'cancelled', 'expired'] as const;
  * scheduled → completed is legal ON PURPOSE: a mentor who ran the call but
  * never tapped "start" has still delivered the session. Requiring an observed
  * start would only teach them to fabricate one.
+ *
+ * expired → completed is legal for the same reason, one step later: the call
+ * happened and nobody said so within the hour. It is the ONLY way out of
+ * expired — not `active` (there is nothing live to resume), not `cancelled`
+ * (nobody called it off at the time, and leaving it expired is the honest
+ * record of an absence).
  */
 export const LEGAL_TRANSITIONS: Readonly<Record<SessionStatus, readonly SessionStatus[]>> = {
   scheduled: ['active', 'completed', 'cancelled', 'expired'],
   active: ['completed', 'cancelled', 'expired'],
   completed: [],
   cancelled: [],
-  expired: [],
+  expired: ['completed'],
 };
 
 export function isSessionStatus(v: unknown): v is SessionStatus {
@@ -55,6 +72,10 @@ export function transitionRefusal(from: SessionStatus, to: SessionStatus): strin
   if (canTransition(from, to)) return null;
   if (from === to) return `This session is already ${from}.`;
   if (isTerminal(from)) return `This session is already ${from} and cannot be reopened.`;
+  // The one refusal a mentor is likely to meet, so it says what they CAN do.
+  if (from === 'expired') {
+    return `This session expired because no outcome was recorded. It can only be marked completed.`;
+  }
   return `A ${from} session cannot become ${to}.`;
 }
 
