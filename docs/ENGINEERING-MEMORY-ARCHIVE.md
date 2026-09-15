@@ -4532,6 +4532,20 @@ them — 14 log days, paying — is **in no book at all**, because `lead-intake`
 excludes `is_premium === true` from the pool. That is correct for *lead*
 intake and leaves retention, the other P0, with no book. Not fixed here.
 
+**Corrected the same day.** The first version counted cards DEALT. Measured
+over 14 days: Anshul was dealt 229 never-contacted cards and worked **65**;
+Neelam was dealt 44 and worked **1** — against promise cards worked at 91% and
+74%. Both counsellors work promises and skip cold cards, which means "the deck
+dealt them" says almost nothing about whether anybody was reached: v1 would
+have stayed silent on a book where 164 cold cards were dealt and never touched.
+The reading now counts never-contacted students actually WORKED. A student is
+reached when someone calls them, not when a card appears on a screen.
+
+The sentence still names no work rate and no percentage — a test forbids `%`
+in it. The gap is real and the founder must see it, but a per-rep work rate is
+a quota wearing a number's clothes (SALES-OS §0), and a counsellor judged on
+cold-call volume will pad it.
+
 ## Incident #78
 
 **2026-09-15 · An unkept promise is redealt every morning forever, so one

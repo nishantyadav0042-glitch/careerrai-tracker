@@ -4,7 +4,8 @@ import {
   STARVED_MIN_UNREACHED, STARVED_MIN_ZERO_DAYS, type RepDay,
 } from './book-starvation';
 
-const day = (d: string, dealt: number, fresh: number): RepDay => ({ day: d, dealt, fresh });
+/** `freshWorked` — never-contacted students actually REACHED that day. */
+const day = (d: string, dealt: number, freshWorked: number): RepDay => ({ day: d, dealt, freshWorked });
 
 describe('counting back from the last day actually worked', () => {
   // ── THE LEAVE THAT MUST NOT LOOK LIKE STARVATION ──────────────────────────
@@ -55,13 +56,14 @@ describe('what production looked like on 15 Sep', () => {
     ],
   });
 
-  // Anshul: the same size of pile, moving every day. This must NEVER fire —
-  // working through a big book is the job, not a fault.
+  // Anshul: the same size of pile, and somebody new is reached every day.
+  // This must NEVER fire — working through a big book is the job, not a fault.
+  // These are his real WORKED counts (43, 5, 3, 2), not his dealt counts.
   const anshul = readStarvation({
     repId: 'a1', repName: 'Anshul', bookSize: 555, neverDealt: 277,
     days: [
-      day('2026-09-15', 70, 47), day('2026-09-14', 71, 49), day('2026-09-13', 70, 43),
-      day('2026-09-12', 70, 15), day('2026-09-11', 66, 17),
+      day('2026-09-14', 71, 43), day('2026-09-13', 70, 5), day('2026-09-12', 70, 3),
+      day('2026-09-11', 66, 2), day('2026-09-10', 59, 4),
     ],
   });
 
@@ -176,7 +178,7 @@ describe('reading it off the database', () => {
   // Only s0-s49 have ever been dealt, all on promise lanes, across four days.
   const cards = Array.from({ length: 50 }, (_, i) => ({
     student_id: `s${i}`, rep_id: 'n1', lane: 'callback',
-    ist_day: `2026-09-1${1 + (i % 4)}`,
+    ist_day: `2026-09-1${1 + (i % 4)}`, worked_at: '2026-09-11T10:00:00Z',
   }));
 
   it('flags a book where 150 students have never been dealt a card', async () => {
@@ -186,10 +188,14 @@ describe('reading it off the database', () => {
     expect(out).toHaveLength(1);
     expect(out[0].evidence.never_dealt_a_card).toBe(150);
     expect(out[0].evidence.book_size).toBe(200);
+    expect(out[0].evidence.working_days_nobody_new_reached).toBe(4);
   });
 
   it('clears the book as soon as the fresh lane moves again', async () => {
-    const moving = [...cards, { student_id: 's150', rep_id: 'n1', lane: 'fresh', ist_day: '2026-09-14' }];
+    const moving = [...cards, {
+      student_id: 's150', rep_id: 'n1', lane: 'fresh', ist_day: '2026-09-14',
+      worked_at: '2026-09-14T10:00:00Z',
+    }];
     const out = await findStarvedBooks(
       admin({ sales_rep_config: seats, profiles: people, lead_outreach: book, sales_opportunity: moving }), NOW,
     );
@@ -220,5 +226,48 @@ describe('reading it off the database', () => {
     expect(await findStarvedBooks(
       admin({ sales_rep_config: seats, profiles: people, lead_outreach: [], sales_opportunity: [] }), NOW,
     )).toEqual([]);
+  });
+});
+
+// ── THE CORRECTION, HOURS AFTER THE FIRST VERSION SHIPPED ────────────────────
+//
+// v1 counted cards DEALT. Over 14 days Anshul was dealt 229 never-contacted
+// cards and worked 65; Neelam was dealt 44 and worked 1 — against promise
+// cards at 91% and 74%. So "the deck dealt them" says almost nothing about
+// whether anyone was reached, and v1 would have stayed silent on a book where
+// 164 cold cards were dealt and never touched.
+describe('a card dealt is not a student reached', () => {
+  it('still fires when cards are dealt every day and nobody is worked', () => {
+    const r = readStarvation({
+      repId: 'a1', repName: 'Anshul', bookSize: 555, neverDealt: 277,
+      days: [
+        day('2026-09-14', 71, 0), day('2026-09-13', 70, 0),
+        day('2026-09-12', 70, 0), day('2026-09-11', 66, 0),
+      ],
+    });
+    expect(r.zeroFreshDays).toBe(4);
+    expect(r.isStarved).toBe(true);
+  });
+
+  it('counts a single student reached as the book moving', () => {
+    // Deliberately no gradient. One real conversation with someone new is the
+    // book moving; turning this into a rate would make it a quota, and
+    // SALES-OS §0 forbids that.
+    const r = readStarvation({
+      repId: 'a1', repName: 'Anshul', bookSize: 555, neverDealt: 277,
+      days: [day('2026-09-14', 71, 1), day('2026-09-13', 70, 0), day('2026-09-12', 70, 0)],
+    });
+    expect(r.isStarved).toBe(false);
+  });
+
+  it('tells the founder nobody was reached, not how hard anyone worked', () => {
+    const s = starvationReason(readStarvation({
+      repId: 'n1', repName: 'Neelam', bookSize: 583, neverDealt: 333,
+      days: [day('2026-09-11', 69, 0), day('2026-09-10', 69, 0), day('2026-09-09', 114, 0)],
+    }));
+    expect(s).toContain('not one never-contacted student has been reached');
+    // No work-rate percentage may appear — that is a quota wearing a number's
+    // clothes (SALES-OS §0).
+    expect(s).not.toMatch(/\d+\s*%/);
   });
 });

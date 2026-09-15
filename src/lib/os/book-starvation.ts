@@ -84,7 +84,7 @@ export interface StarvationReading {
   repName: string;
   bookSize: number;
   neverDealt: number;
-  /** Consecutive most-recent days WITH CARDS DEALT that gave zero fresh. */
+  /** Consecutive most-recent working days on which NOBODY new was reached. */
   zeroFreshDays: number;
   isStarved: boolean;
 }
@@ -94,8 +94,22 @@ export interface RepDay {
   day: string;
   /** Cards dealt that day, any lane. Days with none are not working days. */
   dealt: number;
-  /** Cards dealt that day in the never-contacted lane. */
-  fresh: number;
+  /**
+   * Never-contacted cards actually WORKED that day — not merely dealt.
+   *
+   * Corrected 15 Sep, hours after the first version shipped measuring cards
+   * dealt. Over 14 days the two books ran:
+   *
+   *   rep      fresh dealt   fresh worked
+   *   Anshul       229           65   (28%)
+   *   Neelam        44            1   ( 2%)
+   *
+   * Against promise cards at 91% and 74%. So "the deck dealt them" says
+   * almost nothing about whether anybody was reached, and the first version
+   * would have stayed silent for a book where 229 cold cards were dealt and
+   * 164 were never touched. A student is reached when someone calls them.
+   */
+  freshWorked: number;
 }
 
 /**
@@ -112,7 +126,7 @@ export function zeroFreshStreak(days: RepDay[]): number {
     .sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : 0));
   let streak = 0;
   for (const d of working) {
-    if (d.fresh > 0) break;
+    if (d.freshWorked > 0) break;
     streak += 1;
   }
   return streak;
@@ -138,7 +152,8 @@ export function readStarvation(args: {
 /** The sentence the founder reads. Blames the arithmetic, names no fault. */
 export function starvationReason(r: StarvationReading): string {
   return `${r.neverDealt} of the ${r.bookSize} students in ${r.repName}'s book have never been `
-    + `dealt a single card, and the deck has given them zero for ${r.zeroFreshDays} working days running. `
+    + `dealt a single card, and for ${r.zeroFreshDays} working days running not one never-contacted `
+    + `student has been reached. `
     + `Promises and retries are untrimmable and are counted first, so on a full day the `
     + `never-contacted lane is the only one that can lose — and it loses every time. `
     + `This is the arithmetic of the day, not anyone's effort.`;
@@ -163,7 +178,7 @@ export function starvationException(r: StarvationReading, detectedAtMs: number):
     evidence: {
       book_size: r.bookSize,
       never_dealt_a_card: r.neverDealt,
-      zero_fresh_working_days: r.zeroFreshDays,
+      working_days_nobody_new_reached: r.zeroFreshDays,
       min_unreached: STARVED_MIN_UNREACHED,
       min_zero_days: STARVED_MIN_ZERO_DAYS,
     },
@@ -218,9 +233,9 @@ export async function findStarvedBooks(
   // tells us whether the lane is moving. One paged read serves both, so the
   // "never dealt" set cannot disagree with the daily counts.
   const { data: cards, error: cardErr } = await fetchAll<
-    { student_id: string; rep_id: string; lane: string | null; ist_day: string }
+    { student_id: string; rep_id: string; lane: string | null; ist_day: string; worked_at: string | null }
   >(
-    () => admin.from('sales_opportunity').select('student_id, rep_id, lane, ist_day').in('rep_id', repIds),
+    () => admin.from('sales_opportunity').select('student_id, rep_id, lane, ist_day, worked_at').in('rep_id', repIds),
     { orderBy: 'id' },
   );
   if (cardErr || !cards) return [];
@@ -236,9 +251,9 @@ export async function findStarvedBooks(
     const byDay = new Map<string, RepDay>();
     for (const c of cards) {
       if (c.rep_id !== repId || c.ist_day < sinceDay) continue;
-      const d = byDay.get(c.ist_day) ?? { day: c.ist_day, dealt: 0, fresh: 0 };
+      const d = byDay.get(c.ist_day) ?? { day: c.ist_day, dealt: 0, freshWorked: 0 };
       d.dealt += 1;
-      if (c.lane === 'fresh') d.fresh += 1;
+      if (c.lane === 'fresh' && c.worked_at) d.freshWorked += 1;
       byDay.set(c.ist_day, d);
     }
 
