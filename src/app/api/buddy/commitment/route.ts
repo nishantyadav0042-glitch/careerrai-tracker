@@ -99,15 +99,23 @@ export async function POST(request: NextRequest) {
   // time that disagrees with the transition — and a second debrief for the
   // same session can no longer quietly move it.
   //
-  // The status guard makes this a conditional update: a session already
-  // completed, cancelled or expired matches zero rows and writes nothing,
-  // rather than the trigger raising an error into a result nobody read.
+  // The status guard makes this a conditional update: a session that already
+  // carries a human assertion — completed or cancelled — matches zero rows and
+  // writes nothing, rather than the trigger raising an error into a result
+  // nobody read.
+  //
+  // `expired` IS accepted, since 15 Sep 2026. It means the stale-release cron
+  // found no recorded outcome within the hour, not that the call failed, and
+  // four delivered sessions could not be recorded because every layer refused
+  // it — the DB (20260915a, now fixed), this guard, and the mentor's own
+  // session list. A mentor closing out late is the exact case this route is
+  // for; the alternative is that the delivery is never recorded at all.
   let sessionCompleted = false;
   if (sessionId) {
     const { data: done, error: doneError } = await admin.from('video_sessions')
       .update({ session_status: 'completed' })
       .eq('id', sessionId).eq('buddy_id', user.id)
-      .in('session_status', ['scheduled', 'active'])
+      .in('session_status', ['scheduled', 'active', 'expired'])
       .select('id, student_id')
       .maybeSingle();
 

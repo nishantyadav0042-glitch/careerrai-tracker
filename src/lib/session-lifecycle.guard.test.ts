@@ -18,8 +18,17 @@ import {
 // Before a salesperson is asked to sell this, the product must be able to say
 // "this session happened". These guards protect that.
 
-const MIGRATION = 'supabase/migrations/20260824e_session_lifecycle.sql';
+// The LIVE definition of both trigger functions. 20260915a supersedes the
+// bodies first written in 20260824e/g — a guard that reads a superseded
+// migration is asserting against history, not against the database.
+const MIGRATION = 'supabase/migrations/20260915a_expired_is_not_a_verdict.sql';
 const SQL = readFileSync(MIGRATION, 'utf8');
+// The structural facts — CHECK constraints and the trigger wiring — were
+// written once in 20260824e/g and are not restated by 20260915a, which only
+// replaces the two function bodies. Each guard reads the file that owns its
+// fact, so neither can be silently dropped.
+const STRUCTURE = readFileSync('supabase/migrations/20260824e_session_lifecycle.sql', 'utf8')
+  + readFileSync('supabase/migrations/20260824g_session_terminal_reassert.sql', 'utf8');
 
 describe('the transition table in code IS the one in the database', () => {
   it('every legal transition in code is legal in the trigger', () => {
@@ -60,8 +69,9 @@ describe('the transitions that must NOT be possible', () => {
     ['completed', 'active'],   // reopening a finished session
     ['completed', 'completed'],// duplicate completion
     ['cancelled', 'completed'],// completing what was called off
-    ['expired', 'completed'],  // the stale-release cron resurrecting a session
-    ['expired', 'active'],
+    ['expired', 'active'],     // nothing live to resume
+    ['expired', 'cancelled'],  // nobody called it off at the time
+    ['expired', 'expired'],    // re-expiring says nothing new
     ['active', 'scheduled'],   // un-starting
     ['scheduled', 'scheduled'],
   ] as [SessionStatus, SessionStatus][])('%s -> %s is refused', (from, to) => {
@@ -77,6 +87,12 @@ describe('the transitions that must NOT be possible', () => {
     ['active', 'completed'],
     ['active', 'cancelled'],
     ['active', 'expired'],
+    // 15 Sep 2026. `expired` means the cron found no recorded outcome, NOT
+    // that the call failed — release-stale-sessions says so and refuses to
+    // write `cancelled` for exactly that reason. Four delivered sessions could
+    // not be recorded because this was refused, so an absence of evidence must
+    // stay answerable. It is the only way out of expired.
+    ['expired', 'completed'],
   ] as [SessionStatus, SessionStatus][])('%s -> %s is allowed', (from, to) => {
     expect(canTransition(from, to)).toBe(true);
     expect(transitionRefusal(from, to)).toBeNull();
@@ -108,11 +124,11 @@ describe('the database stamps the times, and they are facts', () => {
   });
 
   it('completed without an end time is structurally impossible', () => {
-    expect(SQL).toMatch(/video_sessions_completed_has_end[\s\S]*?session_status <> 'completed' or ended_at is not null/);
+    expect(STRUCTURE).toMatch(/video_sessions_completed_has_end[\s\S]*?session_status <> 'completed' or ended_at is not null/);
   });
 
   it('a session cannot end before it began', () => {
-    expect(SQL).toMatch(/ended_at is null or started_at is null or ended_at >= started_at/);
+    expect(STRUCTURE).toMatch(/ended_at is null or started_at is null or ended_at >= started_at/);
   });
 
   it('completed does NOT require an observed start — no fabricated timestamps', () => {
@@ -130,26 +146,37 @@ describe('re-asserting a finished state is refused', () => {
   // was corrupted — ended_at is immutable — but the CALLER was told their write
   // worked, so a close-out submitted twice was indistinguishable from one
   // submitted once.
-  const REASSERT = readFileSync('supabase/migrations/20260824g_session_terminal_reassert.sql', 'utf8');
+  const REASSERT = SQL;
 
   it('uses UPDATE OF, the only form that fires on the SET list', () => {
     // A row-level BEFORE UPDATE trigger cannot tell "set to the same value"
     // from "never mentioned" — NEW carries the old value either way.
-    expect(REASSERT).toMatch(/before update of session_status on public\.video_sessions/);
+    expect(STRUCTURE).toMatch(/before update of session_status on public\.video_sessions/);
   });
 
-  it('refuses when the session is already terminal', () => {
+  it('refuses when the session already carries a human assertion', () => {
     const m = REASSERT.match(/if old\.session_status in \(([^)]*)\) then/);
     expect(m).toBeTruthy();
     const guarded = [...m![1].matchAll(/'([a-z]+)'/g)].map((x) => x[1]).sort();
     expect(guarded).toEqual([...TERMINAL_STATUSES].sort());
   });
 
+  it('still refuses to re-expire an expired session', () => {
+    // Expired is no longer terminal, so the clause above no longer covers it.
+    // Re-asserting expiry still asserts nothing new and must not report success.
+    expect(REASSERT).toMatch(/old\.session_status = 'expired' and new\.session_status = 'expired'/);
+  });
+
+  it('tells a mentor what they CAN do with an expired session', () => {
+    expect(REASSERT).toMatch(/can only be moved to completed/);
+  });
+
   it('leaves unrelated edits to a finished session legal', () => {
     // Notes, a calendar id, updated_at — a finished session is still editable.
     // Only re-asserting its STATE is refused, which is why the trigger is
     // scoped to the session_status column rather than to the whole row.
-    expect(REASSERT).not.toMatch(/before update on public\.video_sessions/);
+    const reassertDdl = STRUCTURE.slice(STRUCTURE.indexOf('video_session_terminal_reassert_guard'));
+    expect(reassertDdl).not.toMatch(/before update on public\.video_sessions/);
   });
 });
 

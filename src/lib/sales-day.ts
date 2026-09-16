@@ -2,6 +2,7 @@ import type { DueReason } from '@/lib/call-queue';
 import {
   DAY_FLOOR, DAY_CEILING, ROTATION_FLOOR, ATTENTION_CEILING, NEW_ARRIVAL_CEILING,
   ROTATION_CALL_EVERY, DAY_ANCHOR_HOUR_IST, CONVERSION_CEILING, RETRY_CEILING,
+  FRESH_PIN_PER_DAY,
 } from '@/lib/os/scale-config';
 
 // ── THE DAY — how 50 to 70 students are dealt from what the book supplies ────
@@ -19,12 +20,14 @@ import {
 //      short, and it comes back tomorrow regardless.
 //   3. Signals fill first. Rotation gets whatever is left up to the ceiling,
 //      and never fewer than ROTATION_FLOOR, so the silent book always moves.
-//   4. The day is at least DAY_FLOOR when the book can supply it, and at most
-//      DAY_CEILING — except promises, which are never bumped: a callback the
-//      student asked for makes the day seventy-one, not a different seventy.
-//   5. Channel is decided here too: attention and rotation are messages;
-//      every ROTATION_CALL_EVERY-th rotation card is a call; everything else
-//      is a call.
+//   4. The day is built to DAY_CEILING whenever the book can supply it
+//      (founder, 15 Sep) and is never below DAY_FLOOR while it can — except
+//      promises, which are never bumped: a callback the student asked for
+//      makes the day seventy-one, not a different seventy. A book that cannot
+//      fill seventy reports short; it is never padded and never capped early.
+//   5. Channel is decided here too: rotation is messaged (every
+//      ROTATION_CALL_EVERY-th card is a call) and everything else, attention
+//      included since 15 Sep 2026, is a call.
 //
 // What this module never does: invent a candidate. Every card it returns was
 // classified by the queue with a true printed reason. A day can still be
@@ -47,13 +50,53 @@ export const SECTION_LABEL: Record<DaySection, string> = {
   rotation: 'Rotation',
 };
 
+// ── THE FIVE AT THE TOP ─────────────────────────────────────────────────────
+//
+// Founder's call, 15 Sep 2026. Fourteen days measured: 273 never-contacted
+// cards were DEALT across both books and 66 were worked, while promise cards
+// ran at 74-91%. The cold lane was never short of cards — it was short of
+// hours, because promises sort first, get worked first, and the day ends.
+//
+// So a small fixed number of never-contacted students is lifted above the
+// promises, and given the CHANNEL the lane's own action implies: an
+// introduction is a call, not a template. Everything else keeps the queue's
+// rank order exactly — this is one deliberate, bounded exception to "filter,
+// never re-sort", not a new priority scheme.
+//
+// Nothing is dropped and no promise is removed: the five move UP, the rest
+// shift down by five, and the same cards are in the day. A promised callback
+// lands five cards later than it would have, which is minutes.
+export function pinFreshToFront<T extends { dueReason: DueReason; channel: Channel }>(
+  queue: T[], n: number = FRESH_PIN_PER_DAY,
+): T[] {
+  if (n <= 0 || queue.length === 0) return queue;
+  const pinned: T[] = [];
+  const rest: T[] = [];
+  for (const c of queue) {
+    // Only never-contacted. `rotation` is someone we HAVE spoken to before and
+    // is a different promise to the student.
+    if (c.dueReason === 'fresh' && pinned.length < n) {
+      // An introduction is a conversation. A pinned card that arrives as a
+      // template defeats the point of pinning it.
+      pinned.push({ ...c, channel: 'call' });
+      continue;
+    }
+    rest.push(c);
+  }
+  return [...pinned, ...rest];
+}
+
 export const SECTION_OF: Record<DueReason, DaySection> = {
   callback: 'promises', retry: 'promises', followup: 'promises',
   checkout_abandoned: 'money',
   conversion: 'buddy',
   new_never_logged: 'new',
   attention: 'attention',
-  going_cold: 'retention', broken_streak: 'retention',
+  // `restart` is a retention lane and rides the retention section: it is a
+  // CALL (only attention and rotation are messaged) and it takes no ceiling
+  // of its own, because its whole population is 103 students and a lane that
+  // cannot spike does not need a cap.
+  going_cold: 'retention', broken_streak: 'retention', restart: 'retention',
   fresh: 'rotation', rotation: 'rotation',
 };
 
@@ -213,11 +256,51 @@ export function assembleDay<T extends { studentId: string; dueReason: DueReason 
   }
   const held = [...trimmed, ...heldBack];
 
-  // Rotation: what is left of the DAY up to the ceiling, never below the
-  // floor while the pool can supply it, minus what the day already spent.
+  // ── ROTATION FILLS TO THE CEILING, NOT THE FLOOR (founder, 15 Sep 2026) ──
+  //
+  // This line read `DAY_FLOOR - signalsToday` until tonight, and that one word
+  // decided two things nobody chose.
+  //
+  // FIRST, the deck a counsellor opens in the morning was always exactly
+  // DAY_FLOOR. Not "usually around fifty" — the first build of Anshul's day
+  // was 50 cards on 10, 11, 13, 14, 15 and 16 Sep, and 53 on the 12th. Days
+  // later ENDED at 59-73, but only because signals arriving through the day
+  // were added on top; they were never bound by this target. The rep's
+  // morning was fifty cards, every morning.
+  //
+  // SECOND, and worse, the never-contacted share was frozen at whatever
+  // signals happened to exist at the moment the page was FIRST opened —
+  // because `usedRotation` has already spent the target by then and rotation
+  // never tops up again. Same rep, same book, same week:
+  //
+  //   15 Sep, first opened 06:50, few signals yet  -> 47 fresh cards
+  //   16 Sep, first opened 00:07, retry lane full  -> 27 fresh cards
+  //   12 Sep, first opened 02:16, signals waiting  -> 15 fresh cards
+  //
+  // Fifteen to forty-nine never-contacted students a day, decided by the CLOCK
+  // TIME AT WHICH SOMEBODY HAPPENED TO LOAD THE PAGE, while 319 of them sat in
+  // that book with phone numbers. No one would have chosen that, and nothing
+  // surfaced it.
+  //
+  // "50-70" (2 Sep) was a BAND, and building to the bottom of a band is not a
+  // range, it is a cap wearing a range's clothes. The cost is measurable: on
+  // 14 Sep Anshul WORKED 65 cards against a morning deck of 50.
+  //
+  // Against DAY_CEILING both go away: the first build is seventy, and the
+  // never-contacted share is the whole remaining room whenever the page is
+  // opened.
+  //
+  // Founder tonight: "I want ki dono reps ko daily 70 relevant students milne
+  // chahiye... naye students ko bhi daily add karte jao jinko touch hi nahi
+  // kiya, unki quantity bhi badhate jao."
+  //
+  // DAY_CEILING is unchanged and still binding — `room` below caps this at the
+  // same 70 it always did. What changed is that a day no longer STOPS at 50
+  // when the book has more to give. A book that cannot supply seventy still
+  // reports short (SALES-OS §5); it is simply no longer made short on purpose.
   const signalsToday = usedSignals + newSignals.length;
   const room = DAY_CEILING - usedTotal - newSignals.length;
-  const target = Math.max(ROTATION_FLOOR, DAY_FLOOR - signalsToday);
+  const target = Math.max(ROTATION_FLOOR, DAY_CEILING - signalsToday);
   const rotation = newRotation.slice(0, Math.max(0, Math.min(room, target - usedRotation)));
 
   // Short day and real signals held back? Use them before ending short — but
@@ -245,9 +328,21 @@ export function assembleDay<T extends { studentId: string; dueReason: DueReason 
   const queue = day.map((c) => {
     const section = SECTION_OF[c.dueReason];
     counts[section]++;
+    // ── ATTENTION IS A CALL NOW (founder, 15 Sep 2026) ───────────────────
+    //
+    // It was a message from 2 Sep: "what got in the way?" is a question, and a
+    // question is cheap to send. But the student it goes to opened the app and
+    // stopped short of studying — often having recorded, in their own words,
+    // that they could not — and a template is the wrong instrument for the one
+    // moment they told us something. Founder: "un sabhi students ko jaldi se
+    // jaldi call karna hai."
+    //
+    // The price is paid in ATTENTION_CEILING, halved to 10 in the same breath,
+    // because a call costs what a template does not and this lane must not
+    // take the day from `restart`. Rotation stays messaged: there the volume
+    // IS the point.
     let channel: Channel = 'call';
-    if (section === 'attention') channel = 'message';
-    else if (section === 'rotation') {
+    if (section === 'rotation') {
       channel = rotationIndex % ROTATION_CALL_EVERY === 0 ? 'call' : 'message';
       rotationIndex++;
     }
@@ -255,7 +350,9 @@ export function assembleDay<T extends { studentId: string; dueReason: DueReason 
   });
 
   return {
-    queue,
+    // The one deliberate re-order, applied last so counts and channels are
+    // decided on the queue's own ranking and only the ORDER changes.
+    queue: pinFreshToFront(queue),
     counts: { given: counts, heldBack: held.length - backfilled, rotationPool: newRotation.length + carried.filter((c) => SECTION_OF[c.dueReason] === 'rotation').length },
     band: { floor: DAY_FLOOR, ceiling: DAY_CEILING },
   };

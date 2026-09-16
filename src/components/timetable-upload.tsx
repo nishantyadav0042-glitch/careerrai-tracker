@@ -105,7 +105,10 @@ export function TimetableUpload({ onClose, kind = 'weekly' }: {
     });
     const json = await res.json();
     if (!res.ok) {
-      track('timetable_parse_failed', { status: res.status });
+      // `reason` is the whole point of the 15 Sep fix: a status alone could not
+      // tell a bad photo from a password-protected workbook from our own
+      // extractor, and seven weeks of 422s went undiagnosed because of it.
+      track('timetable_parse_failed', { status: res.status, reason: json?.reason ?? null });
       if (typeof json?.error === 'string') lastServerError.current = json.error;
       return null;
     }

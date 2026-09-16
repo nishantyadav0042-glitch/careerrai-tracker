@@ -9,6 +9,15 @@ describe('the daily digest tells the founder the state before they open anything
     critical: [{ title: '₹999 captured but premium never unlocked for Riya', student: 'Riya' }],
     attention: [{ title: '3 students going cold', count: 3 }],
     ai: { rupeesToday: 4.2, spikeRatio: 3.1 },
+    study: {
+      thisWeek: { studied: 40, matureStudied: 25, logRows: 150, zeroHourRows: 65 },
+      lastWeek: { studied: 35, matureStudied: 20, logRows: 140, zeroHourRows: 60 },
+      habit: { cohortWeek: '2026-08-24', signups: 218, ratePct: 6 },
+    },
+    promises: [{
+      rep: 'Neelam Singh', overdue: 24, stale: 2,
+      line: '2 of them have been waiting more than 7 days: Aarav (9d), Ishita (8d).',
+    }],
     headline: '1 critical issue needs you today — paid students at risk.',
   };
 
@@ -41,5 +50,48 @@ describe('the daily digest tells the founder the state before they open anything
     const cron = readFileSync('src/app/api/cron/founder-digest/route.ts', 'utf8');
     expect(cron).toContain('buildFounderDigest');
     expect(cron).toContain('digestToHtml');
+  });
+});
+
+// ── "Logs went up" was wrong three ways (15 Sep 2026) ───────────────────────
+//
+// Half of all log rows record NO study, ticking a plan task writes the same
+// row type as the daily-log form, and the rise tracked ad spend rather than
+// behaviour. The digest now answers the question the founder was actually
+// asking, and carries the caveat so the number cannot be requoted as studying.
+describe('the digest says whether students are studying, not how many rows exist', () => {
+  const sample: DigestBlock = {
+    score: 78,
+    new24h: { students: 12, premium: 2, revenueRupees: 3998 },
+    critical: [],
+    attention: [],
+    ai: { rupeesToday: 4.2, spikeRatio: null },
+    study: {
+      thisWeek: { studied: 40, matureStudied: 25, logRows: 150, zeroHourRows: 65 },
+      lastWeek: { studied: 35, matureStudied: 20, logRows: 140, zeroHourRows: 60 },
+      habit: { cohortWeek: '2026-08-24', signups: 218, ratePct: 6 },
+    },
+    promises: [],
+    headline: 'All clear.',
+  };
+
+  it('leads that block with students, not log rows', () => {
+    const html = digestToHtml(sample);
+    expect(html).toContain('Are they studying?');
+    expect(html).toContain('40 students actually studied this week');
+  });
+
+  it('prints the caveat beside the number, never on its own page', () => {
+    expect(digestToHtml(sample)).toContain('recorded no study time');
+  });
+
+  it('shows the count an arrival spike cannot explain', () => {
+    expect(digestToHtml(sample)).toContain('25 of them past their first week');
+  });
+
+  it('omits the habit line entirely when no cohort window has closed', () => {
+    const html = digestToHtml({ ...sample, study: { ...sample.study, habit: null } });
+    expect(html).not.toContain('Habit rate');
+    expect(html).toContain('40 students actually studied');
   });
 });

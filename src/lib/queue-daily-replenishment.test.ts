@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { pinMidShiftClock } from './test-support/mid-shift';
+import { FRESH_PIN_PER_DAY, DAY_CEILING } from './os/scale-config';
 
 // ── THE QUEUE IS REBUILT, NOT CARRIED FORWARD ──────────────────────────────
 //
@@ -147,13 +148,15 @@ describe('replenishment is signal-driven, never quota-driven', () => {
     const got = ids(queue);
     expect(got, 'a new student needs no cron to become eligible').toContain('s100');
     expect(got).toContain('s114');
-    // CHANGED 2 Sep 2026 (SALES-OS.md §5, the 50–70 day). 55 never-contacted
-    // students are all ROTATION — there is no signal among them — and a day
-    // made only of rotation is the floor, fifty. The other five are not lost:
-    // still owned, still eligible, dealt tomorrow. Signals earn the room above
-    // the floor; rotation is steady.
-    expect(queue.length).toBe(50);
-    expect(new Set(got).size).toBe(50);
+    // 2 Sep 2026: a day made only of rotation stopped at the floor, fifty, and
+    // the other five waited for tomorrow. 15 Sep 2026 (founder): that made the
+    // bottom of the 50-70 band the day's real size, and in production it meant
+    // a rep got 50 cards while 319 never-contacted students sat in his book.
+    // All 55 real candidates are dealt now. The cap did not move — DAY_CEILING
+    // is still 70 and the no-padding rule still holds, because every one of
+    // these 55 is a real never-contacted student, not a slot being filled.
+    expect(queue.length).toBe(55);
+    expect(new Set(got).size).toBe(55);
   });
 
   it('a follow-up coming due re-enters by itself', async () => {
@@ -218,7 +221,10 @@ describe('capacity, not a target', () => {
   it('more eligible than capacity → the highest priority, never all of them', async () => {
     for (let i = 0; i < 200; i++) ROSTER.push(student(i));
     const { queue } = await build(Array.from({ length: 200 }, (_, k) => untouched(k)));
-    expect(queue.length).toBeLessThanOrEqual(60);
+    // Capacity is the DECLARED ceiling; the literal 60 here predated
+    // DAY_CEILING becoming 70. 200 eligible students still produce a day a
+    // person can finish, never 200 cards.
+    expect(queue.length).toBeLessThanOrEqual(DAY_CEILING);
     expect(queue.length).toBeGreaterThan(0);
   });
 
@@ -230,7 +236,16 @@ describe('capacity, not a target', () => {
       last_attempt_at: iso(Date.now() - 30 * HOUR), no_answer_count: 0, owner: null, owner_id: REP,
     };
     const { queue } = await build([promise, ...Array.from({ length: 99 }, (_, k) => untouched(k < 50 ? k : k + 1))]);
-    expect(queue[0].studentId).toBe('s50');
-    expect(queue[0].dueReason).toBe('callback');
+    // Since 15 Sep the day opens with FRESH_PIN_PER_DAY never-contacted
+    // students (founder's call: 273 cold cards were dealt in 14 days and 66
+    // worked — the lane was short of hours, not cards). The promise is no
+    // longer literally first, and the guarantee this protects is unchanged:
+    // it outranks every cold card that is NOT one of the pinned few.
+    const _idx = queue.findIndex((l) => l.studentId === 's50');
+    expect(_idx, 'the promise must still be in the deck').toBeGreaterThanOrEqual(0);
+    expect(_idx, 'a promise may never fall below the pinned few').toBeLessThanOrEqual(FRESH_PIN_PER_DAY);
+    expect(queue.slice(0, _idx).every((l) => l.dueReason === 'fresh'),
+      'only pinned never-contacted cards may sit above a promise').toBe(true);
+    expect(queue[_idx].dueReason).toBe('callback');
   });
 });

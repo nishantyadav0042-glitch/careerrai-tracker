@@ -21,11 +21,19 @@ const read = (p: string) => readFileSync(join(process.cwd(), p), 'utf8');
 const NUDGE = 'src/components/daily-buddy-nudge.tsx';
 const JOURNEY = 'src/lib/journey.ts';
 
+// Four on 19 Aug, six from 15 Sep. `_mounted` and `_blocked` were added when
+// this surface went to ZERO shown for two weeks and nothing stored could say
+// which of six gates was closing (buddy-nudge-telemetry.guard.test.ts owns
+// that contract). They are counted here because "and nothing else" is the
+// point of this list: an event that appears in the component and not in this
+// array is an event nobody agreed to.
 const EVENTS = [
   'buddy_nudge_shown',
   'buddy_nudge_dismissed',
   'buddy_nudge_cta',
   'buddy_nudge_rung',
+  'buddy_nudge_mounted',
+  'buddy_nudge_blocked',
 ] as const;
 
 describe('the event contract exists and is closed', () => {
@@ -36,7 +44,7 @@ describe('the event contract exists and is closed', () => {
     }
   });
 
-  it('the nudge emits all four, and nothing else', () => {
+  it('the nudge emits all six, and nothing else', () => {
     const s = read(NUDGE);
     for (const e of EVENTS) expect(s, `${e} must fire`).toContain(`'${e}'`);
     const emitted = [...s.matchAll(/track\(\s*'([a-z_]+)'/g)].map((m) => m[1]);
@@ -102,8 +110,18 @@ describe('scope containment — this gate changes nothing but telemetry', () => 
     const s = read(NUDGE);
     expect(s, 'the 1400ms settle stands').toContain('1400');
     expect(s, 'the daily slot claim stands').toContain('claimDailyModal()');
-    expect(s, 'the first-run queue conditions stand')
-      .toMatch(/!tourDone\(\)\s*\|\|\s*notifAskVisible\(\)\s*\|\|\s*insightVisible\(\)\s*\|\|\s*logModalOpen\(\)/);
+    // The four queue conditions were one `||` expression until 15 Sep, when
+    // each gained its own line so it could name itself in telemetry. Same
+    // conditions, same order, same verdicts — assert the ORDER, which is the
+    // founder's rule (21 July: the buddy pitch is LAST), not the punctuation.
+    const order = ['tourDone()', 'notifAskVisible()', 'insightVisible()', 'logModalOpen()'];
+    let at = s.indexOf('const attempt = () =>');
+    expect(at, 'the settle loop moved — this assertion needs rewiring').toBeGreaterThan(-1);
+    for (const gate of order) {
+      const i = s.indexOf(gate, at);
+      expect(i, `${gate} is no longer checked before the pitch`).toBeGreaterThan(at);
+      at = i;
+    }
     expect(s, 'the rung still routes to the gated card').toContain('href="/student/buddy"');
     expect(s, 'the CTA is still the shared sheet button').toContain('UnlockBuddyButton');
   });

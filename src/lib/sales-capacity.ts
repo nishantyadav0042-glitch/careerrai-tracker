@@ -308,6 +308,9 @@ export async function getTeamCapacity(admin: any, nowMs: number = Date.now()): P
   const names = new Map<string, string>();
   const overdueFollowup = new Set<string>();
   const logDates = new Map<string, string[]>();
+  // Days actually studied — a zero-hour row means the student told us they
+  // could not, which the lanes must not read as studying (15 Sep 2026).
+  const studiedDates = new Map<string, string[]>();
   const createdAt = new Map<string, string | null>();
   const taps = new Map<string, { taps: number; door: boolean }>();
 
@@ -318,7 +321,7 @@ export async function getTeamCapacity(admin: any, nowMs: number = Date.now()): P
       const [{ data: profs }, { data: fups }, { data: reports }, { data: eng }] = await Promise.all([
         admin.from('profiles').select('id, full_name, created_at').in('id', chunk),
         admin.from('sales_followup').select('student_id').eq('status', 'open').lte('due_at', nowIso).in('student_id', chunk),
-        admin.from('daily_reports').select('student_id, report_date').gte('report_date', since30).in('student_id', chunk),
+        admin.from('daily_reports').select('student_id, report_date, study_duration').gte('report_date', since30).in('student_id', chunk),
         admin.from('student_engagement').select('student_id, buddy_cta_clicks, intent_door_at').in('student_id', chunk),
       ]);
       for (const p of profs ?? []) { names.set(p.id, p.full_name ?? 'Student'); createdAt.set(p.id, p.created_at ?? null); }
@@ -326,6 +329,10 @@ export async function getTeamCapacity(admin: any, nowMs: number = Date.now()): P
       for (const r of reports ?? []) {
         if (!logDates.has(r.student_id)) logDates.set(r.student_id, []);
         logDates.get(r.student_id)!.push(r.report_date);
+        if (Number(r.study_duration ?? 0) > 0) {
+          if (!studiedDates.has(r.student_id)) studiedDates.set(r.student_id, []);
+          studiedDates.get(r.student_id)!.push(r.report_date);
+        }
       }
       for (const e of eng ?? []) taps.set(e.student_id, { taps: e.buddy_cta_clicks ?? 0, door: e.intent_door_at != null });
     }
@@ -351,6 +358,7 @@ export async function getTeamCapacity(admin: any, nowMs: number = Date.now()): P
     // never re-implements a predicate of its own.
     const lane = classifyLane({
       todayIst, createdAt: createdAt.get(sid) ?? null, logDates: logDates.get(sid) ?? [],
+      studiedDates: studiedDates.get(sid) ?? [],
       buddyTaps: e?.taps ?? 0, intentDoor: e?.door ?? false, momentumScore: 0,
     });
     const item = classifyWorkItem({

@@ -279,6 +279,43 @@ export async function recordConversion(admin: any, args: {
     // student who bought on their own.
     if (!repId) return;
 
+    // ── A TEST PURCHASE IS NOT A SALE (5 Sep 2026) ──────────────────────────
+    //
+    // The founder bought a ₹399 session on his own phone-signup account to
+    // check that checkout worked, and refunded it twelve hours later. That
+    // account sat in Neelam's book, so the payment credited her a conversion.
+    // It was the only conversion she had; the sales screen therefore reported
+    // one sale for a rep who had made none, and the lead had never even been
+    // contacted (`lead_outreach.status = 'not_contacted'`).
+    //
+    // The population rule already exists and is used everywhere a "real
+    // student" is counted (getRealStudents): role student, not a test account,
+    // not a demo. Attribution simply never asked. It asks now, because a
+    // conversion count that includes our own test transactions is not a
+    // measure of selling — and a rep can be paid an incentive on it.
+    //
+    // HONEST ABOUT THE LIMIT: this catches a payer FLAGGED as test or demo. It
+    // would not have caught the 4 Sep case on its own, because that account was
+    // never flagged — it looked exactly like a real student. Flagging it is a
+    // data fix, done separately; this is the guard that stops the same shape
+    // from recurring once an account is correctly marked.
+    const { data: payer, error: payerErr } = await admin.from('profiles')
+      .select('role, is_test_account, is_demo').eq('id', args.studentId).maybeSingle();
+    if (payerErr) {
+      // Do not guess. Attributing on an unreadable profile is how the bug
+      // above happens; skipping loses a row the payroll screen already reports
+      // as an unattributed sale, which is recoverable.
+      console.error('[sales-earnings] payer read failed:', payerErr.message);
+      return;
+    }
+    const isRealStudent = payer?.role === 'student'
+      && payer?.is_test_account !== true
+      && payer?.is_demo !== true;
+    if (!isRealStudent) {
+      console.warn('[sales-earnings] conversion not attributed — payer is not a real student:', args.studentId);
+      return;
+    }
+
     const { error: insErr } = await admin.from('sales_conversions')
       .upsert({
         payment_id: args.paymentId,

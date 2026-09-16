@@ -6,8 +6,19 @@ import { sanitizeBlocks, sanitizeSyllabusEndDate, sanitizeTargets } from '@/lib/
 import { EXTRACT_PROMPT, spreadsheetPrompt, salvageTruncatedJson } from '@/lib/timetable-extract';
 import { workbookToSheets, csvToSheet, sheetsToPromptText, windowDatedSheets, type SheetText } from '@/lib/workbook-text';
 import { emitTimeline } from '@/lib/os/timeline';
+import { refusal, type RefusalCode } from '@/lib/timetable-refusal';
 
 export const maxDuration = 60;
+
+/**
+ * Every refusal leaves the same shape: the sentence the student reads, and the
+ * code the telemetry counts. `reason` is what seven weeks of 422s were missing
+ * (lib/timetable-refusal).
+ */
+function refuse(code: RefusalCode) {
+  const r = refusal(code);
+  return NextResponse.json({ error: r.message, reason: r.code }, { status: r.status });
+}
 
 // Coaching timetable -> structured blocks.
 //
@@ -50,22 +61,19 @@ export async function POST(request: NextRequest) {
     file?: string; mediaType?: string;
   };
   if (!file || !mediaType) {
-    return NextResponse.json({ error: 'file and mediaType required' }, { status: 400 });
+    return refuse('file_missing');
   }
   const isVision = (VISION_MEDIA_TYPES as readonly string[]).includes(mediaType);
   const isSpreadsheet = (SPREADSHEET_MEDIA_TYPES as readonly string[]).includes(mediaType);
   if (mediaType === LEGACY_XLS) {
-    return NextResponse.json(
-      { error: 'That is an old-format .xls file. Open it and save as .xlsx, then upload again.' },
-      { status: 400 },
-    );
+    return refuse('legacy_xls');
   }
   if (!isVision && !isSpreadsheet) {
-    return NextResponse.json({ error: 'Upload a photo (JPG/PNG), a PDF, or an Excel file (.xlsx/.csv).' }, { status: 400 });
+    return refuse('unsupported_type');
   }
   // ~5MB of base64. The client downscales images before sending.
   if (file.length > 7_000_000) {
-    return NextResponse.json({ error: 'That file is too large — try a photo instead of a scan.' }, { status: 413 });
+    return refuse('file_too_large');
   }
 
   // The Gemini key is shared across all users, so one student re-uploading in a
@@ -92,10 +100,7 @@ export async function POST(request: NextRequest) {
       .eq('user_id', user.id).eq('event', 'timetable_parsed').gte('created_at', dayAgo),
   ]);
   if ((lastHour ?? 0) >= 6 || (lastDay ?? 0) >= 15) {
-    return NextResponse.json(
-      { error: "That's a lot of uploads — take a break and try again later, or add your classes by hand." },
-      { status: 429 },
-    );
+    return refuse('quota_exceeded');
   }
 
   let parts: GeminiPart[];
@@ -110,16 +115,10 @@ export async function POST(request: NextRequest) {
         ? csvToSheet(Buffer.from(file, 'base64').toString('utf8'))
         : await workbookToSheets(Buffer.from(file, 'base64'));
     } catch {
-      return NextResponse.json(
-        { error: "Couldn't open that Excel file — it may be corrupted or password-protected. Re-save it and try again." },
-        { status: 422 },
-      );
+      return refuse('workbook_unreadable');
     }
     if (sheets.length === 0) {
-      return NextResponse.json(
-        { error: 'That file has no readable rows. Check the sheet has your timetable in it.' },
-        { status: 422 },
-      );
+      return refuse('workbook_empty');
     }
     // Long day-plans are cut to the actionable window IN CODE, not by asking
     // the model nicely — it proved it ignores the ask and truncates its own
@@ -139,21 +138,17 @@ export async function POST(request: NextRequest) {
   const raw = await callGemini({ parts, json: true, maxTokens: isSpreadsheet ? 8192 : 4096, temperature: 0.1, backoffBaseMs: 6000 });
   if (raw === null) {
     // Transient AI failure, NOT a bad upload — don't blame the student's photo.
-    return NextResponse.json(
-      { error: 'The scanner is busy right now — try again in a moment, or add your classes by hand.' },
-      { status: 503 },
-    );
+    return refuse('scanner_unavailable');
   }
 
   // extractJson, then the truncation rescue — a reply that died at the token
   // ceiling still carries dozens of complete, usable blocks.
   const parsed = extractJson<ParseResult>(raw) ?? salvageTruncatedJson<ParseResult>(raw);
-  if (!parsed || parsed.is_timetable === false) {
-    return NextResponse.json(
-      { error: "That doesn't look like a class timetable. Try a clearer photo, or add your classes by hand." },
-      { status: 422 },
-    );
-  }
+  // Two different failures wearing one face. `!parsed` is the model answering
+  // in a shape we could not read — our problem. `is_timetable: false` is the
+  // model reading it fine and saying it is not a timetable — the photo's.
+  if (!parsed) return refuse('model_reply_unreadable');
+  if (parsed.is_timetable === false) return refuse('not_a_timetable');
 
   // Everything the model returned passes through the sanitizer before it is
   // shown to the student — invented topics are dropped here, not stored.
@@ -171,10 +166,7 @@ export async function POST(request: NextRequest) {
       summary: 'Timetable OCR failed — nothing readable in the photo', actor: 'student',
       metadata: { mediaType },
     });
-    return NextResponse.json(
-      { error: "Couldn't read any classes or targets from that. Try a clearer photo." },
-      { status: 422 },
-    );
+    return refuse('nothing_readable');
   }
 
   admin.from('student_events').insert({

@@ -39,6 +39,11 @@ export type SalesObjective = 'retention' | 'conversion';
  */
 const RETENTION_LANES: ReadonlySet<string> = new Set<DueReason>([
   'going_cold', 'broken_streak', 'new_never_logged',
+  // Came back once, then stopped (15 Sep 2026). The student has already shown
+  // us the product works for them — twice. Getting them studying again is
+  // retention in its purest form, and a card that opened with a pitch would
+  // waste the one thing that makes this call land.
+  'restart',
   // Attention (2 Sep 2026): opened the app and did not log, or tapped a
   // notification. The student reached for the product and stopped short of
   // studying — activation work, which is retention.
@@ -59,6 +64,18 @@ export interface ObjectiveInput {
   hasCommercialSignal: boolean;
   /** A retention need: silent, slipping, or never activated. */
   hasRetentionNeed: boolean;
+  /**
+   * The student already pays.
+   *
+   * Added 15 Sep 2026, before premium students were allowed into a book at
+   * all. Until then `lead-intake` excluded them, so this file never had to
+   * consider them — and a paying student landing in the `fresh` lane with no
+   * visible retention need would have classified as CONVERSION, putting a
+   * counsellor on the phone to pitch the product to somebody who had already
+   * bought it. One call like that costs more trust than the card could ever
+   * return.
+   */
+  alreadyPaying?: boolean;
 }
 
 export interface ObjectiveVerdict {
@@ -77,7 +94,23 @@ export interface ObjectiveVerdict {
  * whose purpose we cannot state should not have been dealt.
  */
 export function classifyObjective(input: ObjectiveInput): ObjectiveVerdict {
-  const { lane, hasCommercialSignal, hasRetentionNeed } = input;
+  const { lane, hasCommercialSignal, hasRetentionNeed, alreadyPaying } = input;
+
+  // You cannot convert somebody who has already converted. Checked FIRST, above
+  // every commercial signal, because the signals are exactly what would get
+  // this wrong: a paying student who revisits the paid page looks identical to
+  // a free student reaching for it, and the call that follows is the
+  // difference between "how is it going" and "would you like to buy".
+  //
+  // MISSION: revenue is fuel, never the destination. The one thing worth
+  // protecting about a paying student is that they keep studying.
+  if (alreadyPaying) {
+    return {
+      primary: 'retention',
+      secondary: null,
+      primaryReason: 'This student already pays — the only job is keeping them studying.',
+    };
+  }
 
   // A promise the student made outranks any classification we invent: the
   // objective is whatever the last conversation was about, and the queue

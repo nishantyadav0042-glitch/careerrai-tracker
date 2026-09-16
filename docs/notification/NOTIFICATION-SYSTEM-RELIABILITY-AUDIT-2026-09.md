@@ -1,5 +1,18 @@
 # CareerRai Notification System — Reliability Audit
 
+> **⚠️ CORRECTED 2 Sep 2026.** This document states a "92% delivery" figure.
+> That number is wrong twice: `received_at` means the service-worker handler
+> ran, not that anything was delivered or seen; and it was computed over
+> `send_status = 'provider_accepted'`, a set that `push-recovery` continuously
+> relabels to `unknown` when a send goes 48h unconfirmed — so failures are
+> removed from the denominator and the ratio trends to 100% by construction.
+> On the honest denominator the figure is **70.1%**, and the correct name is
+> **provider-accepted → service-worker receipt**. The canonical business metric
+> is **Push Reachability = 139/620 = 22.4%**, frozen in
+> [NOTIFICATION-SCHEDULE-AND-METRICS-CLOSURE-2026-09.md](./NOTIFICATION-SCHEDULE-AND-METRICS-CLOSURE-2026-09.md).
+> The findings below stand except where they rest on that number.
+
+
 **Date:** 1 September 2026 · **Phase:** 0–9 complete (audit + research). **No code written.**
 **Snapshot:** production `pobhpszlsozeonejtzqy`, repo `ff8a4a8`.
 **Companions:** `NOTIFICATION-REACH-ROOT-CAUSE-AUDIT-2026-09.md`, `IOS-NATIVE-PUSH-SCOPE-2026-09.md`, `NOTIFICATION-REACH-FIX-PLAN-2026-09.md`

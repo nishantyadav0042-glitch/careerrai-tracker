@@ -3,7 +3,7 @@ import { assembleDay, dayAnchorMs, istHour, SECTION_OF, SECTION_ORDER, type DayS
 import type { DueReason } from './call-queue';
 import {
   DAY_FLOOR, DAY_CEILING, ROTATION_FLOOR, ATTENTION_CEILING, NEW_ARRIVAL_CEILING, ROTATION_CALL_EVERY,
-  SHIFT_END_HOUR_IST, RETRY_CEILING,
+  SHIFT_END_HOUR_IST, RETRY_CEILING, FRESH_PIN_PER_DAY,
 } from './os/scale-config';
 
 // ── THE DAY IS 50–70, AND EVERY RULE OF IT IS PROVEN HERE ───────────────────
@@ -17,16 +17,24 @@ const c = (dueReason: DueReason, n = 1) =>
   Array.from({ length: n }, () => ({ studentId: `s${++seq}`, dueReason }));
 
 describe('the band', () => {
-  it('signals short of the floor: rotation fills up to the floor', () => {
+  // ── 15 Sep 2026: the band is built to the TOP, not the bottom ────────────
+  //
+  // These two cases asserted DAY_FLOOR until tonight, and that assertion was
+  // the bug: with 23 signal cards a rep's day came out at exactly 50 while
+  // 319 never-contacted students sat in his book with phone numbers. A band
+  // built to its bottom every day is a cap, not a range. Founder: "dono reps
+  // ko daily 70 relevant students milne chahiye."
+  it('signals short of the ceiling: rotation fills the day to the ceiling', () => {
     const day = assembleDay([...c('going_cold', 5), ...c('conversion', 5), ...c('fresh', 100)]);
-    expect(day.queue).toHaveLength(DAY_FLOOR);
-    expect(day.counts.given.rotation).toBe(DAY_FLOOR - 10);
+    expect(day.queue).toHaveLength(DAY_CEILING);
+    expect(day.counts.given.rotation).toBe(DAY_CEILING - 10);
   });
 
-  it('signals near the floor: rotation still gets its floor, up to the ceiling', () => {
-    const day = assembleDay([...c('going_cold', 45), ...c('fresh', 100)]);
-    expect(day.queue).toHaveLength(45 + ROTATION_FLOOR);
-    expect(day.counts.given.rotation).toBe(ROTATION_FLOOR);
+  it('signals near the ceiling: rotation still gets its floor, up to the ceiling', () => {
+    const signals = DAY_CEILING - ROTATION_FLOOR;
+    const day = assembleDay([...c('going_cold', signals), ...c('fresh', 100)]);
+    expect(day.queue).toHaveLength(DAY_CEILING);
+    expect(day.counts.given.rotation, 'the silent book moves even on a loud day').toBe(ROTATION_FLOOR);
   });
 
   it('signals above the floor: rotation takes only the room left under the ceiling', () => {
@@ -88,30 +96,74 @@ describe('ceilings hold back, never discard', () => {
 });
 
 describe('order and channel', () => {
-  it('the ranked order is preserved: promises first, rotation last', () => {
+  // ── THE ONE DELIBERATE EXCEPTION (founder, 15 Sep 2026) ───────────────────
+  //
+  // Fourteen days: 273 never-contacted cards DEALT across both books, 66
+  // worked, while promise cards ran at 74-91%. The cold lane was never short
+  // of cards — it was short of hours, because promises sort first, get worked
+  // first, and the day ends. So FRESH_PIN_PER_DAY never-contacted students sit
+  // above the promises, and everything below them keeps the queue's ranking
+  // exactly. Nothing is dropped; the rest shift down by five.
+  it('pins the first few never-contacted students above the promises', () => {
     const day = assembleDay([...c('callback', 2), ...c('checkout_abandoned', 1), ...c('attention', 3), ...c('fresh', 60)]);
     const sections = day.queue.map((x) => x.section);
+    expect(sections.slice(0, FRESH_PIN_PER_DAY).every((s) => s === 'rotation')).toBe(true);
+    expect(day.queue.slice(0, FRESH_PIN_PER_DAY).every((x) => x.dueReason === 'fresh')).toBe(true);
+  });
+
+  it('keeps the queue ranking for everything below the pinned few', () => {
+    const day = assembleDay([...c('callback', 2), ...c('checkout_abandoned', 1), ...c('attention', 3), ...c('fresh', 60)]);
+    const sections = day.queue.map((x) => x.section).slice(FRESH_PIN_PER_DAY);
     const firstRotation = sections.indexOf('rotation');
     expect(sections.slice(0, 2)).toEqual(['promises', 'promises']);
     expect(sections[2]).toBe('money');
     expect(sections.slice(firstRotation).every((s) => s === 'rotation')).toBe(true);
   });
 
-  it('attention is a message; every Nth rotation card is a call; everything else is a call', () => {
+  it('drops nothing and duplicates nothing when it pins', () => {
+    // A re-order that loses a promise is a broken commitment, not a tweak.
+    const day = assembleDay([...c('callback', 2), ...c('checkout_abandoned', 1), ...c('attention', 3), ...c('fresh', 60)]);
+    const ids = day.queue.map((x) => x.studentId);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(day.queue.filter((x) => x.section === 'promises')).toHaveLength(2);
+  });
+
+  it('pins nothing when the day holds no never-contacted student', () => {
+    const day = assembleDay([...c('callback', 2), ...c('attention', 3), ...c('rotation', 20)]);
+    expect(day.queue[0].section).toBe('promises');
+  });
+
+  it('only rotation is messaged, and there only every Nth card is a call', () => {
     const day = assembleDay([...c('callback', 1), ...c('attention', 2), ...c('going_cold', 1), ...c('fresh', 20)]);
     const by = (s: string) => day.queue.filter((x) => x.section === s);
     expect(by('promises').every((x) => x.channel === 'call')).toBe(true);
     expect(by('retention').every((x) => x.channel === 'call')).toBe(true);
-    expect(by('attention').every((x) => x.channel === 'message')).toBe(true);
-    const rot = by('rotation');
-    rot.forEach((x, i) => expect(x.channel).toBe(i % ROTATION_CALL_EVERY === 0 ? 'call' : 'message'));
+    // Attention was a message from 2 Sep and is a CALL from 15 Sep (founder).
+    // The student it goes to opened the app and stopped short of studying,
+    // often having said so in their own words; a template is the wrong reply
+    // to that. The cost was paid in ATTENTION_CEILING, not in the channel.
+    expect(by('attention').every((x) => x.channel === 'call')).toBe(true);
+    // The pinned never-contacted cards are CALLS, whatever the rotation cycle
+    // would have given them: an introduction that arrives as a template
+    // defeats the point of pinning it.
+    const pinned = day.queue.slice(0, FRESH_PIN_PER_DAY);
+    expect(pinned.every((x) => x.dueReason === 'fresh' && x.channel === 'call')).toBe(true);
+    // Below the pin the every-Nth-is-a-call cycle carries on from where the
+    // pinned cards left it. They were rotation cards too, so they spent the
+    // first FRESH_PIN_PER_DAY positions of the cycle before being lifted out
+    // and made calls — the cycle is not restarted, which would quietly turn
+    // extra rotation cards into calls the founder never asked for.
+    const rot = by('rotation').slice(FRESH_PIN_PER_DAY);
+    rot.forEach((x, i) => expect(x.channel)
+      .toBe((i + FRESH_PIN_PER_DAY) % ROTATION_CALL_EVERY === 0 ? 'call' : 'message'));
   });
 
-  it('never contacted (fresh) comes before the long-silent (rotation) within the rotation section', () => {
-    // The queue ranks them; assembleDay must not reorder.
+  it('never contacted comes before the long-silent, even when the queue ranked it lower', () => {
+    // `rotation` is someone we HAVE spoken to; `fresh` is someone nobody ever
+    // has. The pin is only ever spent on the second kind.
     const cands = [...c('rotation', 3), ...c('fresh', 3)];
     const day = assembleDay(cands);
-    expect(day.queue.map((x) => x.dueReason).slice(0, 3)).toEqual(['rotation', 'rotation', 'rotation']);
+    expect(day.queue.map((x) => x.dueReason).slice(0, 3)).toEqual(['fresh', 'fresh', 'fresh']);
   });
 
   it('the counts add up to the queue, section by section', () => {
@@ -143,31 +195,43 @@ describe('order and channel', () => {
 // the quota-driven replenishment the founder ruled out on 30 Aug.
 describe('a rebuild continues today, it does not deal a second day', () => {
   it('rotation does not re-top after cards are worked', () => {
-    // Morning: 50 rotation cards dealt. By evening 30 are marked and 20 remain
-    // open. A rebuild must show those 20 — not 20 plus 30 replacements.
+    // THE INCIDENT #72 INVARIANT, unchanged: morning deals 50 rotation cards,
+    // by evening 30 are marked and 20 remain open. A rebuild must never treat
+    // the 30 worked ones as free slots and deal 30 replacements.
+    //
+    // What the 15 Sep target change does alter is the arithmetic around it:
+    // the day's target is DAY_CEILING now, so after 50 dealt there are 20 more
+    // to give — and the rebuild gives exactly those 20, never 50 again. The
+    // worked cards still free nothing.
     const remaining = c('rotation', 20);
     const openToday = new Set(remaining.map((x) => x.studentId));
     const day = assembleDay([...remaining, ...c('rotation', 200)], {
       openToday, usedToday: { rotation: 50 },
     });
-    expect(day.queue).toHaveLength(20);
-    expect(day.queue.every((x) => openToday.has(x.studentId))).toBe(true);
+    const newlyDealt = day.queue.filter((x) => !openToday.has(x.studentId)).length;
+    expect(newlyDealt, 'only the room left under the ceiling').toBe(DAY_CEILING - 50);
+    expect(50 + newlyDealt, 'the day still stops at the ceiling').toBe(DAY_CEILING);
+    expect(day.queue.filter((x) => openToday.has(x.studentId)),
+      'every open card survives the rebuild').toHaveLength(20);
   });
 
   it('rotation tops up only to the day-s target, counting what it already spent', () => {
-    // 10 dealt this morning, 4 still open: the target is 50, so at most 40 new.
+    // 10 dealt this morning, 4 still open: the target is the ceiling, so at
+    // most DAY_CEILING - 10 new. The invariant under test is unchanged — what
+    // was already DEALT is subtracted, so a worked card never frees a slot
+    // (Incident #72). Only the target moved.
     const remaining = c('rotation', 4);
     const openToday = new Set(remaining.map((x) => x.studentId));
     const day = assembleDay([...remaining, ...c('rotation', 200)], {
       openToday, usedToday: { rotation: 10 },
     });
-    expect(day.counts.given.rotation).toBe(4 + (DAY_FLOOR - 10));
+    expect(day.counts.given.rotation).toBe(4 + (DAY_CEILING - 10));
   });
 
   it('a genuinely new SIGNAL still arrives mid-day — that is the point of the exception', () => {
     // A promise coming due at 6pm, on a rotation target already fully spent.
     const day = assembleDay([...c('callback', 1), ...c('rotation', 50)], {
-      openToday: new Set(), usedToday: { rotation: DAY_FLOOR },
+      openToday: new Set(), usedToday: { rotation: DAY_CEILING },
     });
     expect(day.counts.given.promises, 'a promise is never withheld').toBe(1);
     expect(day.counts.given.rotation, 'but rotation is done for today').toBe(0);
@@ -175,7 +239,7 @@ describe('a rebuild continues today, it does not deal a second day', () => {
 
   it('with no context it behaves exactly as before — nothing else changes', () => {
     const cands = [...c('going_cold', 5), ...c('rotation', 100)];
-    expect(assembleDay(cands).queue).toHaveLength(DAY_FLOOR);
+    expect(assembleDay(cands).queue).toHaveLength(DAY_CEILING);
   });
 });
 
@@ -245,7 +309,8 @@ describe('the day s ceilings count what was dealt today', () => {
     // 14 more at 22:00: 44 never-contacted students in one day.
     const day = assembleDay([...c('fresh', 200)], {
       openToday: new Set(),
-      usedToday: { callback: 5, attention: 20, new_never_logged: 15, rotation: ROTATION_FLOOR },
+      // 40 signals dealt + rotation already at the day's remaining room.
+      usedToday: { callback: 5, attention: 20, new_never_logged: 15, rotation: DAY_CEILING - 40 },
     });
     expect(day.counts.given.rotation, 'rotation is done for today').toBe(0);
   });
@@ -412,6 +477,9 @@ describe('retries yield, callbacks do not', () => {
     // The ceiling is a shape, not a starvation rule: with nothing else to
     // deal, held retries come back before a counsellor gets a 45-card day.
     const day = assembleDay([...c('retry', 83)], { openToday: new Set(), usedToday: {} });
+    // Retries are capped at RETRY_CEILING and the rest are HELD; the backfill
+    // that saves the day from being short still stops at DAY_FLOOR, because a
+    // held card returning is a rescue, not the day's target.
     expect(day.queue.length).toBe(DAY_FLOOR);
   });
 

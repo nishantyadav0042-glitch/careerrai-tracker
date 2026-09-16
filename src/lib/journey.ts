@@ -308,6 +308,15 @@ export type EventName =
   // Deliberately a separate name from push_ask_shown: no permission prompt is
   // involved, so counting it as an ask would inflate the acquisition funnel.
   | 'push_setup_guidance_shown'
+  // Fired once per mount, BEFORE any decision. Production, 15 Sep: 65 students
+  // opened /student/tracker with no push subscription and emitted no push_*
+  // row at all — yet every path out of evaluate() reports. Either the
+  // component never mounted for them or it never reached evaluate(), and
+  // nothing we stored could tell the two apart. NOTIFICATION-OS §8 is "every
+  // stage measured"; the mount was the one stage that was not. This does NOT
+  // count as an ask (see push_setup_guidance_shown above for why that
+  // distinction is load-bearing).
+  | 'push_ask_mounted'
   | 'push_ask_shown' | 'push_ask_skipped' | 'push_ask_later'
   | 'push_ask_blocked' | 'push_ask_dismissed' | 'push_ask_failed'
   // ReopenAppNudge (1 Sep): a student who already installed but landed in a
@@ -382,6 +391,15 @@ export type EventName =
   // engagement on the screen as an abandonment.
   | 'buddy_nudge_shown' | 'buddy_nudge_dismissed'
   | 'buddy_nudge_cta' | 'buddy_nudge_rung'
+  // WHY it was silent (15 Sep). `_shown` counted the surface working; nothing
+  // counted it not working. Production: 124 `buddy_nudge_shown` all-time, zero
+  // since 1 Sep — the day the push ask began rendering on every app open — and
+  // six different bail-outs that all look identical from the outside.
+  // `_mounted` fires before any gate, so "never rendered" and "rendered and
+  // bailed" stop being the same number; `_blocked.gate` names which gate.
+  // Neither counts as a pitch: a mount is not an impression, and folding them
+  // into `_shown` would inflate the one number this funnel is judged on.
+  | 'buddy_nudge_mounted' | 'buddy_nudge_blocked'
   // Free external resources attached to a study task (31 Aug). The plan has
   // always been able to say "solve 15 questions" without being able to say
   // where the 15 questions are; these three measure whether closing that gap

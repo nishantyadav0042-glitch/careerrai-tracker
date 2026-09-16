@@ -42,9 +42,15 @@ export async function POST(request: NextRequest) {
     if (session.session_status === 'completed') {
       return NextResponse.json({ ok: true, alreadyCompleted: true });
     }
-    // A cancelled or expired orientation cannot be completed. The DB trigger
-    // (20260824e) refuses it; this returns the reason instead of letting the
-    // write fail inside a Promise.all whose errors nobody reads.
+    // A cancelled orientation cannot be completed. The DB trigger refuses it;
+    // this returns the reason instead of letting the write fail inside a
+    // Promise.all whose errors nobody reads.
+    //
+    // An EXPIRED one now can (20260915a): expiry means the stale-release cron
+    // found no recorded outcome within the hour, not that the call failed.
+    // This route asks canTransition rather than listing statuses itself, so it
+    // picked the change up without editing — which is the whole reason the
+    // state machine is a shared module.
     if (!canTransition(session.session_status as SessionStatus, 'completed')) {
       return NextResponse.json(
         { error: transitionRefusal(session.session_status as SessionStatus, 'completed') },
