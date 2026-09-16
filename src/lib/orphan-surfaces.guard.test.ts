@@ -186,20 +186,6 @@ describe('orphan surfaces are declared, not discovered', () => {
 // mistake this file's own header records making once already.
 
 const KNOWN_PARKED_MODULES: Record<string, string> = {
-  'src/lib/retention-baseline.ts':
-    'PARKED 16 Sep, deliberately and for a short, named window. It is the ' +
-    'FROZEN baseline taken immediately before confirm-or-correct logging and ' +
-    'plan healing — every return rate, the plan-versus-reality figures, and ' +
-    'the decision rule, all set BEFORE any post-change number exists so that ' +
-    '"retention did not move, ship another feature" is not available as a ' +
-    'response. Nothing imports it yet because the thing it will be compared ' +
-    'AGAINST has not shipped. That is the point: a baseline written after the ' +
-    'change is not a baseline. UNPARK WHEN the post-change readout lands — it ' +
-    'imports BASELINE and readSignal to render before/after through one set ' +
-    'of definitions, and deletes this entry in the same commit. If the ' +
-    'intervention is abandoned instead, this file stays as the dated record ' +
-    'of what the product looked like on 16 Sep and docs/RETENTION-BASELINE-' +
-    '2026-09-16.md holds the queries that reproduce it.',
   'src/lib/sales-distribution.ts':
     'PARKED 29 Aug, note rewritten the same evening when its stated blocker ' +
     'stopped being true. The two counsellor seats now exist and BATCH 1 IS ' +
