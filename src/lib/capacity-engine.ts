@@ -111,6 +111,54 @@ export function capBudget(proposedHours: number | null, capacity: Capacity): num
 // revise downward is a permanent label, not a planning input.
 
 import { MIN_DAILY_HOURS, MAX_DAILY_HOURS } from '@/lib/daily-hours';
+import { durationIsUnknown } from '@/lib/check-in';
+
+// ── ONE DERIVATION OF THE ENGINE'S INPUTS ───────────────────────────────────
+//
+// computeCapacity takes two log-derived numbers, and getting the second one
+// right is subtle enough that it has its own incident: `loggedDays` is an
+// EVIDENCE count, so a day we never measured the duration of must not be
+// counted, or a student is judged against their own stated hours on the
+// strength of days nobody measured. A declared zero, though, IS behaviour and
+// must count — otherwise honest bad days become a way to dodge the tier.
+//
+// That derivation was written inline inside api/routine/today. The second
+// surface to need capacity would have copied it, and the copy would have
+// drifted; the comment directly above it in that file is itself a warning
+// about the two-writer bug that came from sharing helpers but duplicating the
+// ASSEMBLY. So the assembly lives here now and both callers use it.
+
+export interface CapacityReport {
+  report_date?: string | null;
+  day_outcome?: string | null;
+  study_duration?: number | string | null;
+  study_duration_source?: string | null;
+}
+
+/**
+ * Capacity from raw `daily_reports` rows.
+ *
+ * `since` is an ISO date. Callers that already windowed at the database may
+ * omit it; passing it is harmless and makes the window explicit at surfaces
+ * that hold a longer history (the tracker holds 500 rows).
+ */
+export function capacityFromReports(
+  reports: readonly CapacityReport[],
+  claimedHours: number | null,
+  since?: string,
+): Capacity {
+  const rows = since
+    ? reports.filter((r) => typeof r.report_date !== 'string' || r.report_date >= since)
+    : reports;
+  const hours = rows.map((r) => Number(r.study_duration) || 0);
+  const measuredDays = rows.filter((r) => !durationIsUnknown(r)).length;
+  return computeCapacity(hours, measuredDays, claimedHours);
+}
+
+/** The first date inside the capacity window, as an ISO date. */
+export function capacityWindowStart(now: Date = new Date()): string {
+  return new Date(now.getTime() - CAPACITY_WINDOW_DAYS * 86_400_000).toISOString().slice(0, 10);
+}
 
 /** Claim must be at least this multiple of behaviour before we say anything. */
 export const OVERSTATE_RATIO = 2;

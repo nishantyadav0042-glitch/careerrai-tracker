@@ -7,7 +7,7 @@ import { assessFinishDate, feasibilityMessage } from '@/lib/date-feasibility';
 import { pickMission, mockPendingAnalysisSignal, revisionOverdueSignal, baselineRoutineSignal, blockerBiasSignal, type Blocker } from '@/lib/mission-engine';
 import { type CoverageStatus } from '@/lib/topic-selector';
 import { plannerRecency } from '@/lib/plan-history';
-import { computeCapacity, CAPACITY_WINDOW_DAYS } from '@/lib/capacity-engine';
+import { capacityFromReports, CAPACITY_WINDOW_DAYS, type CapacityReport } from '@/lib/capacity-engine';
 import { computeAdaptation } from '@/lib/adaptation-engine';
 import { weightedCompletedForDay } from '@/lib/completion-portion';
 import { assembleIntelligence, momentumProxy } from '@/lib/intelligence';
@@ -20,7 +20,7 @@ import { dailyHours, hoursForDay } from '@/lib/daily-hours';
 import type { DebriefRow } from '@/lib/mock-informed-focus';
 import { determineAlignment, insightDisclosure, normalizeInsight, type PersistedInsight } from '@/lib/insight-plan-handoff';
 import type { CoreSection } from '@/lib/prep-insight-engine';
-import { dayWasStudied, durationIsUnknown } from '@/lib/check-in';
+import { dayWasStudied } from '@/lib/check-in';
 
 const VALID_CORE_SECTIONS: CoreSection[] = ['VARC', 'DILR', 'QA'];
 
@@ -139,15 +139,16 @@ export async function GET() {
   // without ever sizing it.
   const biggestBlocker = profile.biggest_blocker as Blocker | null;
   const claimedHours = dailyHours(profile).weekday;
-  const recentStudyHours = (recentReports ?? []).map((r: { study_duration: unknown }) => Number(r.study_duration) || 0);
   // Q4 -- a day we never measured is not evidence of BEHAVIOUR. It already
   // contributes nothing to the magnitude (the engine filters h > 0), but it
   // must not count toward MIN_DAYS_FOR_BEHAVIOUR either, or a student gets
   // judged against their own stated hours on the strength of days nobody
   // measured. A declared zero still counts -- that IS behaviour (Q2).
-  const measuredDays = (recentReports ?? [])
-    .filter((r: { day_outcome?: string | null; study_duration?: number | null; study_duration_source?: string | null }) => !durationIsUnknown(r)).length;
-  const capacity = computeCapacity(recentStudyHours, measuredDays, claimedHours);
+  //
+  // The assembly now lives in the engine (capacityFromReports) so the tracker
+  // reads capacity through the same derivation instead of a second copy. The
+  // rows are already windowed by the query above.
+  const capacity = capacityFromReports((recentReports ?? []) as CapacityReport[], claimedHours);
 
   const recentPlanFits = (recentReports ?? [])
     .map((r: { plan_fit: unknown }) => r.plan_fit)
@@ -378,7 +379,7 @@ export async function GET() {
 
   const intelligence = assembleIntelligence({
     phase: routine.phase as Phase,
-    loggedDays: recentStudyHours.length,
+    loggedDays: (recentReports ?? []).length,
     activeDays21,
     recentActive10,
     priorActive10,
