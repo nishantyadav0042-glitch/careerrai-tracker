@@ -5334,3 +5334,69 @@ versus its daily total, its own correction was a daily total hiding a morning
 defect, and this is a daily total read before the day had finished being
 written. The common shape is not a wrong number — it is a right number read at
 the wrong moment, and the fix is always to make the moment visible.
+
+---
+
+## Incident #88
+
+**2026-09-16 · A counsellor capped herself at 40 because the deck counted a
+message as a call · Sales (Trust) (P1)**
+
+**What happened.** Neelam, on WhatsApp at 09:49 IST, in her own words:
+
+> *"Aapne kl bola tha 40 se jada mt Krna is liye nhi kiye mene because mai msg
+> krti hu to vhi total no. Count hote h ese me to mai confused ho re hu ki
+> kitni call ki h kitni nhi"*
+>
+> *"Agar vha pr not pick walo pr ya switch off pr filter lga skti to or ache se
+> hota"*
+
+She stopped short of her day's work because she could not read her own tally.
+Two separate defects in one message, and she found both.
+
+**Defect 1 — the tally counted every marked card as one thing.** `CallDeck`
+held a single `done` counter incremented on every successful disposition, so a
+WhatsApp message, a skip and a connected call all moved the same number. A
+counsellor working to a call figure had no way to tell what she had actually
+done, and the cost was not a wrong dashboard — it was **a real person deciding
+to stop working**.
+
+**Defect 2 — seventy cards arrive as one list.** The deck groups by section
+(promises / money / new / attention / rotation), which is the right primary
+cut, but there was no way to slice ACROSS it. To find the students who had not
+picked up she had to read all seventy, every time. On today's deck that is 18
+cards hiding inside 70.
+
+**What was done.** `lib/sales-deck-filter.ts`, pure and unit-tested.
+
+The tally splits into **called · messaged · skipped**. Two decisions carry the
+weight: an **unanswered dial counts as a CALL** — she picked up the phone and
+rang, and counting only connected calls would tell a counsellor her hardest
+hours did not happen — and a **skip counts as neither**, because a skip writes
+no lead state and starts no clock (`lib/sales-disposition`), so folding it into
+either would let a day of skipping read as a day of calling.
+
+Five filter chips that cut across the sections rather than repeating them:
+All · To call · To message · Didn't pick up · Never called. Counted from
+`no_answer_count` rather than the `retry` lane, deliberately: a lane is
+assigned by the queue and expires, while an unanswered dial is a fact about the
+student that survives tomorrow's deal. Chip counts come from the whole day, not
+the filtered view — a chip that shrank because another chip was active would be
+the same lie as a ceiling that refills when a card is worked (#72). Filtering
+hides cards from the VIEW and never from the day: "N still to mark" stays the
+whole deck, so finishing a filter can never read as finishing the day.
+
+**What was deliberately NOT built.** No target, no goal, no progress bar toward
+40. **SALES-OS §0** — a P5 number may never appear as a performance judgement,
+a target, a quota, or an input to pay. "At least 40 daily" is the founder's
+instruction to a person; putting 40 on her screen would make the product
+enforce it, which is a different thing from letting her see her own work. She
+asked to SEE, so she is shown counts and nothing else, and a guard test fails
+the build if a target, goal, quota or percentage ever reaches that header.
+
+**Lesson.** *A number a worker cannot decompose is a number that will stop
+them.* Every earlier entry in this family cost a wrong belief on a founder's
+screen; this one cost a counsellor's afternoon. The operator surfaces have been
+audited hard for whether their numbers are TRUE — this is the first that was
+true and still unusable, because it answered a question nobody was asking. She
+had to be the one to report it, which by #20's standard is itself the failure.
