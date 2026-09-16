@@ -255,6 +255,22 @@ export const WORKSPACES: AdminWorkspace[] = [
       { label: 'Feature flags', href: null, status: 'planned', blockedOn: 'No flag store exists.' },
     ],
   },
+  // Deliberately LAST (founder, 16 Sep): a section he opens on purpose when he
+  // sits down to talk to students, not something that competes with the daily
+  // operating boards above it.
+  {
+    id: 'outreach',
+    label: 'Student outreach',
+    icon: 'MessageCircle',
+    href: '/admin/student-outreach',
+    purpose: 'Every student who logged in the last 21 days, with a personal feedback ask ready to send.',
+    tabs: [
+      // Only its own route. `/admin/log-breakers` is a sibling worklist and it
+      // belongs to People — claiming it here too would give one page two
+      // meanings, which admin-workspaces.test.ts correctly refuses.
+      { label: 'Feedback round', href: '/admin/student-outreach', status: 'live' },
+    ],
+  },
 ];
 
 /** Flat list of every route this structure claims. */
