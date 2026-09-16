@@ -6007,3 +6007,78 @@ nobody asked.
 to invent a second one.** `plan-card:tick` had the correct shape AND the
 evidence (70 rows since July) before this happened. The gap was that nothing
 carried the pattern from one surface to the other.
+
+## Incident #95
+
+**16 Sep 2026 — `daily_log` counted 12-20% of real logs for nine days, and
+nothing was broken enough to notice.**
+
+`public.daily_reports` is the studied-day ledger. It is written through one
+RPC, `upsert_log_and_streak`, from TWO client paths:
+
+| Door | File | Emitted `daily_log`? |
+|---|---|---|
+| Log sheet | `hooks/useLogging.ts` | yes |
+| Plan card (`close_day`) | `DailyTracker/TodaysRoutineCard.tsx` | **no** |
+
+The plan card is the door students actually use. Measured against the table it
+is supposed to describe:
+
+```
+date        daily_log events   daily_reports rows
+14 Sep                     2                   30
+13 Sep                     3                   23
+11 Sep                     3                   21
+30-day totals      99 students          241 students
+```
+
+**Why it survived.** Nothing errored. No test failed. No student was harmed.
+The event produced a small daily number in a product with a small daily habit,
+and a small number was exactly what anyone glancing at it expected to see. A
+metric that is wrong by an order of magnitude but *plausible* is harder to
+catch than one that is wrong and absurd, and there was no assertion anywhere
+that the event count should resemble the row count.
+
+**What it cost.** Every retention curve, cohort split and experiment readout in
+the company is computed from this event. So this was never a reporting
+nuisance — it was a wrong denominator under every decision taken from it since
+19 Aug. It also produced a published falsehood: an earlier report to the
+founder claimed **"291 students opened the log and wrote nothing"**, built on
+`completion_write` — which is a plan-task TICK and not a log at all. Two
+different wrong events, one confident wrong thesis, and a product strategy
+discussion held on top of it. The founder ordered the audit that found this;
+it was not found by the people who wrote the metric.
+
+**The near-miss in the fix.** The obvious repair is to emit `daily_log`
+wherever `dayClosed` is true. That would have been worse than the bug.
+`close_day` rides along on EVERY tick, so `dayClosed` stays true for the
+second and tenth tap of an already-closed day — an undercount would have
+become an overcount, and an overcount looks like growth, so nobody would have
+reported it. Only the RPC knows which call actually inserted, and it already
+says so in `is_new_log`; `log-daily` had been reading that field all along.
+The fix threads the same field through `complete-task` and gates on it.
+
+**Fixed by** capturing `is_new_log` off the RPC in `complete-task` (including
+on its one retry — a day closed on the second attempt must still count),
+returning `isNewLog`, emitting `daily_log` from the plan card gated on it, and
+tagging both doors with `surface` so the split stays visible instead of
+collapsing into one untraceable total. `isNewLog` is placed after
+`coverageAdvanceFailed` in the response because
+`topics-and-coverage-truthful.test.ts` asserts those two stay adjacent — a new
+field is not a reason to widen somebody else's invariant.
+
+**The lesson, and it is not "add an event".**
+
+> **An event that describes a table must be checked against that table.**
+> Instrumentation is a claim about reality, and a claim nobody audits is an
+> opinion. `daily_log` and `daily_reports` disagreed by 2.4x for nine days in
+> the same database, twenty lines apart in the same file, and no surface
+> anywhere compared them.
+
+Encoded as `lib/daily-log-event.guard.test.ts` — verified to fail against the
+reintroduced bug (2 of 8 red) before being kept — which fails the build if any
+writer of `daily_reports` stops emitting the event, if the emit is gated on
+`dayClosed` instead of `isNewLog`, or if the retry drops the RPC result.
+
+This is Incident #93's lesson in a third costume: a watch, a detector and now a
+metric, each a copy of reality with nothing checking the copy still matches.

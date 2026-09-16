@@ -83,7 +83,11 @@ export function useLogging(studentId: string, initial?: InitialLogging | null) {
       return (await response.json()) as LoggingResponse;
     },
     onSuccess: (data) => {
-      track('daily_log', { report_date: data?.report_date, streak: data?.streak });
+      // `surface` names the door. The plan card writes the same daily_reports
+      // row and now emits this event too, so without it the two are one
+      // indistinguishable total — and the whole point of the 16 Sep fix was
+      // that a plausible total hid a 12-20% capture rate for nine days.
+      track('daily_log', { report_date: data?.report_date, streak: data?.streak, surface: 'log_sheet' });
       setFeedbackData(data);
       setShowFeedback(true);
       queryClient.invalidateQueries({ queryKey: ['streak'] });

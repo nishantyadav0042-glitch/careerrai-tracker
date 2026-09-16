@@ -386,7 +386,7 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
       // Server state changed — the 30s GET cache must never serve
       // pre-completion data.
       clearRoutineCache();
-      const json = (await res.json()) as { completedTaskIds: string[]; fullyDone: boolean; dayClosed: boolean; coverageAdvanceFailed?: boolean };
+      const json = (await res.json()) as { completedTaskIds: string[]; fullyDone: boolean; dayClosed: boolean; isNewLog?: boolean; coverageAdvanceFailed?: boolean };
       // Success is recorded too: a failure rate needs a denominator, and the
       // A1 question is "how often does a tick fail to become a study day", not
       // "how many failures were there". coverageAdvanceFailed rides along --
@@ -395,6 +395,26 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
         taskId: task.id, ok: true, status: res.status, kind: 'http', surface: 'plan_card',
         dayClosed: json.dayClosed, coverageAdvanceFailed: json.coverageAdvanceFailed ?? false,
       });
+      // ── A STUDIED DAY IS A STUDIED DAY, WHICHEVER DOOR IT CAME THROUGH ────
+      //
+      // `daily_log` was only ever emitted by useLogging (the log sheet). This
+      // card writes the SAME daily_reports row through the same
+      // upsert_log_and_streak RPC, and it is the door students actually use --
+      // so the event counted a fraction of reality and nobody could see it,
+      // because the number it produced was plausible. Measured 16 Sep over
+      // nine days: 2 events against 30 real rows on 14 Sep, 3 against 23 on
+      // 13 Sep -- roughly 12-20% captured.
+      //
+      // Every retention figure, cohort and experiment readout runs through
+      // this event, so the undercount was not a reporting nuisance: it was a
+      // wrong denominator under every decision made from it.
+      //
+      // Gated on isNewLog, never on dayClosed -- see the server comment.
+      // `surface` distinguishes the two doors so the split stays visible
+      // rather than being silently merged into one total.
+      if (json.isNewLog) {
+        track('daily_log', { surface: 'plan_card' });
+      }
       setCompletedIds(new Set(json.completedTaskIds));
       setExpandedTaskId(null);
       if (confidence && task.topic) setConfidenceTaps((prev) => [...prev, { topic: task.topic!, confidence }]);
