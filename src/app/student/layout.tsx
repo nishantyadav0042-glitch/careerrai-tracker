@@ -199,17 +199,44 @@ export default async function StudentLayout({ children }: { children: React.Reac
   const showResourceAnnounce = noBlockingModal && !showCoverageReview
     && !showTimetablePrompt && !onboardedTodayIst;
 
-  // Declared AFTER the announcement, and excluding it, because both claim the
-  // same once-a-day slot. Without this the winner is whichever effect happens
-  // to run first, which is JSX order — a real priority decided by a detail
-  // nobody would think to preserve while editing the tree. The announcement
-  // wins for the one day it exists; the buddy nudge is there every day.
+  // ── INCIDENT #92: `X && !X` (16 Sep 2026) ─────────────────────────────────
+  //
+  // This line used to carry `&& !showResourceAnnounce`, to stop the two
+  // auto-modals that share the once-a-day slot from racing. The intent was
+  // right and the expression was a contradiction:
+  //
+  //   showResourceAnnounce = noBlockingModal && !showCoverageReview
+  //                          && !showTimetablePrompt && !onboardedTodayIst
+  //
+  // — which is exactly the set of conditions `showBuddyNudge` itself requires.
+  // So the nudge needed all four to be true AND `!(all four)`. It was
+  // `X && !X`: **false for every student, on every day, forever.** Production
+  // agrees precisely — 124 `buddy_nudge_shown` all-time and zero since
+  // 1 September, the day the announcement shipped (#158).
+  //
+  // Why it could never have worked here: this layout is a SERVER component.
+  // `ResourceAnnounce` is shown once ever per browser and remembers that in
+  // `localStorage` (`cr_resource_announce_v1`). The server cannot read that
+  // flag, so `showResourceAnnounce` is structurally incapable of meaning
+  // "the announcement is actually going to appear" — it means "this student
+  // is eligible for it", which stays true forever. A permanently-true
+  // exclusion silently killed the best-converting surface we have (28 of 124
+  // shown modals reached the CTA, 22.6%, against 0.8% for the evening push)
+  // for fifteen days, while `<ResourceAnnounce />` beside it rendered null.
+  //
+  // The priority the old clause was protecting is now enforced where it is
+  // actually knowable, by the mechanism both components already use:
+  // `ResourceAnnounce` checks its SEEN_KEY and then claims the shared slot
+  // SYNCHRONOUSLY in its mount effect; the buddy nudge claims 1400ms later.
+  // The announcement therefore wins the one day it appears whatever the JSX
+  // order, and on every later day it returns early without claiming and the
+  // nudge gets the slot. That is the outcome the old comment described.
   //
   // Keep `!onboardedTodayIst && !profile?.buddy_id` adjacent and on one line:
   // log-tour.guard.test.ts scans for that exact pair to prove no sales modal
   // stacks onto the sample-insight moment. New clauses go on the line above.
   const showBuddyNudge = noBlockingModal && !showCoverageReview && appInstalled
-    && !showTimetablePrompt && !showResourceAnnounce
+    && !showTimetablePrompt
     && !onboardedTodayIst && !profile?.buddy_id && profile?.is_premium !== true;
 
   return (

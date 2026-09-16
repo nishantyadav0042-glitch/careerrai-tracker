@@ -108,7 +108,20 @@ describe('the impression is honest', () => {
 describe('scope containment — this gate changes nothing but telemetry', () => {
   it('behaviour, timing, eligibility and routing are untouched', () => {
     const s = read(NUDGE);
-    expect(s, 'the 1400ms settle stands').toContain('1400');
+    // WHY THIS CHANGED (16 Sep 2026, Incident #92). It read
+    // `toContain('1400')`, pinning the settle as part of "this change is
+    // telemetry only" — correct for that change and wrong to keep as a literal.
+    // The nudge was unreachable: the layout gated it on `!showResourceAnnounce`,
+    // a flag built from the nudge's OWN preconditions, so the expression was
+    // `X && !X` — false for every student since 1 September. Removing that
+    // exclusion put both auto-modals back in a real race for one daily slot,
+    // and the nudge's 1400ms would have beaten the announcement's 1800ms,
+    // inverting the stated priority. The delays are now named constants and
+    // the ordering between them IS the priority, asserted in
+    // resource-announce.guard.test.ts. What this case is really about — that
+    // the nudge still settles before it claims — is unchanged.
+    expect(s, 'the settle stands, as a shared named constant').toContain('NUDGE_SETTLE_MS');
+    expect(s, 'and never again as a literal that two files must agree on').not.toMatch(/\}, \d{3,4}\);/);
     expect(s, 'the daily slot claim stands').toContain('claimDailyModal()');
     // The four queue conditions were one `||` expression until 15 Sep, when
     // each gained its own line so it could name itself in telemetry. Same

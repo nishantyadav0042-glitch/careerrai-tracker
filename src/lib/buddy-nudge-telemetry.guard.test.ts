@@ -28,7 +28,10 @@ function gateLadder(): string {
   const s = code(NUDGE);
   const start = s.indexOf('timer = setTimeout(');
   expect(start, 'the settle timeout not found — this guard needs rewiring').toBeGreaterThan(-1);
-  const end = s.indexOf('}, 1400);', start);
+  // Was `'}, 1400);'` until 16 Sep, when the settle became a named constant
+  // shared with the announcement — the two delays ARE the priority between the
+  // two auto-modals (Incident #92), so neither may be a literal any more.
+  const end = s.indexOf('}, NUDGE_SETTLE_MS);', start);
   expect(end, 'the settle timeout has no terminator').toBeGreaterThan(start);
   return s.slice(start, end);
 }

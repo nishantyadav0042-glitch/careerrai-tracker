@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { BookOpen } from 'lucide-react';
-import { claimDailyModal } from '@/lib/daily-modal';
+import { claimDailyModal, ANNOUNCE_SETTLE_MS } from '@/lib/daily-modal';
 import { track } from '@/lib/journey';
 
 // ── One-time announcement: tasks on new topics now carry a lesson link ───────
@@ -35,7 +35,7 @@ export function ResourceAnnounce() {
       if (!claimDailyModal()) return;
       setShow(true);
       track('resource_announce_shown', {});
-    }, 1800);
+    }, ANNOUNCE_SETTLE_MS);
     return () => clearTimeout(t);
   }, []);
 
