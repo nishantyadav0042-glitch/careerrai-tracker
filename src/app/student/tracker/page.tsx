@@ -63,6 +63,12 @@ export default async function DailyTrackerPage() {
   const admin = createAdminClient();
   // eslint-disable-next-line react-hooks/purity -- server component, per-request "now" is correct here
   const twoDaysAgo = new Date(Date.now() - 2 * 86_400_000).toISOString().split('T')[0];
+  // Yesterday in the SAME study-day terms the check-in writes with, computed
+  // before the query wave so the routine read can ride along with it. The
+  // display value below is derived from getLogDateString for the identical
+  // reason — a raw UTC "yesterday" names the wrong day between 03:00 and 05:29
+  // IST, which has already cost this codebase one incident.
+  const yesterdayForPlan = new Date(Date.parse(getLogDateString()) - 86_400_000).toISOString().slice(0, 10);
 
   // Topic-memory's two source reads (full-history completions + topic_coverage)
   // depend only on user.id — not on the profile — so they ride in this one
@@ -77,6 +83,7 @@ export default async function DailyTrackerPage() {
     completionRecords,
     { data: coverageRows },
     { count: plansBuiltCount },
+    { data: yesterdayRoutine },
     { count: remindersSentCount },
     { data: weakestSectionRow },
   ] = await Promise.all([
@@ -126,6 +133,11 @@ export default async function DailyTrackerPage() {
     // the rows, so none of this adds payload to a page already watched on
     // /admin/perf.
     admin.from('daily_routines').select('routine_date', { count: 'exact', head: true }).eq('student_id', user.id),
+    // Yesterday's plan, so the check-in can SHOW what was planned instead of
+    // asking a student to remember it. One row, in the wave that was already
+    // running.
+    admin.from('daily_routines').select('tasks').eq('student_id', user.id)
+      .eq('routine_date', yesterdayForPlan).maybeSingle(),
     admin.from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
     // The one onboarding column getStudentProfile's shared selector does not
     // carry — a single-column read in the same wave rather than widening a
@@ -327,12 +339,30 @@ export default async function DailyTrackerPage() {
   };
 
   // Yesterday backlog — from already-fetched logs.
+  // ONE yesterday. `yesterdayForPlan` above fetched yesterday's routine and
+  // this names the day the check-in WRITES; if the two ever derived the day
+  // separately they could drift by one, and the gate would show a student one
+  // day's plan while logging a different day against it.
   const todayStr = getLogDateString();
   const todayDate = new Date(todayStr + 'T00:00:00.000Z');
-  const yesterdayDate = new Date(todayDate.getTime() - 86_400_000);
-  const yesterdayStr = yesterdayDate.toISOString().split('T')[0];
+  const yesterdayStr = yesterdayForPlan;
+  const yesterdayDate = new Date(yesterdayStr + 'T00:00:00.000Z');
   const hasLoggedYesterday = logs?.some((l) => l.report_date === yesterdayStr) ?? false;
   const yesterdayLabel = yesterdayDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+
+  // What yesterday actually asked for, so the check-in can show it instead of
+  // asking the student to remember. Shape-checked here rather than trusted:
+  // `tasks` is jsonb and an older row can hold anything.
+  const yesterdayPlanned = (Array.isArray((yesterdayRoutine as { tasks?: unknown } | null)?.tasks)
+    ? ((yesterdayRoutine as { tasks: unknown[] }).tasks)
+    : [])
+    .map((t) => t as { id?: unknown; label?: unknown; section?: unknown })
+    .filter((t) => typeof t.id === 'string' && typeof t.label === 'string')
+    .map((t) => ({
+      id: t.id as string,
+      label: t.label as string,
+      section: typeof t.section === 'string' ? t.section : null,
+    }));
 
   // Total study time (all logs) + a 7-day study-hours sparkline for the pace card.
   const hoursByDate = new Map((logs ?? []).map((l) => [l.report_date, Number(l.study_duration) || 0]));
@@ -541,7 +571,12 @@ export default async function DailyTrackerPage() {
   return (
     <div className="bg-stone-50 px-1 pb-4">
       {showCheckIn && (
-        <CheckInGate yesterdayStr={yesterdayStr} yesterdayLabel={yesterdayLabel} variant={checkInVariant} />
+        <CheckInGate
+          yesterdayStr={yesterdayStr}
+          yesterdayLabel={yesterdayLabel}
+          variant={checkInVariant}
+          plannedTasks={yesterdayPlanned}
+        />
       )}
       <div className="mx-auto flex max-w-md flex-col gap-1.5">
         {/* New Mastery plans — gated per section to opted-in test accounts
