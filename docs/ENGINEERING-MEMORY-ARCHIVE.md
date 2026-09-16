@@ -5262,3 +5262,216 @@ looked healthy; `min(surfaced_at)` said 50 every morning. When a surface is
 rebuilt through the day, the number a person actually saw is the first one, not
 the sum — and the first draft of this entry got the claim wrong by reading the
 sum.
+
+---
+
+## Incident #87
+
+**Date:** 2026-09-12 (found while running the nightly counsellor-day watch)
+**Area:** Monitoring — the watches that guard the Sales OS
+**Severity:** P2 (no student or counsellor was harmed; the detector was blind, not the system)
+
+### What happened
+
+The 22:10 IST counsellor-day watch ran and reported nothing, correctly by its
+own rules. The day it looked at was the first genuinely clean one since the
+Incident #74 fix: Anshul dealt **70 cards — exactly `DAY_CEILING`** — with
+rotation at **15, exactly `ROTATION_FLOOR`**, every capped lane inside its
+ceiling, and all 70 cards closed (46 worked, 24 swept as `not_marked`).
+
+Neelam had **no day at all**: zero `sales_opportunity` rows, zero
+`sales_activity` touches, last session 11 Sep 18:04 IST. She did not sign in on
+a Saturday, and the deck is built and recorded on page load, so no login means
+no deck. That is an absence, not a fault.
+
+But the watch could not have told the difference, and that is the incident.
+Three defects, all in the detector:
+
+1. **A rep with zero rows disappeared from the result.** The watch's query was
+   `GROUP BY rep_id` over `sales_opportunity`. A rep with no cards produces no
+   group, so she was not a row with zeroes in it — she was **absent from the
+   output entirely**. Every per-rep condition, including F ("rotation = 0 for a
+   rep"), passed silently for the rep in the worst possible state. Had the deck
+   *failed to build* for someone who showed up and sat waiting, the watch would
+   have said exactly what it said on this benign Saturday: nothing.
+
+2. **The watch's frozen facts were three days stale.** It still asserted
+   "Promises (callback, **retry**, followup) and money are UNTRIMMABLE" — the
+   rule Incident #74 reversed on 9 Sep. So condition A carried no `retry`
+   ceiling and could not detect a broken retry cap, and condition D would have
+   excused a retry-inflated day as "explained by promises". The watch was
+   validating production against a rule production no longer follows — and the
+   specific rule it was blind to was the one it had just been rewritten to
+   catch.
+
+3. **Condition G was unreachable.** "Retry above 60 and rising" cannot fire once
+   `RETRY_CEILING` is 20. A condition that can never be true reads, every night,
+   exactly like a condition that is being checked and found false.
+
+### Root cause
+
+A watch prompt is **code duplicated into prose**, and nothing links the two. The
+9 Sep commit changed `UNTRIMMABLE` and added `RETRY_CEILING`; the watch that
+polices `UNTRIMMABLE` and `RETRY_CEILING` lives outside the repo, so it was not
+in the diff, no test covered it, and no reviewer saw it. It went stale in
+silence and kept reporting confidently.
+
+Defect 1 is the sibling of a lesson already paid for. **Incident #70:** "a
+per-entity alert system is structurally blind to a platform-wide fault — a
+student who cannot log in never becomes a row." Here: *a per-entity health check
+driven by a `GROUP BY` over the event table is blind to the entity with zero
+events.* Same shape, different table, three weeks later. The first lesson was
+recorded and did not generalise, because it was written as a fact about
+`founder-alerts` rather than as a fact about aggregation.
+
+### Fix
+
+The watch now drives its per-rep loop from `profiles WHERE role = 'sales'`
+LEFT JOINed to `sales_opportunity`, never from a `GROUP BY` over the offer
+table, with the reason stated in the prompt so it is not quietly refactored
+back. Its frozen facts were corrected to the post-#74 rules, `retry > 20` was
+added to condition A, and dead condition G was replaced by one that can
+actually fire: **retry pinned at exactly its ceiling for three consecutive
+days**, which is what "the backlog is still growing behind the fuse" looks like
+once a cap hides the raw number.
+
+A new condition H disambiguates the zero-deck case, which is the whole point:
+
+- zero cards **and** evidence they showed up (a touch, or a session updated
+  today) → **P0, report immediately**: they came to work and the system gave
+  them no day;
+- zero cards and no evidence → absence, stay silent — *unless* it is the second
+  consecutive day, then one line with the rep, the run of days, and the size of
+  their untouched book.
+
+### Lessons
+
+**A `GROUP BY` cannot see the entity that produced no rows — and that entity is
+usually the one in trouble.** Zero is a state, not an absence of state. Any
+per-entity health check must be driven from the entity table and outer-joined to
+the events, so the broken entity arrives as a row of zeroes instead of vanishing.
+This is Incident #70's lesson in a second costume; it is stated here as a fact
+about aggregation, not about one alerting module, so that it transfers next time.
+
+**Zero rows is ambiguous and must never be read as health.** "No deck because
+nobody asked for one" and "no deck because the build failed" are the same
+silence. A watch that cannot separate them by evidence — did they show up? — is
+not watching.
+
+**A watch prompt is code, and it goes stale in silence.** Every frozen constant
+in a watch is a copy with no compiler, no test, and no reviewer behind it. When
+a commit changes a threshold or a rule that a watch asserts, updating the watch
+belongs in that commit's Definition of Done. A stale watch is worse than no
+watch: it reports "checked, all clear" against a rule that no longer exists.
+
+**A condition that cannot fire is indistinguishable from a condition that
+passes.** Once `retry > 60` became unreachable, three nights of silence from
+condition G meant nothing at all and looked like three nights of good news.
+When a cap is introduced beneath a threshold, the threshold above it is dead and
+must be rewritten to measure the thing the cap now hides.
+
+---
+
+---
+
+## Incident #88
+
+**Date:** 2026-09-13 (student hit it 11 Sep; reported by a counsellor on the 13th)
+**Area:** Blueprint Builder — the onboarding flow that turns a signup into a student
+**Severity:** P0-shaped, P1 in outcome (one student confirmed hit, recovered himself; the flow is the activation funnel)
+
+### What happened
+
+Aryan Lalwani, on an iPhone, reached the **last screen** of the Blueprint
+Builder — the one that asks him to lock the date he'll finish the CAT syllabus
+— tapped to save, and was shown a red box reading:
+
+> **TypeError: Load failed**
+
+That is WebKit's internal name for a rejected `fetch`. It was rendered
+verbatim into the flow that decides whether somebody ever becomes a student at
+all. He reloaded, the draft in localStorage restored his answers, and he
+finished two minutes later (15:47:42 error → 15:49:05 `log_tour_done`). He is
+onboarded. Nothing was lost.
+
+We only learned of it because a counsellor forwarded a WhatsApp screenshot two
+days later, saying *"the issue keeps coming up again and again."*
+
+### Root cause
+
+Two defects stacked, and the second is the one that matters.
+
+**1. A write that never arrived was treated as a write that was refused.**
+`fetch` RESOLVES on 400/404/500 and only REJECTS on a network fault. Those are
+opposite events. postgrest-js catches the rejection and hands back a
+normal-looking result — `status: 0`, and `error.message` set to
+`` `${err.name}: ${err.message}` `` — so `if (e) throw e` fired on what was
+really a momentary radio drop on Indian mobile data. One dropped packet, and
+the student is told the product broke. No retry existed, though every one of
+these saves sets known columns on one row keyed by id and is therefore
+perfectly idempotent.
+
+**2. A driver's string was rendered as a sentence for a student.**
+`setError(message)` where `message` came straight off the error object. This
+is the SECOND time this exact line has put an engineer's text on a student's
+screen in this exact flow:
+
+| | shown to a student | source |
+|---|---|---|
+| Incident #14 | `permission denied for function is_admin` | Postgres |
+| Incident #88 | `TypeError: Load failed` | WebKit |
+
+Incident #14's fix was to REPORT the error (report-error.ts). That was right
+and it worked — the row is in `client_errors`. But the fix stopped one step
+short: it made sure we see the message, and left the student seeing it too.
+
+`plan-card:tick` had already solved this properly elsewhere in the codebase —
+catch, classify, `reportHandledError`, then a human sentence — and its comment
+records **70 "Load failed" rows since 26 July**. So this is the ordinary
+condition of a phone on Indian mobile data, not an exotic one, and the pattern
+for handling it already existed three files away. Onboarding just never adopted
+it.
+
+### Fix
+
+`src/lib/write-retry.ts` — one rule for "the request never arrived", branching
+on `status === 0` and **never on the message text**, because every engine words
+it differently (Safari "Load failed", Chrome "Failed to fetch", Firefox
+"NetworkError when attempting to fetch resource"). A guard test pins all three.
+
+- `retryOnNetworkFailure` for postgrest writes, `retryFetch` for bare `fetch`.
+  Three bounded attempts, 400ms then 1200ms. A server refusal is **never**
+  retried — a 403 is an answer, and asking again just reprints it slower.
+- All seven `profiles` writes in the Builder now go through one `saveProfile`,
+  plus the coverage grid's `/api/coverage` POST.
+- Neither branch of the catch can render driver text any more. Network →
+  "check your connection"; server → "something went wrong on our side". Both
+  end with **"your answers are saved"**, which is the half that actually stops
+  a student closing the tab, and is true: the localStorage draft is what saved
+  Aryan.
+- `blueprint-save-errors.guard.test.ts` fails if `setError` is ever handed an
+  error's `.message` again, and was verified to fail against the reintroduced
+  bug before being kept.
+
+### Lessons
+
+**"Arrived and was refused" and "never arrived" are different events and must
+never share a code path.** One is a verdict — retrying reprints it. The other
+is weather — retrying usually fixes it. The signal is `status === 0` for
+postgrest and a rejection for bare `fetch`; it is never the message text,
+which is engine-specific and changes under you.
+
+**An error message is UI, and it is written for whoever will read it.** If a
+student can see it, an engineer's words are a bug in the copy, not a debugging
+convenience. Report the real thing and render a human thing — the two are not
+in tension, and Incident #14 got half of this right two months ago.
+
+**A retry is free when the write is idempotent, and every one of these was.**
+Setting known columns on your own row by id costs nothing to repeat. The
+absence of a retry here was not a decision anyone made; it was a question
+nobody asked.
+
+**When a pattern already exists in the codebase, the new code is not the place
+to invent a second one.** `plan-card:tick` had the correct shape AND the
+evidence (70 rows since July) before this happened. The gap was that nothing
+carried the pattern from one surface to the other.
