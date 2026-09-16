@@ -103,21 +103,28 @@ describe('order and channel', () => {
   // of cards — it was short of hours, because promises sort first, get worked
   // first, and the day ends. So FRESH_PIN_PER_DAY never-contacted students sit
   // above the promises, and everything below them keeps the queue's ranking
-  // exactly. Nothing is dropped; the rest shift down by five.
-  it('pins the first few never-contacted students above the promises', () => {
+  // exactly. Nothing is dropped.
+  //
+  // CHANGED 16 Sep 2026 when the block went from five to twenty-five: the
+  // promises keep the top and the pinned block sits straight after them. At
+  // five, pinning above a promise cost a student minutes. At twenty-five it
+  // would cost a rep who works ~28 cards EVERY promise in the day, and one
+  // counsellor is carrying 35 callbacks. Promises are never bumped (2 Sep);
+  // the block still starts near the top, because promises are few.
+  it('puts the promises first, then pins the never-contacted block', () => {
     const day = assembleDay([...c('callback', 2), ...c('checkout_abandoned', 1), ...c('attention', 3), ...c('fresh', 60)]);
     const sections = day.queue.map((x) => x.section);
-    expect(sections.slice(0, FRESH_PIN_PER_DAY).every((s) => s === 'rotation')).toBe(true);
-    expect(day.queue.slice(0, FRESH_PIN_PER_DAY).every((x) => x.dueReason === 'fresh')).toBe(true);
+    expect(sections.slice(0, 2), 'a promise is never bumped').toEqual(['promises', 'promises']);
+    const block = day.queue.slice(2, 2 + FRESH_PIN_PER_DAY);
+    expect(block.every((x) => x.dueReason === 'fresh'), 'the pinned block follows the promises').toBe(true);
   });
 
-  it('keeps the queue ranking for everything below the pinned few', () => {
+  it('keeps the queue ranking for everything below the pinned block', () => {
     const day = assembleDay([...c('callback', 2), ...c('checkout_abandoned', 1), ...c('attention', 3), ...c('fresh', 60)]);
-    const sections = day.queue.map((x) => x.section).slice(FRESH_PIN_PER_DAY);
-    const firstRotation = sections.indexOf('rotation');
-    expect(sections.slice(0, 2)).toEqual(['promises', 'promises']);
-    expect(sections[2]).toBe('money');
-    expect(sections.slice(firstRotation).every((s) => s === 'rotation')).toBe(true);
+    const below = day.queue.map((x) => x.section).slice(2 + FRESH_PIN_PER_DAY);
+    expect(below[0], 'money sorts above attention and rotation').toBe('money');
+    const firstRotation = below.indexOf('rotation');
+    expect(below.slice(firstRotation).every((s) => s === 'rotation')).toBe(true);
   });
 
   it('drops nothing and duplicates nothing when it pins', () => {
@@ -146,14 +153,17 @@ describe('order and channel', () => {
     // The pinned never-contacted cards are CALLS, whatever the rotation cycle
     // would have given them: an introduction that arrives as a template
     // defeats the point of pinning it.
-    const pinned = day.queue.slice(0, FRESH_PIN_PER_DAY);
-    expect(pinned.every((x) => x.dueReason === 'fresh' && x.channel === 'call')).toBe(true);
+    const promiseCount = day.queue.filter((x) => x.section === 'promises').length;
+    const pinned = day.queue.slice(promiseCount, promiseCount + FRESH_PIN_PER_DAY)
+      .filter((x) => x.dueReason === 'fresh');
+    expect(pinned.length, 'the block must exist to be worth asserting').toBeGreaterThan(0);
+    expect(pinned.every((x) => x.channel === 'call')).toBe(true);
     // Below the pin the every-Nth-is-a-call cycle carries on from where the
     // pinned cards left it. They were rotation cards too, so they spent the
     // first FRESH_PIN_PER_DAY positions of the cycle before being lifted out
     // and made calls — the cycle is not restarted, which would quietly turn
     // extra rotation cards into calls the founder never asked for.
-    const rot = by('rotation').slice(FRESH_PIN_PER_DAY);
+    const rot = by('rotation').slice(pinned.length);
     rot.forEach((x, i) => expect(x.channel)
       .toBe((i + FRESH_PIN_PER_DAY) % ROTATION_CALL_EVERY === 0 ? 'call' : 'message'));
   });

@@ -70,9 +70,28 @@ export function pinFreshToFront<T extends { dueReason: DueReason; channel: Chann
   queue: T[], n: number = FRESH_PIN_PER_DAY,
 ): T[] {
   if (n <= 0 || queue.length === 0) return queue;
+  // ── AT TWENTY-FIVE, THE PIN GOES BELOW THE PROMISES (16 Sep 2026) ────────
+  //
+  // At five it sat above them, and that was right: five cards is minutes, and
+  // the note above explains why the cold lane needed the lift.
+  //
+  // Twenty-five is a different object. A rep who works ~28 cards a day would
+  // spend the whole day inside the pinned block and reach no promise at all,
+  // and one of the two counsellors is carrying 35 callback cards. A callback
+  // is a time a STUDENT asked for and we agreed to — the founder's rule since
+  // 2 Sep is that promises are never bumped, and Incident #78 is about people
+  // who are already waiting.
+  //
+  // So promises keep the top, the pinned never-contacted block comes straight
+  // after them, and everything else follows. The founder chose the SIZE of the
+  // block; the Constitution decides where it sits. In practice promises are
+  // few — eight on 16 Sep — so the block still starts near the top of the day,
+  // which is the whole point of pinning it.
+  const promises: T[] = [];
   const pinned: T[] = [];
   const rest: T[] = [];
   for (const c of queue) {
+    if (SECTION_OF[c.dueReason] === 'promises') { promises.push(c); continue; }
     // Only never-contacted. `rotation` is someone we HAVE spoken to before and
     // is a different promise to the student.
     if (c.dueReason === 'fresh' && pinned.length < n) {
@@ -83,7 +102,7 @@ export function pinFreshToFront<T extends { dueReason: DueReason; channel: Chann
     }
     rest.push(c);
   }
-  return [...pinned, ...rest];
+  return [...promises, ...pinned, ...rest];
 }
 
 export const SECTION_OF: Record<DueReason, DaySection> = {

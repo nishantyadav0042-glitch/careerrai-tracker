@@ -1,4 +1,5 @@
 import { canAccessLead, loadStaffDirectory, resolveOwnerToken, type SalesPrincipal } from '@/lib/sales-authz';
+import { dealsUnclaimedTo } from '@/lib/sales-unclaimed-owner';
 import { getRosterMomentum, bandMeta } from '@/lib/momentum';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { scoreConversion, conversionTier } from '@/lib/sales-score';
@@ -515,6 +516,16 @@ async function readLeadOutreach(db: any, ids: string[]): Promise<any[]> {
 export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null): Promise<CallQueue> {
   const db = admin ?? createAdminClient();
   const staff = await loadStaffDirectory(db);
+  // ── ONE STUDENT, ONE DECK (founder, 16 Sep 2026) ─────────────────────────
+  //
+  // The active seats, so an UNCLAIMED student can be dealt to exactly one of
+  // them. `canAccessLead` says yes to every rep for an unclaimed lead — right
+  // for authorization, wrong for dealing — and 86 students landed in both
+  // decks on the same day in early September because of it. A failed read
+  // leaves this empty, which deals unclaimed students to NOBODY: the safer
+  // direction, since an unowned student is already a data-quality exception.
+  const { data: seatRows } = await db.from('sales_rep_config').select('rep_id').eq('active', true);
+  const activeSeatIds = ((seatRows ?? []) as Array<{ rep_id: string }>).map((r) => r.rep_id);
   const now = Date.now();
   const todayIst = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
   const since30 = new Date(now - 30 * 86_400_000).toISOString().slice(0, 10);
@@ -712,6 +723,12 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
       ? ({ kind: 'owned', ownerId } as const)
       : resolveOwnerToken((o?.owner as string | null) ?? null, staff);
     if (!canAccessLead(ownership, viewer ?? null)) continue;
+    // Authorized, but is this student THIS rep's to be dealt today? An owned
+    // lead already answered that; an unclaimed one is split deterministically
+    // across the seats so two decks built a second apart cannot both claim
+    // them. An admin sees everybody's book and is never narrowed.
+    if (ownership.kind === 'unclaimed' && viewer?.role === 'sales'
+      && !dealsUnclaimedTo(r.id, viewer.id, activeSeatIds)) continue;
     totalOpen++;
 
     // ── THE CONTACT CEILING ───────────────────────────────────────────────

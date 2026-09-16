@@ -5400,3 +5400,90 @@ screen; this one cost a counsellor's afternoon. The operator surfaces have been
 audited hard for whether their numbers are TRUE — this is the first that was
 true and still unusable, because it answered a question nobody was asking. She
 had to be the one to report it, which by #20's standard is itself the failure.
+
+---
+
+## Incident #89
+
+**2026-09-16 · Forty-one percent of all calling effort went to the lane that
+converts worst, while 673 students had never been called once ·
+Sales (Trust) (P1)**
+
+**What happened.** Founder: *"what is the possible solution which can help us
+achieve our goal — maximum conversion, zero mixup between reps, maximum
+students outreach."* All three turned out to have one measurable answer.
+
+**Where the calls actually go.** 30 days, 1,057 worked cards:
+
+| lane | worked | connect % | interested per call |
+| --- | --- | --- | --- |
+| checkout_abandoned | 31 | 41.9% | **19.4%** |
+| going_cold | 13 | 53.8% | 15.4% |
+| conversion | 38 | 42.1% | 7.9% |
+| **fresh** | **84** | **38.1%** | **7.1%** |
+| new_never_logged | 136 | 39.7% | 4.4% |
+| callback | 180 | 8.9% | 2.8% |
+| followup | 46 | 26.1% | 2.2% |
+| **retry** | **433** | **11.5%** | **1.4%** |
+| attention | 93 | 17.2% | 1.1% |
+
+**433 of 1,057 worked cards — 41% of every call the business made — went to
+`retry`**, the second-worst lane by yield. A never-contacted student answers
+**3.3× more often** and is **5× more likely to be interested**.
+
+This is not a judgement of either counsellor and must never be read as one
+(SALES-OS §0): the queue hands out those cards. On 16 Sep one rep worked 20 of
+20 retry cards, 7 of 7 followups and 1 of 1 callback — 28 cards, every one a
+re-dial or a promise — and did not touch a single one of the 37 `fresh` or 10
+`restart` cards the day-size fix had just given him.
+
+**The base behind it.** 1,209 students; **673 have never been dealt a single
+card**. In 30 days 2,265 cards were dealt to only **537 distinct students** —
+4.2 cards each — while more than half the base waited.
+
+**The mixup, measured before being fixed.** 108 students were dealt to both
+reps in 30 days; **86 of them on the SAME IST day** (34 on 2 Sep, 39 on 5 Sep).
+**Zero were worked by both**, so no student was called twice and no trust was
+spent — what was spent is slots, each of those students taking a place in two
+seventy-card days. Cause: `canAccessLead` answers TRUE for an unclaimed lead by
+design (the SA-1D shared book), which is right for AUTHORIZATION and wrong for
+DEALING.
+
+**It stopped on 7 Sep by accident, not by fix.** Intake now assigns everyone it
+can, and the 75 students still unowned are almost all unreachable anyway — **72
+of the 75 have no phone**, so they are never dealt and surface as a
+data-quality exception instead. The hole did not close; the thing falling
+through it ran out. That is not a fix, so it was fixed.
+
+**What was done.**
+
+1. **`RETRY_CEILING` 20 → 12** (founder chose the gradual cut over 8). Frees
+   roughly eight slots a rep a day.
+2. **`FRESH_PIN_PER_DAY` 5 → 25** (founder chose aggressive). The five-card
+   test had already passed — on 14 Sep all five pinned cards were worked, 5 of
+   5 — so position was proven to be the cause.
+3. **The pinned block now sits BELOW the promises, not above.** At five,
+   pinning above a promise cost a student minutes. At twenty-five it would cost
+   a rep who works ~28 cards *every promise in the day*, and one counsellor is
+   carrying 35 callbacks. Promises are never bumped (2 Sep) and #78 is about
+   people already waiting. **The founder chose the size; the Constitution
+   decided the order**, and he was told so plainly.
+4. **`lib/sales-unclaimed-owner.ts`** — an unclaimed student is dealt to
+   exactly one seat by a stable FNV-1a hash of their id across the active
+   seats. Every rep's page computes the same answer with no write and no lock,
+   so two decks built a second apart cannot disagree. A failed seat read deals
+   unclaimed students to **nobody**, never to everybody. Authorization is
+   untouched: a rep who opens an unclaimed student may still claim them, which
+   is what the shared book is for.
+
+**What was NOT done, and why.** No conversion tuning. The business has **2**
+conversions in total; any claim to have optimised conversion on n=2 would be a
+fabrication. The honest lever is the 1,057 → 217 step — 474 of the worked cards
+were calls nobody answered — so the work was spent on who gets called, not on
+what is said.
+
+**Lesson.** *Effort follows the queue, not the opportunity, and nobody can see
+the difference from inside a day.* Both counsellors were working hard and
+working the top of their lists; the list was pointed at the worst lane in the
+business. The number that would have shown it — interested-per-call by lane —
+existed in the data all along and had never once been computed.

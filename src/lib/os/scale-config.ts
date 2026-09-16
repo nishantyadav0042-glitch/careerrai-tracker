@@ -132,16 +132,34 @@ export const ROTATION_SILENT_DAYS = 21;
  * the hours that were gone by the time anyone reached it. Promises sort first
  * and are worked first, and a day runs out.
  *
- * FIVE, not fifty. Five of roughly seventy delays no promised callback in any
- * way a student would notice, and it is a test rather than a redesign: if the
- * pinned five are worked next week, position was the cause and we can talk
- * about six; if they are skipped at the top of an empty day, position was
- * never the problem and nothing has been broken finding out.
+ * FIVE was the test, and it passed. On 14 Sep all five pinned cards were
+ * WORKED, 5 of 5. Position was the cause.
+ *
+ * TWENTY-FIVE from 16 Sep 2026 (founder), because the test's other half also
+ * came back. That morning the day-size fix put 37 `fresh` and 10 `restart`
+ * cards in one rep's deck, and by 14:33 he had worked 28 of 77 — **every one
+ * of them a re-dial or a promise, and not one new student.** More cards did
+ * not produce more first conversations; only position does.
+ *
+ * What the size is worth, measured over 30 days and 1,057 worked cards:
+ *
+ *   lane     worked   connect %   interested per call
+ *   fresh       84      38.1%          7.1%
+ *   retry      433      11.5%          1.4%
+ *
+ * A never-contacted student answers 3.3x more often and is 5x more likely to
+ * be interested — and 673 of 1,209 students have never been dealt a single
+ * card. Twenty-five a day clears that backlog in about a month.
+ *
+ * PROMISES STAY ABOVE THE PIN (see pinFreshToFront). At five, pinning above a
+ * promise cost a student minutes; at twenty-five it would cost a rep who works
+ * ~28 cards every promise in the day, and a callback is a time a STUDENT
+ * asked for. The founder chose the SIZE; the Constitution decides the order.
  *
  * This is NOT a quota and may never be reported as one (SALES-OS §0). It
  * changes what the day OFFERS first, never what anyone is measured on.
  */
-export const FRESH_PIN_PER_DAY = 5;
+export const FRESH_PIN_PER_DAY = 25;
 /** After any touch, a student is left alone this long unless a promise, a
  *  money signal or a retention lane brings them back. */
 export const TOUCH_COOLDOWN_DAYS = 7;
@@ -200,8 +218,18 @@ export const CONVERSION_CEILING = 12;
  * unfinishable list makes every number on it a lie — so retries yield and
  * callbacks do not. Nobody is dropped: an unreached retry waits a day, and
  * MAX_CONSECUTIVE_NO_ANSWER still ages a student out for good.
+ *
+ * TWENTY became TWELVE on 16 Sep 2026 (founder, who chose to cut gradually
+ * rather than to eight). Measured over 30 days and 1,057 worked cards, the
+ * retry lane took **433 of them — 41% of all the calling effort in the
+ * business** — and returned the second-worst yield of any lane: 11.5%
+ * connected, 1.4% interested, against `fresh` at 38.1% and 7.1%. On 16 Sep one
+ * rep worked 20 of 20 retry cards before touching a single new student.
+ *
+ * This is not a judgement of anyone: the queue hands out those cards. Twelve
+ * frees roughly eight slots a rep a day for students nobody has ever called.
  */
-export const RETRY_CEILING = 20;
+export const RETRY_CEILING = 12;
 
 // ── Buddy check-in (founder, 10 Aug) ────────────────────────────────────────
 // "Agar mere paas 5 student assigned hain aur unme se kisi ek ne bhi kal log
