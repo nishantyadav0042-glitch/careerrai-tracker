@@ -24,23 +24,37 @@ describe('the band', () => {
   // 319 never-contacted students sat in his book with phone numbers. A band
   // built to its bottom every day is a cap, not a range. Founder: "dono reps
   // ko daily 70 relevant students milne chahiye."
+  // ── 16 Sep 2026: the rotation share is now TWO sections ──────────────────
+  //
+  // These three read `counts.given.rotation` alone and that stopped being the
+  // whole answer tonight. The never-contacted cards lifted to the top of the
+  // counsellor's screen are counted under `intro`, because the pin is a
+  // SECTION now — until tonight it only reordered an array the screen
+  // re-groups, so it had never moved a card in production at all.
+  //
+  // What the band promises is unchanged and is what these assert: how many of
+  // the day's cards came out of the silent book. That total is `intro +
+  // rotation`, and splitting it is exactly the point.
+  const fromTheBook = (day: { counts: { given: Record<string, number> } }) =>
+    day.counts.given.intro + day.counts.given.rotation;
+
   it('signals short of the ceiling: rotation fills the day to the ceiling', () => {
     const day = assembleDay([...c('going_cold', 5), ...c('conversion', 5), ...c('fresh', 100)]);
     expect(day.queue).toHaveLength(DAY_CEILING);
-    expect(day.counts.given.rotation).toBe(DAY_CEILING - 10);
+    expect(fromTheBook(day)).toBe(DAY_CEILING - 10);
   });
 
   it('signals near the ceiling: rotation still gets its floor, up to the ceiling', () => {
     const signals = DAY_CEILING - ROTATION_FLOOR;
     const day = assembleDay([...c('going_cold', signals), ...c('fresh', 100)]);
     expect(day.queue).toHaveLength(DAY_CEILING);
-    expect(day.counts.given.rotation, 'the silent book moves even on a loud day').toBe(ROTATION_FLOOR);
+    expect(fromTheBook(day), 'the silent book moves even on a loud day').toBe(ROTATION_FLOOR);
   });
 
   it('signals above the floor: rotation takes only the room left under the ceiling', () => {
     const day = assembleDay([...c('going_cold', 60), ...c('fresh', 100)]);
     expect(day.queue).toHaveLength(DAY_CEILING);
-    expect(day.counts.given.rotation).toBe(DAY_CEILING - 60);
+    expect(fromTheBook(day)).toBe(DAY_CEILING - 60);
   });
 
   it('signals over the ceiling are trimmed from the bottom — never a promise or a money card', () => {
@@ -103,21 +117,28 @@ describe('order and channel', () => {
   // of cards — it was short of hours, because promises sort first, get worked
   // first, and the day ends. So FRESH_PIN_PER_DAY never-contacted students sit
   // above the promises, and everything below them keeps the queue's ranking
-  // exactly. Nothing is dropped; the rest shift down by five.
-  it('pins the first few never-contacted students above the promises', () => {
+  // exactly. Nothing is dropped.
+  //
+  // CHANGED 16 Sep 2026 when the block went from five to twenty-five: the
+  // promises keep the top and the pinned block sits straight after them. At
+  // five, pinning above a promise cost a student minutes. At twenty-five it
+  // would cost a rep who works ~28 cards EVERY promise in the day, and one
+  // counsellor is carrying 35 callbacks. Promises are never bumped (2 Sep);
+  // the block still starts near the top, because promises are few.
+  it('puts the promises first, then pins the never-contacted block', () => {
     const day = assembleDay([...c('callback', 2), ...c('checkout_abandoned', 1), ...c('attention', 3), ...c('fresh', 60)]);
     const sections = day.queue.map((x) => x.section);
-    expect(sections.slice(0, FRESH_PIN_PER_DAY).every((s) => s === 'rotation')).toBe(true);
-    expect(day.queue.slice(0, FRESH_PIN_PER_DAY).every((x) => x.dueReason === 'fresh')).toBe(true);
+    expect(sections.slice(0, 2), 'a promise is never bumped').toEqual(['promises', 'promises']);
+    const block = day.queue.slice(2, 2 + FRESH_PIN_PER_DAY);
+    expect(block.every((x) => x.dueReason === 'fresh'), 'the pinned block follows the promises').toBe(true);
   });
 
-  it('keeps the queue ranking for everything below the pinned few', () => {
+  it('keeps the queue ranking for everything below the pinned block', () => {
     const day = assembleDay([...c('callback', 2), ...c('checkout_abandoned', 1), ...c('attention', 3), ...c('fresh', 60)]);
-    const sections = day.queue.map((x) => x.section).slice(FRESH_PIN_PER_DAY);
-    const firstRotation = sections.indexOf('rotation');
-    expect(sections.slice(0, 2)).toEqual(['promises', 'promises']);
-    expect(sections[2]).toBe('money');
-    expect(sections.slice(firstRotation).every((s) => s === 'rotation')).toBe(true);
+    const below = day.queue.map((x) => x.section).slice(2 + FRESH_PIN_PER_DAY);
+    expect(below[0], 'money sorts above attention and rotation').toBe('money');
+    const firstRotation = below.indexOf('rotation');
+    expect(below.slice(firstRotation).every((s) => s === 'rotation')).toBe(true);
   });
 
   it('drops nothing and duplicates nothing when it pins', () => {
@@ -146,14 +167,17 @@ describe('order and channel', () => {
     // The pinned never-contacted cards are CALLS, whatever the rotation cycle
     // would have given them: an introduction that arrives as a template
     // defeats the point of pinning it.
-    const pinned = day.queue.slice(0, FRESH_PIN_PER_DAY);
-    expect(pinned.every((x) => x.dueReason === 'fresh' && x.channel === 'call')).toBe(true);
+    const promiseCount = day.queue.filter((x) => x.section === 'promises').length;
+    const pinned = day.queue.slice(promiseCount, promiseCount + FRESH_PIN_PER_DAY)
+      .filter((x) => x.dueReason === 'fresh');
+    expect(pinned.length, 'the block must exist to be worth asserting').toBeGreaterThan(0);
+    expect(pinned.every((x) => x.channel === 'call')).toBe(true);
     // Below the pin the every-Nth-is-a-call cycle carries on from where the
     // pinned cards left it. They were rotation cards too, so they spent the
     // first FRESH_PIN_PER_DAY positions of the cycle before being lifted out
     // and made calls — the cycle is not restarted, which would quietly turn
     // extra rotation cards into calls the founder never asked for.
-    const rot = by('rotation').slice(FRESH_PIN_PER_DAY);
+    const rot = by('rotation').slice(pinned.length);
     rot.forEach((x, i) => expect(x.channel)
       .toBe((i + FRESH_PIN_PER_DAY) % ROTATION_CALL_EVERY === 0 ? 'call' : 'message'));
   });
@@ -430,14 +454,22 @@ describe('a card the ledger cannot name still occupies the day', () => {
 // promise the STUDENT extracted from us. A retry is our own policy.
 describe('retries yield, callbacks do not', () => {
   it('caps the re-dial pile and holds the rest for tomorrow', () => {
+    // `promises` until 16 Sep 2026, when retry got its own `redial` section.
+    // The ceiling is unchanged; what changed is that a re-dial stopped being
+    // FILED as a promise, having been measured at 1.4% interested across 435
+    // worked cards — 41% of everything either counsellor completed in a month.
     const day = assembleDay([...c('retry', 83), ...c('rotation', 200)]);
-    expect(day.counts.given.promises).toBe(RETRY_CEILING);
+    expect(day.counts.given.redial).toBe(RETRY_CEILING);
+    expect(day.counts.given.promises, 'a re-dial is not a promise').toBe(0);
   });
 
   it('does not cap the callbacks sitting in the same section', () => {
-    // THE TRAP. callback, retry and followup all live in the `promises`
-    // section. A ceiling counted per SECTION would silently bump callbacks —
-    // promises a student asked for — the moment retries filled the lane.
+    // THE TRAP, and it is still live for callback and followup, which DO share
+    // the `promises` section. A ceiling counted per SECTION would silently bump
+    // callbacks — promises a student asked for — the moment retries filled the
+    // lane. Retry now sits in `redial`, so it could no longer bump a callback
+    // even if the ceiling were counted per section; this still guards that the
+    // ceiling is counted per LANE, which is what makes that true.
     const day = assembleDay([...c('retry', 40), ...c('callback', 30), ...c('followup', 12)]);
     const byLane = (l: DueReason) => day.queue.filter((x) => x.dueReason === l).length;
     expect(byLane('retry')).toBe(RETRY_CEILING);

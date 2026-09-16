@@ -10,6 +10,7 @@
  * starts promising the practice layer we deliberately have not built.
  */
 import { describe, it, expect } from 'vitest';
+import { ANNOUNCE_SETTLE_MS, NUDGE_SETTLE_MS } from './daily-modal';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { TOPIC_RESOURCES } from './topic-resources';
@@ -65,13 +66,60 @@ describe('the announcement cannot nag', () => {
     expect(code(ANNOUNCE)).toContain('claimDailyModal()');
   });
 
-  it('outranks the buddy nudge, which shares the same once-a-day slot', () => {
-    // Both call claimDailyModal(). Before this was explicit the winner was
-    // whichever effect ran first — JSX order — so a reorder of the tree would
-    // have silently swapped a real priority.
+  it('outranks the buddy nudge by CLAIMING FIRST, never by excluding it', () => {
+    // ── WHY THIS ASSERTION INVERTED (16 Sep 2026, Incident #92) ───────────
+    //
+    // It used to require `showBuddyNudge ... !showResourceAnnounce` in the
+    // layout, to stop the two auto-modals racing for the shared daily slot.
+    // The intent was right; the expression was `X && !X`. Every condition in
+    // `showResourceAnnounce` is also a condition of `showBuddyNudge`, so the
+    // nudge needed all of them true AND their negation. It was false for
+    // every student on every day: 124 `buddy_nudge_shown` all-time, zero from
+    // 1 September — the day the announcement shipped.
+    //
+    // It could never have worked, because the layout is a SERVER component
+    // and "has this browser already seen the announcement?" lives in
+    // localStorage. `showResourceAnnounce` can only ever mean "eligible",
+    // which never stops being true.
+    //
+    // The priority is real and is enforced where it is knowable: the
+    // announcement checks its SEEN_KEY and claims the slot synchronously on
+    // mount, while the nudge claims on a 1400ms timer. So the announcement
+    // wins the day it appears whatever the JSX order, and once seen it returns
+    // before claiming and the nudge gets the slot.
+    const layout = code(LAYOUT);
+    expect(layout, 'a server-side flag may never gate the nudge on a localStorage fact')
+      .not.toMatch(/showBuddyNudge[\s\S]{0,300}!showResourceAnnounce/);
+
+    // The mechanism that actually arbitrates, pinned at both ends.
+    const announce = code(ANNOUNCE);
+    expect(announce.indexOf('SEEN_KEY'), 'the seen check comes before the claim')
+      .toBeLessThan(announce.indexOf('claimDailyModal()'));
+    expect(ANNOUNCE_SETTLE_MS, 'the announcement must reach the slot first')
+      .toBeLessThan(NUDGE_SETTLE_MS);
+    expect(announce, 'the announcement settles on the shared constant').toContain('ANNOUNCE_SETTLE_MS');
+    expect(code('src/components/daily-buddy-nudge.tsx'), 'and so does the nudge')
+      .toContain('NUDGE_SETTLE_MS');
+  });
+
+  it('the nudge is reachable: no condition of the nudge is also a condition that excludes it', () => {
+    // The generic form of Incident #92. `showBuddyNudge` must not be gated on
+    // the negation of any flag built from its own preconditions — that is a
+    // contradiction, and a contradiction here is a silent, permanent outage of
+    // the highest-converting surface in the product.
     const s = code(LAYOUT);
-    expect(s).toMatch(/showBuddyNudge[\s\S]{0,240}!showResourceAnnounce/);
-    expect(s.indexOf('const showResourceAnnounce')).toBeLessThan(s.indexOf('const showBuddyNudge'));
+    const line = s.slice(s.indexOf('const showBuddyNudge'));
+    const expr = line.slice(0, line.indexOf(';'));
+    for (const flag of ['showResourceAnnounce', 'showTimetablePrompt', 'showCoverageReview']) {
+      const decl = s.slice(s.indexOf(`const ${flag}`), s.indexOf(`const ${flag}`) + 400);
+      const body = decl.slice(0, decl.indexOf(';'));
+      // If the flag is built out of `noBlockingModal`, it is true whenever the
+      // nudge's own preconditions hold, so excluding it excludes the nudge.
+      if (body.includes('noBlockingModal') && !body.includes('profile?.')) {
+        expect(expr, `${flag} is implied by the nudge's own conditions — excluding it is X && !X`)
+          .not.toContain(`!${flag}`);
+      }
+    }
   });
 
   it('never fires over a blocking flow or on a student who onboarded today', () => {

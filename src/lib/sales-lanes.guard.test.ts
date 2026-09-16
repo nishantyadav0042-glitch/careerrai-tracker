@@ -169,12 +169,38 @@ describe('lane discipline', () => {
 describe('queue-level wiring (source-pinned)', () => {
   const SRC = readFileSync('src/lib/call-queue.ts', 'utf8');
 
-  it('promises still outrank every retention lane: callback > retry > followup > lanes', () => {
-    // The sort bands: due tiers 5–7M, retention 3–4M, conversion 1M, fresh <1M.
-    expect(SRC).toMatch(/7_000_000 \+ minutesOverdue/);
-    expect(SRC).toMatch(/6_000_000 \+ minutesOverdue/);
-    expect(SRC).toMatch(/5_000_000 \+ minutesOverdue/);
+  it('a promise outranks every lane — and a re-dial is not a promise', () => {
+    // WHY THIS ASSERTION CHANGED (16 Sep 2026). It read
+    // `callback > retry > followup > lanes` and pinned retry at 6_000_000,
+    // second of every lane in the book. Thirty days at that rank: 558 retry
+    // cards dealt and 435 WORKED — 41% of every card either counsellor
+    // completed — producing 6 students who said interested, 1.4%. Over the
+    // same month 370 never-contacted cards were dealt and 286 were never
+    // reached, in a lane that converts at 7.1%.
+    //
+    // A callback is a time a student named and we agreed to. A re-dial is our
+    // own policy for someone who did not pick up — the note under
+    // `const UNTRIMMABLE` has said exactly that since 9 Sep, when retry lost
+    // its promise status for CEILING purposes and kept it for RANK. This
+    // finishes that change.
+    expect(SRC).toMatch(/7_000_000 \+ minutesOverdue/);  // callback — a promise
+    expect(SRC).toMatch(/5_000_000 \+ minutesOverdue/);  // followup — a promise
     expect(SRC).toMatch(/going_cold: 4_000_000/);
+
+    // The re-dial band, and the two neighbours that define it: below a student
+    // nobody has ever logged a call against, above cold conversion intent.
+    expect(SRC, 'a re-dial no longer ranks second in the book').not.toMatch(/6_000_000 \+ minutesOverdue/);
+    expect(SRC).toMatch(/2_000_000 \+ minutesOverdue/);
+    expect(SRC).toMatch(/new_never_logged: 3_000_000/);
+    expect(SRC).toMatch(/conversion: 1_000_000/);
+
+    // And the section: a re-dial is filed under `redial`, never `promises`.
+    // This is the one that reaches the counsellor, because call-deck.tsx
+    // groups the day by SECTION and renders the groups in SECTION_ORDER.
+    const day = readFileSync('src/lib/sales-day.ts', 'utf8');
+    const map = day.slice(day.indexOf('export const SECTION_OF'), day.indexOf('export const SECTION_OF') + 900);
+    expect(map).toMatch(/retry:\s*'redial'/);
+    expect(map, 'callback and followup keep the promises section').toMatch(/callback: 'promises', followup: 'promises'/);
   });
 
   it('the never-logged flood is capped so one lane cannot eat the whole day', () => {

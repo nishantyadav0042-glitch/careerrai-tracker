@@ -5,7 +5,7 @@ import { SESSION_PRICING } from '@/lib/plans';
 import Link from 'next/link';
 import { X } from 'lucide-react';
 import { UnlockBuddyButton } from '@/components/unlock-buddy-sheet';
-import { claimDailyModal } from '@/lib/daily-modal';
+import { claimDailyModal, NUDGE_SETTLE_MS } from '@/lib/daily-modal';
 import { track } from '@/lib/journey';
 import { TOUR_DONE_EVENT, NOTIF_ASK_SETTLED_EVENT, INSIGHT_DONE_EVENT, tourDone, notifAskVisible, insightVisible, logModalOpen } from '@/lib/first-run-events';
 
@@ -81,8 +81,12 @@ export function DailyBuddyNudge({ fullName }: { fullName?: string }) {
     const attempt = () => {
       if (shown) return;
       if (timer) clearTimeout(timer);
-      // 1.4s settle: lets the notif ask evaluate and the first-log prompt
-      // (700ms after tour) claim the screen first if it's going to.
+      // Settle first: lets the notif ask evaluate and the first-log prompt
+      // (700ms after tour) claim the screen if they're going to — and, since
+      // 16 Sep, lets the one-time concept-resource announcement claim the
+      // shared daily slot ahead of this on the single day it appears.
+      // NUDGE_SETTLE_MS > ANNOUNCE_SETTLE_MS is the whole of that priority;
+      // see the note in lib/daily-modal.ts (Incident #92).
       timer = setTimeout(() => {
         if (shown) return;
         // Unchanged order, unchanged verdicts — each one now says its name.
@@ -118,7 +122,7 @@ export function DailyBuddyNudge({ fullName }: { fullName?: string }) {
             blocked(claim?.reason === 'claim_failed' ? 'claim_failed' : 'already_pitched_today');
           })
           .catch(() => { blocked('claim_unreachable'); /* fail closed: no proof, no pitch */ });
-      }, 1400);
+      }, NUDGE_SETTLE_MS);
     };
     attempt();
     window.addEventListener(TOUR_DONE_EVENT, attempt);

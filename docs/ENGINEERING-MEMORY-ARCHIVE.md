@@ -5405,6 +5405,398 @@ had to be the one to report it, which by #20's standard is itself the failure.
 
 ## Incident #89
 
+**2026-09-16 · Forty-one percent of all calling effort went to the lane that
+converts worst, while 673 students had never been called once ·
+Sales (Trust) (P1)**
+
+**What happened.** Founder: *"what is the possible solution which can help us
+achieve our goal — maximum conversion, zero mixup between reps, maximum
+students outreach."* All three turned out to have one measurable answer.
+
+**Where the calls actually go.** 30 days, 1,057 worked cards:
+
+| lane | worked | connect % | interested per call |
+| --- | --- | --- | --- |
+| checkout_abandoned | 31 | 41.9% | **19.4%** |
+| going_cold | 13 | 53.8% | 15.4% |
+| conversion | 38 | 42.1% | 7.9% |
+| **fresh** | **84** | **38.1%** | **7.1%** |
+| new_never_logged | 136 | 39.7% | 4.4% |
+| callback | 180 | 8.9% | 2.8% |
+| followup | 46 | 26.1% | 2.2% |
+| **retry** | **433** | **11.5%** | **1.4%** |
+| attention | 93 | 17.2% | 1.1% |
+
+**433 of 1,057 worked cards — 41% of every call the business made — went to
+`retry`**, the second-worst lane by yield. A never-contacted student answers
+**3.3× more often** and is **5× more likely to be interested**.
+
+This is not a judgement of either counsellor and must never be read as one
+(SALES-OS §0): the queue hands out those cards. On 16 Sep one rep worked 20 of
+20 retry cards, 7 of 7 followups and 1 of 1 callback — 28 cards, every one a
+re-dial or a promise — and did not touch a single one of the 37 `fresh` or 10
+`restart` cards the day-size fix had just given him.
+
+**The base behind it.** 1,209 students; **673 have never been dealt a single
+card**. In 30 days 2,265 cards were dealt to only **537 distinct students** —
+4.2 cards each — while more than half the base waited.
+
+**The mixup, measured before being fixed.** 108 students were dealt to both
+reps in 30 days; **86 of them on the SAME IST day** (34 on 2 Sep, 39 on 5 Sep).
+**Zero were worked by both**, so no student was called twice and no trust was
+spent — what was spent is slots, each of those students taking a place in two
+seventy-card days. Cause: `canAccessLead` answers TRUE for an unclaimed lead by
+design (the SA-1D shared book), which is right for AUTHORIZATION and wrong for
+DEALING.
+
+**It stopped on 7 Sep by accident, not by fix.** Intake now assigns everyone it
+can, and the 75 students still unowned are almost all unreachable anyway — **72
+of the 75 have no phone**, so they are never dealt and surface as a
+data-quality exception instead. The hole did not close; the thing falling
+through it ran out. That is not a fix, so it was fixed.
+
+**What was done.**
+
+1. **`RETRY_CEILING` 20 → 12** (founder chose the gradual cut over 8). Frees
+   roughly eight slots a rep a day.
+2. **`FRESH_PIN_PER_DAY` 5 → 25** (founder chose aggressive). The five-card
+   test had already passed — on 14 Sep all five pinned cards were worked, 5 of
+   5 — so position was proven to be the cause.
+3. **The pinned block now sits BELOW the promises, not above.** At five,
+   pinning above a promise cost a student minutes. At twenty-five it would cost
+   a rep who works ~28 cards *every promise in the day*, and one counsellor is
+   carrying 35 callbacks. Promises are never bumped (2 Sep) and #78 is about
+   people already waiting. **The founder chose the size; the Constitution
+   decided the order**, and he was told so plainly.
+4. **`lib/sales-unclaimed-owner.ts`** — an unclaimed student is dealt to
+   exactly one seat by a stable FNV-1a hash of their id across the active
+   seats. Every rep's page computes the same answer with no write and no lock,
+   so two decks built a second apart cannot disagree. A failed seat read deals
+   unclaimed students to **nobody**, never to everybody. Authorization is
+   untouched: a rep who opens an unclaimed student may still claim them, which
+   is what the shared book is for.
+
+**What was NOT done, and why.** No conversion tuning. The business has **2**
+conversions in total; any claim to have optimised conversion on n=2 would be a
+fabrication. The honest lever is the 1,057 → 217 step — 474 of the worked cards
+were calls nobody answered — so the work was spent on who gets called, not on
+what is said.
+
+**Lesson.** *Effort follows the queue, not the opportunity, and nobody can see
+the difference from inside a day.* Both counsellors were working hard and
+working the top of their lists; the list was pointed at the worst lane in the
+business. The number that would have shown it — interested-per-call by lane —
+existed in the data all along and had never once been computed.
+
+---
+
+## Incident #90
+
+**2026-09-16 · A counsellor's absence stranded 583 students for three days,
+and nothing in the system could see it · Sales (Trust) (P1)**
+
+**What happened.** Founder: *"can you automate this assignment overall, that
+too smart auto assignment on a daily basis?"* Assignment was already
+automated — `lead-intake.ts` has run daily since 2 Sep, 14 runs in 14 days,
+0 students outside a book. So the question became: what is assignment
+actually failing to do?
+
+**First, the thing assignment cannot fix, said plainly.**
+
+| | Anshul | Neelam |
+| --- | --- | --- |
+| Book | 554 | 583 |
+| Distinct students worked in 14 days | 218 | 185 |
+| **One full pass through the book** | **~36 days** | **~44 days** |
+
+A student waits five to six weeks between touches. Two part-time seats, six
+hours, six days, reach about 200 distinct students a fortnight against a book
+of 1,137. **No assignment algorithm changes that arithmetic — it only changes
+who waits.** That was said to the founder before any option was offered.
+
+**Then the two things assignment WAS failing to do.**
+
+**1. Absence stranded a whole book.** Neelam was away 12, 13 and 14 September.
+Her **583 students got nothing for three days**, and Anshul could not have
+reached them: an owned lead is invisible to every other seat.
+`sales_rep_config.unavailable_until` existed and worked — for INTAKE, stopping
+new students entering an absent seat. It did nothing about the book already
+there, which is the half that matters. And no leave was ever recorded for those
+three days, so a config flag alone would have caught none of them.
+
+**2. The split levelled the wrong number.** Intake apportioned new students in
+proportion to each seat's remaining daily allowance, which with two identical
+seats is a 50/50 alternation. That keeps BOOK SIZES level — 554 and 583, five
+percent apart — while the number that sets a student's wait drifted: **319 and
+389 never contacted, twenty-two percent apart**.
+
+**What was done.**
+
+`lib/sales-absence-cover.ts` decides who is absent today on two rules, and the
+second is the one that catches a real day: **declared** (`unavailable_until`
+covers today) and **observed** (the shift is 2.5 hours old and not one card has
+been marked). Neelam's three days were all of the second kind.
+
+Cover grants **access for the rest of that day** and nothing else. No ownership
+moves, nothing is written, and it expires at midnight because it is recomputed
+on every page load. The founder was explicit: *"ownership nahi badalti — sirf
+us din ka access."* A book is a relationship; cutting it while somebody is ill
+is how you lose the person as well as the students. A guard test forbids the
+module containing `update`, `insert`, `upsert`, `delete` or `owner_id` at all.
+
+An absent book goes to **exactly one** covering seat, chosen the same
+deterministic way an unclaimed student is (#89) — otherwise "zero mixup between
+reps" is undone on precisely the days nobody is watching. A scheduled day off is
+never an absence; an unknown shift start is never guessed into one.
+
+`canAccessLead` gained `coveringRepIds`, **absent by default**: a caller that
+supplies nothing gets exactly the behaviour it had before cover existed, which
+is what keeps this a widening of one path rather than of the whole gate.
+
+And `planIntake` now levels **backlog per unit of allowance** rather than
+headcount. Both intents survive: a seat configured for three times the daily
+intake still takes three times the pool (2A §5 step 6), and between seats of
+equal capacity the one with fewer students still waiting for a first word goes
+first. With equal backlogs AND equal allowances it is the old alternation
+exactly, and a caller that cannot compute a backlog gets that old behaviour
+rather than a guess.
+
+**What was NOT built, and why.** Routing by fit — "send this kind of student to
+the rep who converts that kind" — is impossible to do honestly: the business
+has **2** conversions in total. Any model built on that is a guess wearing a
+model's clothes (L1).
+
+**Lesson.** *A system that assigns responsibility must also notice when
+responsibility is not being exercised.* Every ownership rule here was correct —
+exclusive, audited, never overwritten — and the correctness is what stranded
+583 students, because exclusivity with no liveness check means an absent owner
+holds a book nobody else may touch. The gap was not in the assignment; it was
+in the absence of a question about the assignee.
+
+---
+
+## Incident #91 — the pin that never reached the screen (16 Sep 2026)
+
+**Severity:** P1 (Sales / Growth). **Impact:** every never-contacted student the
+pin was meant to lift, for thirty days; and 41% of two counsellors' calling
+hours spent in the worst-converting lane in the book.
+
+### What was believed
+
+On 15 Sep the deck was changed so the day "opens with never-contacted students
+at the top" — five of them, lifted above the promises, with a comment
+explaining that the cold lane "was never short of cards, it was short of hours."
+On 16 Sep the founder chose to widen that block from five to twenty-five, and
+the code was changed again, this time moving the block *below* the promises so
+a rep working ~28 cards would still reach a promised callback.
+
+Both changes were correct on their own terms. Both were tested. Neither moved a
+single card on a counsellor's screen, on any day, for either rep.
+
+### What was actually happening
+
+`pinFreshToFront` returned `[...promises, ...pinned, ...rest]` — an ordering of
+the queue **array**. `call-deck.tsx` does not render the array. It builds
+`bySection` and renders `SECTION_ORDER.filter(...)`, group by group. A pinned
+card's `dueReason` was still `fresh`, and `SECTION_OF.fresh === 'rotation'`, so
+it was placed in the **Rotation** group and rendered last — precisely where it
+would have rendered with no pin at all.
+
+Production, the thirty days the pin was live: **370 `fresh` cards dealt, 84
+worked — 23%.** On 16 Sep: **43 dealt, 0 worked.** Meanwhile `retry`, which
+rendered second, ran at **78% worked**.
+
+The defect was invisible to every test because every test asserted on
+`day.queue` — the array — which was ordered exactly as intended.
+
+### The two inversions the same read exposed
+
+Once it was clear that `SECTION_ORDER` *is* the priority a counsellor works —
+not the `sort` weights in `call-queue.ts`, which only order cards **within** a
+section — the order itself had to be read as a priority statement. It said two
+things nobody had chosen.
+
+**`retry` was filed under `promises`.** The note under `const UNTRIMMABLE` has
+said since 9 Sep (#74) that a re-dial is our own policy and not a commitment a
+student extracted from us; that reading removed retry's protection from the
+*ceiling* and left its *rank* and its *section* untouched. So it rendered second
+in the entire deck, above money, above every retention lane, above the pin.
+
+Thirty days, by lane, worked cards → students who said interested:
+
+| lane | dealt | worked | interested | rate |
+|---|---|---|---|---|
+| checkout_abandoned | 74 | 31 | 6 | **19.4%** |
+| going_cold | 57 | 13 | 2 | **15.4%** |
+| conversion | 273 | 38 | 3 | 7.9% |
+| fresh | 370 | 84 | 6 | 7.1% |
+| new_never_logged | 346 | 136 | 6 | 4.4% |
+| callback | 271 | 185 | 5 | 2.7% |
+| followup | 54 | 46 | 1 | 2.2% |
+| **retry** | **558** | **435** | **6** | **1.4%** |
+| attention | 299 | 93 | 1 | 1.1% |
+
+**435 of 1,064 worked cards — 41% of every card either counsellor completed in a
+month — went to the lane that converts worst**, while 286 never-contacted cards
+at 7.1% were dealt and never reached.
+
+**`retention` rendered sixth of seven, below `attention`.** That section carries
+`restart`, the multi-day loggers the founder named FIRST priority on 15 Sep. On
+16 Sep both books were dealt **21 restart cards between them and worked zero**.
+
+### The fix
+
+- **Pinning is a section.** `pinnedIntroIds()` decides which never-contacted
+  cards are lifted, off the queue's own order; the decision is applied where the
+  counts are computed, so a card's section, its count and its channel are one
+  decision (the `admin-filters` doctrine). The section is `intro` — "First
+  conversation" — placed second, directly under the promises.
+- **`retry` moved to its own `redial` section** and from sort band `6_000_000`
+  to `2_000_000`: under `new_never_logged`, over `conversion`. `RETRY_CEILING`
+  is unchanged and no student is dropped — a re-dial is still dealt and still
+  carries its full no-answer count. It simply no longer outranks every
+  conversation that has never happened.
+- **`SECTION_ORDER` re-laid** to the founder's stated priority and the measured
+  yield: `promises, intro, money, retention, buddy, new, attention, redial,
+  rotation`.
+- **The stored queue is written in render order** (`orderForScreen`), so
+  `sales_opportunity.rank` finally means what every prior analysis assumed it
+  meant. Re-grouping is stable — "filter, never re-sort" is intact; the queue's
+  own sort still decides who is first within a section.
+- `sales-deck-order.guard.test.ts` binds the two layers: it asserts that the
+  screen groups by section, that the stored queue never runs backwards through
+  `SECTION_ORDER`, that **every** section reachable from `SECTION_OF` has a
+  place in the order and a label (a card mapped to an unlisted section would
+  vanish from the screen while still counting in the day), and that the counts
+  match the cards section by section.
+
+### What was NOT changed, and why
+
+The relative order of `money > buddy > new` was already the measured order
+(19.4% > 7.9% > 4.4%) and was left alone. `attention` stays above `redial`
+despite near-identical rates (1.1% vs 1.4%) because the founder named
+daily-openers-who-cannot-log as an explicit priority on 15 Sep and the rates are
+inside each other's noise.
+
+### Lesson
+
+*A change to ordering is only real at the layer that renders it.* Three separate
+changes to the pin were written, reviewed, tested and shipped against an array
+the product re-groups before showing anyone. The tests were not weak — they
+asserted exactly what the function promised. Nothing in the repo connected the
+function's promise to the screen's behaviour, so the promise could be kept and
+the behaviour never change. This is 0C.3 (PRODUCER → WRITE → CONSUMER →
+SURFACE → REAL DATA) applied to ordering: the surface, not the producer, is
+where an ordering claim has to be proven.
+
+The second lesson is narrower and older: **a rule half-applied is a rule that
+will invert.** Retry stopped being a promise for ceiling purposes on 9 Sep and
+stayed one for rank and section purposes for a week, which is how the lane the
+repo had explicitly demoted came to own 41% of the day.
+
+---
+
+## Incident #92 — `X && !X`: the buddy nudge was unreachable (16 Sep 2026)
+
+**Severity:** P1 (Student / Growth). **Impact:** the highest-converting surface
+in the product, dead for fifteen days, for every buddy-less non-premium student
+— roughly 157 who were eligible and active in the last week.
+
+### What the instrumentation was for, and what it actually found
+
+On 15 Sep the daily buddy nudge was instrumented rather than guessed at:
+production showed **124 `buddy_nudge_shown` all-time and zero since 1 Sep**, six
+different bail-outs shared one symptom, and nothing stored could say which gate
+was closing. The founder's instruction was explicit — *"pehle mujhe instrument
+karke exact wajah dikhao"* — so a `NudgeGate` union was added and every bail-out
+made to name itself, with `buddy_nudge_mounted` fired before any gate could run.
+
+Thirty-six hours later the answer arrived, and it was not one of the six:
+
+- `buddy_nudge_mounted` — **0 rows**
+- `buddy_nudge_blocked` — **0 rows**
+- `push_ask_mounted` over the same window — 16 rows, with `push_ask_later` 32,
+  `push_ask_skipped` 8, `push_ask_shown` 6. The telemetry pipe was healthy.
+- Eligible and active in 7 days (`app_installed`, no `buddy_id`, not premium,
+  seen in the last week): **157 students.**
+
+The mount event fires before every gate. Zero mounts means the component was
+never rendered at all, and the six gates were never the question.
+
+### The defect
+
+```ts
+const showResourceAnnounce = noBlockingModal && !showCoverageReview
+  && !showTimetablePrompt && !onboardedTodayIst;
+
+const showBuddyNudge = noBlockingModal && !showCoverageReview && appInstalled
+  && !showTimetablePrompt && !showResourceAnnounce
+  && !onboardedTodayIst && !profile?.buddy_id && profile?.is_premium !== true;
+```
+
+Every condition of `showResourceAnnounce` is also a condition of
+`showBuddyNudge`. Let `A = noBlockingModal && !showCoverageReview &&
+!showTimetablePrompt && !onboardedTodayIst`. Then `showResourceAnnounce === A`
+and `showBuddyNudge === A && !A && …` — **false for every student, on every
+day**. `git log -S` dates the clause to `a32dc385`, 1 September, #158, which is
+the exact day the surface went silent.
+
+It could not have worked even in principle. `src/app/student/layout.tsx` is a
+**server component**. `ResourceAnnounce` shows once ever per browser and
+remembers that in `localStorage` (`cr_resource_announce_v1`). The server cannot
+read that key, so `showResourceAnnounce` can only ever mean *"this student is
+eligible for the announcement"* — which stays true forever. A permanently-true
+exclusion, written to prevent a race, silently removed the surface: 28 of 124
+shown modals reached the CTA (**22.6%**) against 28 of 3,458 evening pushes
+(0.8%).
+
+Beside it, `<ResourceAnnounce />` was rendering `null` the whole time, because
+its own `SEEN_KEY` had long since been set.
+
+### The fix, and the wrong first version of it
+
+The exclusion is removed. The priority it was protecting — *"the announcement
+wins the one day it exists; the buddy nudge is there every day"* — now lives in
+`lib/daily-modal.ts`, beside the slot both components claim:
+
+```ts
+export const ANNOUNCE_SETTLE_MS = 1800;
+export const NUDGE_SETTLE_MS = 2200;
+```
+
+The announcement checks its `SEEN_KEY`, and on the single day it appears claims
+the shared slot first. On every later day it returns *before* claiming, and the
+nudge takes the slot 400ms afterwards.
+
+**The first version of this fix was wrong, and a guard caught it.** The
+reasoning written into it was that the announcement claimed synchronously on
+mount while the nudge claimed on a timer, so removing the exclusion was safe.
+The assertion failed. Reading the component instead of assuming: the
+announcement claims at **1800ms** and the nudge claimed at **1400ms**, so
+deleting the exclusion alone would have handed the nudge the slot 400ms early
+and inverted the stated priority — replacing a permanent outage of one surface
+with a permanent outage of the other. That is why the delays are now named,
+shared, and ordered by a test rather than by two literals in two files.
+
+### Lesson
+
+*A gate built from a condition's own preconditions is not a gate, it is a
+contradiction* — and the surface it guards goes dark in a way that no
+in-component instrumentation can see, because nothing in the component ever
+runs. The 15 Sep telemetry was still the right thing to ship: it is the only
+reason the mount count could be compared against 157 eligible students and the
+question moved up a layer. What it teaches is where to put the first probe.
+**Instrument the mount before instrumenting the gates**, or a healthy-looking
+gate ladder will be measured on a component nobody renders.
+
+The second lesson repeats #91 from the same day, in the other direction: a rule
+expressed at a layer that cannot know the fact it depends on will be wrong
+forever and look deliberate. #91 put an ordering in an array the screen
+re-groups; #92 put a localStorage fact in a server component. Both were written
+carefully, reviewed, and tested. Neither could ever have been true.
+
+## Incident #93
+
 **Date:** 2026-09-12 (found while running the nightly counsellor-day watch)
 **Area:** Monitoring — the watches that guard the Sales OS
 **Severity:** P2 (no student or counsellor was harmed; the detector was blind, not the system)
@@ -5514,7 +5906,7 @@ must be rewritten to measure the thing the cap now hides.
 
 ---
 
-## Incident #90
+## Incident #94
 
 **Date:** 2026-09-13 (student hit it 11 Sep; reported by a counsellor on the 13th)
 **Area:** Blueprint Builder — the onboarding flow that turns a signup into a student
@@ -5559,7 +5951,7 @@ screen in this exact flow:
 | | shown to a student | source |
 |---|---|---|
 | Incident #14 | `permission denied for function is_admin` | Postgres |
-| Incident #90 | `TypeError: Load failed` | WebKit |
+| Incident #94 | `TypeError: Load failed` | WebKit |
 
 Incident #14's fix was to REPORT the error (report-error.ts). That was right
 and it worked — the row is in `client_errors`. But the fix stopped one step

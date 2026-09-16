@@ -49,6 +49,20 @@ export interface SalesPrincipal {
   /** profiles.id — the ONLY identity key. */
   id: string;
   role: 'sales' | 'admin';
+  /**
+   * Absent seats whose book this principal is COVERING today (16 Sep 2026).
+   *
+   * Neelam was away 12-14 September and her 583 students got nothing, because
+   * an owned lead is invisible to every other seat. Cover grants access for
+   * the rest of that day; it moves no ownership and writes nothing, and it
+   * expires at midnight because it is computed fresh on every page load
+   * (lib/sales-absence-cover).
+   *
+   * Absent by default and everywhere: a caller that does not supply it gets
+   * exactly the behaviour it had before cover existed, which is what keeps
+   * this a widening of one path rather than of the whole gate.
+   */
+  coveringRepIds?: readonly string[];
 }
 
 /**
@@ -193,7 +207,10 @@ export function canAccessLead(
     case 'unclaimed':
       return true; // SA-1D shared book — see the note above.
     case 'owned':
-      return resolution.ownerId === principal.id;
+      if (resolution.ownerId === principal.id) return true;
+      // Covering an absent colleague's book, for today only. Never a default:
+      // the list is empty unless the caller computed an absence.
+      return (principal.coveringRepIds ?? []).includes(resolution.ownerId);
     case 'unresolvable':
     case 'unavailable':
       return false; // fail closed
