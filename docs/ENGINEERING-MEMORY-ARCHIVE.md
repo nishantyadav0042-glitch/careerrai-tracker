@@ -5572,3 +5572,124 @@ exclusive, audited, never overwritten — and the correctness is what stranded
 583 students, because exclusivity with no liveness check means an absent owner
 holds a book nobody else may touch. The gap was not in the assignment; it was
 in the absence of a question about the assignee.
+
+---
+
+## Incident #91 — the pin that never reached the screen (16 Sep 2026)
+
+**Severity:** P1 (Sales / Growth). **Impact:** every never-contacted student the
+pin was meant to lift, for thirty days; and 41% of two counsellors' calling
+hours spent in the worst-converting lane in the book.
+
+### What was believed
+
+On 15 Sep the deck was changed so the day "opens with never-contacted students
+at the top" — five of them, lifted above the promises, with a comment
+explaining that the cold lane "was never short of cards, it was short of hours."
+On 16 Sep the founder chose to widen that block from five to twenty-five, and
+the code was changed again, this time moving the block *below* the promises so
+a rep working ~28 cards would still reach a promised callback.
+
+Both changes were correct on their own terms. Both were tested. Neither moved a
+single card on a counsellor's screen, on any day, for either rep.
+
+### What was actually happening
+
+`pinFreshToFront` returned `[...promises, ...pinned, ...rest]` — an ordering of
+the queue **array**. `call-deck.tsx` does not render the array. It builds
+`bySection` and renders `SECTION_ORDER.filter(...)`, group by group. A pinned
+card's `dueReason` was still `fresh`, and `SECTION_OF.fresh === 'rotation'`, so
+it was placed in the **Rotation** group and rendered last — precisely where it
+would have rendered with no pin at all.
+
+Production, the thirty days the pin was live: **370 `fresh` cards dealt, 84
+worked — 23%.** On 16 Sep: **43 dealt, 0 worked.** Meanwhile `retry`, which
+rendered second, ran at **78% worked**.
+
+The defect was invisible to every test because every test asserted on
+`day.queue` — the array — which was ordered exactly as intended.
+
+### The two inversions the same read exposed
+
+Once it was clear that `SECTION_ORDER` *is* the priority a counsellor works —
+not the `sort` weights in `call-queue.ts`, which only order cards **within** a
+section — the order itself had to be read as a priority statement. It said two
+things nobody had chosen.
+
+**`retry` was filed under `promises`.** The note under `const UNTRIMMABLE` has
+said since 9 Sep (#74) that a re-dial is our own policy and not a commitment a
+student extracted from us; that reading removed retry's protection from the
+*ceiling* and left its *rank* and its *section* untouched. So it rendered second
+in the entire deck, above money, above every retention lane, above the pin.
+
+Thirty days, by lane, worked cards → students who said interested:
+
+| lane | dealt | worked | interested | rate |
+|---|---|---|---|---|
+| checkout_abandoned | 74 | 31 | 6 | **19.4%** |
+| going_cold | 57 | 13 | 2 | **15.4%** |
+| conversion | 273 | 38 | 3 | 7.9% |
+| fresh | 370 | 84 | 6 | 7.1% |
+| new_never_logged | 346 | 136 | 6 | 4.4% |
+| callback | 271 | 185 | 5 | 2.7% |
+| followup | 54 | 46 | 1 | 2.2% |
+| **retry** | **558** | **435** | **6** | **1.4%** |
+| attention | 299 | 93 | 1 | 1.1% |
+
+**435 of 1,064 worked cards — 41% of every card either counsellor completed in a
+month — went to the lane that converts worst**, while 286 never-contacted cards
+at 7.1% were dealt and never reached.
+
+**`retention` rendered sixth of seven, below `attention`.** That section carries
+`restart`, the multi-day loggers the founder named FIRST priority on 15 Sep. On
+16 Sep both books were dealt **21 restart cards between them and worked zero**.
+
+### The fix
+
+- **Pinning is a section.** `pinnedIntroIds()` decides which never-contacted
+  cards are lifted, off the queue's own order; the decision is applied where the
+  counts are computed, so a card's section, its count and its channel are one
+  decision (the `admin-filters` doctrine). The section is `intro` — "First
+  conversation" — placed second, directly under the promises.
+- **`retry` moved to its own `redial` section** and from sort band `6_000_000`
+  to `2_000_000`: under `new_never_logged`, over `conversion`. `RETRY_CEILING`
+  is unchanged and no student is dropped — a re-dial is still dealt and still
+  carries its full no-answer count. It simply no longer outranks every
+  conversation that has never happened.
+- **`SECTION_ORDER` re-laid** to the founder's stated priority and the measured
+  yield: `promises, intro, money, retention, buddy, new, attention, redial,
+  rotation`.
+- **The stored queue is written in render order** (`orderForScreen`), so
+  `sales_opportunity.rank` finally means what every prior analysis assumed it
+  meant. Re-grouping is stable — "filter, never re-sort" is intact; the queue's
+  own sort still decides who is first within a section.
+- `sales-deck-order.guard.test.ts` binds the two layers: it asserts that the
+  screen groups by section, that the stored queue never runs backwards through
+  `SECTION_ORDER`, that **every** section reachable from `SECTION_OF` has a
+  place in the order and a label (a card mapped to an unlisted section would
+  vanish from the screen while still counting in the day), and that the counts
+  match the cards section by section.
+
+### What was NOT changed, and why
+
+The relative order of `money > buddy > new` was already the measured order
+(19.4% > 7.9% > 4.4%) and was left alone. `attention` stays above `redial`
+despite near-identical rates (1.1% vs 1.4%) because the founder named
+daily-openers-who-cannot-log as an explicit priority on 15 Sep and the rates are
+inside each other's noise.
+
+### Lesson
+
+*A change to ordering is only real at the layer that renders it.* Three separate
+changes to the pin were written, reviewed, tested and shipped against an array
+the product re-groups before showing anyone. The tests were not weak — they
+asserted exactly what the function promised. Nothing in the repo connected the
+function's promise to the screen's behaviour, so the promise could be kept and
+the behaviour never change. This is 0C.3 (PRODUCER → WRITE → CONSUMER →
+SURFACE → REAL DATA) applied to ordering: the surface, not the producer, is
+where an ordering claim has to be proven.
+
+The second lesson is narrower and older: **a rule half-applied is a rule that
+will invert.** Retry stopped being a promise for ceiling purposes on 9 Sep and
+stayed one for rank and section purposes for a week, which is how the lane the
+repo had explicitly demoted came to own 41% of the day.

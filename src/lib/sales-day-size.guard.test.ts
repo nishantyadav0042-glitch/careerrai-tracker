@@ -53,8 +53,12 @@ describe('the day is built to the ceiling when the book can supply it', () => {
       ...c('callback', 1), ...c('retry', 30), ...c('attention', 2), ...c('fresh', 319),
     ]);
     expect(day.queue.length, 'this was 50 before 15 Sep 2026').toBe(DAY_CEILING);
-    expect(day.counts.given.rotation, 'the never-contacted share was 27 that morning')
-      .toBe(DAY_CEILING - signals);
+    // `intro + rotation`: since 16 Sep the never-contacted cards lifted to the
+    // top of the screen are counted under `intro`. The share of the day that
+    // came out of the silent book is what this case is about, and that is the
+    // sum — the split is which of them the counsellor sees first.
+    expect(day.counts.given.intro + day.counts.given.rotation,
+      'the never-contacted share was 27 that morning').toBe(DAY_CEILING - signals);
   });
 
   it('a quiet day is a full day of rotation, not a half day', () => {
@@ -64,7 +68,7 @@ describe('the day is built to the ceiling when the book can supply it', () => {
 
   it('the silent book still gets its floor on a loud day', () => {
     const day = assembleDay([...c('going_cold', DAY_CEILING - ROTATION_FLOOR), ...c('fresh', 100)]);
-    expect(day.counts.given.rotation).toBe(ROTATION_FLOOR);
+    expect(day.counts.given.intro + day.counts.given.rotation).toBe(ROTATION_FLOOR);
     expect(day.queue.length).toBe(DAY_CEILING);
   });
 

@@ -24,23 +24,37 @@ describe('the band', () => {
   // 319 never-contacted students sat in his book with phone numbers. A band
   // built to its bottom every day is a cap, not a range. Founder: "dono reps
   // ko daily 70 relevant students milne chahiye."
+  // ── 16 Sep 2026: the rotation share is now TWO sections ──────────────────
+  //
+  // These three read `counts.given.rotation` alone and that stopped being the
+  // whole answer tonight. The never-contacted cards lifted to the top of the
+  // counsellor's screen are counted under `intro`, because the pin is a
+  // SECTION now — until tonight it only reordered an array the screen
+  // re-groups, so it had never moved a card in production at all.
+  //
+  // What the band promises is unchanged and is what these assert: how many of
+  // the day's cards came out of the silent book. That total is `intro +
+  // rotation`, and splitting it is exactly the point.
+  const fromTheBook = (day: { counts: { given: Record<string, number> } }) =>
+    day.counts.given.intro + day.counts.given.rotation;
+
   it('signals short of the ceiling: rotation fills the day to the ceiling', () => {
     const day = assembleDay([...c('going_cold', 5), ...c('conversion', 5), ...c('fresh', 100)]);
     expect(day.queue).toHaveLength(DAY_CEILING);
-    expect(day.counts.given.rotation).toBe(DAY_CEILING - 10);
+    expect(fromTheBook(day)).toBe(DAY_CEILING - 10);
   });
 
   it('signals near the ceiling: rotation still gets its floor, up to the ceiling', () => {
     const signals = DAY_CEILING - ROTATION_FLOOR;
     const day = assembleDay([...c('going_cold', signals), ...c('fresh', 100)]);
     expect(day.queue).toHaveLength(DAY_CEILING);
-    expect(day.counts.given.rotation, 'the silent book moves even on a loud day').toBe(ROTATION_FLOOR);
+    expect(fromTheBook(day), 'the silent book moves even on a loud day').toBe(ROTATION_FLOOR);
   });
 
   it('signals above the floor: rotation takes only the room left under the ceiling', () => {
     const day = assembleDay([...c('going_cold', 60), ...c('fresh', 100)]);
     expect(day.queue).toHaveLength(DAY_CEILING);
-    expect(day.counts.given.rotation).toBe(DAY_CEILING - 60);
+    expect(fromTheBook(day)).toBe(DAY_CEILING - 60);
   });
 
   it('signals over the ceiling are trimmed from the bottom — never a promise or a money card', () => {
@@ -440,14 +454,22 @@ describe('a card the ledger cannot name still occupies the day', () => {
 // promise the STUDENT extracted from us. A retry is our own policy.
 describe('retries yield, callbacks do not', () => {
   it('caps the re-dial pile and holds the rest for tomorrow', () => {
+    // `promises` until 16 Sep 2026, when retry got its own `redial` section.
+    // The ceiling is unchanged; what changed is that a re-dial stopped being
+    // FILED as a promise, having been measured at 1.4% interested across 435
+    // worked cards — 41% of everything either counsellor completed in a month.
     const day = assembleDay([...c('retry', 83), ...c('rotation', 200)]);
-    expect(day.counts.given.promises).toBe(RETRY_CEILING);
+    expect(day.counts.given.redial).toBe(RETRY_CEILING);
+    expect(day.counts.given.promises, 'a re-dial is not a promise').toBe(0);
   });
 
   it('does not cap the callbacks sitting in the same section', () => {
-    // THE TRAP. callback, retry and followup all live in the `promises`
-    // section. A ceiling counted per SECTION would silently bump callbacks —
-    // promises a student asked for — the moment retries filled the lane.
+    // THE TRAP, and it is still live for callback and followup, which DO share
+    // the `promises` section. A ceiling counted per SECTION would silently bump
+    // callbacks — promises a student asked for — the moment retries filled the
+    // lane. Retry now sits in `redial`, so it could no longer bump a callback
+    // even if the ceiling were counted per section; this still guards that the
+    // ceiling is counted per LANE, which is what makes that true.
     const day = assembleDay([...c('retry', 40), ...c('callback', 30), ...c('followup', 12)]);
     const byLane = (l: DueReason) => day.queue.filter((x) => x.dueReason === l).length;
     expect(byLane('retry')).toBe(RETRY_CEILING);

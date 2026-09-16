@@ -108,7 +108,10 @@ describe('escalating changes NOTHING about who is dealt', () => {
     expect(block, 'a stale promise must not be skipped').not.toMatch(/\bcontinue;/);
 
     const day = readFileSync(join(__dirname, '..', 'sales-day.ts'), 'utf8');
-    const untrimmable = day.slice(day.indexOf('UNTRIMMABLE'), day.indexOf('UNTRIMMABLE') + 400);
+    // Anchored on the DECLARATION, not the first mention: prose above it
+    // refers to the set by name, and a guard that reads a comment instead of
+    // the code it guards proves nothing.
+    const untrimmable = day.slice(day.indexOf('const UNTRIMMABLE'), day.indexOf('const UNTRIMMABLE') + 400);
     expect(untrimmable, 'callback stays untrimmable').toContain('callback');
     const ceilings = day.slice(day.indexOf('CEILING'), day.indexOf('CEILING') + 500);
     expect(ceilings, 'a callback ceiling is exactly what the founder refused').not.toMatch(/callback:\s*\w/);
