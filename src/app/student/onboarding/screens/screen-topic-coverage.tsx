@@ -5,6 +5,8 @@ import { cn } from '@/lib/utils';
 import { KNOWLEDGE_GRAPH, ONBOARDING_CORE_GRAPH, type CoverageSectionId, type KnowledgeSection } from '@/lib/topics-constants';
 import { Rai, RAI_LEVELS } from '@/components/mascots';
 import type { CoverageStatus } from '@/lib/coverage-status';
+import { retryFetch, NETWORK_WRITE_MESSAGE } from '@/lib/write-retry';
+import { reportHandledError } from '@/lib/report-error';
 
 // ── The companion trail ──────────────────────────────────────────────────────
 // Founder vision (drawn on a screenshot): as the student taps topics, a line
@@ -329,11 +331,16 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch('/api/coverage', {
+      // Retried because it never arriving is the common case on a phone, and
+      // this POST is idempotent — it replaces this student's whole matrix, so
+      // running it twice lands the same rows. A 4xx/5xx is NOT retried: fetch
+      // resolving means the server answered. (13 Sep 2026 — same failure that
+      // printed "TypeError: Load failed" on the finish-date screen.)
+      const res = await retryFetch(() => fetch('/api/coverage', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ matrix }),
-      });
+      }));
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
         throw new Error((json as { error?: string })?.error ?? 'Could not save your preparation map.');
@@ -346,7 +353,15 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
         ...examCounts,
       });
     } catch (err) {
-      setError((err as { message?: string })?.message ?? 'Could not save your preparation map.');
+      // Two different failures, two different sentences. A rejected fetch is
+      // the phone's radio and never reached us; anything thrown above is the
+      // API's own curated message. What a student must NEVER read is the
+      // engine's internal name — "TypeError: Load failed" is not a sentence.
+      const neverArrived = err instanceof TypeError;
+      reportHandledError(err, { where: 'onboarding:coverage-save', detail: stepIdx });
+      setError(neverArrived
+        ? NETWORK_WRITE_MESSAGE
+        : ((err as { message?: string })?.message ?? 'Could not save your preparation map.'));
     } finally {
       setSaving(false);
     }
