@@ -5267,6 +5267,144 @@ sum.
 
 ## Incident #87
 
+**2026-09-16 · The tile showed a number that was 42% unwritten beside one that
+was finished, and the founder read a collapse · Analytics (P1)**
+
+**What happened.** Founder, 09:36 IST: *"why these daily logs decreased so
+significantly suddenly? What's the exact reasoning?"* The Command Center read
+**LOGGED YESTERDAY 12** against a remembered **30**.
+
+Nothing had decreased.
+
+**The mechanism.** Students fill in the previous day's log during the NEXT day.
+Measured across thirteen days, only **22% of that backfill arrives before
+10:00 IST** — 78% comes later, peaking between 19:00 and 21:00. Split by when
+the row was written rather than which day it is about:
+
+| report_date | written that day | filled in next day | final |
+| --- | --- | --- | --- |
+| 10 Sep | 7 | +11 | 19 |
+| 11 Sep | 9 | +12 | 21 |
+| 12 Sep | 8 | +14 | 23 |
+| 13 Sep | 9 | +14 | 23 |
+| 14 Sep | 11 | +18 | **30** |
+| **15 Sep** | **9** | **+3 (at 09:36)** | **12** ← read here |
+
+**The same-day component of 15 Sep was NINE**, which is the most ordinary
+number in that column (7-11 all week). What was missing had not been written
+yet. Measured at the moment of the question, a day this age is typically
+**58% complete**, so 12 implied a final near 21 — in line with 19, 21, 23, 23.
+
+**And the rise it was compared against was not a rise.** Over 31 settled days
+the count has mean **22.1**, SD **5.9**, range **9-32**. 19, 21, 23 and 23 all
+sit within half a standard deviation of the mean; 30 is +1.3. There is nothing
+in "19 → 30" to explain, and inventing a cause for it would have been the
+precise-lie failure of L1.
+
+**What was ruled out, with evidence, before concluding.** Traffic: 46 students
+opened the app on 15 Sep, the highest of the week — the students came and did
+not log, so it was never a reach problem. Counsellor calls: logs from students
+called within 48h ran 4-12 every day with no relationship to the total.
+Signups: the 7-day-fresh cohort did drain from 407 to 11, but that is a
+two-week slope, not a one-day step. Code: `main` did not change between 9 Sep
+and 19:14 UTC on 15 Sep.
+
+**What was done.** `lib/os/log-maturity.ts`. `SETTLE_DAYS = 2` (measured: every
+report_date's count at age 2 already equals its final; age 1 does not). The
+two still-filling tiles now carry their own maturity — *"still filling — about
+58% in by now"* — and the row is followed by the last SETTLED day with its
+count and what a normal settled day is. The share is measured from this table's
+own history, never typed into the page, and a window too thin to measure it
+prints *"still filling"* rather than a guessed percentage.
+
+**The note sits ON the tile, not in the caption below the row**, because the
+eye compares two figures before it ever reaches a caption — which is exactly
+how 12 beside 30 read as a collapse, on a screen that already carried an
+honest caption about what a log is.
+
+**What was deliberately NOT done.** The tiles were not re-pointed at a settled
+day. `ActivityState` derives from days-since-log across the app, so the count
+and the People list it drills into would have stopped agreeing — the one
+invariant `admin-filters` exists to hold.
+
+**Lesson.** *A number that keeps growing after its period ends has an age, and
+a surface that prints it without its age will mislead every single morning.*
+Third of this family in two days: #86 was a deck read at its first build
+versus its daily total, its own correction was a daily total hiding a morning
+defect, and this is a daily total read before the day had finished being
+written. The common shape is not a wrong number — it is a right number read at
+the wrong moment, and the fix is always to make the moment visible.
+
+---
+
+## Incident #88
+
+**2026-09-16 · A counsellor capped herself at 40 because the deck counted a
+message as a call · Sales (Trust) (P1)**
+
+**What happened.** Neelam, on WhatsApp at 09:49 IST, in her own words:
+
+> *"Aapne kl bola tha 40 se jada mt Krna is liye nhi kiye mene because mai msg
+> krti hu to vhi total no. Count hote h ese me to mai confused ho re hu ki
+> kitni call ki h kitni nhi"*
+>
+> *"Agar vha pr not pick walo pr ya switch off pr filter lga skti to or ache se
+> hota"*
+
+She stopped short of her day's work because she could not read her own tally.
+Two separate defects in one message, and she found both.
+
+**Defect 1 — the tally counted every marked card as one thing.** `CallDeck`
+held a single `done` counter incremented on every successful disposition, so a
+WhatsApp message, a skip and a connected call all moved the same number. A
+counsellor working to a call figure had no way to tell what she had actually
+done, and the cost was not a wrong dashboard — it was **a real person deciding
+to stop working**.
+
+**Defect 2 — seventy cards arrive as one list.** The deck groups by section
+(promises / money / new / attention / rotation), which is the right primary
+cut, but there was no way to slice ACROSS it. To find the students who had not
+picked up she had to read all seventy, every time. On today's deck that is 18
+cards hiding inside 70.
+
+**What was done.** `lib/sales-deck-filter.ts`, pure and unit-tested.
+
+The tally splits into **called · messaged · skipped**. Two decisions carry the
+weight: an **unanswered dial counts as a CALL** — she picked up the phone and
+rang, and counting only connected calls would tell a counsellor her hardest
+hours did not happen — and a **skip counts as neither**, because a skip writes
+no lead state and starts no clock (`lib/sales-disposition`), so folding it into
+either would let a day of skipping read as a day of calling.
+
+Five filter chips that cut across the sections rather than repeating them:
+All · To call · To message · Didn't pick up · Never called. Counted from
+`no_answer_count` rather than the `retry` lane, deliberately: a lane is
+assigned by the queue and expires, while an unanswered dial is a fact about the
+student that survives tomorrow's deal. Chip counts come from the whole day, not
+the filtered view — a chip that shrank because another chip was active would be
+the same lie as a ceiling that refills when a card is worked (#72). Filtering
+hides cards from the VIEW and never from the day: "N still to mark" stays the
+whole deck, so finishing a filter can never read as finishing the day.
+
+**What was deliberately NOT built.** No target, no goal, no progress bar toward
+40. **SALES-OS §0** — a P5 number may never appear as a performance judgement,
+a target, a quota, or an input to pay. "At least 40 daily" is the founder's
+instruction to a person; putting 40 on her screen would make the product
+enforce it, which is a different thing from letting her see her own work. She
+asked to SEE, so she is shown counts and nothing else, and a guard test fails
+the build if a target, goal, quota or percentage ever reaches that header.
+
+**Lesson.** *A number a worker cannot decompose is a number that will stop
+them.* Every earlier entry in this family cost a wrong belief on a founder's
+screen; this one cost a counsellor's afternoon. The operator surfaces have been
+audited hard for whether their numbers are TRUE — this is the first that was
+true and still unusable, because it answered a question nobody was asking. She
+had to be the one to report it, which by #20's standard is itself the failure.
+
+---
+
+## Incident #89
+
 **Date:** 2026-09-12 (found while running the nightly counsellor-day watch)
 **Area:** Monitoring — the watches that guard the Sales OS
 **Severity:** P2 (no student or counsellor was harmed; the detector was blind, not the system)
@@ -5374,7 +5512,9 @@ must be rewritten to measure the thing the cap now hides.
 
 ---
 
-## Incident #88
+---
+
+## Incident #90
 
 **Date:** 2026-09-13 (student hit it 11 Sep; reported by a counsellor on the 13th)
 **Area:** Blueprint Builder — the onboarding flow that turns a signup into a student
@@ -5419,7 +5559,7 @@ screen in this exact flow:
 | | shown to a student | source |
 |---|---|---|
 | Incident #14 | `permission denied for function is_admin` | Postgres |
-| Incident #88 | `TypeError: Load failed` | WebKit |
+| Incident #90 | `TypeError: Load failed` | WebKit |
 
 Incident #14's fix was to REPORT the error (report-error.ts). That was right
 and it worked — the row is in `client_errors`. But the fix stopped one step

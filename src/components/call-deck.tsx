@@ -8,6 +8,8 @@ import type { CallLead } from '@/lib/call-queue';
 import type { Remark, RemarkHistory } from '@/lib/sales-remarks';
 import { NO_ANSWER_CONTRADICTION_CODE } from '@/lib/no-answer-contradiction';
 import { SECTION_ORDER, SECTION_LABEL, type DaySection } from '@/lib/sales-day';
+import { DECK_FILTERS, DECK_FILTER_LABEL, matchesDeckFilter, deckFilterCounts,
+  addToTally, tallyLine, EMPTY_TALLY, type DeckFilter } from '@/lib/sales-deck-filter';
 import { messageFor, JOURNEY_LABEL } from '@/lib/sales-messages';
 
 const TIER: Record<string, string> = { hot: 'bg-rose-50 text-rose-700', warm: 'bg-amber-50 text-amber-800', cool: 'bg-stone-100 text-stone-500' };
@@ -49,7 +51,17 @@ function defaultCallback(): string {
 
 export function CallDeck({ queue, repFirstName }: { queue: CallLead[]; repFirstName: string }) {
   const [list, setList] = useState(queue);
-  const [done, setDone] = useState(0);
+  // ── SHE HAS TO BE ABLE TO SEE HER OWN DAY (Neelam, 16 Sep 2026) ──────────
+  //
+  // "mai msg krti hu to vhi total no. count hote h ese me to mai confused ho
+  // re hu ki kitni call ki h kitni nhi" — one counter for calls, messages and
+  // skips alike, so a counsellor working to a call figure could not tell what
+  // she had actually done. And "agar vha pr not pick walo pr filter lga skti
+  // to or ache se hota" — seventy cards arriving as one list.
+  //
+  // Both hers to ask for and ours to have got wrong. lib/sales-deck-filter.
+  const [tally, setTally] = useState(EMPTY_TALLY);
+  const [filter, setFilter] = useState<DeckFilter>('all');
   const [openId, setOpenId] = useState<string | null>(null);
   // Which card has the 'what did you message?' box open, and its draft.
   // Founder order, 3 Sep: a sent message must carry the rep's own words -
@@ -122,7 +134,7 @@ export function CallDeck({ queue, repFirstName }: { queue: CallLead[]; repFirstN
       });
       const json = await res.json().catch(() => null);
       if (res.ok && json?.ok === true) {
-        setDone((d) => d + 1);
+        setTally((t) => addToTally(t, outcome));
         setList((l) => l.filter((x) => x.studentId !== lead.studentId));
         setOpenId(null);
         setInFlight((f) => ({ ...f, [lead.studentId]: false }));
@@ -155,7 +167,7 @@ export function CallDeck({ queue, repFirstName }: { queue: CallLead[]; repFirstN
     return (
       <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-8 text-center">
         <p className="text-lg font-bold text-emerald-800">Queue cleared for now 👏</p>
-        <p className="mt-1 text-sm text-emerald-700">Every card marked — {done} this session. New leads and callbacks roll in through the day; tomorrow&rsquo;s list is dealt at 4 AM.</p>
+        <p className="mt-1 text-sm text-emerald-700">Every card marked — {tallyLine(tally)} this session. New leads and callbacks roll in through the day; tomorrow&rsquo;s list is dealt at 4 AM.</p>
       </div>
     );
   }
@@ -163,8 +175,14 @@ export function CallDeck({ queue, repFirstName }: { queue: CallLead[]; repFirstN
   // THE DAY IN SECTIONS (founder, 2 Sep): promises, money, buddy interest,
   // new arrivals, attention, slipping, rotation — in that order, each with its
   // count, so the mix is visible and a counsellor never works only one kind.
+  // Counts come from the WHOLE day, not from what the current filter left on
+  // screen — a chip that shrank because another chip is active would be the
+  // same lie as a ceiling that refills when a card is worked (Incident #72).
+  const counts = deckFilterCounts(list);
+  const shown = list.filter((l) => matchesDeckFilter(l, filter));
+
   const bySection = new Map<DaySection, CallLead[]>();
-  for (const lead of list) {
+  for (const lead of shown) {
     const key = (lead.section ?? 'rotation') as DaySection;
     if (!bySection.has(key)) bySection.set(key, []);
     bySection.get(key)!.push(lead);
@@ -304,8 +322,40 @@ export function CallDeck({ queue, repFirstName }: { queue: CallLead[]; repFirstN
           read "N in your queue", which says nothing about whether the day was
           finished. This one names the job that is left. */}
       <p className="px-1 text-center text-xs font-semibold text-stone-500">
-        {done} marked · <span className="text-stone-800">{list.length} still to mark</span>
+        {tallyLine(tally)} · <span className="text-stone-800">{list.length} still to mark</span>
       </p>
+
+      {/* The filter cuts ACROSS the sections below, which is the whole point:
+          the day is already grouped by promises / new / attention / rotation,
+          so a chip that re-cut the same way would be decoration. A chip with
+          nothing behind it is hidden rather than shown greyed — an empty chip
+          is a question a counsellor has to answer mid-dial. */}
+      <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5">
+        {DECK_FILTERS.filter((f) => f === 'all' || counts[f] > 0).map((f) => (
+          <button
+            key={f}
+            type="button"
+            onClick={() => setFilter(f)}
+            aria-pressed={filter === f}
+            className={`shrink-0 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
+              filter === f
+                ? 'border-stone-900 bg-stone-900 text-white'
+                : 'border-stone-200 bg-white text-stone-600 hover:border-stone-400'}`}
+          >
+            {DECK_FILTER_LABEL[f]} <span className={filter === f ? 'text-stone-300' : 'text-stone-400'}>{counts[f]}</span>
+          </button>
+        ))}
+      </div>
+
+      {shown.length === 0 && (
+        <div className="rounded-2xl border border-stone-200 bg-stone-50 p-6 text-center">
+          <p className="text-sm font-semibold text-stone-700">Nothing in &ldquo;{DECK_FILTER_LABEL[filter]}&rdquo; right now</p>
+          <button type="button" onClick={() => setFilter('all')} className="mt-2 text-[12px] font-bold text-stone-900 underline">
+            Show all {counts.all}
+          </button>
+        </div>
+      )}
+
       {SECTION_ORDER.filter((k) => (bySection.get(k)?.length ?? 0) > 0).map((k) => (
         <section key={k} className="space-y-3">
           <h2 className="flex items-baseline gap-2 px-1 pt-1 text-[11px] font-bold uppercase tracking-widest text-stone-400">
