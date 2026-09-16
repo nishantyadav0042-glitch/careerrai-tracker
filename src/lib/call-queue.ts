@@ -1,5 +1,6 @@
 import { canAccessLead, loadStaffDirectory, resolveOwnerToken, type SalesPrincipal } from '@/lib/sales-authz';
-import { dealsUnclaimedTo } from '@/lib/sales-unclaimed-owner';
+import { dealsUnclaimedTo, unclaimedDealtTo } from '@/lib/sales-unclaimed-owner';
+import { coveringFor, type SeatDay } from '@/lib/sales-absence-cover';
 import { getRosterMomentum, bandMeta } from '@/lib/momentum';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { scoreConversion, conversionTier } from '@/lib/sales-score';
@@ -516,6 +517,14 @@ async function readLeadOutreach(db: any, ids: string[]): Promise<any[]> {
 export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null): Promise<CallQueue> {
   const db = admin ?? createAdminClient();
   const staff = await loadStaffDirectory(db);
+  const now = Date.now();
+  const todayIst = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  const since30 = new Date(now - 30 * 86_400_000).toISOString().slice(0, 10);
+  // The day is dealt from 4 AM IST (founder, 2 Sep): the attention window
+  // looks back ATTENTION_WINDOW_DAYS from the most recent 4 AM, so "opened
+  // yesterday and did not log" means the same thing all day long.
+  const attentionSinceIso = new Date(dayAnchorMs(now) - ATTENTION_WINDOW_DAYS * 86_400_000).toISOString();
+
   // ── ONE STUDENT, ONE DECK (founder, 16 Sep 2026) ─────────────────────────
   //
   // The active seats, so an UNCLAIMED student can be dealt to exactly one of
@@ -524,15 +533,46 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
   // decks on the same day in early September because of it. A failed read
   // leaves this empty, which deals unclaimed students to NOBODY: the safer
   // direction, since an unowned student is already a data-quality exception.
-  const { data: seatRows } = await db.from('sales_rep_config').select('rep_id').eq('active', true);
-  const activeSeatIds = ((seatRows ?? []) as Array<{ rep_id: string }>).map((r) => r.rep_id);
-  const now = Date.now();
-  const todayIst = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-  const since30 = new Date(now - 30 * 86_400_000).toISOString().slice(0, 10);
-  // The day is dealt from 4 AM IST (founder, 2 Sep): the attention window
-  // looks back ATTENTION_WINDOW_DAYS from the most recent 4 AM, so "opened
-  // yesterday and did not log" means the same thing all day long.
-  const attentionSinceIso = new Date(dayAnchorMs(now) - ATTENTION_WINDOW_DAYS * 86_400_000).toISOString();
+  const { data: seatRows } = await db.from('sales_rep_config')
+    .select('rep_id, active, work_start_ist, work_days, unavailable_until').eq('active', true);
+  const seatCfg = (seatRows ?? []) as Array<{
+    rep_id: string; active: boolean; work_start_ist: string | null;
+    work_days: number[] | null; unavailable_until: string | null;
+  }>;
+  const activeSeatIds = seatCfg.map((r) => r.rep_id);
+
+  // ── COVER FOR AN ABSENT COLLEAGUE (founder, 16 Sep 2026) ─────────────────
+  //
+  // Neelam was away 12-14 September and her 583 students got nothing for three
+  // days: an owned lead is invisible to every other seat, and no leave was
+  // ever recorded, so nothing in the config would have caught it either.
+  //
+  // Cover grants ACCESS for the rest of the day and nothing else — no
+  // ownership moves, nothing is written, and it expires on its own because it
+  // is recomputed on every page load. The founder's words: "ownership nahi
+  // badalti — sirf us din ka access."
+  //
+  // Read failures leave `covering` empty, which is exactly today's behaviour.
+  let covering: string[] = [];
+  if (viewer?.role === 'sales' && seatCfg.length > 1) {
+    const { data: markedRows } = await db.from('sales_opportunity')
+      .select('rep_id').eq('ist_day', todayIst).not('worked_at', 'is', null);
+    const workedBySeat = new Map<string, number>();
+    for (const r of (markedRows ?? []) as Array<{ rep_id: string }>) {
+      workedBySeat.set(r.rep_id, (workedBySeat.get(r.rep_id) ?? 0) + 1);
+    }
+    const seats: SeatDay[] = seatCfg.map((c) => ({
+      repId: c.rep_id, active: c.active !== false,
+      workStartIst: c.work_start_ist, workDays: c.work_days,
+      unavailableUntil: c.unavailable_until,
+      workedToday: workedBySeat.get(c.rep_id) ?? 0,
+    }));
+    covering = coveringFor(viewer.id, seats, now, todayIst,
+      (absentId, present) => unclaimedDealtTo(absentId, present));
+  }
+  const principal: SalesPrincipal | null = viewer
+    ? { ...viewer, coveringRepIds: covering }
+    : null;
 
   // ── TODAY'S LIST IS ALREADY DECIDED ──────────────────────────────────────
   //
@@ -722,7 +762,7 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
     const ownership = ownerId
       ? ({ kind: 'owned', ownerId } as const)
       : resolveOwnerToken((o?.owner as string | null) ?? null, staff);
-    if (!canAccessLead(ownership, viewer ?? null)) continue;
+    if (!canAccessLead(ownership, principal)) continue;
     // Authorized, but is this student THIS rep's to be dealt today? An owned
     // lead already answered that; an unclaimed one is split deterministically
     // across the seats so two decks built a second apart cannot both claim
