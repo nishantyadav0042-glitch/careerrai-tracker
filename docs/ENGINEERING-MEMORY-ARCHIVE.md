@@ -6248,3 +6248,83 @@ faults.
 reading it. A dashboard stage with no writer, and a ledger column with no
 reader, both fail silently and both look like good news. When a funnel is built
 to answer a question, something must assert that it still can.
+
+---
+
+## Incident #98
+
+**16 Sep 2026 — the capacity engine was built, tested, documented and never
+connected, while the plan asked eight times what students deliver.**
+
+`capacity-engine.ts` exists. It computes a `sustainableHours` from a student's
+own logged behaviour, it is covered by tests, and its header explains exactly
+why it matters ("otherwise every day starts as a failure"). A comment inside it
+records the rest:
+
+> Nothing applies sustainableHours to a plan — `capBudget()` has no caller, and
+> the day is sized by `dailyHours(profile)`.
+
+So the mechanism designed to stop the plan over-asking had never once run. The
+admin card that claimed "plan sized to {sustainableHours}h" was found to be
+false earlier and removed, and `admin-capacity-claim.guard.test.ts` was written
+as a two-way coupling: the claim may return if the wiring does.
+
+**What the wiring would have been.** Measured across the 804 students who have
+ever been given a routine: median claimed **5h/day**, p90 8h, max 16h, against
+a median **0.6h** actually reported by an active student. 1,713 routines in 30
+days, 4.36 tasks planned, 0.44 ticked, **83.7% never receiving a single tick**.
+
+**And why it was the wrong fix.** 413 of those 804 carry
+`study_hours_source = 'student'`: they personally confirmed the number. The
+plan is not over-reaching — it is faithfully building the day the student asked
+for. `daily-hours.ts` carries the standing 6 Aug decision that the hours belong
+to the student and *"nothing in this codebase may derive, cap, trim, round
+toward behaviour, or otherwise 'improve' it… The date gives. The hours don't."*
+
+Wiring `capBudget` would have satisfied the instruction and violated the
+Constitution, and it would have told a sincere fifteen-hour student that they
+are a thirty-six-minute student on the strength of three weeks of logs.
+
+**The resolution.** Nothing derives the number. The product now SHOWS the
+student their own two numbers — what their plan is built to, what they have
+actually been studying — and offers a one-tap change. `setDailyHours` stays the
+only writer, and it only ever runs from a request the student made. Keeping the
+current number is the same write as changing it, which is what the existing
+route's comment already said, and that write stamps `study_hours_set_at` and
+silences the card for a cooldown: no new column, no dismissal state, no
+migration. `capBudget` still has no caller, pinned by test.
+
+**Three second-order defects found in the same pass.**
+
+1. The derivation of the engine's inputs lived inline in `api/routine/today`.
+   The tracker was about to become a second surface needing capacity and would
+   have copied it — the comment directly above that code is itself a warning
+   about the two-writer bug from sharing helpers while duplicating the
+   assembly. Moved into the engine as `capacityFromReports`.
+2. The tracker selected only `report_date, study_duration`, so
+   `durationIsUnknown` could not tell a real zero-hour day from a day nobody
+   measured and counted both as behaviour evidence. That is the Q4 defect
+   reintroduced by omission, and it would have crossed the behaviour threshold
+   on days nobody measured.
+3. The page derived "yesterday" separately from the check-in's own derivation.
+   Between 03:00 and 05:29 IST a raw UTC yesterday names the wrong day — an
+   off-by-one this codebase has already paid for — and here it would have shown
+   a student one day's plan while logging a different day against it. Collapsed
+   to one derivation.
+
+**A negative finding recorded deliberately.** The feared backlog spiral (miss a
+day, tomorrow holds both, abandon) **does not exist**. Within-student over 60
+days, 506 students, 1,347 routines: plans average **19.9 minutes UNDER** the
+student's own claim, and five untouched days move a plan from 378 to 417
+minutes and 4.43 to 4.97 tasks — where stacking would have added ~22 tasks, and
+a backlog would exceed the claim by definition. Priority-based plan healing was
+therefore **not built**. It would have been surface area against a problem we
+do not have, and the fact that it was not built is worth as much memory as the
+things that were.
+
+**Lesson.** A module that is built, tested and unwired is more dangerous than
+one that does not exist: the tests pass, the file reads as solved, and a
+surface can claim its value without consuming it. Before building a mechanism,
+grep for its callers — and if a Constitution forbids the obvious wiring, the
+Constitution is usually protecting something the instruction did not know
+about. Show the human the evidence instead of acting on it for them.
