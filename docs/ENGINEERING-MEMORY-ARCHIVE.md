@@ -6082,3 +6082,82 @@ writer of `daily_reports` stops emitting the event, if the emit is gated on
 
 This is Incident #93's lesson in a third costume: a watch, a detector and now a
 metric, each a copy of reality with nothing checking the copy still matches.
+
+---
+
+## Incident #96
+
+**16 Sep 2026 — the money-back guarantee had never once been claimable, and we
+advertised it on three public pages for two months.**
+
+`/refunds`, `/terms` and `/pricing` all promised a full refund in the first
+month on one condition: **at least 20 logged study days**. The granting route,
+`api/student/request-refund`, enforced `REQUIRED_DAYS = 20` against
+`daily_reports` in the 30 days from signup.
+
+Measured on exactly that window, here is every student who has ever paid
+CareerRai, best first:
+
+```
+Rudra Pratap Singh   15      Razorpay Review (test)    5
+Arnav Badaya         11      Harsh Rajput              4
+Vedashri kale        10      Dhruv Vakadia             4
+Monu singh            7
+```
+
+**Nobody reached 20. Not one payer, ever.** The most engaged paying customer in
+company history missed the bar by five days. Widening to every student who has
+ever logged a single day — 324 of them — exactly **three** reached 20, under
+1%, and none of the three had paid.
+
+A condition no customer can satisfy is not a condition. It is a refusal written
+in advance, and we printed it in our Terms.
+
+**Why it survived.** The bar existed as **five separate literals in five
+files** — the route's `REQUIRED_DAYS`, the profile page's
+`REFUND_DAYS_REQUIRED`, and three hand-typed sentences in public prose. Nothing
+connected the sentence a student read to the comparison the server ran, so
+nothing could notice they had come apart. More importantly, nothing connected
+either of them to **what students actually do**: the number was chosen before
+we had a single paying customer and was never once checked against the
+behaviour of the customers we got. No test could fail, because no test knew
+what the number was supposed to mean.
+
+It is the same shape as Incident #86 and Incident #93: a rule validated against
+an intention instead of against production. Here the rule was a promise to a
+paying customer, which makes it a Trust-OS matter and not merely a bug.
+
+**Two smaller defects found in the same pass.** The route and the profile card
+built the eligibility window independently — same intent, two expressions — so
+the green "Eligible" badge and the server's verdict were only ever coincidences
+away from disagreeing. And both applied **only the upper bound**
+(`report_date <= joined + 30`), never the lower, so a log recorded before
+signup would have counted toward the guarantee. No such row exists today, which
+is precisely why it could have stayed wrong indefinitely.
+
+**The fix.** `src/lib/refund-policy.ts` is now the only place the number
+exists. `REFUND_REQUIRED_DAYS = 10`, `REFUND_WINDOW_DAYS = 30`, one
+`refundWindow()` both counting sites call, one `refundShortfallMessage()` the
+student sees. All five surfaces interpolate the constant; none types a digit.
+
+**Why 10.** The condition exists to establish that a student gave CareerRai a
+fair chance before asking for the money back — not that they were exceptional.
+Ten days across a month is a student who came back on ten separate occasions:
+the mentor was used, the plan was filled, the product had every chance to work.
+One day, or four, has not established that, so the condition still costs
+something. At 10, three of the seven payers clear it. And it agrees with what
+we ourselves believe about this product — our own retention research rejected
+daily opening as the behaviour to demand, while the old bar demanded 20 daily
+logs out of 30 in public, in writing.
+
+**What has teeth now.** `refund-policy.guard.test.ts` records
+`BEST_PAYING_STUDENT_DAYS = 15` as a measured fact and **fails the build if the
+bar is ever set above it**. That is the assertion that was missing: not "is the
+copy in sync" — though it checks that too, on all five files — but *is this
+number reachable by a real customer*. Verified to fail against both
+reintroduced faults (bar back to 20; a hand-typed "20 study days" in the public
+page).
+
+**Lesson.** A number that appears in a promise to a customer must be checked
+against the customers, not against the intention that produced it. If no test
+can state what the number is supposed to mean, nobody is checking it.

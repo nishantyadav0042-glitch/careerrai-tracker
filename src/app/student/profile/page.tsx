@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import type { NotifPrefs } from '@/types';
 import { paymentsEnabled } from '@/lib/feature-flags';
 import { getActiveScholarship, scholarshipDisplay } from '@/lib/pricing';
+import { REFUND_REQUIRED_DAYS, refundWindow, isInRefundWindow } from '@/lib/refund-policy';
 import { ProfilePanelTabs } from '@/components/profile-panel-tabs';
 import { ProfileOverview } from './profile-overview';
 import { HistorySection } from './history-section';
@@ -22,11 +23,11 @@ export default async function StudentProfilePage() {
     .single();
   if (!profile) redirect('/login');
 
-  // Compute refund window dates from profile (needed for parallel queries below)
-  const joinedAt = new Date(profile.created_at);
-  const firstMonthEnd = new Date(joinedAt.getTime() + 30 * 24 * 3600 * 1000).toISOString().slice(0, 10);
-  const isInFirstMonth = new Date() <= new Date(joinedAt.getTime() + 30 * 24 * 3600 * 1000);
-  const REFUND_DAYS_REQUIRED = 20;
+  // Refund window and bar, from the one module /refunds, /terms, /pricing and
+  // the granting API all read. The number a student sees on this card is the
+  // number that route enforces, by construction rather than by care.
+  const refundRange = refundWindow(profile.created_at);
+  const isInFirstMonth = isInRefundWindow(profile.created_at);
    
   const thirtyDaysAgoIso = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
 
@@ -50,7 +51,7 @@ export default async function StudentProfilePage() {
     admin.from('daily_reports').select('id', { count: 'exact', head: true }).eq('student_id', user.id),
     admin.from('streak_data').select('current_streak, longest_streak').eq('student_id', user.id).maybeSingle(),
     admin.from('test_results').select('percentile').eq('student_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
-    admin.from('daily_reports').select('id', { count: 'exact', head: true }).eq('student_id', user.id).lte('report_date', firstMonthEnd),
+    admin.from('daily_reports').select('id', { count: 'exact', head: true }).eq('student_id', user.id).gte('report_date', refundRange.start).lte('report_date', refundRange.end),
     admin.from('refund_requests').select('status, requested_at').eq('student_id', user.id).maybeSingle(),
     paymentsEnabled() ? getActiveScholarship(user.id) : Promise.resolve(null),
   ]);
@@ -78,7 +79,7 @@ export default async function StudentProfilePage() {
   const progressPct = latestPercentile ? Math.min(100, Math.round((latestPercentile / targetPercentile) * 100)) : 0;
 
   const refundDaysLogged = firstMonthDaysResult.count ?? 0;
-  const refundEligible = refundDaysLogged >= REFUND_DAYS_REQUIRED;
+  const refundEligible = refundDaysLogged >= REFUND_REQUIRED_DAYS;
   const existingRefundReq = refundReqResult.data as { status: 'pending' | 'approved' | 'rejected'; requested_at: string } | null;
 
   let scholarship: { label: string; pricing: ReturnType<typeof scholarshipDisplay> } | null = null;
@@ -119,7 +120,7 @@ export default async function StudentProfilePage() {
             refundDaysLogged={refundDaysLogged}
             refundEligible={refundEligible}
             existingRefundReq={existingRefundReq ? { status: existingRefundReq.status, requestedAt: existingRefundReq.requested_at } : null}
-            REFUND_DAYS_REQUIRED={REFUND_DAYS_REQUIRED}
+            REFUND_DAYS_REQUIRED={REFUND_REQUIRED_DAYS}
             scholarship={scholarship}
             prefs={prefs}
             hasPushSubscription={!!profile.push_subscription}
