@@ -121,3 +121,73 @@ describe('assignmentReason — every row explains itself', () => {
     expect(r).toContain('SLA not started');
   });
 });
+
+// ── THE SPLIT LEVELS THE WAIT, NOT THE HEADCOUNT (16 Sep 2026) ──────────────
+//
+// Founder: "backlog barabar rakho." On 16 Sep the two books were 554 and 583 —
+// five percent apart — while the students nobody had ever contacted were 319
+// and 389, twenty-two percent apart. A student's wait is set by the queue
+// ahead of them, not by the size of the book they sit in.
+describe('new students fill the shallower book first', () => {
+  const NOW = Date.parse('2026-09-16T10:00:00Z');
+  const s = (over: Partial<IntakeSeat>): IntakeSeat => ({
+    repId: 'a', name: 'Anshul', active: true, unavailableUntil: null,
+    maxNewPerDay: 50, newToday: 0, bookSize: 0, ...over,
+  });
+  const cand = (n: number) => Array.from({ length: n }, (_, i) => ({
+    id: `p${i}`, createdAt: new Date(NOW - i * 3_600_000).toISOString(),
+  }));
+
+  it('gives the deeper backlog fewer of today’s new students', () => {
+    const seats = [
+      s({ repId: 'a', untouchedBacklog: 319 }),
+      s({ repId: 'b', name: 'Neelam', untouchedBacklog: 389 }),
+    ];
+    const plan = planIntake(seats, cand(20), NOW);
+    const by = Object.fromEntries(plan.seats.map((p) => [p.repId, p.studentIds.length]));
+    expect(by.a, 'the shallower book takes more').toBeGreaterThan(by.b);
+    expect(by.a + by.b).toBe(20);
+  });
+
+  it('closes the gap rather than overshooting it', () => {
+    const seats = [
+      s({ repId: 'a', untouchedBacklog: 10 }),
+      s({ repId: 'b', name: 'Neelam', untouchedBacklog: 0 }),
+    ];
+    const plan = planIntake(seats, cand(20), NOW);
+    const by = Object.fromEntries(plan.seats.map((p) => [p.repId, p.studentIds.length]));
+    // 10 and 0 plus 20 students should end near 15 and 15, never 0 and 20.
+    expect(Math.abs((10 + by.a) - (0 + by.b))).toBeLessThanOrEqual(1);
+  });
+
+  it('still respects a seat’s daily fuse, whatever the backlog says', () => {
+    // The fuse is a hard ceiling. A seat with nothing waiting must not be
+    // handed a day's worth of students because its backlog is zero.
+    const seats = [
+      s({ repId: 'a', untouchedBacklog: 500 }),
+      s({ repId: 'b', name: 'Neelam', untouchedBacklog: 0, maxNewPerDay: 3 }),
+    ];
+    const plan = planIntake(seats, cand(20), NOW);
+    const by = Object.fromEntries(plan.seats.map((p) => [p.repId, p.studentIds.length]));
+    expect(by.b).toBe(3);
+    expect(by.a).toBe(17);
+  });
+
+  it('a bigger seat still takes a bigger share when the backlogs are level', () => {
+    // 2A §5 step 6 survives: capacity still shapes the split. The backlog only
+    // decides between seats of equal capacity.
+    const seats = [
+      s({ repId: 'a', maxNewPerDay: 30, untouchedBacklog: 0 }),
+      s({ repId: 'b', name: 'Neelam', maxNewPerDay: 10, untouchedBacklog: 0 }),
+    ];
+    const plan = planIntake(seats, cand(20), NOW);
+    expect(plan.seats.map((p) => p.studentIds.length)).toEqual([15, 5]);
+  });
+
+  it('behaves exactly as before when no backlog is supplied', () => {
+    // A caller that cannot compute it gets the old alternation, not a guess.
+    const seats = [s({ repId: 'a' }), s({ repId: 'b', name: 'Neelam' })];
+    const plan = planIntake(seats, cand(9), NOW);
+    expect(plan.seats.map((p) => p.studentIds.length)).toEqual([5, 4]);
+  });
+});

@@ -173,12 +173,19 @@ describe('a correct run — the positive controls', () => {
     // r4 (premium), r5 (no phone) and r6 (already owned) never enter the pool.
     expect(body.poolSize).toBe(3);
     expect(body.waiting).toBe(0);
+    // CHANGED 16 Sep 2026, and this fixture demonstrates exactly why. The
+    // split used to alternate, handing the odd student to the lower rep id.
+    // It now levels the students NOBODY HAS EVER CONTACTED, per unit of a
+    // seat's daily allowance — and A already owns r6, who has never been
+    // contacted. So A starts one deeper and B takes the first new arrival.
+    // In production the same rule closes a 319 / 389 gap that a 554 / 583
+    // book-size split had been ignoring.
     const byRep = Object.fromEntries(body.enrolled.map((e: any) => [e.repId, e]));
-    expect(byRep[A].landed).toBe(2);   // r1, r3 — the odd one to the lower rep id
-    expect(byRep[B].landed).toBe(1);   // r2
+    expect(byRep[B].landed, 'B starts with an empty untouched backlog').toBe(2);
+    expect(byRep[A].landed, 'A already owns one nobody has called').toBe(1);
     const rows = upserts.flatMap((u) => u.rows);
-    expect(rows.filter((r) => r.owner_id === A).map((r) => r.student_id)).toEqual(['r1', 'r3']);
-    expect(rows.filter((r) => r.owner_id === B).map((r) => r.student_id)).toEqual(['r2']);
+    expect(rows.filter((r) => r.owner_id === B).map((r) => r.student_id)).toEqual(['r1', 'r3']);
+    expect(rows.filter((r) => r.owner_id === A).map((r) => r.student_id)).toEqual(['r2']);
   });
 
   it('writes with ON CONFLICT DO NOTHING — the idempotency key is the row itself', async () => {
@@ -237,8 +244,10 @@ describe('a correct run — the positive controls', () => {
     owned.add('r1');
     const body = await (await run()).json();
     const byRep = Object.fromEntries(body.enrolled.map((e: any) => [e.repId, e]));
-    expect(byRep[A].requested).toBe(2);
-    expect(byRep[A].landed).toBe(1);
+    // r1 is B's under the backlog-levelling split (see the case above), so it
+    // is B whose write is refused and B who must report it honestly.
+    expect(byRep[B].requested).toBe(2);
+    expect(byRep[B].landed).toBe(1);
     expect(activity.map((a) => a.student_id).sort()).toEqual(['r2', 'r3']);
   });
 

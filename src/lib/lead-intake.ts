@@ -77,6 +77,19 @@ export interface IntakeSeat {
   newToday: number;
   /** Rows this seat owns in total. The portfolio ceiling counts these. */
   bookSize: number;
+  /**
+   * Students in this seat's book that NOBODY has ever contacted (16 Sep 2026).
+   *
+   * The number the split should actually level. Book size says how many a seat
+   * is responsible for; this says how many are still waiting for a first word,
+   * and those are not the same thing — on 16 Sep the books were 554 and 583
+   * (a 5% gap) while the untouched backlogs were 319 and 389 (a 22% gap).
+   *
+   * Optional so a caller that cannot compute it keeps the old behaviour: with
+   * no backlog to level, the split falls back to alternating, which is what it
+   * did before.
+   */
+  untouchedBacklog?: number;
 }
 
 export interface IntakeCandidate {
@@ -131,6 +144,7 @@ export function seatAllowance(seat: IntakeSeat, nowMs: number): { allowance: num
 export function planIntake(seats: IntakeSeat[], pool: IntakeCandidate[], nowMs: number): IntakePlan {
   const ordered = [...pool].sort((a, b) =>
     Date.parse(b.createdAt) - Date.parse(a.createdAt) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const seatsById = new Map(seats.map((s) => [s.repId, s]));
   const plans: SeatPlan[] = [...seats]
     .sort((a, b) => (a.repId < b.repId ? -1 : a.repId > b.repId ? 1 : 0))
     .map((s) => ({ repId: s.repId, name: s.name, ...seatAllowance(s, nowMs), studentIds: [] as string[] }));
@@ -143,18 +157,39 @@ export function planIntake(seats: IntakeSeat[], pool: IntakeCandidate[], nowMs: 
 
   const total = Math.min(ordered.length, sumAllowance);
 
-  // Largest remainder: floor every share, then hand the leftover units to the
-  // largest fractional parts (rep id breaks a tie).
-  const shares = plans.map((p) => (total * p.allowance) / sumAllowance);
-  const counts = shares.map(Math.floor);
-  let leftover = total - counts.reduce((s, c) => s + c, 0);
-  const byRemainder = plans
-    .map((p, i) => ({ i, frac: shares[i] - counts[i], repId: p.repId }))
-    .filter((x) => plans[x.i].allowance > counts[x.i])
-    .sort((a, b) => b.frac - a.frac || (a.repId < b.repId ? -1 : 1));
-  for (const x of byRemainder) {
-    if (leftover === 0) break;
-    counts[x.i]++; leftover--;
+  // ── LEVEL THE BACKLOG, NOT THE HEADCOUNT (founder, 16 Sep 2026) ──────────
+  //
+  // The split was proportional to each seat's remaining allowance, which with
+  // two identical seats is a 50/50 alternation. That keeps BOOK SIZES level
+  // and lets the thing that matters drift: on 16 Sep the books were 554 and
+  // 583 — five percent apart — while the students nobody had ever contacted
+  // were 319 and 389, twenty-two percent apart. A student's wait is set by the
+  // queue ahead of them, not by the size of the book they sit in.
+  //
+  // So the pool fills the shallower book first: each student goes to whichever
+  // seat would, after taking them, still have the smallest untouched backlog.
+  // Two level seats alternate exactly as before, so a day with nothing to
+  // correct behaves identically — and a caller that cannot supply a backlog
+  // gets that same old behaviour rather than a guess.
+  // The score is backlog PER UNIT OF ALLOWANCE, so both intents survive: a
+  // seat configured for three times the daily intake still takes three times
+  // the pool (2A §5 step 6), and between seats of equal capacity the one with
+  // fewer students still waiting for a first word goes first. With equal
+  // backlogs AND equal allowances this is the old alternation exactly.
+  const backlog = plans.map((p) => seatsById.get(p.repId)?.untouchedBacklog ?? 0);
+  const counts = plans.map(() => 0);
+  const load = (i: number) => (backlog[i] + counts[i]) / plans[i].allowance;
+  for (let k = 0; k < total; k++) {
+    let best = -1;
+    for (let i = 0; i < plans.length; i++) {
+      if (counts[i] >= plans[i].allowance) continue;
+      if (best === -1) { best = i; continue; }
+      // Lightest load wins; rep id breaks a tie so the answer never depends on
+      // the order the seats were read in.
+      if (load(i) < load(best) || (load(i) === load(best) && plans[i].repId < plans[best].repId)) best = i;
+    }
+    if (best === -1) break;
+    counts[best]++;
   }
 
   // Deal newest-first to whoever has the most of their share still open; on a
@@ -211,7 +246,7 @@ export interface IntakeRun {
 const off = (v: string | null) => v != null && ['false', '0', 'off'].includes(v.trim().toLowerCase());
 
 interface SeatRow { id: string; full_name: string | null }
-interface BookRow { student_id: string; owner_id: string | null; enrolled_at: string | null }
+interface BookRow { student_id: string; owner_id: string | null; enrolled_at: string | null; last_attempt_at: string | null }
 interface RosterRow { id: string; created_at: string; phone: string | null; is_premium: boolean | null }
 
 function istDayStart(nowMs: number): string {
@@ -260,16 +295,23 @@ export async function runLeadIntake(
   //    each seat already received today ─────────────────────────────────────
   const book = await readAllRows<BookRow>(
     'lead_outreach(book)',
-    () => admin.from('lead_outreach').select('student_id, owner_id, enrolled_at'), { orderBy: 'student_id' });
+    // last_attempt_at comes too, so the split can level the students still
+    // waiting for a first word rather than the size of each book (16 Sep).
+    () => admin.from('lead_outreach').select('student_id, owner_id, enrolled_at, last_attempt_at'),
+    { orderBy: 'student_id' });
   if (book.state === 'unavailable') return unavailable(0, book.reason);
   const already = new Set<string>();
   const bookSize = new Map<string, number>();
+  const untouched = new Map<string, number>();
   const newToday = new Map<string, number>();
   const dayStart = istDayStart(nowMs);
   for (const r of book.state === 'value' ? book.value : []) {
     already.add(r.student_id);
     if (!r.owner_id) continue;
     bookSize.set(r.owner_id, (bookSize.get(r.owner_id) ?? 0) + 1);
+    // Never contacted by anyone. Not the same as book size: on 16 Sep the
+    // books were 554 and 583 while these were 319 and 389.
+    if (!r.last_attempt_at) untouched.set(r.owner_id, (untouched.get(r.owner_id) ?? 0) + 1);
     if (r.enrolled_at && r.enrolled_at >= dayStart) newToday.set(r.owner_id, (newToday.get(r.owner_id) ?? 0) + 1);
   }
 
@@ -284,6 +326,7 @@ export async function runLeadIntake(
         maxNewPerDay: Number(c.max_new_per_day ?? 0),
         newToday: newToday.get(s.id) ?? 0,
         bookSize: bookSize.get(s.id) ?? 0,
+        untouchedBacklog: untouched.get(s.id) ?? 0,
       };
     });
 

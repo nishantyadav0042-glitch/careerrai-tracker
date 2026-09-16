@@ -5487,3 +5487,88 @@ the difference from inside a day.* Both counsellors were working hard and
 working the top of their lists; the list was pointed at the worst lane in the
 business. The number that would have shown it — interested-per-call by lane —
 existed in the data all along and had never once been computed.
+
+---
+
+## Incident #90
+
+**2026-09-16 · A counsellor's absence stranded 583 students for three days,
+and nothing in the system could see it · Sales (Trust) (P1)**
+
+**What happened.** Founder: *"can you automate this assignment overall, that
+too smart auto assignment on a daily basis?"* Assignment was already
+automated — `lead-intake.ts` has run daily since 2 Sep, 14 runs in 14 days,
+0 students outside a book. So the question became: what is assignment
+actually failing to do?
+
+**First, the thing assignment cannot fix, said plainly.**
+
+| | Anshul | Neelam |
+| --- | --- | --- |
+| Book | 554 | 583 |
+| Distinct students worked in 14 days | 218 | 185 |
+| **One full pass through the book** | **~36 days** | **~44 days** |
+
+A student waits five to six weeks between touches. Two part-time seats, six
+hours, six days, reach about 200 distinct students a fortnight against a book
+of 1,137. **No assignment algorithm changes that arithmetic — it only changes
+who waits.** That was said to the founder before any option was offered.
+
+**Then the two things assignment WAS failing to do.**
+
+**1. Absence stranded a whole book.** Neelam was away 12, 13 and 14 September.
+Her **583 students got nothing for three days**, and Anshul could not have
+reached them: an owned lead is invisible to every other seat.
+`sales_rep_config.unavailable_until` existed and worked — for INTAKE, stopping
+new students entering an absent seat. It did nothing about the book already
+there, which is the half that matters. And no leave was ever recorded for those
+three days, so a config flag alone would have caught none of them.
+
+**2. The split levelled the wrong number.** Intake apportioned new students in
+proportion to each seat's remaining daily allowance, which with two identical
+seats is a 50/50 alternation. That keeps BOOK SIZES level — 554 and 583, five
+percent apart — while the number that sets a student's wait drifted: **319 and
+389 never contacted, twenty-two percent apart**.
+
+**What was done.**
+
+`lib/sales-absence-cover.ts` decides who is absent today on two rules, and the
+second is the one that catches a real day: **declared** (`unavailable_until`
+covers today) and **observed** (the shift is 2.5 hours old and not one card has
+been marked). Neelam's three days were all of the second kind.
+
+Cover grants **access for the rest of that day** and nothing else. No ownership
+moves, nothing is written, and it expires at midnight because it is recomputed
+on every page load. The founder was explicit: *"ownership nahi badalti — sirf
+us din ka access."* A book is a relationship; cutting it while somebody is ill
+is how you lose the person as well as the students. A guard test forbids the
+module containing `update`, `insert`, `upsert`, `delete` or `owner_id` at all.
+
+An absent book goes to **exactly one** covering seat, chosen the same
+deterministic way an unclaimed student is (#89) — otherwise "zero mixup between
+reps" is undone on precisely the days nobody is watching. A scheduled day off is
+never an absence; an unknown shift start is never guessed into one.
+
+`canAccessLead` gained `coveringRepIds`, **absent by default**: a caller that
+supplies nothing gets exactly the behaviour it had before cover existed, which
+is what keeps this a widening of one path rather than of the whole gate.
+
+And `planIntake` now levels **backlog per unit of allowance** rather than
+headcount. Both intents survive: a seat configured for three times the daily
+intake still takes three times the pool (2A §5 step 6), and between seats of
+equal capacity the one with fewer students still waiting for a first word goes
+first. With equal backlogs AND equal allowances it is the old alternation
+exactly, and a caller that cannot compute a backlog gets that old behaviour
+rather than a guess.
+
+**What was NOT built, and why.** Routing by fit — "send this kind of student to
+the rep who converts that kind" — is impossible to do honestly: the business
+has **2** conversions in total. Any model built on that is a guess wearing a
+model's clothes (L1).
+
+**Lesson.** *A system that assigns responsibility must also notice when
+responsibility is not being exercised.* Every ownership rule here was correct —
+exclusive, audited, never overwritten — and the correctness is what stranded
+583 students, because exclusivity with no liveness check means an absent owner
+holds a book nobody else may touch. The gap was not in the assignment; it was
+in the absence of a question about the assignee.

@@ -49,7 +49,8 @@ describe('the deck deals an unclaimed student to one rep, not every rep', () => 
     // exception with a founder alert behind it, not a card to duplicate.
     // `?? []` on the read is what makes the narrow reject every viewer.
     const s = code();
-    expect(s).toMatch(/const activeSeatIds = \(\(seatRows \?\? \[\]\)/);
+    expect(s).toMatch(/seatRows \?\? \[\]/);
+    expect(s).toMatch(/const activeSeatIds = seatCfg\.map/);
   });
 });
 
