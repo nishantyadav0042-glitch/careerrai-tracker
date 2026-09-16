@@ -38,6 +38,10 @@ import { sessionsVisibleFrom } from '@/lib/session-window';
 import { PlanExtendedAlert } from '@/components/home/plan-extended-alert';
 import { ConfirmHoursCard } from '@/components/home/confirm-hours-card';
 import { dailyHours, needsHoursConfirmation } from '@/lib/daily-hours';
+import {
+  capacityFromReports, capacityWindowStart, readHoursReality, shouldOfferHoursCorrection,
+} from '@/lib/capacity-engine';
+import { RightSizeHoursCard } from '@/components/home/right-size-hours-card';
 import { isCovered } from '@/lib/coverage-status';
 import { HomeTimetableCard } from '@/components/home/home-timetable-card';
 import { loggedToday } from '@/lib/facts/daily-log';
@@ -96,7 +100,13 @@ export default async function DailyTrackerPage() {
       .limit(1),
     admin
       .from('daily_reports')
-      .select('report_date, study_duration')
+      // day_outcome and study_duration_source are read ONLY by
+      // durationIsUnknown, which decides whether a zero-hour day is evidence
+      // of behaviour or a day we simply never measured. Without them every
+      // zero day counts as evidence, the behaviour threshold is crossed on
+      // days nobody measured, and the capacity this page shows diverges from
+      // the one api/routine/today computes. That is the Q4 defect exactly.
+      .select('report_date, study_duration, day_outcome, study_duration_source')
       .eq('student_id', user.id)
       .order('report_date', { ascending: false })
       .limit(500),
@@ -248,6 +258,27 @@ export default async function DailyTrackerPage() {
   // that we don't know. Founder: "any confusion for any student, ask them the
   // question in app and then act, or confirm from them."
   const confirmHours = needsHoursConfirmation(profile) ? dailyHours(profile).weekday : null;
+
+  // The gap between the hours the student set and the hours they have been
+  // studying. Computed from `logs`, which this page already holds — no extra
+  // query — through the SAME derivation api/routine/today uses, so the card
+  // and the plan can never disagree about what this student's capacity is.
+  //
+  // Nothing here writes anything. It decides whether to SHOW the evidence; the
+  // student decides what to do about it, and setDailyHours stays the only
+  // writer (see components/home/right-size-hours-card).
+  const hoursReality = readHoursReality(
+    capacityFromReports(
+      (logs ?? []) as { report_date?: string | null; day_outcome?: string | null; study_duration?: number | string | null; study_duration_source?: string | null }[],
+      dailyHours(profile).weekday,
+      capacityWindowStart(),
+    ),
+  );
+  // The ownership handshake wins when both could fire: a student who cannot
+  // prove the number is theirs should not be asked to revise it first.
+  const offerRightSize = confirmHours == null && shouldOfferHoursCorrection(hoursReality, {
+    hoursSetAt: (profile?.study_hours_set_at as string | null) ?? null,
+  });
 
   const targetLabel = targetIso
     ? new Date(targetIso + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })
@@ -600,6 +631,18 @@ export default async function DailyTrackerPage() {
         {/* The one-time ownership handshake. Only for students whose hours we
             cannot prove they chose — see lib/daily-hours.needsHoursConfirmation. */}
         {confirmHours != null && <ConfirmHoursCard hours={confirmHours} />}
+        {/* The plan is sized to a number the student set and has never been
+            shown again. This puts their own two numbers side by side and lets
+            them move one — it never moves it for them. */}
+        {offerRightSize && hoursReality.claimedHours != null && hoursReality.observedHours != null
+          && hoursReality.suggestedHours != null && (
+          <RightSizeHoursCard
+            claimedHours={hoursReality.claimedHours}
+            observedHours={hoursReality.observedHours}
+            suggestedHours={hoursReality.suggestedHours}
+            loggedDays={hoursReality.loggedDays}
+          />
+        )}
         {/* What we do for them, free — repeated every third day. Founder,
             8 Aug: "yeh sab cheezein baar baar highlight karni padengi... to
             keep the retention." Counts come from their own rows, so the
