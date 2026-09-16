@@ -6161,3 +6161,90 @@ page).
 **Lesson.** A number that appears in a promise to a customer must be checked
 against the customers, not against the intention that produced it. If no test
 can state what the number is supposed to mean, nobody is checking it.
+
+---
+
+## Incident #97
+
+**16 Sep 2026 — the revenue funnel was built to answer "why did they abandon?"
+and had been unable to answer it since the day it shipped.**
+
+The founder asked why 51 checkouts were created and never paid, and ordered
+instrumentation before any fix. The instrumentation already existed —
+`payment-funnel.ts`, built in August, whose own header says the three
+abandonment populations "need opposite fixes and we could not tell them apart."
+Reading it against production found **five defects, all in the reading and none
+in the paying**.
+
+**1. Two stages had no emission site at all.**
+
+| Stage | Rendered by | Written by |
+|---|---|---|
+| `payment_failed` | `/admin` funnel | nothing — ever |
+| `paywall_viewed` | `/admin` funnel | nothing — ever |
+
+All three checkout surfaces registered Razorpay's `payment.failed` listener and
+wrote the result to `student_events` as `pay_failed`. The funnel reads
+`analytics_events`. So the "Payment failed" row has read **0 since August**,
+which looks like *no payment problems* and means *not wired*. Incident #95's
+shape precisely: a plausible zero. `paywall_viewed` — the one stage that says
+how many students were ever shown a price — was never emitted either, so every
+rate below it was computed against `order_created` instead.
+
+**2, 3, 4. Three defects in `KEY_SPLIT_EVENT` itself.**
+`payment_checkout_opened` is the event the module names as the one that
+matters, because it splits "never reached Razorpay" (our bug) from "reached it
+and left" (their decision). It was wrong three ways at once: emitted
+unconditionally *before* the redirect branch **and again inside it**, so
+redirect users counted twice; emitted *before* `rzp.open()`, so it claimed a
+window had been shown at a point where the call could still throw; and emitted
+with **no `orderId`** on two of the three surfaces, so no dismissal could be
+joined to the order it abandoned.
+
+The double-count left a tell that should have been read months ago: **28 orders
+against 41 checkout-shown events.** More payment windows than orders exist is
+impossible.
+
+**5. The one screen the founder uses ignored all of it.** Revenue Operations
+labelled every `status='created'` order with one asserted sentence — *"Opened
+checkout and left. A real payment would have auto-confirmed — this is a sales
+follow-up."* Measured, that is wrong for a large share: **37 students created an
+abandoned order, only 29 ever emitted a checkout-opened event**, and on the
+redirect leg **8 students navigated to Razorpay and exactly 1 came back**. An
+order that never showed a payment window is not a sales follow-up. It is our
+defect, and it was filed as the student's decision.
+
+**What the corrected reading says.** Razorpay's `payment.failed` has never
+fired, in the product's entire history, on any surface — and `failure_code` is
+null on all 51 abandoned orders. **Students are not failing payment.** They
+open the price and close it, or they never see it. Those need opposite
+responses and neither of them is "optimise the checkout".
+
+**The fix.** All three surfaces now emit the full client funnel —
+`paywall_viewed`, `payment_cta_clicked`, `payment_checkout_opened` (once, after
+`rzp.open()`), `payment_checkout_dismissed`, `payment_failed` — each carrying
+the `orderId` it belongs to, with Razorpay's verbatim error preserved through a
+new `checkoutFailureProps` in `payment-failure.ts`. `lib/checkout-stall.ts`
+classifies each abandoned order into the population it is actually in, and
+Revenue Operations now renders that instead of a sentence.
+
+**The honesty rule that made this a module and not a ternary.** *Absence of an
+event is only evidence when the event existed.* An order from 4 August has no
+checkout event and never will; concluding "never reached Razorpay" from that
+silence invents a product bug out of a deployment date. Hence two cutovers, not
+one: `FUNNEL_INSTRUMENTED_FROM` (25 Aug, when the events began) and
+`ORDER_ATTRIBUTION_FROM` (16 Sep, when every event began carrying its order).
+Orders older than the join returns `not_instrumented` and says so on the card.
+
+**What has teeth now.** `payment-funnel-emission.guard.test.ts` fails the build
+if any stage in `PAYMENT_FUNNEL_EVENTS` has no emission site anywhere in `src`,
+if a checkout surface drops any of the four client events, if any order-scoped
+event is emitted without an `orderId`, if the split event moves back above the
+redirect branch or above `rzp.open()`, or if Revenue Operations goes back to
+asserting a reason. Verified to fail against four separately reintroduced
+faults.
+
+**Lesson.** Defining a metric is not instrumenting it, and rendering it is not
+reading it. A dashboard stage with no writer, and a ledger column with no
+reader, both fail silently and both look like good news. When a funnel is built
+to answer a question, something must assert that it still can.
