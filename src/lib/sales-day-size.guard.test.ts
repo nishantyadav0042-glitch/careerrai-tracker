@@ -40,15 +40,21 @@ const c = (dueReason: DueReason, n = 1) =>
 
 describe('the day is built to the ceiling when the book can supply it', () => {
   it('reproduces the exact production shape that came out at fifty', () => {
-    // Anshul's FIRST BUILD of 16 Sep, 00:07 IST: retry 20 (at its own
-    // ceiling), attention 2, callback 1 — and a book with 319 never-contacted
-    // students behind it. This is the deck he would have opened in the
-    // morning.
+    // Anshul's FIRST BUILD of 16 Sep, 00:07 IST: retry at its own ceiling,
+    // attention 2, callback 1 — and a book with 319 never-contacted students
+    // behind it. This is the deck he would have opened in the morning.
+    //
+    // The signal count moves with RETRY_CEILING, which fell 20 -> 12 on 16 Sep
+    // after the retry lane was measured taking 41% of all calling effort at
+    // 1.4% interested. Derived rather than typed, so the case keeps meaning
+    // what it says when that ceiling moves again.
+    const signals = 1 + RETRY_CEILING + 2;
     const day = assembleDay([
-      ...c('callback', 1), ...c('retry', 20), ...c('attention', 2), ...c('fresh', 319),
+      ...c('callback', 1), ...c('retry', 30), ...c('attention', 2), ...c('fresh', 319),
     ]);
     expect(day.queue.length, 'this was 50 before 15 Sep 2026').toBe(DAY_CEILING);
-    expect(day.counts.given.rotation, 'and the never-contacted share was 27').toBe(DAY_CEILING - 23);
+    expect(day.counts.given.rotation, 'the never-contacted share was 27 that morning')
+      .toBe(DAY_CEILING - signals);
   });
 
   it('a quiet day is a full day of rotation, not a half day', () => {
