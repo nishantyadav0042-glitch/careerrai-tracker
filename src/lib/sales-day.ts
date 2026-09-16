@@ -36,12 +36,37 @@ import {
 
 export type Channel = 'call' | 'message';
 
-export type DaySection = 'promises' | 'money' | 'buddy' | 'new' | 'attention' | 'retention' | 'rotation';
+export type DaySection = 'promises' | 'intro' | 'money' | 'retention' | 'buddy' | 'new' | 'attention' | 'redial' | 'rotation';
 
-export const SECTION_ORDER: readonly DaySection[] = ['promises', 'money', 'buddy', 'new', 'attention', 'retention', 'rotation'];
+// ── THE ORDER THE COUNSELLOR ACTUALLY SEES (16 Sep 2026) ────────────────────
+//
+// This array is not decoration. `call-deck.tsx` groups the day BY SECTION and
+// renders the groups in this order, so THIS is the priority a counsellor works
+// top-down — not the `sort` weights in call-queue.ts, which only order cards
+// WITHIN a section. Two things were wrong with the old order and both were
+// costing calls every day:
+//
+//   1. `retry` sat in `promises`. The repo's own note under UNTRIMMABLE says a
+//      re-dial "is not a commitment" (Incident #74) — but it was still filed
+//      with the promises, so it rendered second in the whole deck. Thirty days:
+//      435 retry cards worked, 41% of ALL calling effort in the book, for 6
+//      students who said interested (1.4%). It now has its own section and
+//      sits second-from-last.
+//   2. `retention` — which carries `restart`, the multi-day loggers the
+//      founder named FIRST priority on 15 Sep — rendered sixth of seven, below
+//      `attention`. On 16 Sep both counsellors were dealt 21 restart cards
+//      between them and worked zero.
+//
+// The rest of the order is the measured yield, which the old order already had
+// right: money 19.4% > retention (going_cold 15.4%) > buddy 7.9% > new 4.4% >
+// attention 1.1%. `intro` is the pinned never-contacted block — see
+// assembleDay; it is a section now precisely so the pin can reach the screen.
+export const SECTION_ORDER: readonly DaySection[] = ['promises', 'intro', 'money', 'retention', 'buddy', 'new', 'attention', 'redial', 'rotation'];
 
 export const SECTION_LABEL: Record<DaySection, string> = {
   promises: 'Promises due',
+  intro: 'First conversation',
+  redial: 'No answer — try again',
   money: 'Started paying',
   buddy: 'Buddy interest',
   new: 'New arrivals',
@@ -66,47 +91,67 @@ export const SECTION_LABEL: Record<DaySection, string> = {
 // Nothing is dropped and no promise is removed: the five move UP, the rest
 // shift down by five, and the same cards are in the day. A promised callback
 // lands five cards later than it would have, which is minutes.
-export function pinFreshToFront<T extends { dueReason: DueReason; channel: Channel }>(
-  queue: T[], n: number = FRESH_PIN_PER_DAY,
-): T[] {
-  if (n <= 0 || queue.length === 0) return queue;
-  // ── AT TWENTY-FIVE, THE PIN GOES BELOW THE PROMISES (16 Sep 2026) ────────
+export function pinnedIntroIds<T extends { studentId: string; dueReason: DueReason }>(
+  day: readonly T[], n: number = FRESH_PIN_PER_DAY,
+): Set<string> {
+  // ── THE PIN HAD NEVER REACHED THE SCREEN (16 Sep 2026) ──────────────────
   //
-  // At five it sat above them, and that was right: five cards is minutes, and
-  // the note above explains why the cold lane needed the lift.
+  // This used to be `pinFreshToFront`, and it moved never-contacted cards to
+  // the front of the queue ARRAY. It did that correctly. It just did not
+  // matter: `call-deck.tsx` groups the day by `section` and renders the groups
+  // in SECTION_ORDER, and a pinned `fresh` card still carried
+  // `section: 'rotation'` — so it rendered in the LAST group, exactly where it
+  // would have been with no pin at all.
   //
-  // Twenty-five is a different object. A rep who works ~28 cards a day would
-  // spend the whole day inside the pinned block and reach no promise at all,
-  // and one of the two counsellors is carrying 35 callback cards. A callback
-  // is a time a STUDENT asked for and we agreed to — the founder's rule since
-  // 2 Sep is that promises are never bumped, and Incident #78 is about people
-  // who are already waiting.
+  // Thirty days of the pin being live: 370 fresh cards dealt, 84 worked (23%),
+  // against 78% for retry at the top of the screen. On 16 Sep, 43 fresh cards
+  // dealt and 0 worked. Neither the 15 Sep pin-of-five nor the 16 Sep move to
+  // twenty-five changed a single counsellor's screen, because both changed an
+  // array the screen re-groups.
   //
-  // So promises keep the top, the pinned never-contacted block comes straight
-  // after them, and everything else follows. The founder chose the SIZE of the
-  // block; the Constitution decides where it sits. In practice promises are
-  // few — eight on 16 Sep — so the block still starts near the top of the day,
-  // which is the whole point of pinning it.
-  const promises: T[] = [];
-  const pinned: T[] = [];
-  const rest: T[] = [];
-  for (const c of queue) {
-    if (SECTION_OF[c.dueReason] === 'promises') { promises.push(c); continue; }
+  // So the lift is now a SECTION — `intro`, second only to promises — decided
+  // here and applied where the counts are computed, so the count, the label
+  // and the card the counsellor taps are one decision (the admin-filters
+  // doctrine). Chosen off the queue's own order, so the queue still decides
+  // WHICH never-contacted students; this only decides how many are lifted.
+  const ids = new Set<string>();
+  if (n <= 0) return ids;
+  for (const c of day) {
+    if (ids.size >= n) break;
     // Only never-contacted. `rotation` is someone we HAVE spoken to before and
     // is a different promise to the student.
-    if (c.dueReason === 'fresh' && pinned.length < n) {
-      // An introduction is a conversation. A pinned card that arrives as a
-      // template defeats the point of pinning it.
-      pinned.push({ ...c, channel: 'call' });
-      continue;
-    }
-    rest.push(c);
+    if (c.dueReason === 'fresh') ids.add(c.studentId);
   }
-  return [...promises, ...pinned, ...rest];
+  return ids;
+}
+
+/**
+ * Put the day in the order the counsellor reads it.
+ *
+ * `call-deck.tsx` renders sections in SECTION_ORDER, so until now the stored
+ * `rank` and the screen disagreed — which is why "restart ranks 48" and
+ * "restart renders sixth" were both true and neither told you what the
+ * counsellor would work. Sorting the queue the way the screen groups it makes
+ * the stored rank mean what everyone assumed it meant.
+ *
+ * Stable within a section: the queue's own sort still decides who comes first
+ * among promises, among intros, among retries. "Filter, never re-sort" is
+ * unchanged — this re-groups, it does not re-rank.
+ */
+export function orderForScreen<T extends { section: DaySection }>(queue: readonly T[]): T[] {
+  const at = new Map<DaySection, number>(SECTION_ORDER.map((s, i) => [s, i] as const));
+  return queue
+    .map((c, i) => ({ c, i }))
+    .sort((a, b) => (at.get(a.c.section)! - at.get(b.c.section)!) || (a.i - b.i))
+    .map((x) => x.c);
 }
 
 export const SECTION_OF: Record<DueReason, DaySection> = {
-  callback: 'promises', retry: 'promises', followup: 'promises',
+  callback: 'promises', followup: 'promises',
+  // A re-dial is our policy, not a promise the student extracted from us — the
+  // note under UNTRIMMABLE said so in September and only the CEILING followed.
+  // The section follows now too, which is what the counsellor's screen reads.
+  retry: 'redial',
   checkout_abandoned: 'money',
   conversion: 'buddy',
   new_never_logged: 'new',
@@ -220,7 +265,7 @@ export interface AssembledDay<T> {
 }
 
 const emptyCounts = (): Record<DaySection, number> =>
-  ({ promises: 0, money: 0, buddy: 0, new: 0, attention: 0, retention: 0, rotation: 0 });
+  ({ promises: 0, intro: 0, money: 0, retention: 0, buddy: 0, new: 0, attention: 0, redial: 0, rotation: 0 });
 
 /**
  * Deal the day. `cands` must already be ranked, most urgent first; the
@@ -342,10 +387,14 @@ export function assembleDay<T extends { studentId: string; dueReason: DueReason 
   // Rank order is the queue's, not ours: filter, never re-sort.
   const day = cands.filter((c) => keep.has(c.studentId));
 
+  // Decided before the map so the section, the count and the channel of a
+  // pinned card are one decision and cannot drift apart.
+  const intro = pinnedIntroIds(day);
+
   const counts = emptyCounts();
   let rotationIndex = 0;
   const queue = day.map((c) => {
-    const section = SECTION_OF[c.dueReason];
+    const section: DaySection = intro.has(c.studentId) ? 'intro' : SECTION_OF[c.dueReason];
     counts[section]++;
     // ── ATTENTION IS A CALL NOW (founder, 15 Sep 2026) ───────────────────
     //
@@ -369,9 +418,11 @@ export function assembleDay<T extends { studentId: string; dueReason: DueReason 
   });
 
   return {
-    // The one deliberate re-order, applied last so counts and channels are
-    // decided on the queue's own ranking and only the ORDER changes.
-    queue: pinFreshToFront(queue),
+    // Grouped the way the counsellor's screen groups it, applied last so counts
+    // and channels are decided on the queue's own ranking and only the ORDER
+    // changes. An `intro` card is never `rotation`, so it keeps channel 'call':
+    // an introduction is a conversation, not a template.
+    queue: orderForScreen(queue),
     counts: { given: counts, heldBack: held.length - backfilled, rotationPool: newRotation.length + carried.filter((c) => SECTION_OF[c.dueReason] === 'rotation').length },
     band: { floor: DAY_FLOOR, ceiling: DAY_CEILING },
   };

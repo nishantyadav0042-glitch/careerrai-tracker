@@ -879,7 +879,22 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
       dueReason = 'retry'; dueLabel = `Retry — no answer${o.no_answer_count > 1 ? ` (${o.no_answer_count}×)` : ''}`;
       why = [`No answer ${o.no_answer_count > 1 ? `${o.no_answer_count} times` : 'last time'} — the retry window has arrived`];
       action = 'Try again — a different hour often lands';
-      sort = 6_000_000 + minutesOverdue();
+      // ── A RE-DIAL RANKS BELOW A CONVERSATION NOBODY HAS HAD (16 Sep 2026) ─
+      //
+      // This was 6_000_000 — second of every lane in the book, behind only a
+      // promised callback. Thirty days at that rank: 558 retry cards dealt,
+      // 435 WORKED. That is 41% of every card either counsellor completed, and
+      // it produced 6 students who said interested — 1.4%. Over the same
+      // thirty days 370 never-contacted cards were dealt and 286 of them were
+      // never reached at all, in a lane that converts at 7.1%.
+      //
+      // 2_000_000 puts it under `new_never_logged` (3.0M) and above
+      // `conversion` (1.0M): still ahead of the genuinely cold, because a
+      // student who did not pick up is a student we know is reachable — just
+      // no longer ahead of every conversation that has never happened.
+      // Nobody is dropped: RETRY_CEILING still deals them, and the card still
+      // carries the full no-answer count.
+      sort = 2_000_000 + minutesOverdue();
     } else if (dueNow && status === 'interested') {
       dueReason = 'followup'; dueLabel = 'Follow up — was interested';
       why = ['Said interested on the last call — the scheduled nudge is due'];
