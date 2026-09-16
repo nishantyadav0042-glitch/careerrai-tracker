@@ -5262,3 +5262,75 @@ looked healthy; `min(surfaced_at)` said 50 every morning. When a surface is
 rebuilt through the day, the number a person actually saw is the first one, not
 the sum — and the first draft of this entry got the claim wrong by reading the
 sum.
+
+---
+
+## Incident #87
+
+**2026-09-16 · The tile showed a number that was 42% unwritten beside one that
+was finished, and the founder read a collapse · Analytics (P1)**
+
+**What happened.** Founder, 09:36 IST: *"why these daily logs decreased so
+significantly suddenly? What's the exact reasoning?"* The Command Center read
+**LOGGED YESTERDAY 12** against a remembered **30**.
+
+Nothing had decreased.
+
+**The mechanism.** Students fill in the previous day's log during the NEXT day.
+Measured across thirteen days, only **22% of that backfill arrives before
+10:00 IST** — 78% comes later, peaking between 19:00 and 21:00. Split by when
+the row was written rather than which day it is about:
+
+| report_date | written that day | filled in next day | final |
+| --- | --- | --- | --- |
+| 10 Sep | 7 | +11 | 19 |
+| 11 Sep | 9 | +12 | 21 |
+| 12 Sep | 8 | +14 | 23 |
+| 13 Sep | 9 | +14 | 23 |
+| 14 Sep | 11 | +18 | **30** |
+| **15 Sep** | **9** | **+3 (at 09:36)** | **12** ← read here |
+
+**The same-day component of 15 Sep was NINE**, which is the most ordinary
+number in that column (7-11 all week). What was missing had not been written
+yet. Measured at the moment of the question, a day this age is typically
+**58% complete**, so 12 implied a final near 21 — in line with 19, 21, 23, 23.
+
+**And the rise it was compared against was not a rise.** Over 31 settled days
+the count has mean **22.1**, SD **5.9**, range **9-32**. 19, 21, 23 and 23 all
+sit within half a standard deviation of the mean; 30 is +1.3. There is nothing
+in "19 → 30" to explain, and inventing a cause for it would have been the
+precise-lie failure of L1.
+
+**What was ruled out, with evidence, before concluding.** Traffic: 46 students
+opened the app on 15 Sep, the highest of the week — the students came and did
+not log, so it was never a reach problem. Counsellor calls: logs from students
+called within 48h ran 4-12 every day with no relationship to the total.
+Signups: the 7-day-fresh cohort did drain from 407 to 11, but that is a
+two-week slope, not a one-day step. Code: `main` did not change between 9 Sep
+and 19:14 UTC on 15 Sep.
+
+**What was done.** `lib/os/log-maturity.ts`. `SETTLE_DAYS = 2` (measured: every
+report_date's count at age 2 already equals its final; age 1 does not). The
+two still-filling tiles now carry their own maturity — *"still filling — about
+58% in by now"* — and the row is followed by the last SETTLED day with its
+count and what a normal settled day is. The share is measured from this table's
+own history, never typed into the page, and a window too thin to measure it
+prints *"still filling"* rather than a guessed percentage.
+
+**The note sits ON the tile, not in the caption below the row**, because the
+eye compares two figures before it ever reaches a caption — which is exactly
+how 12 beside 30 read as a collapse, on a screen that already carried an
+honest caption about what a log is.
+
+**What was deliberately NOT done.** The tiles were not re-pointed at a settled
+day. `ActivityState` derives from days-since-log across the app, so the count
+and the People list it drills into would have stopped agreeing — the one
+invariant `admin-filters` exists to hold.
+
+**Lesson.** *A number that keeps growing after its period ends has an age, and
+a surface that prints it without its age will mislead every single morning.*
+Third of this family in two days: #86 was a deck read at its first build
+versus its daily total, its own correction was a daily total hiding a morning
+defect, and this is a daily total read before the day had finished being
+written. The common shape is not a wrong number — it is a right number read at
+the wrong moment, and the fix is always to make the moment visible.

@@ -7,6 +7,7 @@ import { findCadenceBursts } from '@/lib/os/rep-cadence';
 import { findUncorroboratedReps } from '@/lib/os/rep-corroboration';
 import { findStarvedBooks } from '@/lib/os/book-starvation';
 import { findPromiseDebt } from '@/lib/os/promise-debt';
+import { readLogMaturity } from '@/lib/os/log-maturity';
 import { DismissAlert } from './dismiss-alert';
 import { getRealStudents, getLoggedToday, getSalesReadyToCall, getWantsBuddy } from '@/lib/admin-filters';
 import { CheckCircle2, ArrowRight, AlertOctagon, AlertTriangle, Circle, ShieldAlert, Phone, SearchCheck } from 'lucide-react';
@@ -96,7 +97,7 @@ export default async function CommandCenterPage() {
   const students = await getRealStudents(admin);
   const istDay = (offset: number) =>
     new Date(now - offset * 86_400_000).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-  const [logged, salesReady, wantsBuddy, activeYesterday, activeWeek] = await Promise.all([
+  const [logged, salesReady, wantsBuddy, activeYesterday, activeWeek, maturity] = await Promise.all([
     getLoggedToday(admin, students),
     getSalesReadyToCall(admin, students),
     getWantsBuddy(admin),
@@ -104,6 +105,13 @@ export default async function CommandCenterPage() {
     fetchAll(() => admin.from('daily_reports').select('student_id').eq('report_date', istDay(1))),
     // Distinct students who logged in the last 7 days — active this week.
     fetchAll(() => admin.from('daily_reports').select('student_id').gte('report_date', istDay(7))),
+    // HOW FINISHED those two counts are (16 Sep 2026). A day's logs keep
+    // arriving for two days, so read at breakfast "yesterday" is about a fifth
+    // written — see lib/os/log-maturity. Never blocks the page.
+    readLogMaturity(admin, now).catch((e) => {
+      console.error('[command-center] log maturity read failed:', e);
+      return { settledDay: null, settledCount: null, settledMedian: null, todaySharePct: null, yesterdaySharePct: null };
+    }),
   ]);
   const yesterdayCount = new Set((activeYesterday.data ?? []).map((r: { student_id: string }) => r.student_id)).size;
   const weekCount = new Set((activeWeek.data ?? []).map((r: { student_id: string }) => r.student_id)).size;
@@ -302,10 +310,31 @@ export default async function CommandCenterPage() {
           is in the founder digest (lib/os/study-truth). */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         <ContextTile label="Students" value={students.length} href="/admin/people" />
-        <ContextTile label="Logged today" value={`${logged.length}/${students.length}`} href="/admin/people?activity=today" />
-        <ContextTile label="Logged yesterday" value={yesterdayCount} href="/admin/people?activity=yesterday" />
+        <ContextTile
+          label="Logged today"
+          value={`${logged.length}/${students.length}`}
+          href="/admin/people?activity=today"
+          note={maturity.todaySharePct == null ? 'still filling' : `still filling — about ${maturity.todaySharePct}% in by now`}
+        />
+        <ContextTile
+          label="Logged yesterday"
+          value={yesterdayCount}
+          href="/admin/people?activity=yesterday"
+          note={maturity.yesterdaySharePct == null ? 'still filling' : `still filling — about ${maturity.yesterdaySharePct}% in by now`}
+        />
         <ContextTile label="Logged this week" value={weekCount} href="/admin/people?activity=this_week" />
       </div>
+      {/* The number a reader can actually compare against, because it is the
+          only one on this row that has stopped moving. Without it the eye puts
+          an unfinished count beside a finished one and reads a collapse. */}
+      {maturity.settledDay != null && maturity.settledCount != null && (
+        <p className="mt-2 px-1 text-[11px] leading-relaxed text-stone-500">
+          Last settled day ({maturity.settledDay}): <strong className="text-stone-700">{maturity.settledCount} logged</strong>
+          {maturity.settledMedian != null && <> · a normal settled day is {maturity.settledMedian}</>}.
+          A day&apos;s logs keep arriving for two days — most of yesterday&apos;s are written this evening — so
+          today and yesterday above are not comparable to it yet.
+        </p>
+      )}
       <p className="mt-2 px-1 text-[11px] leading-relaxed text-stone-400">
         A log is a student answering, not a student studying — roughly half record no study time.
         The daily digest carries how many actually studied.
@@ -326,11 +355,15 @@ function RevenueTile({ emoji, label, value, href, hot }: { emoji: string; label:
   );
 }
 
-function ContextTile({ label, value, href }: { label: string; value: string | number; href: string }) {
+function ContextTile({ label, value, href, note }: { label: string; value: string | number; href: string; note?: string }) {
   return (
     <Link href={href} className="rounded-2xl border border-stone-200 bg-white p-3.5 transition-colors hover:border-stone-400">
       <p className="text-[11px] font-semibold uppercase tracking-wider text-stone-400">{label}</p>
       <p className="mt-1 text-[18px] font-bold leading-none text-stone-900">{value}</p>
+      {/* The maturity sits ON the number, not in a caption below the row: the
+          eye compares the two figures before it ever reaches a caption, which
+          is how "12 against 30" read as a collapse on 16 Sep. */}
+      {note && <p className="mt-1 text-[10px] leading-tight text-amber-700">{note}</p>}
     </Link>
   );
 }
