@@ -5693,3 +5693,104 @@ The second lesson is narrower and older: **a rule half-applied is a rule that
 will invert.** Retry stopped being a promise for ceiling purposes on 9 Sep and
 stayed one for rank and section purposes for a week, which is how the lane the
 repo had explicitly demoted came to own 41% of the day.
+
+---
+
+## Incident #92 — `X && !X`: the buddy nudge was unreachable (16 Sep 2026)
+
+**Severity:** P1 (Student / Growth). **Impact:** the highest-converting surface
+in the product, dead for fifteen days, for every buddy-less non-premium student
+— roughly 157 who were eligible and active in the last week.
+
+### What the instrumentation was for, and what it actually found
+
+On 15 Sep the daily buddy nudge was instrumented rather than guessed at:
+production showed **124 `buddy_nudge_shown` all-time and zero since 1 Sep**, six
+different bail-outs shared one symptom, and nothing stored could say which gate
+was closing. The founder's instruction was explicit — *"pehle mujhe instrument
+karke exact wajah dikhao"* — so a `NudgeGate` union was added and every bail-out
+made to name itself, with `buddy_nudge_mounted` fired before any gate could run.
+
+Thirty-six hours later the answer arrived, and it was not one of the six:
+
+- `buddy_nudge_mounted` — **0 rows**
+- `buddy_nudge_blocked` — **0 rows**
+- `push_ask_mounted` over the same window — 16 rows, with `push_ask_later` 32,
+  `push_ask_skipped` 8, `push_ask_shown` 6. The telemetry pipe was healthy.
+- Eligible and active in 7 days (`app_installed`, no `buddy_id`, not premium,
+  seen in the last week): **157 students.**
+
+The mount event fires before every gate. Zero mounts means the component was
+never rendered at all, and the six gates were never the question.
+
+### The defect
+
+```ts
+const showResourceAnnounce = noBlockingModal && !showCoverageReview
+  && !showTimetablePrompt && !onboardedTodayIst;
+
+const showBuddyNudge = noBlockingModal && !showCoverageReview && appInstalled
+  && !showTimetablePrompt && !showResourceAnnounce
+  && !onboardedTodayIst && !profile?.buddy_id && profile?.is_premium !== true;
+```
+
+Every condition of `showResourceAnnounce` is also a condition of
+`showBuddyNudge`. Let `A = noBlockingModal && !showCoverageReview &&
+!showTimetablePrompt && !onboardedTodayIst`. Then `showResourceAnnounce === A`
+and `showBuddyNudge === A && !A && …` — **false for every student, on every
+day**. `git log -S` dates the clause to `a32dc385`, 1 September, #158, which is
+the exact day the surface went silent.
+
+It could not have worked even in principle. `src/app/student/layout.tsx` is a
+**server component**. `ResourceAnnounce` shows once ever per browser and
+remembers that in `localStorage` (`cr_resource_announce_v1`). The server cannot
+read that key, so `showResourceAnnounce` can only ever mean *"this student is
+eligible for the announcement"* — which stays true forever. A permanently-true
+exclusion, written to prevent a race, silently removed the surface: 28 of 124
+shown modals reached the CTA (**22.6%**) against 28 of 3,458 evening pushes
+(0.8%).
+
+Beside it, `<ResourceAnnounce />` was rendering `null` the whole time, because
+its own `SEEN_KEY` had long since been set.
+
+### The fix, and the wrong first version of it
+
+The exclusion is removed. The priority it was protecting — *"the announcement
+wins the one day it exists; the buddy nudge is there every day"* — now lives in
+`lib/daily-modal.ts`, beside the slot both components claim:
+
+```ts
+export const ANNOUNCE_SETTLE_MS = 1800;
+export const NUDGE_SETTLE_MS = 2200;
+```
+
+The announcement checks its `SEEN_KEY`, and on the single day it appears claims
+the shared slot first. On every later day it returns *before* claiming, and the
+nudge takes the slot 400ms afterwards.
+
+**The first version of this fix was wrong, and a guard caught it.** The
+reasoning written into it was that the announcement claimed synchronously on
+mount while the nudge claimed on a timer, so removing the exclusion was safe.
+The assertion failed. Reading the component instead of assuming: the
+announcement claims at **1800ms** and the nudge claimed at **1400ms**, so
+deleting the exclusion alone would have handed the nudge the slot 400ms early
+and inverted the stated priority — replacing a permanent outage of one surface
+with a permanent outage of the other. That is why the delays are now named,
+shared, and ordered by a test rather than by two literals in two files.
+
+### Lesson
+
+*A gate built from a condition's own preconditions is not a gate, it is a
+contradiction* — and the surface it guards goes dark in a way that no
+in-component instrumentation can see, because nothing in the component ever
+runs. The 15 Sep telemetry was still the right thing to ship: it is the only
+reason the mount count could be compared against 157 eligible students and the
+question moved up a layer. What it teaches is where to put the first probe.
+**Instrument the mount before instrumenting the gates**, or a healthy-looking
+gate ladder will be measured on a component nobody renders.
+
+The second lesson repeats #91 from the same day, in the other direction: a rule
+expressed at a layer that cannot know the fact it depends on will be wrong
+forever and look deliberate. #91 put an ordering in an array the screen
+re-groups; #92 put a localStorage fact in a server component. Both were written
+carefully, reviewed, and tested. Neither could ever have been true.
