@@ -122,3 +122,61 @@ reported beside it; it is simply not the gate.
 | **Weak** | They return, but the logs are empty | An opening problem, not a retention breakthrough. Build no more surface area |
 | **None** | Movement under 3 points either way | Stop assuming logging and adaptation are the answer. The interviews decide |
 | **Negative** | Repeat logging falls, or students say the changes are wrong | Roll back healing, keep the input, fix the engine |
+
+---
+
+## Addendum, same night — two findings that changed the build
+
+### 1. The five-hour plan is the student's own number
+
+Across the **804 students who have ever been given a routine**: median claimed
+**5h/day**, p90 **8h**, max **16h**. **413 of them carry
+`study_hours_source = 'student'`** — they personally confirmed it. Median study
+actually reported by an active student: **0.6h**.
+
+The plan is not over-reaching. It is faithfully building the day the student
+asked for, and then never mentioning the gap again.
+
+This matters because `daily-hours.ts` carries a standing founder decision
+(6 Aug): the hours belong to the student and *"nothing in this codebase may
+derive, cap, trim, round toward behaviour, or otherwise 'improve' it… The date
+gives. The hours don't."* Secretly right-sizing the plan would have violated
+it — and would have been the wrong fix anyway, since fifteen hours from a
+sincere student is a real answer.
+
+So the product now **shows the student their own two numbers and lets them
+move one**. `setDailyHours` remains the only writer. `capBudget()` still has no
+caller, pinned by test.
+
+**A capacity model already existed** (`capacity-engine.ts`, tested) and its own
+comment recorded that nothing consumed it. The 8.3× mismatch was never a
+missing model — it was an unwired one, plus a number nobody was ever shown
+again.
+
+### 2. Missed work does not accumulate — VERIFIED
+
+The feared failure mode (*miss Monday → Tuesday holds Monday + Tuesday →
+backlog → abandonment*) **does not exist in this engine.** Each day is
+regenerated from the student's hours and the topic selector's coverage state;
+uncovered topics are re-offered at the same daily size, which is already
+"rescheduled, not accumulated".
+
+Measured within-student over 60 days, 506 students, 1,347 routines:
+
+| | |
+|---|---|
+| Plan size after 0 untouched days | 378 min · 4.43 tasks |
+| After 1–3 untouched days | 346 min |
+| After 5+ untouched days | 417 min · 4.97 tasks |
+| **Mean size against the student's own claim** | **−19.9 min** |
+
+Five missed days would add roughly 22 tasks if work stacked. Tasks move 4.43 →
+4.97, and plans run on average twenty minutes *under* what the student asked
+for — a backlog would exceed the claim by definition. The 10% drift is
+consistent with phase progression and with higher-claiming students missing
+more days, not with accumulation.
+
+**Consequence: priority-based plan healing was not built.** It would be surface
+area against a problem the data says we do not have. The real defect in the
+same area is that the plan regenerates at *full* size regardless of what
+happened — which is what the right-size card addresses, through the student.
