@@ -186,6 +186,11 @@ export default async function SalesControlTower() {
                 <th className="p-2 text-right" title="Any call or message in the last 21 days.">Touched · 21d</th>
                 <th className="p-2 text-right" title="Nobody has ever called or messaged them.">Never touched</th>
                 <th className="p-2 text-left">Given today</th>
+                {/* Incident #99: every count in this row is "today so far", and
+                    a two-hours-in zero looked exactly like an absent
+                    counsellor. This column is the denominator — where the seat
+                    is in its own shift — not a target of any kind. */}
+                <th className="p-2 text-left" title="Where this counsellor is in their own working day. Counts to the right are partial until the shift ends.">Shift</th>
                 <th className="p-2 text-right">Worked</th>
                 <th className="p-2 text-right" title="Closed without acting, with a reason.">Skipped</th>
                 <th className="p-2 text-right" title="Dealt today and still not marked either way.">Unmarked</th>
@@ -207,13 +212,20 @@ export default async function SalesControlTower() {
                       {given === 0 ? <span className="text-stone-400">nothing dealt yet today</span>
                         : <><span className="font-bold text-stone-800">{given}</span> · {SECTION_ORDER.filter((k) => c.givenToday[k] > 0).map((k) => `${SECTION_LABEL[k]} ${c.givenToday[k]}`).join(' · ')}</>}
                     </td>
-                    <td className="p-2 text-right tabular-nums">{c.workedToday}</td>
+                    <td className="p-2 text-[11px] text-stone-600">
+                      {c.shift.label}
+                      {!c.shift.dayComplete && <span className="ml-1 text-stone-400">· so far</span>}
+                    </td>
+                    {/* Dimmed while the day can still change: an unfinished
+                        number and a final one must not read the same. */}
+                    <td className={cn('p-2 text-right tabular-nums', !c.shift.dayComplete && 'text-stone-500')}>{c.workedToday}</td>
                     <td className="p-2 text-right tabular-nums text-stone-500">{c.skippedToday}</td>
                     {/* The number the founder asked for on 3 Sep: cards dealt
                         and never marked either way. After 21:45 IST the sweep
                         has closed them, so a non-zero here during the shift is
                         work still to do, not a permanent hole. */}
-                    <td className={cn('p-2 text-right tabular-nums', c.openToday > 0 && 'font-bold text-amber-700')}>{c.openToday}</td>
+                    <td className={cn('p-2 text-right tabular-nums',
+                      c.openToday > 0 && c.shift.state !== 'not_started' && c.shift.state !== 'not_scheduled' && 'font-bold text-amber-700')}>{c.openToday}</td>
                     <td className="p-2 text-right tabular-nums">{c.calledToday}</td>
                     <td className="p-2 text-right tabular-nums">{c.messagedToday}</td>
                   </tr>

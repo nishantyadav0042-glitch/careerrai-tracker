@@ -6359,3 +6359,99 @@ surface can claim its value without consuming it. Before building a mechanism,
 grep for its callers — and if a Constitution forbids the obvious wiring, the
 Constitution is usually protecting something the instruction did not know
 about. Show the human the evidence instead of acting on it for them.
+---
+
+## Incident #99 — a worked count read mid-shift, twice (17 Sep 2026)
+
+**Severity:** P1 (Sales / Analytics). **Impact:** the founder's daily read of
+both counsellors, every day; and two builds he asked for that rested entirely
+on the misreading.
+
+### What was reported, and what was true
+
+The founder was told two things on 17 September:
+
+1. *"Neelam has worked 0 cards — the whole day."*
+2. *"154 cards dealt, 31 worked — 123 of them are just a number."*
+
+Both were read off `workedToday` at **17:00 IST**. Both counsellors' shift is
+**15:00–21:00 IST**, from `sales_rep_config.work_start_ist` / `work_end_ist`.
+At 17:00 they were two hours into a six-hour day. The same field had been
+misread the same way **the day before** — that counsellor ended 16 Sep at 39
+worked, having shown 0 at the moment of the earlier check.
+
+The counts were never wrong. They were unfinished, and nothing said so.
+
+### The product defect underneath the reporting mistake
+
+This was not only a reading error, and treating it as one would have left it in
+place. `sales_rep_config`'s shift columns were read by exactly **one** module —
+`sales-absence-cover.ts`, added the previous day for Incident #90. Neither
+`sales-control-tower.ts` nor `os/founder-digest.ts`, the two surfaces the
+founder actually reads, knew a shift existed.
+
+So the control tower printed:
+
+- a two-hours-in `workedToday` and a day-is-over `workedToday` in the same
+  column, in the same type, with nothing to distinguish them; and
+- an amber **Unmarked** warning on cards dealt at 11:06 IST for a shift that
+  does not begin until 15:00 — a hole that had not yet had a chance to be
+  filled.
+
+Given that surface, the misreading was the expected outcome, not a lapse.
+
+### The fix
+
+`src/lib/sales-shift-progress.ts` — pure, no I/O:
+
+```ts
+type ShiftState = 'not_scheduled' | 'unknown' | 'not_started' | 'in_progress' | 'over';
+interface ShiftProgress { state; minutesElapsed; minutesTotal; dayComplete; label }
+```
+
+- **`dayComplete`** is the load-bearing field: may today's counts be read as
+  today's answer? It is a fact about the clock, never about a person.
+- A missing or malformed window returns `'unknown'` with `dayComplete: false`
+  and `minutesTotal: null` — **no guessed denominator** (L1: a trustworthy
+  UNKNOWN beats a precise lie).
+- A non-working day is `'not_scheduled'` and *is* complete: a Sunday zero is an
+  answer, not a worry.
+- `RepCoverage.shift` carries it. The tower renders a **Shift column before
+  Worked** (a number is qualified by what precedes it), dims a partial count
+  and appends "· so far". The Unmarked warning no longer fires before the shift
+  starts.
+- A failed `sales_rep_config` read cannot take the coverage view down — the
+  counts are still true, they only lose their denominator.
+- SALES-OS §0 is guarded by a word-list test: `target`, `quota`, `expected`,
+  `behind`, `ahead`, `shortfall`, `perHour` may not appear in this module. It is
+  a clock, and a clock that learns to say "behind" has become a quota.
+
+### Two builds NOT made, because the premise dissolved
+
+The founder asked for both. Saying so was the work.
+
+**An absent-counsellor fix.** There was no bug. `COVER_AFTER_SHIFT_HOURS` is
+2.5, so cover was due at 17:30 and the observation was made at 17:21. The
+system had not failed; it had not reached its threshold.
+
+**Sizing the deck to each rep's measured throughput.** Completed days — not
+mid-shift snapshots — show one seat working **39, 41, 45, 50, 69, 71, 73, 104**
+against decks of 69–114, and the other **15, 17, 21, 32, 37, 39, 39, 46, 52,
+64** against decks of 59–84. A deck sized to a median would have **capped the
+good days**: 104 and 64 both become impossible. The founder's goal is maximum
+outreach; this build would have reduced it. What is left is a presentation
+question, not a capacity one, and it is smaller than the ordering work of #199
+by a wide margin.
+
+### Lesson
+
+*A count over a window is not a number until the window closes.* Every "today"
+figure on an operator surface needs its denominator rendered beside it, or
+somebody — a founder, an engineer, an agent — will read a partial number as a
+verdict, and the surface will have invited them to.
+
+This is the third form of the same defect in two days. #91 put an ordering in a
+layer the screen re-groups. #92 put a localStorage fact in a server component.
+#93 put a time-bounded count on a surface with no clock. In all three the rule
+was right and the place was wrong — and in all three the code looked correct
+when read on its own.
