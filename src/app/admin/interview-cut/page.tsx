@@ -115,13 +115,23 @@ export default async function InterviewCutPage() {
       </p>
 
       <div className="mt-4 flex flex-wrap gap-2 text-[12px] font-semibold">
-        <span className="rounded-lg bg-stone-900 px-3 py-1.5 text-white">{oneAndDone.length} logged once, never again</span>
+        <span className="rounded-lg bg-stone-900 px-3 py-1.5 text-white">{oneAndDone.length} with exactly one recorded log</span>
         <span className="rounded-lg border border-stone-200 px-3 py-1.5 text-stone-700">{reachable} of those reachable</span>
         <span className="rounded-lg border border-stone-200 px-3 py-1.5 text-stone-700">{repeaters.length} repeaters</span>
         <span className="rounded-lg border border-stone-200 px-3 py-1.5 text-stone-500">{tooRecent} too recent to judge</span>
       </div>
 
-      <section className="mt-5 rounded-xl border border-stone-200 bg-stone-50 p-4">
+      <section className="mt-5 rounded-xl border border-amber-200 bg-amber-50/60 p-4">
+        <h2 className="text-[11px] font-bold uppercase tracking-widest text-amber-800">This is not a churn list</h2>
+        <p className="mt-1.5 text-[13px] leading-relaxed text-stone-800">
+          The only thing established about these students is that they have <strong>exactly one recorded daily
+          report</strong>. We do not know whether they abandoned CAT, carried on offline, moved to another product,
+          forgot us, found us unnecessary, disliked us, or still mean to come back. Those are six different companies
+          to build and the number cannot tell them apart. Finding out which is the entire purpose of the conversation.
+        </p>
+      </section>
+
+      <section className="mt-4 rounded-xl border border-stone-200 bg-stone-50 p-4">
         <h2 className="text-[11px] font-bold uppercase tracking-widest text-stone-500">Open with exactly this</h2>
         <p className="mt-2 rounded-lg bg-white p-3 text-[13px] leading-relaxed text-stone-900">{OPENING}</p>
         <ul className="mt-3 space-y-1 text-[13px] text-stone-700">
@@ -136,7 +146,7 @@ export default async function InterviewCutPage() {
       </section>
 
       <Roster
-        title="Logged once, never again"
+        title="Exactly one recorded log"
         note={`Every one of them, not a recent slice. Excludes anyone whose first log is less than ${SETTLE_DAYS} days old — they have not yet had the week in which returning was possible.`}
         rows={oneAndDone}
       />

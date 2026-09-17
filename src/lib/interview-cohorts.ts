@@ -5,7 +5,13 @@
 //     What, if anything, causes a student to return to CareerRai after their
 //     first meaningful use?
 //
-// 174 of 302 students in the frozen cohort logged once and never again. The
+// 174 of 302 students in the frozen cohort have EXACTLY ONE recorded daily
+// report. That is the whole of what is established — not that they churned,
+// not that they rejected the product, not that they stopped preparing. They
+// may have carried on offline, moved to another product, forgotten us, or
+// still mean to return; those are different companies to build and the count
+// cannot tell them apart. Calling this list "churn" would answer the research
+// question before asking it. The
 // existing Student Outreach board cannot reach them: it lists students who
 // logged in the last 21 days, which by construction is almost the opposite
 // population. This module builds the two rosters the question needs.
