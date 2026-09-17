@@ -66,10 +66,17 @@ describe('capturing it cannot become a chore', () => {
     expect(reasonNeedsVerbatim('other')).toBe(true);
   });
 
-  it('an unanswered call is never asked why the student is not studying', () => {
+  it('an unanswered call is never asked why the student is not studying', async () => {
     // Nobody spoke to them. Asking would be inviting the rep to guess, and a
     // guessed category is indistinguishable from an observed one once stored.
-    expect(deck).toMatch(/asksReason\s*=\s*outcome !== 'no_answer'/);
+    // Broadened 17 Sep 2026: `no_answer` split into two unreached outcomes
+    // (`switched_off` joined it), so pinning the literal would have let the new
+    // one start asking for a reason nobody could have. The RULE is unchanged
+    // and is what this now asserts — no unreached outcome is asked why.
+    expect(deck).toMatch(/asksReason\s*=\s*!isUnreached\(outcome\)/);
+    const { isUnreached, CALL_OUTCOMES } = await import('./sales-disposition');
+    const unreached = CALL_OUTCOMES.filter((o) => isUnreached(o));
+    expect(unreached, 'both ways a call fails to reach anyone').toEqual(['no_answer', 'switched_off']);
   });
 
   it('the vocabulary still carries the product-fixable causes', () => {

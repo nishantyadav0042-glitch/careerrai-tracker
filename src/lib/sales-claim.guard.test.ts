@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { ACTIVITY_STATUSES } from './sales-disposition';
 import { canAccessLead, resolveOwnerToken, type SalesPrincipal, type StaffDirectory } from './sales-authz';
 
@@ -34,11 +35,19 @@ describe('the claim is one atomic conditional statement', () => {
 
 describe('activity vocabulary: code and DB CHECK stay one list', () => {
   it('the sales_activity CHECK lists exactly ACTIVITY_STATUSES', () => {
-    // 20260824b supersedes 20260820c's CHECK: same constraint, 'dnd' added.
-    // The guard always reads the NEWEST definition.
-    // 20260903b supersedes 20260903a: 'skipped' joined the vocabulary, so a
-    // counsellor can close a card honestly instead of leaving it open (3 Sep).
-    const sql = readFileSync('supabase/migrations/20260903b_day_must_close.sql', 'utf8');
+    // This said "the guard always reads the NEWEST definition" while naming a
+    // fixed file, so every new CHECK needed the filename edited by hand — and
+    // until it was, the guard compared the code against a superseded
+    // constraint and passed while the two drifted. 17 Sep 2026: it now does
+    // what it always claimed. ('dnd' arrived in 20260824b, 'skipped' in
+    // 20260903b, 'switched_off' in 20260917a; none of that needs listing here
+    // any more.)
+    const dir = 'supabase/migrations';
+    const defining = readdirSync(dir).filter((f) => f.endsWith('.sql'))
+      .filter((f) => /sales_activity_status_check\s*\n?\s*check \(status in \(/.test(readFileSync(join(dir, f), 'utf8')))
+      .sort();
+    expect(defining.length, 'some migration must define the CHECK').toBeGreaterThan(0);
+    const sql = readFileSync(join(dir, defining[defining.length - 1]), 'utf8');
     const m = sql.match(/sales_activity_status_check\s*\n?\s*check \(status in \(([^)]+)\)\)/);
     expect(m, 'CHECK constraint not found in migration').toBeTruthy();
     const dbList = [...m![1].matchAll(/'([^']+)'/g)].map((x) => x[1]).sort();
