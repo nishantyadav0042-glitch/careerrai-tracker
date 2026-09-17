@@ -275,6 +275,10 @@ export const WORKSPACES: AdminWorkspace[] = [
       // belongs to People — claiming it here too would give one page two
       // meanings, which admin-workspaces.test.ts correctly refuses.
       { label: 'Feedback round', href: '/admin/student-outreach', status: 'live' },
+      // The research roster (17 Sep). Separate from the feedback round because
+      // that board is a 21-day window and this population is almost its
+      // complement: students who logged once, months ago, and never returned.
+      { label: 'Interview cut', href: '/admin/interview-cut', status: 'live' },
     ],
   },
 ];

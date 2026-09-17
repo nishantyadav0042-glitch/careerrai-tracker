@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 // public promise ends up being one no paying customer in company history could
 // actually claim, with nobody noticing for months.
 export default function RefundsPage() {
-  const updated = '16 September 2026';
+  const updated = '17 September 2026';
   return (
     <main className="mx-auto max-w-2xl px-5 py-10 text-stone-800">
       <Link href="/" className="text-sm font-medium text-orange-600 hover:underline">← Back to CareerRai</Link>
