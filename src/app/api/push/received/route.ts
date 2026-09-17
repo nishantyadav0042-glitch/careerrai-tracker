@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { confirmDelivery } from '@/lib/notification-endpoints';
+import { confirmDelivery, readDisplayOutcome } from '@/lib/notification-endpoints';
 
 // Delivery beacon from the service worker (sw.js push handler): fires the
 // moment a push ARRIVES on the device — even with the app fully closed, since
@@ -15,8 +15,9 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 export async function POST(request: NextRequest) {
   let id: unknown;
   let endpointId: unknown;
+  let display: unknown;
   try {
-    ({ id, endpointId } = await request.json());
+    ({ id, endpointId, display } = await request.json());
   } catch {
     // fall through to validation
   }
@@ -53,10 +54,23 @@ export async function POST(request: NextRequest) {
   // students, or either of which we do not recognise. A refusal is reported
   // as a status, never as an error — the student-level receipt above is
   // already banked and must not be undone by a bad or stale device id.
+  //
+  // ── AND WHAT THE DISPLAY CALL DID (Phase 0, 17 Sep 2026) ──────────────────
+  //
+  // Rides this beacon rather than its own: a waking radio is the most expensive
+  // moment to spend a request in, and it is exactly the moment these beacons
+  // are lost. Malformed input becomes null and the receipt proceeds without it
+  // — a bad display field must never cost the receipt, which is the older and
+  // more important signal.
+  //
+  // Recorded per DEVICE, so it needs the endpoint pair. A student still on the
+  // legacy student-level fallback sends no endpointId, records no display, and
+  // behaves exactly as before.
+  const outcome = readDisplayOutcome(display);
   let device: 'confirmed' | 'already' | 'rejected' | 'absent' = 'absent';
   if (typeof endpointId === 'string' && UUID_RE.test(endpointId)) {
-    device = await confirmDelivery(admin, id, endpointId);
+    device = await confirmDelivery(admin, id, endpointId, outcome);
   }
 
-  return NextResponse.json({ ok: true, device });
+  return NextResponse.json({ ok: true, device, display: outcome ? 'recorded' : 'absent' });
 }

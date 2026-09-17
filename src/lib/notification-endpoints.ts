@@ -274,6 +274,50 @@ export async function recordDelivery(
 }
 
 /** What confirmDelivery() actually did — the route turns this into a status. */
+/**
+ * What the service worker's `showNotification()` call actually did.
+ *
+ * `resolved` means the browser ACCEPTED the render request and handed it to the
+ * OS. It is deliberately not called `displayed`, `seen` or `delivered`: Do Not
+ * Disturb, Focus, OEM standby and a phone face-down in a bag all sit past that
+ * boundary, and no web API crosses it. `clicked_at` stays the only production
+ * evidence that a student actually saw a notification.
+ */
+export interface DisplayOutcome {
+  attempted: boolean;
+  resolved: boolean;
+  /** The rejection message, already bounded by the caller. */
+  error: string | null;
+}
+
+/**
+ * Accept a display outcome from the wire, or nothing.
+ *
+ * The beacon is unauthenticated (the SW may hold no session), so this is a
+ * boundary: anything malformed becomes `null` and the receipt proceeds without
+ * it. A bad display field must never cost us the receipt itself, which is the
+ * older and more important signal.
+ */
+export function readDisplayOutcome(raw: unknown): DisplayOutcome | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const d = raw as Record<string, unknown>;
+  if (typeof d.attempted !== 'boolean' || typeof d.resolved !== 'boolean') return null;
+  const error = typeof d.error === 'string' && d.error.trim() !== '' ? d.error.slice(0, 300) : null;
+  // A resolved display has no error, whatever the wire says.
+  return { attempted: d.attempted, resolved: d.resolved, error: d.resolved ? null : error };
+}
+
+/** The delivery columns a display outcome writes. Pure, so the mapping is testable. */
+export function displayColumns(d: DisplayOutcome, nowIso: string): Record<string, string | null> {
+  return {
+    display_attempted_at: d.attempted ? nowIso : null,
+    displayed_at: d.resolved ? nowIso : null,
+    display_error_at: !d.resolved && d.attempted ? nowIso : null,
+    display_status: d.resolved ? 'resolved' : d.attempted ? 'error' : 'not_attempted',
+    display_error: d.resolved ? null : d.error,
+  };
+}
+
 export type ConfirmOutcome =
   | 'confirmed'   // first valid receipt for this (notification, device)
   | 'already'     // a receipt was already recorded — replay, harmless
@@ -306,8 +350,16 @@ export async function confirmDelivery(
   admin: any,
   notificationId: string,
   endpointId: string,
+  display?: DisplayOutcome | null,
 ): Promise<ConfirmOutcome> {
   const now = new Date().toISOString();
+  // `sw_receipt_at` is written at the same instant as `device_confirmed_at` and
+  // supersedes it (17 Sep 2026). The old column is retained, not renamed: it
+  // carries the evidence that receipts undercount displays — 18 of 100 clicked
+  // notifications have no receipt at all — and deleting the proof of a
+  // measurement bug is how the bug comes back.
+  const receipt = { device_confirmed_at: now, sw_receipt_at: now };
+  const displayCols = display ? displayColumns(display, now) : {};
   try {
     // OWNERSHIP: both sides must name the same student. Read them rather than
     // trusting the pair — this is the whole security boundary of this function.
@@ -324,7 +376,7 @@ export async function confirmDelivery(
     // The row keeps its own revoked_at, so the two facts stay separable.
     const { data: updated } = await admin
       .from('notification_deliveries')
-      .update({ device_confirmed_at: now })
+      .update({ ...receipt, ...displayCols })
       .eq('notification_id', notificationId)
       .eq('endpoint_id', endpointId)
       .is('device_confirmed_at', null)
@@ -351,7 +403,8 @@ export async function confirmDelivery(
         notification_id: notificationId,
         endpoint_id: endpointId,
         attempted_at: now,
-        device_confirmed_at: now,
+        ...receipt,
+        ...displayCols,
       }, { onConflict: 'notification_id,endpoint_id' });
     }
 
