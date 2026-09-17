@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-
-const REQUIRED_DAYS = 20;
+import { REFUND_REQUIRED_DAYS, refundWindow, refundShortfallMessage } from '@/lib/refund-policy';
 
 export async function POST() {
   const supabase = await createClient();
@@ -38,21 +37,24 @@ export async function POST() {
     return NextResponse.json({ error: 'You already have a refund request on file.', status: existing.status }, { status: 409 });
   }
 
-  // Count daily_reports in the first 30 days from account creation
-  const joinedAt = new Date(profile.created_at);
-  const thirtyDaysLater = new Date(joinedAt.getTime() + 30 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+  // Logged study days inside the refund window. The window and the bar both
+  // come from src/lib/refund-policy.ts — the same module the progress bar on
+  // the profile card and the three public policy pages read, so what a student
+  // is promised and what this route enforces cannot drift apart.
+  const { start, end } = refundWindow(profile.created_at);
   const { count: daysLogged } = await admin
     .from('daily_reports')
     .select('id', { count: 'exact', head: true })
     .eq('student_id', user.id)
-    .lte('report_date', thirtyDaysLater);
+    .gte('report_date', start)
+    .lte('report_date', end);
 
   const days = daysLogged ?? 0;
-  if (days < REQUIRED_DAYS) {
+  if (days < REFUND_REQUIRED_DAYS) {
     return NextResponse.json({
-      error: `You need ${REQUIRED_DAYS} days logged in your first month to qualify. You have ${days} so far.`,
+      error: refundShortfallMessage(days),
       daysLogged: days,
-      required: REQUIRED_DAYS,
+      required: REFUND_REQUIRED_DAYS,
     }, { status: 400 });
   }
 

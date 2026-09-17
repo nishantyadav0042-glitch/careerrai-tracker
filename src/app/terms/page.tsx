@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { REFUND_REQUIRED_DAYS } from '@/lib/refund-policy';
 
 export const metadata: Metadata = {
   title: 'Terms & Conditions · CareerRai',
@@ -45,7 +46,7 @@ export default function TermsPage() {
             <li>The Buddy plan is a paid, one-to-one mentorship service. Prices are shown in the app before you pay.</li>
             <li>Payments are processed securely by <strong>Razorpay</strong>. We do not store your card or bank details.</li>
             <li>Plans are prepaid for the chosen duration and do <strong>not</strong> auto-renew — you choose whether to renew.</li>
-            <li>Refunds follow our <Link href="/refunds" className="text-orange-600 hover:underline">Refund &amp; Cancellation Policy</Link>: a full refund in your first month if you&apos;ve logged at least 20 study days.</li>
+            <li>Refunds follow our <Link href="/refunds" className="text-orange-600 hover:underline">Refund &amp; Cancellation Policy</Link>: a full refund in your first month if you&apos;ve logged at least {REFUND_REQUIRED_DAYS} study days.</li>
           </ul>
         </section>
 

@@ -186,7 +186,7 @@ export default async function SalesControlTower() {
                 <th className="p-2 text-right" title="Any call or message in the last 21 days.">Touched · 21d</th>
                 <th className="p-2 text-right" title="Nobody has ever called or messaged them.">Never touched</th>
                 <th className="p-2 text-left">Given today</th>
-                {/* Incident #93: every count in this row is "today so far", and
+                {/* Incident #99: every count in this row is "today so far", and
                     a two-hours-in zero looked exactly like an absent
                     counsellor. This column is the denominator — where the seat
                     is in its own shift — not a target of any kind. */}

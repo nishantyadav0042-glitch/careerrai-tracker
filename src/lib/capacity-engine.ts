@@ -79,3 +79,171 @@ export function capBudget(proposedHours: number | null, capacity: Capacity): num
   if (proposedHours == null) return capacity.sustainableHours;
   return Math.min(proposedHours, capacity.sustainableHours);
 }
+
+// ── THE GAP BETWEEN WHAT A STUDENT SAYS AND WHAT THEY DO ────────────────────
+//
+// Measured 16 Sep 2026 across the 804 students who have ever been given a
+// routine: median claimed 5h/day, p90 8h, max 16h. Median study actually
+// reported by an active student: 0.6h. Thirty-six minutes.
+//
+// The plan is NOT over-reaching. It is faithfully building the day the student
+// asked for — and 413 of those 804 carry `study_hours_source = 'student'`,
+// meaning they personally confirmed that number. The product then never
+// mentions the gap again, and regenerates a five-hour day every morning while
+// 83.7% of routines never receive a single tick.
+//
+// WHY THIS DOES NOT SIMPLY TRIM THE NUMBER. daily-hours.ts carries a standing
+// founder decision (6 Aug): the hours are the STUDENT'S, and "nothing in this
+// codebase may derive, cap, trim, round toward behaviour, or otherwise
+// 'improve' it… The date gives. The hours don't." That rule is right, and it
+// is right for this exact case: 15 hours from a sincere student is a real
+// answer, and an app that quietly rewrites it to 0.6 has an opinion about a
+// number it was only ever asked to hold.
+//
+// So nothing here writes anything. This computes an OBSERVATION and a
+// PROPOSAL. The student is shown the gap in their own numbers and taps to
+// change it or to keep it, and `setDailyHours(…, 'student')` remains the only
+// writer. One number, one owner — the owner just finally gets to see the
+// evidence.
+//
+// It is deliberately symmetric. A student doing three hours against a claimed
+// one is offered the increase, because a capacity signal that can only ever
+// revise downward is a permanent label, not a planning input.
+
+import { MIN_DAILY_HOURS, MAX_DAILY_HOURS } from '@/lib/daily-hours';
+import { durationIsUnknown } from '@/lib/check-in';
+
+// ── ONE DERIVATION OF THE ENGINE'S INPUTS ───────────────────────────────────
+//
+// computeCapacity takes two log-derived numbers, and getting the second one
+// right is subtle enough that it has its own incident: `loggedDays` is an
+// EVIDENCE count, so a day we never measured the duration of must not be
+// counted, or a student is judged against their own stated hours on the
+// strength of days nobody measured. A declared zero, though, IS behaviour and
+// must count — otherwise honest bad days become a way to dodge the tier.
+//
+// That derivation was written inline inside api/routine/today. The second
+// surface to need capacity would have copied it, and the copy would have
+// drifted; the comment directly above it in that file is itself a warning
+// about the two-writer bug that came from sharing helpers but duplicating the
+// ASSEMBLY. So the assembly lives here now and both callers use it.
+
+export interface CapacityReport {
+  report_date?: string | null;
+  day_outcome?: string | null;
+  study_duration?: number | string | null;
+  study_duration_source?: string | null;
+}
+
+/**
+ * Capacity from raw `daily_reports` rows.
+ *
+ * `since` is an ISO date. Callers that already windowed at the database may
+ * omit it; passing it is harmless and makes the window explicit at surfaces
+ * that hold a longer history (the tracker holds 500 rows).
+ */
+export function capacityFromReports(
+  reports: readonly CapacityReport[],
+  claimedHours: number | null,
+  since?: string,
+): Capacity {
+  const rows = since
+    ? reports.filter((r) => typeof r.report_date !== 'string' || r.report_date >= since)
+    : reports;
+  const hours = rows.map((r) => Number(r.study_duration) || 0);
+  const measuredDays = rows.filter((r) => !durationIsUnknown(r)).length;
+  return computeCapacity(hours, measuredDays, claimedHours);
+}
+
+/** The first date inside the capacity window, as an ISO date. */
+export function capacityWindowStart(now: Date = new Date()): string {
+  return new Date(now.getTime() - CAPACITY_WINDOW_DAYS * 86_400_000).toISOString().slice(0, 10);
+}
+
+/** Claim must be at least this multiple of behaviour before we say anything. */
+export const OVERSTATE_RATIO = 2;
+/** …and the absolute gap must be at least this many hours. Both, not either. */
+export const MIN_GAP_HOURS = 1;
+/** Days since the student last set their hours before we may raise it again. */
+export const OFFER_COOLDOWN_DAYS = 14;
+
+export interface HoursReality {
+  /** False when there is too little behaviour to claim anything. */
+  established: boolean;
+  claimedHours: number | null;
+  /** Typical hours on a day they actually studied. Median, so one 9-hour
+   *  Sunday cannot redefine a student. */
+  observedHours: number | null;
+  loggedDays: number;
+  /** claimed ÷ observed. Above 1 means they ask more of themselves than they do. */
+  ratio: number | null;
+  direction: 'over' | 'under' | 'matched' | null;
+  /** What we would propose instead. NEVER applied — only ever shown. */
+  suggestedHours: number | null;
+}
+
+const clampHours = (h: number) =>
+  Math.min(MAX_DAILY_HOURS, Math.max(MIN_DAILY_HOURS, Math.round(h * 2) / 2));
+
+/**
+ * Read the gap out of a Capacity. Pure, and it decides nothing.
+ *
+ * `established` is the honest gate: below MIN_DAYS_FOR_BEHAVIOUR logged days
+ * we do not know this student yet, and telling a three-day-old account that it
+ * over-claims would be punishing them for having no history — which is the
+ * one thing the founder ruled out by name.
+ */
+export function readHoursReality(c: Capacity): HoursReality {
+  const observed = c.typicalStudyHours;
+  const claimed = c.claimedHours;
+  const established = c.loggedDays >= MIN_DAYS_FOR_BEHAVIOUR && observed != null && claimed != null;
+
+  if (!established || observed == null || claimed == null || observed <= 0) {
+    return {
+      established: false, claimedHours: claimed, observedHours: observed,
+      loggedDays: c.loggedDays, ratio: null, direction: null, suggestedHours: null,
+    };
+  }
+
+  const ratio = claimed / observed;
+  const gap = Math.abs(claimed - observed);
+
+  let direction: HoursReality['direction'] = 'matched';
+  if (ratio >= OVERSTATE_RATIO && gap >= MIN_GAP_HOURS) direction = 'over';
+  else if (ratio <= 1 / OVERSTATE_RATIO && gap >= MIN_GAP_HOURS) direction = 'under';
+
+  return {
+    established: true, claimedHours: claimed, observedHours: observed,
+    loggedDays: c.loggedDays, ratio, direction,
+    // The student's own typical day, to the nearest half hour. Not a formula,
+    // not a discount — the number their behaviour already reports. We do not
+    // invent a stretch factor on top: that would be precision the data does
+    // not support, dressed as encouragement.
+    suggestedHours: direction === 'matched' ? null : clampHours(observed),
+  };
+}
+
+/**
+ * May we put the gap in front of this student right now?
+ *
+ * Separate from reading it, because "is this true" and "is this the moment to
+ * say it" are different questions and collapsing them is how a product starts
+ * nagging. A student who set their hours three days ago has answered; asking
+ * again is not adaptation, it is pestering someone who already decided.
+ */
+export function shouldOfferHoursCorrection(
+  reality: HoursReality,
+  opts: { hoursSetAt?: string | null; dismissedAt?: string | null; now?: Date } = {},
+): boolean {
+  if (!reality.established || reality.direction === 'matched' || reality.direction == null) return false;
+  if (reality.suggestedHours == null || reality.suggestedHours === reality.claimedHours) return false;
+
+  const now = opts.now ?? new Date();
+  const cooled = (iso: string | null | undefined) => {
+    if (!iso) return true;
+    const t = Date.parse(iso);
+    if (!Number.isFinite(t)) return true;
+    return now.getTime() - t >= OFFER_COOLDOWN_DAYS * 86_400_000;
+  };
+  return cooled(opts.hoursSetAt) && cooled(opts.dismissedAt);
+}

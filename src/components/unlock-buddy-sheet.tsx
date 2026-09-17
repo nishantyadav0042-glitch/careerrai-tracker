@@ -19,6 +19,7 @@ import { ensureTransactableOrigin } from '@/lib/checkout-origin-guard';
 import { loadRazorpay, failureMessage, redirectCheckoutOptions, checkoutCallbackUrl } from '@/lib/razorpay-checkout';
 import { catUrgencyLabel } from '@/lib/cat-countdown';
 import { payFunnel } from '@/lib/payment-funnel-client';
+import { checkoutFailureProps } from '@/lib/payment-failure';
 
 // Buddy checkout. Two entry points share ONE payment path (useBuddyCheckout):
 //  • BuddyBuyButtons — the price choice rendered DIRECTLY on the sales page,
@@ -96,6 +97,11 @@ function useBuddyCheckout() {
     // result of falling through: 0 payments in 21 attempts.
     setBusy(planId);
     setMessage(null);
+    // Intent, before any network call — so "tapped Pay but the order never
+    // minted" is distinguishable from "never tapped Pay". Only the membership
+    // card emitted this, which is why the funnel showed 3 taps behind 28
+    // orders: a top that could never be a real denominator.
+    payFunnel('payment_cta_clicked', { plan: planId, surface: 'unlock_buddy' });
     try {
       // Incident #59: Razorpay refuses careerrai-daily.vercel.app outright, so
       // an order minted here can never be paid. Move to the checkout origin
@@ -132,10 +138,6 @@ function useBuddyCheckout() {
         setMessage('The payment window failed to load. Please check your connection and try again.');
         return;
       }
-
-      // The split event — see lib/payment-funnel. Proves a payment window was
-      // actually shown, not merely that an order was minted.
-      payFunnel('payment_checkout_opened', { plan: planId, surface: 'unlock_buddy' });
 
       // ── Installed iOS PWA: navigate, never a modal ─────────────────────
       // This surface blocks the popups the modal needs AND cannot escape to
@@ -181,7 +183,7 @@ function useBuddyCheckout() {
           // Razorpay keeps the sheet open on a failed attempt so they can retry
           // with another method; only a real close lands here.
           ondismiss: () => {
-            payFunnel('payment_checkout_dismissed', { plan: planId, surface: 'unlock_buddy' });
+            payFunnel('payment_checkout_dismissed', { plan: planId, orderId: data.orderId, surface: 'unlock_buddy' });
             track('pay_dismissed', { plan: planId, orderId: data.orderId });
             setMessage('Payment cancelled. Your spot is still open — tap again when you’re ready.');
           },
@@ -195,10 +197,16 @@ function useBuddyCheckout() {
       });
       rzp.on('payment.failed', (payload: unknown) => {
         const err = (payload as { error?: { reason?: string; step?: string } } | null)?.error;
+        payFunnel('payment_failed', { plan: planId, orderId: data.orderId, surface: 'unlock_buddy', ...checkoutFailureProps(payload) });
         track('pay_failed', { plan: planId, orderId: data.orderId, reason: err?.reason ?? null, step: err?.step ?? null });
         setMessage(failureMessage(payload));
       });
       rzp.open();
+      // THE split event, emitted HERE — after open(), never before. It used to
+      // fire the moment the script loaded, and again inside the redirect
+      // branch, so it counted more windows than there were orders and claimed
+      // a window was shown on paths that returned before showing one.
+      payFunnel('payment_checkout_opened', { plan: planId, orderId: data.orderId, surface: 'unlock_buddy' });
       track('pay_checkout_opened', { plan: planId, orderId: data.orderId });
     } catch {
       track('pay_exception', { plan: planId });
@@ -396,6 +404,12 @@ export function UnlockBuddyButton({
 
   function openSheet() {
     logCtaClick();
+    // The funnel's denominator. `paywall_viewed` sat in PAYMENT_FUNNEL_EVENTS
+    // since August with no emission site anywhere, so the one stage that says
+    // how many students were ever SHOWN a price rendered as an honest blank
+    // while every rate below it was computed against order_created instead.
+    // This surface is the price list: opening it is seeing the offer.
+    payFunnel('paywall_viewed', { surface: 'unlock_buddy' });
     track('buddy_unlock_open', {});
     setOpen(true);
   }

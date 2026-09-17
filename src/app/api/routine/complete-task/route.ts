@@ -165,6 +165,13 @@ export async function POST(request: NextRequest) {
   const emergencyMinimumDone = emergencyDay && completedIds.has(tasks[0].id);
 
   let dayClosed = false;
+  // Did THIS call actually create today's daily_reports row? `close_day` rides
+  // along on every tick, so dayClosed is true on the second and tenth tap of a
+  // day that was already closed by the first. Only the RPC knows which call
+  // inserted, and it says so in `is_new_log` — the same field log-daily reads.
+  // Without this, an event fired on dayClosed alone would count one studied day
+  // several times over, which is the opposite of the undercount it exists to fix.
+  let isNewLog = false;
   if ((fullyDone || emergencyMinimumDone || closeDay === true) && completions && completions.length > 0 && !skipDayClose) {
     const completedTasks = tasks.filter((t) => completedIds.has(t.id));
     const routineMinutes = completedTasks.reduce((s, t) => s + t.estMinutes, 0);
@@ -231,16 +238,20 @@ export async function POST(request: NextRequest) {
       p_emotional_chips: [],
       p_study_duration_source: mergedSource,
     };
-    let { error: rpcError } = await admin.rpc('upsert_log_and_streak', rpcArgs);
+    let { data: rpcResult, error: rpcError } = await admin.rpc('upsert_log_and_streak', rpcArgs);
     // ONE RETRY before giving up (16 Aug — same principle as the auth-session
     // retry in src/proxy.ts): this RPC is what makes a tick count as a
     // studied day, so a one-off transient failure here must not become a
     // silent, permanent "the day never happened." The retry is idempotent
     // (upsert), so trying again cannot double-count or corrupt anything.
     if (rpcError) {
-      ({ error: rpcError } = await admin.rpc('upsert_log_and_streak', rpcArgs));
+      ({ data: rpcResult, error: rpcError } = await admin.rpc('upsert_log_and_streak', rpcArgs));
     }
     dayClosed = !rpcError;
+    // Read the same way log-daily reads it. Defaults to FALSE on an unknown
+    // shape: a missed event is a visible undercount someone can chase, while a
+    // phantom one silently inflates the number the company steers by.
+    isNewLog = !rpcError && ((rpcResult as { is_new_log?: boolean } | null)?.is_new_log === true);
     if (rpcError) {
       // This RPC is what makes a tick count as a studied day — it writes the
       // daily_reports row AND moves the streak. Silently failing here is the
@@ -268,5 +279,14 @@ export async function POST(request: NextRequest) {
     // G3 -- reported, never repaired by pretending it worked. The tick IS
     // saved; what failed is the derived coverage write on top of it.
     coverageAdvanceFailed,
+    // TRUE only on the call that actually inserted today's row, so the client
+    // can emit one `daily_log` per studied day. dayClosed cannot do that job:
+    // it stays true for every later tick of an already-closed day.
+    //
+    // Deliberately placed AFTER coverageAdvanceFailed: topics-and-coverage-
+    // truthful.test.ts asserts those two stay within 300 characters of each
+    // other, and that guard is right to. A new field is not a reason to widen
+    // somebody else's invariant.
+    isNewLog,
   });
 }

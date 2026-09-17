@@ -5795,9 +5795,573 @@ forever and look deliberate. #91 put an ordering in an array the screen
 re-groups; #92 put a localStorage fact in a server component. Both were written
 carefully, reviewed, and tested. Neither could ever have been true.
 
+## Incident #93
+
+**Date:** 2026-09-12 (found while running the nightly counsellor-day watch)
+**Area:** Monitoring — the watches that guard the Sales OS
+**Severity:** P2 (no student or counsellor was harmed; the detector was blind, not the system)
+
+### What happened
+
+The 22:10 IST counsellor-day watch ran and reported nothing, correctly by its
+own rules. The day it looked at was the first genuinely clean one since the
+Incident #74 fix: Anshul dealt **70 cards — exactly `DAY_CEILING`** — with
+rotation at **15, exactly `ROTATION_FLOOR`**, every capped lane inside its
+ceiling, and all 70 cards closed (46 worked, 24 swept as `not_marked`).
+
+Neelam had **no day at all**: zero `sales_opportunity` rows, zero
+`sales_activity` touches, last session 11 Sep 18:04 IST. She did not sign in on
+a Saturday, and the deck is built and recorded on page load, so no login means
+no deck. That is an absence, not a fault.
+
+But the watch could not have told the difference, and that is the incident.
+Three defects, all in the detector:
+
+1. **A rep with zero rows disappeared from the result.** The watch's query was
+   `GROUP BY rep_id` over `sales_opportunity`. A rep with no cards produces no
+   group, so she was not a row with zeroes in it — she was **absent from the
+   output entirely**. Every per-rep condition, including F ("rotation = 0 for a
+   rep"), passed silently for the rep in the worst possible state. Had the deck
+   *failed to build* for someone who showed up and sat waiting, the watch would
+   have said exactly what it said on this benign Saturday: nothing.
+
+2. **The watch's frozen facts were three days stale.** It still asserted
+   "Promises (callback, **retry**, followup) and money are UNTRIMMABLE" — the
+   rule Incident #74 reversed on 9 Sep. So condition A carried no `retry`
+   ceiling and could not detect a broken retry cap, and condition D would have
+   excused a retry-inflated day as "explained by promises". The watch was
+   validating production against a rule production no longer follows — and the
+   specific rule it was blind to was the one it had just been rewritten to
+   catch.
+
+3. **Condition G was unreachable.** "Retry above 60 and rising" cannot fire once
+   `RETRY_CEILING` is 20. A condition that can never be true reads, every night,
+   exactly like a condition that is being checked and found false.
+
+### Root cause
+
+A watch prompt is **code duplicated into prose**, and nothing links the two. The
+9 Sep commit changed `UNTRIMMABLE` and added `RETRY_CEILING`; the watch that
+polices `UNTRIMMABLE` and `RETRY_CEILING` lives outside the repo, so it was not
+in the diff, no test covered it, and no reviewer saw it. It went stale in
+silence and kept reporting confidently.
+
+Defect 1 is the sibling of a lesson already paid for. **Incident #70:** "a
+per-entity alert system is structurally blind to a platform-wide fault — a
+student who cannot log in never becomes a row." Here: *a per-entity health check
+driven by a `GROUP BY` over the event table is blind to the entity with zero
+events.* Same shape, different table, three weeks later. The first lesson was
+recorded and did not generalise, because it was written as a fact about
+`founder-alerts` rather than as a fact about aggregation.
+
+### Fix
+
+The watch now drives its per-rep loop from `profiles WHERE role = 'sales'`
+LEFT JOINed to `sales_opportunity`, never from a `GROUP BY` over the offer
+table, with the reason stated in the prompt so it is not quietly refactored
+back. Its frozen facts were corrected to the post-#74 rules, `retry > 20` was
+added to condition A, and dead condition G was replaced by one that can
+actually fire: **retry pinned at exactly its ceiling for three consecutive
+days**, which is what "the backlog is still growing behind the fuse" looks like
+once a cap hides the raw number.
+
+A new condition H disambiguates the zero-deck case, which is the whole point:
+
+- zero cards **and** evidence they showed up (a touch, or a session updated
+  today) → **P0, report immediately**: they came to work and the system gave
+  them no day;
+- zero cards and no evidence → absence, stay silent — *unless* it is the second
+  consecutive day, then one line with the rep, the run of days, and the size of
+  their untouched book.
+
+### Lessons
+
+**A `GROUP BY` cannot see the entity that produced no rows — and that entity is
+usually the one in trouble.** Zero is a state, not an absence of state. Any
+per-entity health check must be driven from the entity table and outer-joined to
+the events, so the broken entity arrives as a row of zeroes instead of vanishing.
+This is Incident #70's lesson in a second costume; it is stated here as a fact
+about aggregation, not about one alerting module, so that it transfers next time.
+
+**Zero rows is ambiguous and must never be read as health.** "No deck because
+nobody asked for one" and "no deck because the build failed" are the same
+silence. A watch that cannot separate them by evidence — did they show up? — is
+not watching.
+
+**A watch prompt is code, and it goes stale in silence.** Every frozen constant
+in a watch is a copy with no compiler, no test, and no reviewer behind it. When
+a commit changes a threshold or a rule that a watch asserts, updating the watch
+belongs in that commit's Definition of Done. A stale watch is worse than no
+watch: it reports "checked, all clear" against a rule that no longer exists.
+
+**A condition that cannot fire is indistinguishable from a condition that
+passes.** Once `retry > 60` became unreachable, three nights of silence from
+condition G meant nothing at all and looked like three nights of good news.
+When a cap is introduced beneath a threshold, the threshold above it is dead and
+must be rewritten to measure the thing the cap now hides.
+
 ---
 
-## Incident #93 — a worked count read mid-shift, twice (17 Sep 2026)
+---
+
+---
+
+## Incident #94
+
+**Date:** 2026-09-13 (student hit it 11 Sep; reported by a counsellor on the 13th)
+**Area:** Blueprint Builder — the onboarding flow that turns a signup into a student
+**Severity:** P0-shaped, P1 in outcome (one student confirmed hit, recovered himself; the flow is the activation funnel)
+
+### What happened
+
+Aryan Lalwani, on an iPhone, reached the **last screen** of the Blueprint
+Builder — the one that asks him to lock the date he'll finish the CAT syllabus
+— tapped to save, and was shown a red box reading:
+
+> **TypeError: Load failed**
+
+That is WebKit's internal name for a rejected `fetch`. It was rendered
+verbatim into the flow that decides whether somebody ever becomes a student at
+all. He reloaded, the draft in localStorage restored his answers, and he
+finished two minutes later (15:47:42 error → 15:49:05 `log_tour_done`). He is
+onboarded. Nothing was lost.
+
+We only learned of it because a counsellor forwarded a WhatsApp screenshot two
+days later, saying *"the issue keeps coming up again and again."*
+
+### Root cause
+
+Two defects stacked, and the second is the one that matters.
+
+**1. A write that never arrived was treated as a write that was refused.**
+`fetch` RESOLVES on 400/404/500 and only REJECTS on a network fault. Those are
+opposite events. postgrest-js catches the rejection and hands back a
+normal-looking result — `status: 0`, and `error.message` set to
+`` `${err.name}: ${err.message}` `` — so `if (e) throw e` fired on what was
+really a momentary radio drop on Indian mobile data. One dropped packet, and
+the student is told the product broke. No retry existed, though every one of
+these saves sets known columns on one row keyed by id and is therefore
+perfectly idempotent.
+
+**2. A driver's string was rendered as a sentence for a student.**
+`setError(message)` where `message` came straight off the error object. This
+is the SECOND time this exact line has put an engineer's text on a student's
+screen in this exact flow:
+
+| | shown to a student | source |
+|---|---|---|
+| Incident #14 | `permission denied for function is_admin` | Postgres |
+| Incident #94 | `TypeError: Load failed` | WebKit |
+
+Incident #14's fix was to REPORT the error (report-error.ts). That was right
+and it worked — the row is in `client_errors`. But the fix stopped one step
+short: it made sure we see the message, and left the student seeing it too.
+
+`plan-card:tick` had already solved this properly elsewhere in the codebase —
+catch, classify, `reportHandledError`, then a human sentence — and its comment
+records **70 "Load failed" rows since 26 July**. So this is the ordinary
+condition of a phone on Indian mobile data, not an exotic one, and the pattern
+for handling it already existed three files away. Onboarding just never adopted
+it.
+
+### Fix
+
+`src/lib/write-retry.ts` — one rule for "the request never arrived", branching
+on `status === 0` and **never on the message text**, because every engine words
+it differently (Safari "Load failed", Chrome "Failed to fetch", Firefox
+"NetworkError when attempting to fetch resource"). A guard test pins all three.
+
+- `retryOnNetworkFailure` for postgrest writes, `retryFetch` for bare `fetch`.
+  Three bounded attempts, 400ms then 1200ms. A server refusal is **never**
+  retried — a 403 is an answer, and asking again just reprints it slower.
+- All seven `profiles` writes in the Builder now go through one `saveProfile`,
+  plus the coverage grid's `/api/coverage` POST.
+- Neither branch of the catch can render driver text any more. Network →
+  "check your connection"; server → "something went wrong on our side". Both
+  end with **"your answers are saved"**, which is the half that actually stops
+  a student closing the tab, and is true: the localStorage draft is what saved
+  Aryan.
+- `blueprint-save-errors.guard.test.ts` fails if `setError` is ever handed an
+  error's `.message` again, and was verified to fail against the reintroduced
+  bug before being kept.
+
+### Lessons
+
+**"Arrived and was refused" and "never arrived" are different events and must
+never share a code path.** One is a verdict — retrying reprints it. The other
+is weather — retrying usually fixes it. The signal is `status === 0` for
+postgrest and a rejection for bare `fetch`; it is never the message text,
+which is engine-specific and changes under you.
+
+**An error message is UI, and it is written for whoever will read it.** If a
+student can see it, an engineer's words are a bug in the copy, not a debugging
+convenience. Report the real thing and render a human thing — the two are not
+in tension, and Incident #14 got half of this right two months ago.
+
+**A retry is free when the write is idempotent, and every one of these was.**
+Setting known columns on your own row by id costs nothing to repeat. The
+absence of a retry here was not a decision anyone made; it was a question
+nobody asked.
+
+**When a pattern already exists in the codebase, the new code is not the place
+to invent a second one.** `plan-card:tick` had the correct shape AND the
+evidence (70 rows since July) before this happened. The gap was that nothing
+carried the pattern from one surface to the other.
+
+## Incident #95
+
+**16 Sep 2026 — `daily_log` counted 12-20% of real logs for nine days, and
+nothing was broken enough to notice.**
+
+`public.daily_reports` is the studied-day ledger. It is written through one
+RPC, `upsert_log_and_streak`, from TWO client paths:
+
+| Door | File | Emitted `daily_log`? |
+|---|---|---|
+| Log sheet | `hooks/useLogging.ts` | yes |
+| Plan card (`close_day`) | `DailyTracker/TodaysRoutineCard.tsx` | **no** |
+
+The plan card is the door students actually use. Measured against the table it
+is supposed to describe:
+
+```
+date        daily_log events   daily_reports rows
+14 Sep                     2                   30
+13 Sep                     3                   23
+11 Sep                     3                   21
+30-day totals      99 students          241 students
+```
+
+**Why it survived.** Nothing errored. No test failed. No student was harmed.
+The event produced a small daily number in a product with a small daily habit,
+and a small number was exactly what anyone glancing at it expected to see. A
+metric that is wrong by an order of magnitude but *plausible* is harder to
+catch than one that is wrong and absurd, and there was no assertion anywhere
+that the event count should resemble the row count.
+
+**What it cost.** Every retention curve, cohort split and experiment readout in
+the company is computed from this event. So this was never a reporting
+nuisance — it was a wrong denominator under every decision taken from it since
+19 Aug. It also produced a published falsehood: an earlier report to the
+founder claimed **"291 students opened the log and wrote nothing"**, built on
+`completion_write` — which is a plan-task TICK and not a log at all. Two
+different wrong events, one confident wrong thesis, and a product strategy
+discussion held on top of it. The founder ordered the audit that found this;
+it was not found by the people who wrote the metric.
+
+**The near-miss in the fix.** The obvious repair is to emit `daily_log`
+wherever `dayClosed` is true. That would have been worse than the bug.
+`close_day` rides along on EVERY tick, so `dayClosed` stays true for the
+second and tenth tap of an already-closed day — an undercount would have
+become an overcount, and an overcount looks like growth, so nobody would have
+reported it. Only the RPC knows which call actually inserted, and it already
+says so in `is_new_log`; `log-daily` had been reading that field all along.
+The fix threads the same field through `complete-task` and gates on it.
+
+**Fixed by** capturing `is_new_log` off the RPC in `complete-task` (including
+on its one retry — a day closed on the second attempt must still count),
+returning `isNewLog`, emitting `daily_log` from the plan card gated on it, and
+tagging both doors with `surface` so the split stays visible instead of
+collapsing into one untraceable total. `isNewLog` is placed after
+`coverageAdvanceFailed` in the response because
+`topics-and-coverage-truthful.test.ts` asserts those two stay adjacent — a new
+field is not a reason to widen somebody else's invariant.
+
+**The lesson, and it is not "add an event".**
+
+> **An event that describes a table must be checked against that table.**
+> Instrumentation is a claim about reality, and a claim nobody audits is an
+> opinion. `daily_log` and `daily_reports` disagreed by 2.4x for nine days in
+> the same database, twenty lines apart in the same file, and no surface
+> anywhere compared them.
+
+Encoded as `lib/daily-log-event.guard.test.ts` — verified to fail against the
+reintroduced bug (2 of 8 red) before being kept — which fails the build if any
+writer of `daily_reports` stops emitting the event, if the emit is gated on
+`dayClosed` instead of `isNewLog`, or if the retry drops the RPC result.
+
+This is Incident #93's lesson in a third costume: a watch, a detector and now a
+metric, each a copy of reality with nothing checking the copy still matches.
+
+---
+
+## Incident #96
+
+**16 Sep 2026 — the money-back guarantee had never once been claimable, and we
+advertised it on three public pages for two months.**
+
+`/refunds`, `/terms` and `/pricing` all promised a full refund in the first
+month on one condition: **at least 20 logged study days**. The granting route,
+`api/student/request-refund`, enforced `REQUIRED_DAYS = 20` against
+`daily_reports` in the 30 days from signup.
+
+Measured on exactly that window, here is every student who has ever paid
+CareerRai, best first (re-verified 17 Sep through `refundWindow()` itself,
+which is INCLUSIVE at both ends — an earlier draft used an exclusive 30-day
+window and recorded 11 for Arnav):
+
+```
+Rudra Pratap Singh   15      Harsh Rajput              4
+Arnav Badaya         12      Dhruv Vakadia             4
+Vedashri kale        10      ── test account ──
+Monu singh            7      Razorpay Review           5
+```
+
+**SIX real customers, not seven.** `student_payments` holds 7 rows with
+`status='paid'`, but `Razorpay Review` carries `is_test_account = true`. Real
+customer revenue is **₹6,694**, not ₹7,693. Earlier entries in this archive
+said "seven payers"; that count included the test account.
+
+**Nobody reached 20. Not one payer, ever.** Nor under either alternative
+reading: days logged after payment tops out at 12, and the longest consecutive
+run by any payer is 9. The most engaged paying customer in
+company history missed the bar by five days. Widening to every student who has
+ever logged a single day — 324 of them — exactly **three** reached 20, under
+1%, and none of the three had paid.
+
+A condition no customer can satisfy is not a condition. It is a refusal written
+in advance, and we printed it in our Terms.
+
+**Why it survived.** The bar existed as **five separate literals in five
+files** — the route's `REQUIRED_DAYS`, the profile page's
+`REFUND_DAYS_REQUIRED`, and three hand-typed sentences in public prose. Nothing
+connected the sentence a student read to the comparison the server ran, so
+nothing could notice they had come apart. More importantly, nothing connected
+either of them to **what students actually do**: the number was chosen before
+we had a single paying customer and was never once checked against the
+behaviour of the customers we got. No test could fail, because no test knew
+what the number was supposed to mean.
+
+It is the same shape as Incident #86 and Incident #93: a rule validated against
+an intention instead of against production. Here the rule was a promise to a
+paying customer, which makes it a Trust-OS matter and not merely a bug.
+
+**Two smaller defects found in the same pass.** The route and the profile card
+built the eligibility window independently — same intent, two expressions — so
+the green "Eligible" badge and the server's verdict were only ever coincidences
+away from disagreeing. And both applied **only the upper bound**
+(`report_date <= joined + 30`), never the lower, so a log recorded before
+signup would have counted toward the guarantee. No such row exists today, which
+is precisely why it could have stayed wrong indefinitely.
+
+**The fix — the ARCHITECTURE, which is what actually mattered.**
+`src/lib/refund-policy.ts` is now the only place the number exists.
+`REFUND_WINDOW_DAYS = 30`, one `refundWindow()` both counting sites call, one
+`refundShortfallMessage()` the student sees. All five surfaces interpolate the
+constant; none types a digit. Five literals in five files became one.
+
+**AMENDED 17 Sep 2026 — the threshold is 20 again, by founder decision.** It
+was set to 10 on 16 Sep on the evidence below. The founder reviewed the audit,
+was shown explicitly that at 20 no real customer in company history could have
+claimed, that the best reached 15, and that the guard would have to stop
+blocking it — and chose 20. Pricing and refund policy are the founder's call.
+
+Two things changed to keep that honest rather than silent. The guard no longer
+refuses the number, but it was NOT deleted: it now pins the value to a dated
+`FOUNDER_SET_DAYS`, so an accidental future edit still fails the build, and it
+reports the unclaimability as a recorded fact instead of a veto. And the
+public-surface tests are untouched — the single-source architecture is the part
+of this incident that survives regardless of what the number is, and it is the
+reason changing the threshold took one line instead of five.
+
+**The unclaimability is unchanged by the reversal.** Six real customers, best
+15, none at 20. That is the state of the evidence, recorded here so it never
+has to be re-derived to reopen the question.
+
+**Why 10 was chosen on 16 Sep** (superseded, kept for the reasoning). The
+condition exists to establish that a student gave CareerRai a fair chance
+before asking for the money back — not that they were exceptional. Ten days
+across a month is a student who came back on ten separate occasions. At 10,
+three of the six real payers clear it (15, 12, 10).
+
+**What has teeth now.** `refund-policy.guard.test.ts` records
+`BEST_PAYING_STUDENT_DAYS = 15` as a measured fact and pins the bar to
+`FOUNDER_SET_DAYS`, so the threshold cannot drift by accident — only by a
+decision someone signs. That is the assertion that was missing: not "is the
+copy in sync" — though it checks that too, on all five files — but *is this
+number reachable by a real customer*. Verified to fail against both
+reintroduced faults (bar back to 20; a hand-typed "20 study days" in the public
+page).
+
+**Lesson.** A number that appears in a promise to a customer must be checked
+against the customers, not against the intention that produced it. If no test
+can state what the number is supposed to mean, nobody is checking it.
+
+---
+
+## Incident #97
+
+**16 Sep 2026 — the revenue funnel was built to answer "why did they abandon?"
+and had been unable to answer it since the day it shipped.**
+
+The founder asked why 51 checkouts were created and never paid, and ordered
+instrumentation before any fix. The instrumentation already existed —
+`payment-funnel.ts`, built in August, whose own header says the three
+abandonment populations "need opposite fixes and we could not tell them apart."
+Reading it against production found **five defects, all in the reading and none
+in the paying**.
+
+**1. Two stages had no emission site at all.**
+
+| Stage | Rendered by | Written by |
+|---|---|---|
+| `payment_failed` | `/admin` funnel | nothing — ever |
+| `paywall_viewed` | `/admin` funnel | nothing — ever |
+
+All three checkout surfaces registered Razorpay's `payment.failed` listener and
+wrote the result to `student_events` as `pay_failed`. The funnel reads
+`analytics_events`. So the "Payment failed" row has read **0 since August**,
+which looks like *no payment problems* and means *not wired*. Incident #95's
+shape precisely: a plausible zero. `paywall_viewed` — the one stage that says
+how many students were ever shown a price — was never emitted either, so every
+rate below it was computed against `order_created` instead.
+
+**2, 3, 4. Three defects in `KEY_SPLIT_EVENT` itself.**
+`payment_checkout_opened` is the event the module names as the one that
+matters, because it splits "never reached Razorpay" (our bug) from "reached it
+and left" (their decision). It was wrong three ways at once: emitted
+unconditionally *before* the redirect branch **and again inside it**, so
+redirect users counted twice; emitted *before* `rzp.open()`, so it claimed a
+window had been shown at a point where the call could still throw; and emitted
+with **no `orderId`** on two of the three surfaces, so no dismissal could be
+joined to the order it abandoned.
+
+The double-count left a tell that should have been read months ago: **28 orders
+against 41 checkout-shown events.** More payment windows than orders exist is
+impossible.
+
+**5. The one screen the founder uses ignored all of it.** Revenue Operations
+labelled every `status='created'` order with one asserted sentence — *"Opened
+checkout and left. A real payment would have auto-confirmed — this is a sales
+follow-up."* Measured, that is wrong for a large share: **37 students created an
+abandoned order, only 29 ever emitted a checkout-opened event**, and on the
+redirect leg **8 students navigated to Razorpay and exactly 1 came back**. An
+order that never showed a payment window is not a sales follow-up. It is our
+defect, and it was filed as the student's decision.
+
+**What the corrected reading says.** Razorpay's `payment.failed` has never
+fired, in the product's entire history, on any surface — and `failure_code` is
+null on all 51 abandoned orders. **Students are not failing payment.** They
+open the price and close it, or they never see it. Those need opposite
+responses and neither of them is "optimise the checkout".
+
+**The fix.** All three surfaces now emit the full client funnel —
+`paywall_viewed`, `payment_cta_clicked`, `payment_checkout_opened` (once, after
+`rzp.open()`), `payment_checkout_dismissed`, `payment_failed` — each carrying
+the `orderId` it belongs to, with Razorpay's verbatim error preserved through a
+new `checkoutFailureProps` in `payment-failure.ts`. `lib/checkout-stall.ts`
+classifies each abandoned order into the population it is actually in, and
+Revenue Operations now renders that instead of a sentence.
+
+**The honesty rule that made this a module and not a ternary.** *Absence of an
+event is only evidence when the event existed.* An order from 4 August has no
+checkout event and never will; concluding "never reached Razorpay" from that
+silence invents a product bug out of a deployment date. Hence two cutovers, not
+one: `FUNNEL_INSTRUMENTED_FROM` (25 Aug, when the events began) and
+`ORDER_ATTRIBUTION_FROM` (16 Sep, when every event began carrying its order).
+Orders older than the join returns `not_instrumented` and says so on the card.
+
+**What has teeth now.** `payment-funnel-emission.guard.test.ts` fails the build
+if any stage in `PAYMENT_FUNNEL_EVENTS` has no emission site anywhere in `src`,
+if a checkout surface drops any of the four client events, if any order-scoped
+event is emitted without an `orderId`, if the split event moves back above the
+redirect branch or above `rzp.open()`, or if Revenue Operations goes back to
+asserting a reason. Verified to fail against four separately reintroduced
+faults.
+
+**Lesson.** Defining a metric is not instrumenting it, and rendering it is not
+reading it. A dashboard stage with no writer, and a ledger column with no
+reader, both fail silently and both look like good news. When a funnel is built
+to answer a question, something must assert that it still can.
+
+---
+
+## Incident #98
+
+**16 Sep 2026 — the capacity engine was built, tested, documented and never
+connected, while the plan asked eight times what students deliver.**
+
+`capacity-engine.ts` exists. It computes a `sustainableHours` from a student's
+own logged behaviour, it is covered by tests, and its header explains exactly
+why it matters ("otherwise every day starts as a failure"). A comment inside it
+records the rest:
+
+> Nothing applies sustainableHours to a plan — `capBudget()` has no caller, and
+> the day is sized by `dailyHours(profile)`.
+
+So the mechanism designed to stop the plan over-asking had never once run. The
+admin card that claimed "plan sized to {sustainableHours}h" was found to be
+false earlier and removed, and `admin-capacity-claim.guard.test.ts` was written
+as a two-way coupling: the claim may return if the wiring does.
+
+**What the wiring would have been.** Measured across the 804 students who have
+ever been given a routine: median claimed **5h/day**, p90 8h, max 16h, against
+a median **0.6h** actually reported by an active student. 1,713 routines in 30
+days, 4.36 tasks planned, 0.44 ticked, **83.7% never receiving a single tick**.
+
+**And why it was the wrong fix.** 413 of those 804 carry
+`study_hours_source = 'student'`: they personally confirmed the number. (Those
+figures are as of 2026-09-16; the query is `current_date`-relative, so unpinned
+it drifts — 784/403 on 17 Sep. Pin the date before re-deriving.) The
+plan is not over-reaching — it is faithfully building the day the student asked
+for. `daily-hours.ts` carries the standing 6 Aug decision that the hours belong
+to the student and *"nothing in this codebase may derive, cap, trim, round
+toward behaviour, or otherwise 'improve' it… The date gives. The hours don't."*
+
+Wiring `capBudget` would have satisfied the instruction and violated the
+Constitution, and it would have told a sincere fifteen-hour student that they
+are a thirty-six-minute student on the strength of three weeks of logs.
+
+**The resolution.** Nothing derives the number. The product now SHOWS the
+student their own two numbers — what their plan is built to, what they have
+actually been studying — and offers a one-tap change. `setDailyHours` stays the
+only writer, and it only ever runs from a request the student made. Keeping the
+current number is the same write as changing it, which is what the existing
+route's comment already said, and that write stamps `study_hours_set_at` and
+silences the card for a cooldown: no new column, no dismissal state, no
+migration. `capBudget` still has no caller, pinned by test.
+
+**Three second-order defects found in the same pass.**
+
+1. The derivation of the engine's inputs lived inline in `api/routine/today`.
+   The tracker was about to become a second surface needing capacity and would
+   have copied it — the comment directly above that code is itself a warning
+   about the two-writer bug from sharing helpers while duplicating the
+   assembly. Moved into the engine as `capacityFromReports`.
+2. The tracker selected only `report_date, study_duration`, so
+   `durationIsUnknown` could not tell a real zero-hour day from a day nobody
+   measured and counted both as behaviour evidence. That is the Q4 defect
+   reintroduced by omission, and it would have crossed the behaviour threshold
+   on days nobody measured.
+3. The page derived "yesterday" separately from the check-in's own derivation.
+   Between 03:00 and 05:29 IST a raw UTC yesterday names the wrong day — an
+   off-by-one this codebase has already paid for — and here it would have shown
+   a student one day's plan while logging a different day against it. Collapsed
+   to one derivation.
+
+**A negative finding recorded deliberately.** The feared backlog spiral (miss a
+day, tomorrow holds both, abandon) **was not found in the population and window
+tested** — 506 students, 1,344 routines, 60 days. That is not the same claim as
+"accumulation is impossible", and it must not be quoted as one. Within-student: plans run **under the student's own claim in every bucket** (−14.8 to −31.4
+minutes), and five untouched days move a plan from 383 to 419 minutes and 4.47
+to 5.01 tasks — where stacking would have added ~22 tasks, and a backlog would
+exceed the claim by definition. Re-verified 17 Sep with per-bucket sample
+sizes; the apparent rise in planned minutes tracks a rise in CLAIMED minutes
+(410 → 442), which is the confound, and controlling for it the difference is
+flat and negative throughout. Priority-based plan healing was
+therefore **not built**. It would have been surface area against a problem we
+do not have, and the fact that it was not built is worth as much memory as the
+things that were.
+
+**Lesson.** A module that is built, tested and unwired is more dangerous than
+one that does not exist: the tests pass, the file reads as solved, and a
+surface can claim its value without consuming it. Before building a mechanism,
+grep for its callers — and if a Constitution forbids the obvious wiring, the
+Constitution is usually protecting something the instruction did not know
+about. Show the human the evidence instead of acting on it for them.
+---
+
+## Incident #99 — a worked count read mid-shift, twice (17 Sep 2026)
 
 **Severity:** P1 (Sales / Analytics). **Impact:** the founder's daily read of
 both counsellors, every day; and two builds he asked for that rested entirely

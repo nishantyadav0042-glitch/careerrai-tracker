@@ -223,6 +223,12 @@ export const WORKSPACES: AdminWorkspace[] = [
       // Blueprint → first tick → first log → return, every number drilling to
       // the exact students. Distinct from /admin/growth (pre-signup wizard).
       { label: 'Activation', href: '/admin/funnel', status: 'live' },
+      // The 16 Sep experiment: repeat preparation before and after
+      // confirm-or-correct, both sides computed by one function so the
+      // comparison cannot drift, with the decision rule attached. Lives here
+      // rather than as a 13th workspace — the cap is deliberate and this
+      // answers one question rather than running a daily operation.
+      { label: 'Retention readout', href: '/admin/retention', status: 'live' },
       { label: 'Growth funnel', href: '/admin/growth', status: 'moved' },
       { label: 'Speed', href: '/admin/perf', status: 'moved' },
     ],
@@ -253,6 +259,26 @@ export const WORKSPACES: AdminWorkspace[] = [
       { label: 'LIS health', href: '/admin/lis-health', status: 'moved' },
       { label: 'Mission', href: '/admin/mission', status: 'moved' },
       { label: 'Feature flags', href: null, status: 'planned', blockedOn: 'No flag store exists.' },
+    ],
+  },
+  // Deliberately LAST (founder, 16 Sep): a section he opens on purpose when he
+  // sits down to talk to students, not something that competes with the daily
+  // operating boards above it.
+  {
+    id: 'outreach',
+    label: 'Student outreach',
+    icon: 'MessageCircle',
+    href: '/admin/student-outreach',
+    purpose: 'Every student who logged in the last 21 days, with a personal feedback ask ready to send.',
+    tabs: [
+      // Only its own route. `/admin/log-breakers` is a sibling worklist and it
+      // belongs to People — claiming it here too would give one page two
+      // meanings, which admin-workspaces.test.ts correctly refuses.
+      { label: 'Feedback round', href: '/admin/student-outreach', status: 'live' },
+      // The research roster (17 Sep). Separate from the feedback round because
+      // that board is a 21-day window and this population is almost its
+      // complement: students who logged once, months ago, and never returned.
+      { label: 'Interview cut', href: '/admin/interview-cut', status: 'live' },
     ],
   },
 ];

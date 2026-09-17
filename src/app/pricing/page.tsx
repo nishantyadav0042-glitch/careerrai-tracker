@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { REFUND_REQUIRED_DAYS } from '@/lib/refund-policy';
 import { PLANS } from '@/lib/plans';
 
 export const metadata: Metadata = {
@@ -64,7 +65,7 @@ export default function PricingPage() {
             <li>Payments are processed securely by Razorpay. We never store your card or bank details.</li>
             <li>All prices are in Indian Rupees (INR) and include applicable taxes.</li>
             <li>Every plan is a <strong>one-time payment</strong> — there is no recurring mandate and no auto-debit.</li>
-            <li>Full refund in your first month if you&apos;ve logged at least 20 study days — see our{' '}
+            <li>Full refund in your first month if you&apos;ve logged at least {REFUND_REQUIRED_DAYS} study days — see our{' '}
               <Link href="/refunds" className="text-orange-600 hover:underline">Refund Policy</Link>.
             </li>
           </ul>

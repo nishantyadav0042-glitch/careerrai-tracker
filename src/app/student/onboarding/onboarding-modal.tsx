@@ -25,7 +25,8 @@ import ScreenLogTour from './screens/screen-log-tour';
 import ScreenInstantInsight from '@/app/start/screens/screen-instant-insight';
 import { BlueprintPanel } from './components/blueprint-panel';
 import { BLUEPRINT_SECTIONS, computeBlueprintPreview, type SectionId } from '@/lib/blueprint-builder';
-import { reportHandledError } from '@/lib/report-error';
+import { reportHandledError, errorText } from '@/lib/report-error';
+import { retryOnNetworkFailure, isNetworkFailure, NETWORK_WRITE_MESSAGE } from '@/lib/write-retry';
 
 interface OnboardingModalProps {
   onComplete: () => void;
@@ -389,6 +390,42 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
   // all sections as complete — there's nothing left for the panel to track.
   const panelSectionIndex = activeSection ? activeSection.order : coverageSectionOrder;
 
+  // ── One writer for every Blueprint Builder save ───────────────────────────
+  //
+  // Every save below is the same shape: set known columns on this student's
+  // own row, keyed by id. That makes them all IDEMPOTENT, which is what earns
+  // the retry — running one twice leaves the row exactly where running it once
+  // did.
+  //
+  // 13 Sep 2026: a student on an iPhone reached the last screen, tapped to
+  // lock his finish date, and the update's fetch was rejected by the phone,
+  // not refused by the server. postgrest hands that back as a normal result
+  // whose message is the BROWSER's internal error name, and this screen
+  // printed it verbatim: a red box reading "TypeError: Load failed" on the
+  // final step of the flow that decides whether someone becomes a student.
+  //
+  // Two things were wrong and both are fixed here: a momentary radio drop was
+  // treated as a permanent failure, and a driver string was treated as a
+  // sentence for a student to read.
+  const saveProfile = async (patch: Record<string, unknown>, withSelect = false) => {
+    // Awaited inside the closure on purpose: a postgrest builder is a
+    // thenable, not a Promise, and the retry needs a real one it can re-run.
+    const outcome = await retryOnNetworkFailure(async () => {
+      const q = supabase.from('profiles').update(patch).eq('id', userId ?? '');
+      const res = withSelect ? await q.select() : await q;
+      return { error: res.error, status: res.status };
+    });
+    if (outcome.error) {
+      // Carry BOTH: the real message so client_errors stays diagnostic, and
+      // whether it ever reached the server so the student gets the right
+      // sentence. errorText is report-error's — postgrest errors are plain
+      // objects, not Errors, and String()ing one yields "[object Object]".
+      const wrapped = new Error(errorText(outcome.error)) as Error & { network?: boolean };
+      wrapped.network = isNetworkFailure(outcome);
+      throw wrapped;
+    }
+  };
+
   const handleNext = async (data?: Record<string, unknown>) => {
     if (data) setOnboardingData((prev) => ({ ...prev, ...data }));
     setError(null);
@@ -429,13 +466,10 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
         // requires the two columns agree, so both are written together,
         // never independently, on this path too.
         const status = data.self_report_status;
-        const { error: e } = await supabase.from('profiles')
-          .update({
-            self_reported_weakest_section: data.self_reported_weakest_section ?? null,
-            self_report_status: status === 'SELECTED_SECTION' || status === 'NOT_SURE_YET' ? status : null,
-          })
-          .eq('id', userId ?? '');
-        if (e) throw e;
+        await saveProfile({
+          self_reported_weakest_section: data.self_reported_weakest_section ?? null,
+          self_report_status: status === 'SELECTED_SECTION' || status === 'NOT_SURE_YET' ? status : null,
+        });
       }
       // The Insight→Plan handoff (final spec, Part J) — same shape-keyed
       // save pattern, this funnel's own write path for whichever student
@@ -445,22 +479,18 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
         setIsLoading(true);
         const sec = data.onboarding_insight_section;
         const src = data.onboarding_insight_source;
-        const { error: e } = await supabase.from('profiles')
-          .update({
-            onboarding_insight_section: sec === 'VARC' || sec === 'DILR' || sec === 'QA' ? sec : null,
-            onboarding_insight_topic: typeof data.onboarding_insight_topic === 'string' ? data.onboarding_insight_topic : null,
-            onboarding_insight_source: src === 'student' || src === 'careerrai' ? src : null,
-            onboarding_insight_root_cause: typeof data.onboarding_insight_root_cause === 'string' ? data.onboarding_insight_root_cause : null,
-            onboarding_insight_recommend: typeof data.onboarding_insight_recommend === 'string' ? data.onboarding_insight_recommend : null,
-          })
-          .eq('id', userId ?? '');
-        if (e) throw e;
+        await saveProfile({
+          onboarding_insight_section: sec === 'VARC' || sec === 'DILR' || sec === 'QA' ? sec : null,
+          onboarding_insight_topic: typeof data.onboarding_insight_topic === 'string' ? data.onboarding_insight_topic : null,
+          onboarding_insight_source: src === 'student' || src === 'careerrai' ? src : null,
+          onboarding_insight_root_cause: typeof data.onboarding_insight_root_cause === 'string' ? data.onboarding_insight_root_cause : null,
+          onboarding_insight_recommend: typeof data.onboarding_insight_recommend === 'string' ? data.onboarding_insight_recommend : null,
+        });
       }
       // Dream Colleges
       if (data?.dream_colleges) {
         setIsLoading(true);
-        const { error: e } = await supabase.from('profiles').update({ dream_colleges: data.dream_colleges }).eq('id', userId ?? '');
-        if (e) throw e;
+        await saveProfile({ dream_colleges: data.dream_colleges });
       }
       // Exam Context (+ the repeater-only follow-up questions, same screen/shape)
       if (data && (data.exam_target !== undefined || data.attempt_year !== undefined || data.target_percentile !== undefined || data.category !== undefined || data.is_repeater !== undefined)) {
@@ -473,8 +503,7 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
         if (data.target_percentile !== undefined) ec.target_percentile = data.target_percentile ?? null;
         if (data.last_year_percentile !== undefined) ec.last_year_percentile = data.last_year_percentile ?? null;
         if (data.had_buddy_last_year !== undefined) ec.had_buddy_last_year = data.had_buddy_last_year ?? null;
-        const { error: e } = await supabase.from('profiles').update(ec).eq('id', userId ?? '');
-        if (e) throw e;
+        await saveProfile(ec);
       }
       // About You — full_name and phone are NEVER nulled (required / identity
       // fields already set at signup); they update only when a real value is typed.
@@ -511,8 +540,7 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
         if (data.work_ex_months !== undefined) ay.work_ex_months = data.work_ex_months ?? null;
         if (data.coaching_enrolled !== undefined) ay.coaching_enrolled = data.coaching_enrolled ?? false;
         if (Object.keys(ay).length > 0) {
-          const { error: e } = await supabase.from('profiles').update(ay).eq('id', userId ?? '');
-          if (e) throw e;
+          await saveProfile(ay);
         }
       }
       // Finish-date chooser — hours + owned target date land together
@@ -524,13 +552,12 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
         setStudyTargetHours(hours);
         setWeekendHours(weekend);
         setIsLoading(true);
-        const { error: e } = await supabase.from('profiles').update({
+        await saveProfile({
           // Through setDailyHours — the one writer. This is the student typing
           // their own number in the Blueprint Builder, so it counts as theirs.
           ...setDailyHours(hours, 'student', weekend),
           syllabus_target_date: data.syllabus_target_date,
-        }).eq('id', userId ?? '');
-        if (e) throw e;
+        });
       }
 
       if (currentScreen < screens.length - 1) {
@@ -570,23 +597,35 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
         if (Array.isArray(merged.study_windows) && merged.study_windows.length > 0) update.study_windows = merged.study_windows;
         if (typeof merged.success_goal === 'string') update.success_goal = merged.success_goal;
 
-        const { error: finalError } = await supabase.from('profiles').update(update).eq('id', userId).select();
-        if (finalError) throw finalError;
+        await saveProfile(update, true);
 
         try { window.localStorage.removeItem(draftKey(userId)); } catch { /* best-effort */ }
         onComplete();
       }
     } catch (err) {
       console.error('Blueprint Builder error:', err);
-      const message = (err as { message?: string })?.message;
-      // Report BEFORE rendering it. This screen showed a student
+      // Report BEFORE rendering. This screen showed a student
       // "permission denied for function is_admin" while client_errors stayed
       // empty — the console.error above went to a phone nobody was holding,
       // and we only learned of it from a screenshot. A failure here costs us
       // the student entirely, so it is the last place that should fail
-      // silently. (Incident #14.)
+      // silently. (Incident #14.) The report keeps the REAL message; only the
+      // screen gets the human one.
       reportHandledError(err, { where: 'onboarding:blueprint-save', detail: currentScreen });
-      setError(message ?? 'Something went wrong. Please try again.');
+      // NEVER the driver's words. Incident #14 was a Postgres string on a
+      // student's screen; 13 Sep 2026 was a browser's ("TypeError: Load
+      // failed") on the final step. Both are the same mistake — a message
+      // written for an engineer shown to a student — and both read as "this
+      // product is broken" to the person deciding whether to stay.
+      //
+      // The two cases a student can actually tell apart:
+      //   never arrived → their connection, worth tapping again
+      //   refused       → ours, and tapping again will not help
+      // Either way their answers are in the draft, and saying so is what
+      // keeps them from closing the tab.
+      setError((err as { network?: boolean })?.network
+        ? NETWORK_WRITE_MESSAGE
+        : "Something went wrong on our side — your answers are saved. Tap again, and tell us if it keeps happening.");
       setIsLoading(false);
     }
   };

@@ -2,7 +2,7 @@ import { istClock } from '@/lib/sales-absence-cover';
 
 // ── A WORKED COUNT IS NOT A VERDICT UNTIL THE SHIFT IS OVER ─────────────────
 //
-// Incident #93. On 17 September the founder was told, twice, that a counsellor
+// Incident #99. On 17 September the founder was told, twice, that a counsellor
 // "worked zero cards all day" and that a deck of 154 was "123 cards of
 // decoration". Both statements were read off `workedToday` at 17:00 IST.
 //

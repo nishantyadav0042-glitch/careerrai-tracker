@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { shiftProgress, durationLabel, UNKNOWN_SHIFT, type ShiftWindow } from './sales-shift-progress';
 
-// ── INCIDENT #93: A WORKED COUNT READ MID-SHIFT ─────────────────────────────
+// ── INCIDENT #99: A WORKED COUNT READ MID-SHIFT ─────────────────────────────
 //
 // Both counsellors work 15:00-21:00 IST. On 17 Sep `workedToday: 0` was read
 // at 17:00 and reported as "worked nothing all day", and a 154-card deck was

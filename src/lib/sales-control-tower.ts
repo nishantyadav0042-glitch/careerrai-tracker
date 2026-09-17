@@ -123,7 +123,7 @@ export interface RepCoverage {
   calledToday: number;
   messagedToday: number;
   /**
-   * Where this seat is in its own working day (Incident #93).
+   * Where this seat is in its own working day (Incident #99).
    *
    * Every count above is "today so far". Read at 17:00 against a 15:00-21:00
    * shift, `workedToday: 0` looks exactly like an absent counsellor and is
