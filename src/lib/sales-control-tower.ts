@@ -1,5 +1,6 @@
 import { loadStaffDirectory, type StaffDirectory } from '@/lib/sales-authz';
 import { SECTION_OF, type DaySection } from '@/lib/sales-day';
+import { shiftProgress, UNKNOWN_SHIFT, type ShiftProgress, type ShiftWindow } from '@/lib/sales-shift-progress';
 import { ROTATION_SILENT_DAYS } from '@/lib/os/scale-config';
 import { fetchAll } from '@/lib/supabase/fetch-all';
 import { bucketFor, listOpenFollowups } from '@/lib/sales-followup';
@@ -121,6 +122,16 @@ export interface RepCoverage {
   openToday: number;
   calledToday: number;
   messagedToday: number;
+  /**
+   * Where this seat is in its own working day (Incident #93).
+   *
+   * Every count above is "today so far". Read at 17:00 against a 15:00-21:00
+   * shift, `workedToday: 0` looks exactly like an absent counsellor and is
+   * two hours of a six-hour day. This is the denominator that tells them
+   * apart, and `shift.dayComplete` is the only thing that makes any count
+   * above a finished number. It is never a target: SALES-OS §0.
+   */
+  shift: ShiftProgress;
 }
 
 export interface CoverageView {
@@ -151,9 +162,18 @@ export async function readCoverage(admin: any, staff: StaffDirectory | null, day
       { orderBy: 'id' });
     if (offers.error || !offers.data) return { reps: null, failed: `sales_opportunity: ${offers.error?.message ?? 'no data'}` };
 
+    // The shift window per seat. A read failure here must NOT fail coverage:
+    // the counts are still true, they just lose their denominator, and
+    // `shiftProgress` reports 'unknown' rather than inventing a window.
+    const cfg = await admin.from('sales_rep_config').select('rep_id, work_start_ist, work_end_ist, work_days');
+    const shiftOf = new Map<string, ShiftWindow>();
+    for (const r of (cfg?.data ?? []) as { rep_id: string; work_start_ist: string | null; work_end_ist: string | null; work_days: number[] | null }[]) {
+      shiftOf.set(r.rep_id, { workStartIst: r.work_start_ist, workEndIst: r.work_end_ist, workDays: r.work_days });
+    }
+
     const by = new Map<string, RepCoverage>();
     const get = (id: string) => {
-      if (!by.has(id)) by.set(id, { repId: id, name: nameOf(id), book: 0, touched21d: 0, neverTouched: 0, givenToday: empty(), workedToday: 0, skippedToday: 0, openToday: 0, calledToday: 0, messagedToday: 0 });
+      if (!by.has(id)) by.set(id, { repId: id, name: nameOf(id), book: 0, touched21d: 0, neverTouched: 0, givenToday: empty(), workedToday: 0, skippedToday: 0, openToday: 0, calledToday: 0, messagedToday: 0, shift: shiftProgress(shiftOf.get(id) ?? UNKNOWN_SHIFT, nowMs) });
       return by.get(id)!;
     };
     const cutoff = nowMs - ROTATION_SILENT_DAYS * 86_400_000;
