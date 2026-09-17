@@ -1,6 +1,7 @@
-﻿// Service Worker — push notifications + installability (v9: the arrival beacon
-// names the DEVICE, not just the student; v8: chat threads collapse to one tray
-// entry; v7: never answer a navigation)
+// Service Worker — push notifications + installability (v10: the beacon reports
+// whether the notification actually RENDERED, not just that this worker woke;
+// v9: the arrival beacon names the DEVICE, not just the student; v8: chat
+// threads collapse to one tray entry; v7: never answer a navigation)
 //
 // Chrome only offers ONE-TAP PWA install (fires `beforeinstallprompt`) when the
 // site has a service worker with a REAL fetch handler. So we add one — but it is
@@ -113,7 +114,49 @@ self.addEventListener('push', (event) => {
       })
     : self.registration.showNotification(notificationData.title || 'CareerRai', options);
 
-  const work = [showPromise];
+  // ── DID IT ACTUALLY REACH THE SCREEN? (founder audit, 17 Sep 2026) ────────
+  //
+  // Until v10 this worker reported only that it WOKE. The beacon was a sibling
+  // of showNotification(), never conditional on it, so `device_confirmed_at`
+  // proved service-worker execution and nothing more. Two real failures hid in
+  // that gap, in opposite directions:
+  //
+  //   • displayed but never beaconed — 13.6% of all CLICKED notifications had
+  //     no receipt, and a click is proof of display, so that is a floor;
+  //   • beaconed but never displayed — a student who revokes notification
+  //     permission keeps a valid subscription. The provider accepts, this
+  //     worker wakes, the beacon fires, and the screen stays empty. Invisible.
+  //
+  // So the beacon now waits for showNotification() to SETTLE and reports the
+  // outcome. Read the ordering carefully: showPromise was already started
+  // above, and the notification is never gated on the beacon — what is delayed
+  // is the REPORT, never the render. `permission` is read at push time because
+  // a subscription outliving its permission is precisely the silent failure
+  // this instrument exists to name.
+  //
+  // displayed:false is a genuine, reportable outcome and must never be
+  // swallowed — an unreported failure is the state we are trying to leave.
+  var permissionAtPush = 'unsupported';
+  try {
+    if (typeof Notification !== 'undefined' && Notification.permission) {
+      permissionAtPush = Notification.permission;
+    }
+  } catch (e) { /* some engines throw on access; 'unsupported' is the honest answer */ }
+
+  const displayOutcome = showPromise.then(function () {
+    // Resolved = the browser accepted it and handed it to the OS. Confirm it
+    // is genuinely in the tray where we can; getNotifications is advisory, so
+    // a failure here downgrades evidence, it never contradicts the resolve.
+    return self.registration.getNotifications({ tag: options.tag })
+      .then(function (list) {
+        return { status: 'shown', inTray: !!(list && list.length), error: null };
+      })
+      .catch(function () { return { status: 'shown', inTray: null, error: null }; });
+  }).catch(function (err) {
+    return { status: 'failed', inTray: false, error: String((err && err.message) || err).slice(0, 180) };
+  });
+
+  const work = [showPromise.catch(function () { /* reported below, never rethrown */ })];
   const notifId = notificationData.data && notificationData.data.notifId;
   // Which endpoint this copy was sent to (task #79). Echoed back verbatim so
   // the receipt names THIS device, not just this student — the server checks
@@ -130,7 +173,15 @@ self.addEventListener('push', (event) => {
     // DevTools is ever open — matching push.ts's own transient-failure
     // retry, not inventing a new pattern.
     work.push(
-      beaconWithRetry('/api/push/received', notifId, endpointId).catch(function (e) {
+      displayOutcome.then(function (d) {
+        return beaconWithRetry('/api/push/received', notifId, endpointId, {
+          displayed: d.status === 'shown',
+          displayStatus: d.status,
+          displayError: d.error,
+          inTray: d.inTray,
+          permission: permissionAtPush,
+        });
+      }).catch(function (e) {
         console.warn('[Service Worker] received beacon failed after retry:', e);
       })
     );
@@ -138,14 +189,22 @@ self.addEventListener('push', (event) => {
   event.waitUntil(Promise.all(work));
 });
 
-function beaconWithRetry(path, notifId, endpointId) {
+function beaconWithRetry(path, notifId, endpointId, display) {
   function attempt() {
+    // The body keeps its exact v9 shape when `display` is absent, so the click
+    // beacon and any legacy caller are byte-identical to before.
+    const body = endpointId ? { id: notifId, endpointId: endpointId } : { id: notifId };
+    if (display) {
+      body.displayed = display.displayed;
+      body.displayStatus = display.displayStatus;
+      body.displayError = display.displayError;
+      body.inTray = display.inTray;
+      body.permission = display.permission;
+    }
     return fetch(path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(
-        endpointId ? { id: notifId, endpointId: endpointId } : { id: notifId }
-      ),
+      body: JSON.stringify(body),
     }).then(function (res) {
       if (!res.ok) throw new Error('beacon status ' + res.status);
       return res;

@@ -302,10 +302,41 @@ export type ConfirmOutcome =
  * or concurrent beacon returns 'already' and writes nothing. Never throws —
  * a measurement failure must not fail a beacon the device already earned.
  */
+/**
+ * What the DEVICE reported about rendering this copy (v10 service worker).
+ *
+ * Separate from the receipt itself, deliberately. `device_confirmed_at` means
+ * "the worker executed"; these fields mean "the browser rendered it". The 17
+ * Sep audit found those two facts disagree in BOTH directions, so they are
+ * stored as two facts and never collapsed into one.
+ */
+export interface DisplayReport {
+  status: 'shown' | 'failed' | 'unknown';
+  error?: string | null;
+  permission?: 'granted' | 'denied' | 'default' | 'unsupported' | null;
+}
+
+const DISPLAY_STATUSES = ['shown', 'failed', 'unknown'] as const;
+const PERMISSIONS = ['granted', 'denied', 'default', 'unsupported'] as const;
+
+/** Parse an untrusted beacon body into a DisplayReport, or null. */
+export function parseDisplayReport(body: Record<string, unknown>): DisplayReport | null {
+  const raw = body.displayStatus;
+  if (typeof raw !== 'string') return null;
+  if (!(DISPLAY_STATUSES as readonly string[]).includes(raw)) return null;
+  const perm = typeof body.permission === 'string'
+    && (PERMISSIONS as readonly string[]).includes(body.permission)
+    ? (body.permission as DisplayReport['permission']) : null;
+  const err = typeof body.displayError === 'string' && body.displayError.length > 0
+    ? body.displayError.slice(0, 200) : null;
+  return { status: raw as DisplayReport['status'], error: err, permission: perm };
+}
+
 export async function confirmDelivery(
   admin: any,
   notificationId: string,
   endpointId: string,
+  display?: DisplayReport | null,
 ): Promise<ConfirmOutcome> {
   const now = new Date().toISOString();
   try {
@@ -322,9 +353,21 @@ export async function confirmDelivery(
     // but a push already in flight can still land and be displayed afterwards;
     // refusing that receipt would throw away true evidence of a real display.
     // The row keeps its own revoked_at, so the two facts stay separable.
+    // The display fields ride along with the receipt. `displayed_at` is stamped
+    // ONLY for a 'shown' report: a failed render must leave it NULL rather than
+    // record a time at which nothing appeared.
+    const displayPatch = display
+      ? {
+          display_status: display.status,
+          display_error: display.error ?? null,
+          permission_at_push: display.permission ?? null,
+          ...(display.status === 'shown' ? { displayed_at: now } : {}),
+        }
+      : {};
+
     const { data: updated } = await admin
       .from('notification_deliveries')
-      .update({ device_confirmed_at: now })
+      .update({ device_confirmed_at: now, ...displayPatch })
       .eq('notification_id', notificationId)
       .eq('endpoint_id', endpointId)
       .is('device_confirmed_at', null)

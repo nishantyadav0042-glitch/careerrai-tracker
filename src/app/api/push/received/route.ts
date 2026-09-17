@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { confirmDelivery } from '@/lib/notification-endpoints';
+import { confirmDelivery, parseDisplayReport } from '@/lib/notification-endpoints';
 
 // Delivery beacon from the service worker (sw.js push handler): fires the
 // moment a push ARRIVES on the device — even with the app fully closed, since
@@ -15,8 +15,10 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 export async function POST(request: NextRequest) {
   let id: unknown;
   let endpointId: unknown;
+  let body: Record<string, unknown> = {};
   try {
-    ({ id, endpointId } = await request.json());
+    body = (await request.json()) as Record<string, unknown>;
+    ({ id, endpointId } = body as { id?: unknown; endpointId?: unknown });
   } catch {
     // fall through to validation
   }
@@ -24,11 +26,25 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
   }
 
+  // ── WHAT THE DEVICE SAW (v10 service worker, 17 Sep 2026) ────────────────
+  //
+  // Optional and strictly validated. A v9 worker sends none of this and is
+  // handled exactly as before — the rollout is a superset, never a break.
+  // An unrecognised status or permission value parses to null rather than
+  // being stored: a column that may hold junk is a column nobody can query.
+  const display = parseDisplayReport(body);
+
   const admin = createAdminClient();
   const now = new Date().toISOString();
+  // displayed_at is stamped student-level ONLY on a 'shown' report, for the
+  // same reason as the device-level column: a failed render must not record a
+  // moment at which nothing appeared.
   const { data: row } = await admin
     .from('notifications')
-    .update({ received_at: now })
+    .update({
+      received_at: now,
+      ...(display?.status === 'shown' ? { displayed_at: now } : {}),
+    })
     .eq('id', id)
     .is('received_at', null)
     .select('user_id')
@@ -55,8 +71,8 @@ export async function POST(request: NextRequest) {
   // already banked and must not be undone by a bad or stale device id.
   let device: 'confirmed' | 'already' | 'rejected' | 'absent' = 'absent';
   if (typeof endpointId === 'string' && UUID_RE.test(endpointId)) {
-    device = await confirmDelivery(admin, id, endpointId);
+    device = await confirmDelivery(admin, id, endpointId, display);
   }
 
-  return NextResponse.json({ ok: true, device });
+  return NextResponse.json({ ok: true, device, display: display?.status ?? 'absent' });
 }
