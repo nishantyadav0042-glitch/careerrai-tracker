@@ -303,9 +303,17 @@ describe('G/H · one student, two devices', () => {
 describe('I · student-level receipt did not regress', () => {
   const route = codeOnly(readFileSync('src/app/api/push/received/route.ts', 'utf8'));
 
+  // WIDENED 17 Sep 2026 (display instrumentation). This used to pin the
+  // update payload as EXACTLY `{ received_at: now }`. v10 of the service
+  // worker also reports whether the notification RENDERED, so the same update
+  // now carries an optional `displayed_at` beside it. The rule being protected
+  // is unchanged and is asserted below in full: received_at is still stamped,
+  // and still only when it was null.
   it('still stamps notifications.received_at, once, on a null', () => {
-    expect(route).toMatch(/update\(\{\s*received_at:\s*now\s*\}\)/);
+    expect(route).toMatch(/received_at:\s*now/);
     expect(route, 'the set-once guard is what makes the beacon idempotent').toMatch(/\.is\('received_at',\s*null\)/);
+    expect(route, 'a worker that woke is recorded even when nothing rendered')
+      .not.toMatch(/if \(display[\s\S]{0,80}received_at/);
   });
 
   it('still stamps profiles.push_verified_at for the student', () => {
@@ -373,9 +381,14 @@ describe('the attribution wire cannot be removed silently', () => {
       .toMatch(/endpointId \? \{ id: notifId, endpointId: endpointId \} : \{ id: notifId \}/);
   });
 
+  // WIDENED 17 Sep 2026: confirmDelivery gained an optional 4th argument
+  // carrying what the DEVICE reported about rendering. The rule this test
+  // exists for is untouched — the route delegates the pair to the ownership
+  // check and never writes the delivery table itself — so only the arity of
+  // the pinned call changed.
   it('the receipt route hands the pair to the ownership check, not straight to a write', () => {
     const route = codeOnly(readFileSync('src/app/api/push/received/route.ts', 'utf8'));
-    expect(route).toMatch(/confirmDelivery\(admin, id, endpointId\)/);
+    expect(route).toMatch(/confirmDelivery\(admin, id, endpointId(?:, display)?\)/);
     expect(route, 'the route must never write the delivery table itself')
       .not.toMatch(/from\('notification_deliveries'\)/);
   });
