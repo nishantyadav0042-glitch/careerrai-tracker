@@ -65,3 +65,35 @@ export function failureFacts(
     failure_seen_at: nowIso,
   };
 }
+
+/**
+ * What Razorpay told the BROWSER when a checkout attempt failed.
+ *
+ * `failureFacts` above reads the reconcile API's payment entities; this reads
+ * the payload Razorpay Checkout hands a client `payment.failed` listener. Same
+ * principle, different messenger: copy what was reported, classify nothing.
+ *
+ * The two are not redundant. Reconcile runs every 15 minutes and only sees
+ * orders Razorpay still has; this fires the instant it happens, on the device
+ * it happened to, and is the only record of a failure the student personally
+ * watched happen before closing the app.
+ */
+export function checkoutFailureProps(payload: unknown): {
+  code: string | null;
+  description: string | null;
+  source: string | null;
+  step: string | null;
+  reason: string | null;
+  paymentId: string | null;
+} {
+  const err = (payload as { error?: Record<string, unknown> } | null)?.error;
+  const meta = err?.metadata as Record<string, unknown> | undefined;
+  return {
+    code: field(err?.code),
+    description: field(err?.description),
+    source: field(err?.source),
+    step: field(err?.step),
+    reason: field(err?.reason),
+    paymentId: field(meta?.payment_id),
+  };
+}

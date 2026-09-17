@@ -45,9 +45,21 @@ interface Props {
    * completion rate, next-day return. HYPOTHESIS (untested): B outperforms A.
    */
   variant?: 'A' | 'B';
+  /**
+   * What yesterday's plan actually asked for.
+   *
+   * The gate used to ask "how did yesterday go?" with no mention of what was
+   * planned, so the student had to RECONSTRUCT the day before they could
+   * answer about it. Showing the plan is the whole change: report reality,
+   * don't rebuild it from memory.
+   *
+   * Empty is normal and must stay silent — a student with no routine for
+   * yesterday gets exactly the screen they got before.
+   */
+  plannedTasks?: { id: string; label: string; section: string | null }[];
 }
 
-export function CheckInGate({ yesterdayStr, yesterdayLabel, variant = 'A' }: Props) {
+export function CheckInGate({ yesterdayStr, yesterdayLabel, variant = 'A', plannedTasks = [] }: Props) {
   const router = useRouter();
   const [visible, setVisible] = useState(false);
   const [done, setDone] = useState(false);
@@ -58,6 +70,30 @@ export function CheckInGate({ yesterdayStr, yesterdayLabel, variant = 'A' }: Pro
   const [error, setError] = useState<string | null>(null);
 
   const askWhy = outcome != null && outcomeAsksWhy(outcome);
+
+  // ── CONFIRM OR CORRECT ────────────────────────────────────────────────────
+  //
+  // The gate asked "how did yesterday go?" and showed nothing about what
+  // yesterday had asked for, so answering meant reconstructing the day from
+  // memory first. Measured 16 Sep: 4.36 tasks planned a day, 0.44 ticked, and
+  // 83.7% of routines never touched — so for most students the plan is the one
+  // thing they cannot recall.
+  //
+  // Showing it is the whole change. The list is read-only for every answer
+  // except "Studied a bit", which is the diagnostic one: someone who sat down
+  // and did not finish is telling us WHICH parts happened, and that is the
+  // only answer where the detail is worth a second tap.
+  //
+  // Ticking nothing leaves the request byte-identical to before.
+  const [didParts, setDidParts] = useState<string[]>([]);
+  const askParts = outcome === 'partial' && plannedTasks.length > 0;
+  const toggle = (id: string) =>
+    setDidParts((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  // Only sections the API already accepts, de-duplicated. A task whose section
+  // we cannot read contributes nothing rather than a guess.
+  const doneSections = [...new Set(
+    plannedTasks.filter((t) => didParts.includes(t.id)).map((t) => t.section).filter((x): x is string => !!x),
+  )];
 
   // Never on top of the first-run sequence. A student meeting the app for the
   // first time has no yesterday worth asking about, and stacking this on the
@@ -93,7 +129,12 @@ export function CheckInGate({ yesterdayStr, yesterdayLabel, variant = 'A' }: Pro
           // A check-in is not a study claim. Hours and sections stay empty;
           // the full sheet is where a student describes what they actually did.
           hours: 0,
-          sections: [],
+          // Which planned pieces actually happened. Empty for every answer but
+          // "Studied a bit", and empty there too until the student ticks one —
+          // so the default request is exactly what it was before. Hours stay 0:
+          // the gate still has no field for how long, and claiming one would be
+          // the Q5 defect again.
+          sections: doneSections,
           energy: '💪',
         }),
       });
@@ -188,6 +229,17 @@ export function CheckInGate({ yesterdayStr, yesterdayLabel, variant = 'A' }: Pro
                 : "Takes a few seconds. There's no wrong answer."}
             </p>
 
+            {plannedTasks.length > 0 && (
+              <div className="mt-4 rounded-2xl bg-stone-50 p-3">
+                <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400">You planned</p>
+                <ul className="mt-1.5 space-y-1">
+                  {plannedTasks.map((t) => (
+                    <li key={t.id} className="text-[13px] leading-snug text-stone-700">· {t.label}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             <div className="mt-5 space-y-2">
               {OUTCOME_OPTIONS.map((o) => (
                 <button
@@ -217,6 +269,41 @@ export function CheckInGate({ yesterdayStr, yesterdayLabel, variant = 'A' }: Pro
             <p className="mt-1.5 text-[13px] text-stone-500">
               This is how we make your plan fit your actual life.
             </p>
+
+            {/* "Studied a bit" is the one answer where WHICH parts happened is
+                worth asking, and it rides on the screen the student was going
+                to see anyway — no extra step, no extra tap unless they want
+                one. Tapping a reason below submits whatever is ticked here,
+                including nothing. */}
+            {askParts && (
+              <div className="mt-4 rounded-2xl bg-stone-50 p-3">
+                <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400">
+                  Which parts did you get to? <span className="font-semibold normal-case tracking-normal text-stone-400">(optional)</span>
+                </p>
+                <div className="mt-2 space-y-1.5">
+                  {plannedTasks.map((t) => {
+                    const on = didParts.includes(t.id);
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        disabled={saving}
+                        onClick={() => toggle(t.id)}
+                        aria-pressed={on}
+                        className={`flex w-full items-center gap-2.5 rounded-xl border px-3 py-2 text-left transition-all active:scale-[0.99] disabled:opacity-50 ${
+                          on ? 'border-stone-900 bg-white' : 'border-stone-200 bg-white'
+                        }`}
+                      >
+                        <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] font-bold ${
+                          on ? 'border-stone-900 bg-stone-900 text-white' : 'border-stone-300 text-transparent'
+                        }`}>✓</span>
+                        <span className="min-w-0 flex-1 text-[13px] leading-snug text-stone-700">{t.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             <div className="mt-4 flex flex-wrap gap-1.5">
               {BLOCKER_REASONS.map((r) => (

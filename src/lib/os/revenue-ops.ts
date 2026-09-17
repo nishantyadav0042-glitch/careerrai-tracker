@@ -1,4 +1,6 @@
 import { findSacredFailures } from './sacred-guard';
+import { checkoutStall, stallDetail, ORDER_ATTRIBUTION_FROM } from '@/lib/checkout-stall';
+import { PAYMENT_FUNNEL_EVENTS, funnelOrderId } from '@/lib/payment-funnel';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Admin = any;
@@ -64,7 +66,7 @@ export async function assembleRevenueOps(admin: Admin, nowMs: number): Promise<R
       .eq('status', 'failed')
       .gte('created_at', new Date(nowMs - 30 * 86_400_000).toISOString()),
     admin.from('student_payments')
-      .select('id, student_id, amount, created_at')
+      .select('id, student_id, amount, created_at, razorpay_order_id')
       .eq('status', 'created')
       .gte('created_at', new Date(nowMs - 14 * 86_400_000).toISOString()),
     admin.from('profiles')
@@ -92,14 +94,41 @@ export async function assembleRevenueOps(admin: Admin, nowMs: number): Promise<R
       route: `/admin/student/${r.student_id}`,
     });
   }
+  // Where each abandoned order actually stopped. This card used to assert
+  // "Opened checkout and left" for every one of them — including the orders
+  // that never showed a payment window at all, which is our defect and not a
+  // sales follow-up. The funnel events have been able to tell these apart
+  // since August; nothing read them here until now. See lib/checkout-stall.
+  const orderIds = (abandoned ?? []).map((r: any) => r.razorpay_order_id).filter(Boolean) as string[];
+  const eventsByOrder = new Map<string, { event: string }[]>();
+  if (orderIds.length) {
+    const { data: funnelRows } = await admin
+      .from('analytics_events')
+      .select('event_type, metadata')
+      .in('event_type', PAYMENT_FUNNEL_EVENTS as unknown as string[])
+      .gte('created_at', new Date(nowMs - 21 * 86_400_000).toISOString());
+    for (const e of (funnelRows ?? []) as any[]) {
+      // Through funnelOrderId, never a literal: this line read `orderId` while
+      // the route wrote `order_id`, so it matched 0 of 87 production rows.
+      const oid = funnelOrderId(e.metadata);
+      if (oid == null || !orderIds.includes(oid)) continue;
+      eventsByOrder.set(oid, [...(eventsByOrder.get(oid) ?? []), { event: e.event_type as string }]);
+    }
+  }
+
   for (const r of abandoned ?? []) {
     const p: any = profById.get(r.student_id);
     if (!p || p.is_test_account || p.is_demo) continue;
+    const stall = checkoutStall(
+      r.created_at as string,
+      eventsByOrder.get(r.razorpay_order_id as string) ?? [],
+      ORDER_ATTRIBUTION_FROM,
+    );
     items.push({
       id: `abandoned:${r.id}`, state: 'abandoned',
       studentId: r.student_id, studentName: p.full_name ?? 'Student', phone: p.phone ?? null,
       amountRupees: (r.amount ?? 0) / 100,
-      detail: 'Opened checkout and left. A real payment would have auto-confirmed — this is a sales follow-up.',
+      detail: stallDetail(stall),
       route: `/admin/student/${r.student_id}`,
     });
   }

@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { REFUND_REQUIRED_DAYS } from '@/lib/refund-policy';
 
 export const metadata: Metadata = {
   title: 'Refund & Cancellation Policy · CareerRai',
@@ -8,10 +9,15 @@ export const metadata: Metadata = {
 
 // Public refund policy. Required by Razorpay's website verification and by
 // Play/App Store review, and previously only existed as a vague line inside
-// Terms ("refunds, where offered"). The numbers here MUST stay in sync with
-// src/app/api/student/request-refund/route.ts (REQUIRED_DAYS = 20, first month).
+// Terms ("refunds, where offered").
+//
+// The bar is interpolated from src/lib/refund-policy.ts, never typed here. It
+// used to be prose — "at least 20 study days" — sitting three paragraphs and
+// two other files away from the code that granted the refund. That is how a
+// public promise ends up being one no paying customer in company history could
+// actually claim, with nobody noticing for months.
 export default function RefundsPage() {
-  const updated = '25 July 2026';
+  const updated = '16 September 2026';
   return (
     <main className="mx-auto max-w-2xl px-5 py-10 text-stone-800">
       <Link href="/" className="text-sm font-medium text-orange-600 hover:underline">← Back to CareerRai</Link>
@@ -33,9 +39,10 @@ export default function RefundsPage() {
             <strong>full refund</strong>.
           </p>
           <p>
-            The one condition: you must have <strong>logged at least 20 study days</strong> within that first month. We
-            ask for this because mentorship only works if you actually show up — 20 days is how we know you gave it a
-            genuine try, and it is the same standard for everyone.
+            The one condition: you must have <strong>logged at least {REFUND_REQUIRED_DAYS} study days</strong> within
+            that first month. We ask for this because mentorship only works if you actually show up —{' '}
+            {REFUND_REQUIRED_DAYS} days is how we know you gave it a genuine try, and it is the same standard for
+            everyone.
           </p>
         </section>
 
@@ -70,7 +77,7 @@ export default function RefundsPage() {
           <h2 className="text-xl font-semibold text-stone-900">4. When a refund does not apply</h2>
           <ul className="list-disc pl-5">
             <li>After your first month has ended.</li>
-            <li>If fewer than 20 study days were logged in that first month.</li>
+            <li>If fewer than {REFUND_REQUIRED_DAYS} study days were logged in that first month.</li>
             <li>Where an account has been terminated for abuse of the service or of a mentor.</li>
           </ul>
           <p>

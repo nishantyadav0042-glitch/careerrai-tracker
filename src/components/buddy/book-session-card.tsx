@@ -10,6 +10,7 @@ import { ensureTransactableOrigin } from '@/lib/checkout-origin-guard';
 import { IntentPicker, intentIsComplete } from '@/components/session/intent-picker';
 import type { SessionIntent } from '@/lib/session-intent';
 import { payFunnel } from '@/lib/payment-funnel-client';
+import { checkoutFailureProps } from '@/lib/payment-failure';
 
 // ── The single-session door, in the Buddy section ─────────────────────────────────────
 //
@@ -76,6 +77,10 @@ export function BookSessionCard({ findingKind, findingEvidence, mentorFirst, has
     track('session_book_click', { finding: findingKind ?? null, intents, primary: intents[0] ?? null });
 
     setBusy(true); setError(null);
+    // Intent, before any network call. This surface emitted only
+    // checkout_opened, so a session booking that died before Razorpay was
+    // indistinguishable from one nobody ever started.
+    payFunnel('payment_cta_clicked', { plan: 'session', surface: 'session' });
     try {
       // Incident #59: Razorpay refuses careerrai-daily.vercel.app outright, so
       // an order minted here can never be paid. Move to the checkout origin
@@ -135,8 +140,6 @@ export function BookSessionCard({ findingKind, findingEvidence, mentorFirst, has
         return;
       }
 
-      payFunnel('payment_checkout_opened', { plan: 'session', orderId: json.orderId, surface: 'session_inline' });
-
       const rzp = new window.Razorpay({
         key: json.keyId,
         order_id: json.orderId,
@@ -148,6 +151,7 @@ export function BookSessionCard({ findingKind, findingEvidence, mentorFirst, has
         theme: { color: '#E8652D' },
         modal: {
           ondismiss: () => {
+            payFunnel('payment_checkout_dismissed', { plan: 'session', orderId: json.orderId, surface: 'session' });
             track('session_pay_dismissed', { orderId: json.orderId });
             setError('Payment cancelled — nothing was charged.');
           },
@@ -161,8 +165,15 @@ export function BookSessionCard({ findingKind, findingEvidence, mentorFirst, has
           setTimeout(() => router.refresh(), 3000);
         },
       });
-      rzp.on('payment.failed', (payload: unknown) => setError(failureMessage(payload)));
+      rzp.on('payment.failed', (payload: unknown) => {
+        payFunnel('payment_failed', { plan: 'session', orderId: json.orderId, surface: 'session', ...checkoutFailureProps(payload) });
+        setError(failureMessage(payload));
+      });
       rzp.open();
+      // After open(), never before: emitted early it claims a window was shown
+      // on a path that can still throw, and the split it exists to make —
+      // "never reached Razorpay" vs "reached it and left" — silently breaks.
+      payFunnel('payment_checkout_opened', { plan: 'session', orderId: json.orderId, surface: 'session_inline' });
     } catch {
       setError('Could not start checkout — check your connection.');
     } finally {

@@ -223,6 +223,12 @@ export const WORKSPACES: AdminWorkspace[] = [
       // Blueprint → first tick → first log → return, every number drilling to
       // the exact students. Distinct from /admin/growth (pre-signup wizard).
       { label: 'Activation', href: '/admin/funnel', status: 'live' },
+      // The 16 Sep experiment: repeat preparation before and after
+      // confirm-or-correct, both sides computed by one function so the
+      // comparison cannot drift, with the decision rule attached. Lives here
+      // rather than as a 13th workspace — the cap is deliberate and this
+      // answers one question rather than running a daily operation.
+      { label: 'Retention readout', href: '/admin/retention', status: 'live' },
       { label: 'Growth funnel', href: '/admin/growth', status: 'moved' },
       { label: 'Speed', href: '/admin/perf', status: 'moved' },
     ],

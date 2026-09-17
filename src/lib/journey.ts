@@ -333,6 +333,12 @@ export type EventName =
   | 'timetable_upload_start' | 'timetable_saved' | 'timetable_parse_failed'
   | 'timetable_dismissed'
   | 'busy_day_used'
+  // Right-size hours (16 Sep): the student is shown the gap between the hours
+  // they set and the hours they have actually been studying, and decides. The
+  // three outcomes are separate events on purpose — "kept" is a real answer
+  // and must not be inferred from the absence of "changed", which is how a
+  // dismissal silently becomes an unknown.
+  | 'right_size_shown' | 'right_size_changed' | 'right_size_kept'
   | 'next_action_started' | 'next_action_done' | 'next_action_expanded'
   | 'prep_index_expanded' | 'evidence_logged'
   | 'evidence_announce_shown' | 'evidence_announce_dismissed'

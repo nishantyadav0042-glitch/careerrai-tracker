@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { payFunnel } from '@/lib/payment-funnel-client';
+import { checkoutFailureProps } from '@/lib/payment-failure';
 import { PLANS, type PlanId } from '@/lib/plans';
 import { Sparkles, Heart } from 'lucide-react';
 import { trackMeta } from '@/lib/track';
@@ -86,11 +87,6 @@ export function MembershipCard({ status, plan, renewsAt, fullName, scholarship }
       const ok = await loadRazorpay();
       if (!ok || !window.Razorpay) { setMessage('Could not load the payment window. Try again.'); return; }
 
-      // THE split event. Everything above proves intent; this proves the
-      // student actually saw a payment window. Without it, "never reached
-      // Razorpay" and "reached it and left" are the same abandoned order.
-      payFunnel('payment_checkout_opened', { plan: planId, orderId: data.orderId, surface: 'membership' });
-
       // ── Installed iOS PWA: navigate, never a modal ─────────────────────
       // This surface blocks the popups the modal needs AND cannot escape to
       // Safari with an anchor, which is what produced the "tap share, choose
@@ -147,10 +143,16 @@ export function MembershipCard({ status, plan, renewsAt, fullName, scholarship }
       });
       rzp.on('payment.failed', (payload: unknown) => {
         const err = (payload as { error?: { reason?: string; step?: string } } | null)?.error;
+        payFunnel('payment_failed', { plan: planId, orderId: data.orderId, surface: 'membership', ...checkoutFailureProps(payload) });
         track('pay_failed', { plan: planId, orderId: data.orderId, surface: 'membership', reason: err?.reason ?? null, step: err?.step ?? null });
         setMessage(failureMessage(payload));
       });
       rzp.open();
+      // THE split event, and it is emitted HERE — after open(), never before.
+      // It used to fire the moment the script loaded, and again inside the
+      // redirect branch below, so it counted more windows than there were
+      // orders and claimed a window was shown on paths that returned first.
+      payFunnel('payment_checkout_opened', { plan: planId, orderId: data.orderId, surface: 'membership' });
       track('pay_checkout_opened', { plan: planId, orderId: data.orderId, surface: 'membership' });
     } catch {
       setMessage('Something went wrong with the payment. Nothing was charged — please try again.');

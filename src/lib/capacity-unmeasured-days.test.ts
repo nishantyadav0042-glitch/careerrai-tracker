@@ -66,7 +66,27 @@ describe('the engine itself is unchanged — only its input is corrected', () =>
   });
 });
 
+// 16 Sep: the assembly moved OUT of routine/today and into the engine as
+// `capacityFromReports`, because the tracker became a second surface needing
+// capacity and would otherwise have copied the derivation. The invariant is
+// unchanged and so is this guard's job — only the address changed. Callers
+// that hand the engine RAW ROWS are now correct by construction, so what has
+// to be asserted is that they go through the shared derivation rather than
+// re-deriving a day count of their own.
+describe('the measured-day rule lives in one place', () => {
+  it('the engine derives measured days itself, through the authority', () => {
+    const s = read('src/lib/capacity-engine.ts');
+    expect(s, 'must import the authority').toContain('durationIsUnknown');
+    expect(s, 'measured days are counted by excluding unmeasured rows')
+      .toMatch(/filter\(\(r\) => !durationIsUnknown\(r\)\)\.length/);
+    expect(s, 'the derived count is what reaches the engine')
+      .toMatch(/computeCapacity\([^)]*measuredDays/);
+  });
+});
+
 describe('every capacity caller feeds it measured days', () => {
+  // Callers that pass raw rows through capacityFromReports get the rule for
+  // free; callers that still count for themselves must still count correctly.
   for (const [name, path] of [
     ['routine/today', 'src/app/api/routine/today/route.ts'],
     ['student-360', 'src/lib/student-360.ts'],
@@ -74,6 +94,12 @@ describe('every capacity caller feeds it measured days', () => {
   ] as const) {
     it(`${name} counts measured days, not every logged row`, () => {
       const s = read(path);
+      const viaShared = /capacityFromReports\s*\(/.test(s);
+      if (viaShared) {
+        expect(s, 'the shared derivation owns the rule — no second day count here')
+          .not.toMatch(/computeCapacity\s*\(/);
+        return;
+      }
       expect(s, 'must import the authority').toContain('durationIsUnknown');
       expect(s, 'must pass a measured-day count into computeCapacity')
         .toMatch(/computeCapacity\([^)]*measuredDays/);
@@ -88,10 +114,11 @@ describe('every capacity caller feeds it measured days', () => {
 
 describe('scope containment', () => {
   it('the magnitude input is deliberately untouched', () => {
-    // recentStudyHours/hrs still feed computeCapacity unchanged: the engine
-    // already filters h > 0, and re-filtering here would double-count the rule.
-    const s = read('src/app/api/routine/today/route.ts');
-    expect(s).toMatch(/const recentStudyHours = \(recentReports \?\? \[\]\)\.map/);
+    // The hours array still reaches computeCapacity unfiltered: the engine
+    // already drops h > 0, and re-filtering upstream would double-count the
+    // rule. After the move this is asserted where the mapping now lives.
+    const s = read('src/lib/capacity-engine.ts');
+    expect(s).toMatch(/const hours = rows\.map\(\(r\) => Number\(r\.study_duration\) \|\| 0\)/);
   });
 
   it('the engine constants are unchanged', () => {

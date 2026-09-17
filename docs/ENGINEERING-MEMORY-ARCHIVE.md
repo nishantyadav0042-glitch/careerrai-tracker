@@ -6082,3 +6082,280 @@ writer of `daily_reports` stops emitting the event, if the emit is gated on
 
 This is Incident #93's lesson in a third costume: a watch, a detector and now a
 metric, each a copy of reality with nothing checking the copy still matches.
+
+---
+
+## Incident #96
+
+**16 Sep 2026 — the money-back guarantee had never once been claimable, and we
+advertised it on three public pages for two months.**
+
+`/refunds`, `/terms` and `/pricing` all promised a full refund in the first
+month on one condition: **at least 20 logged study days**. The granting route,
+`api/student/request-refund`, enforced `REQUIRED_DAYS = 20` against
+`daily_reports` in the 30 days from signup.
+
+Measured on exactly that window, here is every student who has ever paid
+CareerRai, best first (re-verified 17 Sep through `refundWindow()` itself,
+which is INCLUSIVE at both ends — an earlier draft used an exclusive 30-day
+window and recorded 11 for Arnav):
+
+```
+Rudra Pratap Singh   15      Harsh Rajput              4
+Arnav Badaya         12      Dhruv Vakadia             4
+Vedashri kale        10      ── test account ──
+Monu singh            7      Razorpay Review           5
+```
+
+**SIX real customers, not seven.** `student_payments` holds 7 rows with
+`status='paid'`, but `Razorpay Review` carries `is_test_account = true`. Real
+customer revenue is **₹6,694**, not ₹7,693. Earlier entries in this archive
+said "seven payers"; that count included the test account.
+
+**Nobody reached 20. Not one payer, ever.** Nor under either alternative
+reading: days logged after payment tops out at 12, and the longest consecutive
+run by any payer is 9. The most engaged paying customer in
+company history missed the bar by five days. Widening to every student who has
+ever logged a single day — 324 of them — exactly **three** reached 20, under
+1%, and none of the three had paid.
+
+A condition no customer can satisfy is not a condition. It is a refusal written
+in advance, and we printed it in our Terms.
+
+**Why it survived.** The bar existed as **five separate literals in five
+files** — the route's `REQUIRED_DAYS`, the profile page's
+`REFUND_DAYS_REQUIRED`, and three hand-typed sentences in public prose. Nothing
+connected the sentence a student read to the comparison the server ran, so
+nothing could notice they had come apart. More importantly, nothing connected
+either of them to **what students actually do**: the number was chosen before
+we had a single paying customer and was never once checked against the
+behaviour of the customers we got. No test could fail, because no test knew
+what the number was supposed to mean.
+
+It is the same shape as Incident #86 and Incident #93: a rule validated against
+an intention instead of against production. Here the rule was a promise to a
+paying customer, which makes it a Trust-OS matter and not merely a bug.
+
+**Two smaller defects found in the same pass.** The route and the profile card
+built the eligibility window independently — same intent, two expressions — so
+the green "Eligible" badge and the server's verdict were only ever coincidences
+away from disagreeing. And both applied **only the upper bound**
+(`report_date <= joined + 30`), never the lower, so a log recorded before
+signup would have counted toward the guarantee. No such row exists today, which
+is precisely why it could have stayed wrong indefinitely.
+
+**The fix — the ARCHITECTURE, which is what actually mattered.**
+`src/lib/refund-policy.ts` is now the only place the number exists.
+`REFUND_WINDOW_DAYS = 30`, one `refundWindow()` both counting sites call, one
+`refundShortfallMessage()` the student sees. All five surfaces interpolate the
+constant; none types a digit. Five literals in five files became one.
+
+**AMENDED 17 Sep 2026 — the threshold is 20 again, by founder decision.** It
+was set to 10 on 16 Sep on the evidence below. The founder reviewed the audit,
+was shown explicitly that at 20 no real customer in company history could have
+claimed, that the best reached 15, and that the guard would have to stop
+blocking it — and chose 20. Pricing and refund policy are the founder's call.
+
+Two things changed to keep that honest rather than silent. The guard no longer
+refuses the number, but it was NOT deleted: it now pins the value to a dated
+`FOUNDER_SET_DAYS`, so an accidental future edit still fails the build, and it
+reports the unclaimability as a recorded fact instead of a veto. And the
+public-surface tests are untouched — the single-source architecture is the part
+of this incident that survives regardless of what the number is, and it is the
+reason changing the threshold took one line instead of five.
+
+**The unclaimability is unchanged by the reversal.** Six real customers, best
+15, none at 20. That is the state of the evidence, recorded here so it never
+has to be re-derived to reopen the question.
+
+**Why 10 was chosen on 16 Sep** (superseded, kept for the reasoning). The
+condition exists to establish that a student gave CareerRai a fair chance
+before asking for the money back — not that they were exceptional. Ten days
+across a month is a student who came back on ten separate occasions. At 10,
+three of the six real payers clear it (15, 12, 10).
+
+**What has teeth now.** `refund-policy.guard.test.ts` records
+`BEST_PAYING_STUDENT_DAYS = 15` as a measured fact and pins the bar to
+`FOUNDER_SET_DAYS`, so the threshold cannot drift by accident — only by a
+decision someone signs. That is the assertion that was missing: not "is the
+copy in sync" — though it checks that too, on all five files — but *is this
+number reachable by a real customer*. Verified to fail against both
+reintroduced faults (bar back to 20; a hand-typed "20 study days" in the public
+page).
+
+**Lesson.** A number that appears in a promise to a customer must be checked
+against the customers, not against the intention that produced it. If no test
+can state what the number is supposed to mean, nobody is checking it.
+
+---
+
+## Incident #97
+
+**16 Sep 2026 — the revenue funnel was built to answer "why did they abandon?"
+and had been unable to answer it since the day it shipped.**
+
+The founder asked why 51 checkouts were created and never paid, and ordered
+instrumentation before any fix. The instrumentation already existed —
+`payment-funnel.ts`, built in August, whose own header says the three
+abandonment populations "need opposite fixes and we could not tell them apart."
+Reading it against production found **five defects, all in the reading and none
+in the paying**.
+
+**1. Two stages had no emission site at all.**
+
+| Stage | Rendered by | Written by |
+|---|---|---|
+| `payment_failed` | `/admin` funnel | nothing — ever |
+| `paywall_viewed` | `/admin` funnel | nothing — ever |
+
+All three checkout surfaces registered Razorpay's `payment.failed` listener and
+wrote the result to `student_events` as `pay_failed`. The funnel reads
+`analytics_events`. So the "Payment failed" row has read **0 since August**,
+which looks like *no payment problems* and means *not wired*. Incident #95's
+shape precisely: a plausible zero. `paywall_viewed` — the one stage that says
+how many students were ever shown a price — was never emitted either, so every
+rate below it was computed against `order_created` instead.
+
+**2, 3, 4. Three defects in `KEY_SPLIT_EVENT` itself.**
+`payment_checkout_opened` is the event the module names as the one that
+matters, because it splits "never reached Razorpay" (our bug) from "reached it
+and left" (their decision). It was wrong three ways at once: emitted
+unconditionally *before* the redirect branch **and again inside it**, so
+redirect users counted twice; emitted *before* `rzp.open()`, so it claimed a
+window had been shown at a point where the call could still throw; and emitted
+with **no `orderId`** on two of the three surfaces, so no dismissal could be
+joined to the order it abandoned.
+
+The double-count left a tell that should have been read months ago: **28 orders
+against 41 checkout-shown events.** More payment windows than orders exist is
+impossible.
+
+**5. The one screen the founder uses ignored all of it.** Revenue Operations
+labelled every `status='created'` order with one asserted sentence — *"Opened
+checkout and left. A real payment would have auto-confirmed — this is a sales
+follow-up."* Measured, that is wrong for a large share: **37 students created an
+abandoned order, only 29 ever emitted a checkout-opened event**, and on the
+redirect leg **8 students navigated to Razorpay and exactly 1 came back**. An
+order that never showed a payment window is not a sales follow-up. It is our
+defect, and it was filed as the student's decision.
+
+**What the corrected reading says.** Razorpay's `payment.failed` has never
+fired, in the product's entire history, on any surface — and `failure_code` is
+null on all 51 abandoned orders. **Students are not failing payment.** They
+open the price and close it, or they never see it. Those need opposite
+responses and neither of them is "optimise the checkout".
+
+**The fix.** All three surfaces now emit the full client funnel —
+`paywall_viewed`, `payment_cta_clicked`, `payment_checkout_opened` (once, after
+`rzp.open()`), `payment_checkout_dismissed`, `payment_failed` — each carrying
+the `orderId` it belongs to, with Razorpay's verbatim error preserved through a
+new `checkoutFailureProps` in `payment-failure.ts`. `lib/checkout-stall.ts`
+classifies each abandoned order into the population it is actually in, and
+Revenue Operations now renders that instead of a sentence.
+
+**The honesty rule that made this a module and not a ternary.** *Absence of an
+event is only evidence when the event existed.* An order from 4 August has no
+checkout event and never will; concluding "never reached Razorpay" from that
+silence invents a product bug out of a deployment date. Hence two cutovers, not
+one: `FUNNEL_INSTRUMENTED_FROM` (25 Aug, when the events began) and
+`ORDER_ATTRIBUTION_FROM` (16 Sep, when every event began carrying its order).
+Orders older than the join returns `not_instrumented` and says so on the card.
+
+**What has teeth now.** `payment-funnel-emission.guard.test.ts` fails the build
+if any stage in `PAYMENT_FUNNEL_EVENTS` has no emission site anywhere in `src`,
+if a checkout surface drops any of the four client events, if any order-scoped
+event is emitted without an `orderId`, if the split event moves back above the
+redirect branch or above `rzp.open()`, or if Revenue Operations goes back to
+asserting a reason. Verified to fail against four separately reintroduced
+faults.
+
+**Lesson.** Defining a metric is not instrumenting it, and rendering it is not
+reading it. A dashboard stage with no writer, and a ledger column with no
+reader, both fail silently and both look like good news. When a funnel is built
+to answer a question, something must assert that it still can.
+
+---
+
+## Incident #98
+
+**16 Sep 2026 — the capacity engine was built, tested, documented and never
+connected, while the plan asked eight times what students deliver.**
+
+`capacity-engine.ts` exists. It computes a `sustainableHours` from a student's
+own logged behaviour, it is covered by tests, and its header explains exactly
+why it matters ("otherwise every day starts as a failure"). A comment inside it
+records the rest:
+
+> Nothing applies sustainableHours to a plan — `capBudget()` has no caller, and
+> the day is sized by `dailyHours(profile)`.
+
+So the mechanism designed to stop the plan over-asking had never once run. The
+admin card that claimed "plan sized to {sustainableHours}h" was found to be
+false earlier and removed, and `admin-capacity-claim.guard.test.ts` was written
+as a two-way coupling: the claim may return if the wiring does.
+
+**What the wiring would have been.** Measured across the 804 students who have
+ever been given a routine: median claimed **5h/day**, p90 8h, max 16h, against
+a median **0.6h** actually reported by an active student. 1,713 routines in 30
+days, 4.36 tasks planned, 0.44 ticked, **83.7% never receiving a single tick**.
+
+**And why it was the wrong fix.** 413 of those 804 carry
+`study_hours_source = 'student'`: they personally confirmed the number. (Those
+figures are as of 2026-09-16; the query is `current_date`-relative, so unpinned
+it drifts — 784/403 on 17 Sep. Pin the date before re-deriving.) The
+plan is not over-reaching — it is faithfully building the day the student asked
+for. `daily-hours.ts` carries the standing 6 Aug decision that the hours belong
+to the student and *"nothing in this codebase may derive, cap, trim, round
+toward behaviour, or otherwise 'improve' it… The date gives. The hours don't."*
+
+Wiring `capBudget` would have satisfied the instruction and violated the
+Constitution, and it would have told a sincere fifteen-hour student that they
+are a thirty-six-minute student on the strength of three weeks of logs.
+
+**The resolution.** Nothing derives the number. The product now SHOWS the
+student their own two numbers — what their plan is built to, what they have
+actually been studying — and offers a one-tap change. `setDailyHours` stays the
+only writer, and it only ever runs from a request the student made. Keeping the
+current number is the same write as changing it, which is what the existing
+route's comment already said, and that write stamps `study_hours_set_at` and
+silences the card for a cooldown: no new column, no dismissal state, no
+migration. `capBudget` still has no caller, pinned by test.
+
+**Three second-order defects found in the same pass.**
+
+1. The derivation of the engine's inputs lived inline in `api/routine/today`.
+   The tracker was about to become a second surface needing capacity and would
+   have copied it — the comment directly above that code is itself a warning
+   about the two-writer bug from sharing helpers while duplicating the
+   assembly. Moved into the engine as `capacityFromReports`.
+2. The tracker selected only `report_date, study_duration`, so
+   `durationIsUnknown` could not tell a real zero-hour day from a day nobody
+   measured and counted both as behaviour evidence. That is the Q4 defect
+   reintroduced by omission, and it would have crossed the behaviour threshold
+   on days nobody measured.
+3. The page derived "yesterday" separately from the check-in's own derivation.
+   Between 03:00 and 05:29 IST a raw UTC yesterday names the wrong day — an
+   off-by-one this codebase has already paid for — and here it would have shown
+   a student one day's plan while logging a different day against it. Collapsed
+   to one derivation.
+
+**A negative finding recorded deliberately.** The feared backlog spiral (miss a
+day, tomorrow holds both, abandon) **was not found in the population and window
+tested** — 506 students, 1,344 routines, 60 days. That is not the same claim as
+"accumulation is impossible", and it must not be quoted as one. Within-student: plans run **under the student's own claim in every bucket** (−14.8 to −31.4
+minutes), and five untouched days move a plan from 383 to 419 minutes and 4.47
+to 5.01 tasks — where stacking would have added ~22 tasks, and a backlog would
+exceed the claim by definition. Re-verified 17 Sep with per-bucket sample
+sizes; the apparent rise in planned minutes tracks a rise in CLAIMED minutes
+(410 → 442), which is the confound, and controlling for it the difference is
+flat and negative throughout. Priority-based plan healing was
+therefore **not built**. It would have been surface area against a problem we
+do not have, and the fact that it was not built is worth as much memory as the
+things that were.
+
+**Lesson.** A module that is built, tested and unwired is more dangerous than
+one that does not exist: the tests pass, the file reads as solved, and a
+surface can claim its value without consuming it. Before building a mechanism,
+grep for its callers — and if a Constitution forbids the obvious wiring, the
+Constitution is usually protecting something the instruction did not know
+about. Show the human the evidence instead of acting on it for them.
