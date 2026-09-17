@@ -1,4 +1,5 @@
 'use client';
+import { detectPlatform } from '@/lib/journey';
 // The ONE safe way to obtain and persist a push subscription — shared by every
 // grant and heal path so they can't drift apart. Born from the 21 July P0: five
 // separate call sites each did `getSubscription() → unsubscribe() → subscribe()`,
@@ -79,7 +80,29 @@ export async function persistSubscription(sub: PushSubscription, context: string
       const res = await fetch('/api/push/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subscription: sub.toJSON(), context }),
+        // ── EVERY ENDPOINT SINCE 1 SEP WAS RECORDED AS platform:'unknown' ────
+        //
+        // /api/push/subscribe has read `body?.platform` since it was written,
+        // and nothing has ever sent it. `registerWebPushEndpoint` therefore
+        // fell through to its `?? 'unknown'` default on every single
+        // subscribe. The 137 rows reading 'android' are all from the
+        // 20260901a backfill — their newest `registered_at` is 1 September.
+        // Every endpoint created since is 'unknown', which is now the
+        // second-largest bucket in the table.
+        //
+        // `context` was always sent and is correct; only the platform half of
+        // the pair was missing, so the defect was invisible — the rows looked
+        // populated.
+        //
+        // `detectPlatform()` already exists and already labels every analytics
+        // event; its three return values are exactly three of the four the
+        // column's CHECK allows, so this reuses shipped, exercised detection
+        // rather than inventing a second one that could disagree with it.
+        //
+        // Deliberately NOT backfilling the 84 existing 'unknown' rows: their
+        // platform was never observed, and guessing it from a later user-agent
+        // would put a precise lie where an honest unknown stands (L1).
+        body: JSON.stringify({ subscription: sub.toJSON(), context, platform: detectPlatform() }),
       });
       if (res.ok) return { ok: true };
       lastReason = `server_${res.status}`;
