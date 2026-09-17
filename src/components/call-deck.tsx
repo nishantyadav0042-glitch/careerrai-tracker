@@ -2,8 +2,8 @@
 import { useState } from 'react';
 import { REASON_CATEGORIES, REASON_LABEL, reasonNeedsVerbatim,
   type ReasonCategory } from '@/lib/intervention-taxonomy';
-import { SKIP_REASONS, SKIP_REASON_LABEL, type SkipReason } from '@/lib/sales-disposition';
-import { MessageCircle, PhoneCall, PhoneOff, ChevronDown, UserRound, Send } from 'lucide-react';
+import { SKIP_REASONS, SKIP_REASON_LABEL, isUnreached, type SkipReason } from '@/lib/sales-disposition';
+import { MessageCircle, PhoneCall, PhoneOff, PowerOff, ChevronDown, UserRound, Send } from 'lucide-react';
 import type { CallLead } from '@/lib/call-queue';
 import type { Remark, RemarkHistory } from '@/lib/sales-remarks';
 import { NO_ANSWER_CONTRADICTION_CODE } from '@/lib/no-answer-contradiction';
@@ -249,7 +249,12 @@ export function CallDeck({ queue, repFirstName }: { queue: CallLead[]; repFirstN
               ))}
             </ul>
           </div>
-          <div className="mt-3 flex items-stretch gap-px bg-stone-100">
+          {/* `flex-wrap` since 17 Sep: splitting "No answer" into two buttons
+              made six actions on a row that was already full at five, and on a
+              360px phone an un-wrapped row crushes every label into an
+              unreadable column of letters. Wrapping keeps each action at a
+              tappable width and costs one extra line at most. */}
+          <div className="mt-3 flex flex-wrap items-stretch gap-px bg-stone-100">
             {lead.phone && (
               <a href={`tel:${lead.phone}`} className="flex flex-1 items-center justify-center gap-1.5 bg-stone-900 py-3 text-[13px] font-bold text-white active:scale-95">
                 <PhoneCall className="h-4 w-4" /> Call
@@ -277,8 +282,20 @@ export function CallDeck({ queue, repFirstName }: { queue: CallLead[]; repFirstN
               className="flex items-center justify-center gap-1 bg-white px-3 py-3 text-[12px] font-semibold text-amber-800 active:scale-95 disabled:opacity-50">
               <Send className="h-4 w-4" /> Messaged
             </button>
-            <button onClick={() => void dispose(lead, 'no_answer', '')} disabled={inFlight[lead.studentId]} className="flex items-center justify-center gap-1 bg-white px-3 py-3 text-[12px] font-semibold text-orange-600 active:bg-orange-50 disabled:opacity-40" title="Didn't pick up">
+            {/* TWO WAYS A CALL FAILS, TWO BUTTONS (founder, 17 Sep 2026).
+                `no_answer` held both until today — 256 students, the second
+                largest status in the book — and "it rang and nobody picked up"
+                is not "the phone is off". Our students switch phones off to
+                study, so the second one may be the signal rather than the
+                failure. Both still count as one miss against the same ceiling
+                and leave the lead in the same state; only the record differs,
+                because guessing at a different cadence before the two numbers
+                exist is how this repo has been wrong before. */}
+            <button onClick={() => void dispose(lead, 'no_answer', '')} disabled={inFlight[lead.studentId]} className="flex items-center justify-center gap-1 bg-white px-2 py-3 text-[12px] font-semibold text-orange-600 active:bg-orange-50 disabled:opacity-40" title="It rang — nobody picked up">
               <PhoneOff className="h-4 w-4" /> No answer
+            </button>
+            <button onClick={() => void dispose(lead, 'switched_off', '')} disabled={inFlight[lead.studentId]} className="flex items-center justify-center gap-1 bg-white px-2 py-3 text-[12px] font-semibold text-violet-700 active:bg-violet-50 disabled:opacity-40" title="Phone switched off / unreachable">
+              <PowerOff className="h-4 w-4" /> Switched off
             </button>
             <button onClick={() => setOpenId(openId === lead.studentId ? null : lead.studentId)} className="flex items-center justify-center gap-1 bg-white px-3 py-3 text-[12px] font-bold text-teal-700 active:bg-teal-50">
               Log <ChevronDown className={`h-4 w-4 transition-transform ${openId === lead.studentId ? 'rotate-180' : ''}`} />
@@ -410,7 +427,8 @@ function Disposition({ lead, onDispose }: {
   const isSkip = outcome === 'skipped';
   // Nobody spoke to a student who was skipped either, so the "why aren't they
   // studying" taxonomy is as inapplicable here as it is to an unanswered dial.
-  const asksReason = outcome !== 'no_answer' && !isSkip;
+  // Neither unreached outcome has a reason to give: nobody spoke.
+  const asksReason = !isUnreached(outcome) && !isSkip;
   const needsVerbatim = asksReason && reasonNeedsVerbatim(reason || null);
   // ── A NOTE IS REQUIRED ON EVERY CONNECTED OUTCOME ────────────────────────
   //

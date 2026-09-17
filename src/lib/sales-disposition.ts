@@ -33,7 +33,31 @@ export const CONNECTED_OUTCOMES = ['interested', 'callback', 'converted', 'not_i
  *  it sets last_attempt_at, starts the 7-day cooldown and counts as worked.
  *  Without it, twenty messages a day left no trace and the rotation could not
  *  count them. */
-export const CALL_OUTCOMES = [...CONNECTED_OUTCOMES, 'no_answer', 'messaged', 'skipped'] as const;
+// ── A PHONE THAT IS OFF IS NOT A PHONE NOBODY ANSWERED (founder, 17 Sep) ────
+//
+// `no_answer` is the commonest disposition in the book — **256 students** sit
+// in it, second only to the 659 never contacted. Until today it collapsed two
+// different facts into one: the phone rang and nobody picked up, and the phone
+// was switched off. The founder's call: *"switch off different outcome"*.
+//
+// They differ in what they say about the student. A phone that rings unanswered
+// says something about this moment. A phone that is OFF says something about
+// this TIME OF DAY — and our students are people who switch phones off to
+// study, which is the behaviour we are supposedly selecting for.
+//
+// WHAT THIS CHANGES TODAY: only that we can tell them apart. `switched_off`
+// leaves the lead in exactly the same state as `no_answer`, on exactly the
+// same clock, under exactly the same ceiling. That is deliberate. We have no
+// evidence yet that a switched-off phone deserves a different cadence, and the
+// last time this repo guessed at a cause before measuring it, the answer was
+// wrong six ways (#84, #92). Measure first; tune when 256 becomes two numbers.
+export const CALL_OUTCOMES = [...CONNECTED_OUTCOMES, 'no_answer', 'switched_off', 'messaged', 'skipped'] as const;
+
+/** The two ways a call fails to reach anyone. Both count as a miss. */
+export const UNREACHED_OUTCOMES = ['no_answer', 'switched_off'] as const;
+export function isUnreached(v: unknown): v is (typeof UNREACHED_OUTCOMES)[number] {
+  return typeof v === 'string' && (UNREACHED_OUTCOMES as readonly string[]).includes(v);
+}
 
 /**
  * Why a card was closed without acting on it (founder, 3 Sep 2026).
@@ -213,7 +237,13 @@ export function planDisposition(
     // double the day. The miss count is untouched — nobody failed to answer.
     return { status: 'messaged', nextActionAt: null, callbackAt: null, noAnswerCount: prevMisses };
   }
-  if (outcome === 'no_answer') {
+  if (isUnreached(outcome)) {
+    // Both unreached outcomes share this path on purpose — see UNREACHED_OUTCOMES.
+    // The lead state stays `no_answer`: `lead_outreach.status` records WHERE the
+    // lead is, and an unreached student is in the same place either way. WHICH
+    // kind of miss it was is recorded on the activity row, which is the event
+    // log and the only place the distinction can be counted without rewriting
+    // every branch in the queue that reads this status.
     const misses = prevMisses + 1;
     // The ceiling. Six consecutive unanswered attempts spans roughly eight
     // days across morning and evening windows; a student who has not picked up

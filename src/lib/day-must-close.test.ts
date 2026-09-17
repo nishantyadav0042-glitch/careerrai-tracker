@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { computeCheckpoint, describeCheckpoint, type OpportunityRow } from './sales-checkpoint';
 import { SKIP_REASONS, SKIP_REASON_LABEL, isSkipReason, isCallOutcome, planDisposition, ACTIVITY_STATUSES } from './sales-disposition';
 import { markSkipped, closeDay } from './sales-opportunity-record';
@@ -131,9 +132,20 @@ describe('the skip vocabulary', () => {
   });
 
   it('the database CHECK lists exactly the activity vocabulary', () => {
-    const sql = readFileSync('supabase/migrations/20260903b_day_must_close.sql', 'utf8');
+    // Reads the LATEST migration that defines the constraint, not a fixed one.
+    // It was pinned to 20260903b until 17 Sep 2026, when `switched_off` was
+    // added in a later file — at which point the guard was comparing the code
+    // against a superseded CHECK and would have passed while the two drifted.
+    // The invariant is "the DB's CURRENT vocabulary equals the code's", and
+    // only the newest definition is current.
+    const dir = 'supabase/migrations';
+    const defining = readdirSync(dir).filter((f) => f.endsWith('.sql'))
+      .filter((f) => /sales_activity_status_check[\s\S]*?check \(status in \(/i.test(readFileSync(join(dir, f), 'utf8')))
+      .sort();
+    expect(defining.length, 'some migration must define the status CHECK').toBeGreaterThan(0);
+    const sql = readFileSync(join(dir, defining[defining.length - 1]), 'utf8');
     const block = sql.match(/sales_activity_status_check[\s\S]*?check \(status in \(([\s\S]*?)\)\)/i);
-    expect(block, 'the migration must define the status CHECK').not.toBeNull();
+    expect(block).not.toBeNull();
     const dbValues = [...block![1].matchAll(/'([a-z_]+)'/g)].map((m) => m[1]).sort();
     expect(dbValues).toEqual([...ACTIVITY_STATUSES].sort());
   });
