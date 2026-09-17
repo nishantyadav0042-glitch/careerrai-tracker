@@ -50,8 +50,29 @@ self.addEventListener('fetch', (event) => {
 self.addEventListener('push', (event) => {
   console.log('[Service Worker] Push received:', event);
 
+  // ── A PUSH THAT DISPLAYS NOTHING COSTS THE SUBSCRIPTION ON iOS ───────────
+  //
+  // This used to `return` here. Apple's rule for Home Screen web apps is that
+  // EVERY push must result in a user-visible notification; a push event that
+  // resolves without one counts against the subscription and, repeated, ends
+  // it — silently and permanently. The same applies to the payload-parse and
+  // display-rejection paths below, which is why nothing in this handler is
+  // allowed to finish without having called showNotification().
+  //
+  // A dataless push is not expected (the sender always attaches a payload), so
+  // this is a safety net rather than a path. It is reported as its own display
+  // error so that if it ever DOES happen we find out from the data instead of
+  // from a student going quiet.
   if (!event.data) {
     console.warn('[Service Worker] Push received but no data');
+    event.waitUntil(
+      self.registration.showNotification('CareerRai', {
+        body: 'Tap to open CareerRai',
+        icon: '/careerrai-logo.png',
+        badge: '/careerrai-logo.png',
+        tag: 'careerrai-notification',
+      }).catch(function () { /* nothing further is available to try */ })
+    );
     return;
   }
 
@@ -113,7 +134,37 @@ self.addEventListener('push', (event) => {
       })
     : self.registration.showNotification(notificationData.title || 'CareerRai', options);
 
-  const work = [showPromise];
+  // ── THE DISPLAY OUTCOME IS THE WHOLE POINT OF PHASE 0 ────────────────────
+  //
+  // Two things change here and they are the same change.
+  //
+  // FIRST, `showPromise` could previously REJECT straight into
+  // `Promise.all(work)` and therefore into `event.waitUntil`, marking the push
+  // event failed. Only the chat branch had a `.catch()`. One malformed payload
+  // could kill a push on every platform and, on iOS, cost the subscription
+  // outright — and `display_error` was never written by anything, so it would
+  // have been invisible. It is now impossible for this handler to reject.
+  //
+  // SECOND, the outcome is now carried on the receipt beacon instead of being
+  // discarded. Note what `resolved` does and does not mean: the browser
+  // accepted the render request and handed it to the OS. It is NOT proof a
+  // human saw it. Do Not Disturb, Focus and OEM standby all live past that
+  // boundary and no web API crosses it.
+  //
+  // THE TRADE, stated because it is real: the beacon used to race alongside
+  // showNotification and now waits for it. `showNotification()` is a local
+  // call that settles in milliseconds, so the added exposure is small — and
+  // without waiting there is no outcome to send, which is the entire purpose.
+  var display = { attempted: true, resolved: false, error: null };
+  var settled = showPromise.then(
+    function () { display.resolved = true; },
+    function (e) {
+      display.error = String((e && (e.message || e.name)) || e || 'unknown').slice(0, 300);
+      console.warn('[Service Worker] showNotification rejected:', e);
+    }
+  );
+
+  const work = [settled];
   const notifId = notificationData.data && notificationData.data.notifId;
   // Which endpoint this copy was sent to (task #79). Echoed back verbatim so
   // the receipt names THIS device, not just this student — the server checks
@@ -130,7 +181,9 @@ self.addEventListener('push', (event) => {
     // DevTools is ever open — matching push.ts's own transient-failure
     // retry, not inventing a new pattern.
     work.push(
-      beaconWithRetry('/api/push/received', notifId, endpointId).catch(function (e) {
+      settled.then(function () {
+        return beaconWithRetry('/api/push/received', notifId, endpointId, display);
+      }).catch(function (e) {
         console.warn('[Service Worker] received beacon failed after retry:', e);
       })
     );
@@ -138,14 +191,17 @@ self.addEventListener('push', (event) => {
   event.waitUntil(Promise.all(work));
 });
 
-function beaconWithRetry(path, notifId, endpointId) {
+function beaconWithRetry(path, notifId, endpointId, display) {
   function attempt() {
+    // `display` rides the EXISTING beacon rather than adding a second and third
+    // network call. A waking radio is the most expensive moment to spend a
+    // request in, and it is exactly the moment these beacons are lost.
+    var body = endpointId ? { id: notifId, endpointId: endpointId } : { id: notifId };
+    if (display) body.display = display;
     return fetch(path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(
-        endpointId ? { id: notifId, endpointId: endpointId } : { id: notifId }
-      ),
+      body: JSON.stringify(body),
     }).then(function (res) {
       if (!res.ok) throw new Error('beacon status ' + res.status);
       return res;

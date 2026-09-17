@@ -375,7 +375,12 @@ describe('the attribution wire cannot be removed silently', () => {
 
   it('the receipt route hands the pair to the ownership check, not straight to a write', () => {
     const route = codeOnly(readFileSync('src/app/api/push/received/route.ts', 'utf8'));
-    expect(route).toMatch(/confirmDelivery\(admin, id, endpointId\)/);
+    // Pinned the exact arity until 17 Sep 2026, when Phase 0 added a fourth
+    // argument carrying the display outcome. The RULE this guards is unchanged
+    // and is what it now asserts: the pair goes to the ownership check, and the
+    // route never writes the delivery table itself. Pinning the arity instead
+    // would fail on every future argument while proving nothing extra.
+    expect(route).toMatch(/confirmDelivery\(admin, id, endpointId[,)]/);
     expect(route, 'the route must never write the delivery table itself')
       .not.toMatch(/from\('notification_deliveries'\)/);
   });
