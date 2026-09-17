@@ -6096,16 +6096,25 @@ month on one condition: **at least 20 logged study days**. The granting route,
 `daily_reports` in the 30 days from signup.
 
 Measured on exactly that window, here is every student who has ever paid
-CareerRai, best first:
+CareerRai, best first (re-verified 17 Sep through `refundWindow()` itself,
+which is INCLUSIVE at both ends — an earlier draft used an exclusive 30-day
+window and recorded 11 for Arnav):
 
 ```
-Rudra Pratap Singh   15      Razorpay Review (test)    5
-Arnav Badaya         11      Harsh Rajput              4
-Vedashri kale        10      Dhruv Vakadia             4
-Monu singh            7
+Rudra Pratap Singh   15      Harsh Rajput              4
+Arnav Badaya         12      Dhruv Vakadia             4
+Vedashri kale        10      ── test account ──
+Monu singh            7      Razorpay Review           5
 ```
 
-**Nobody reached 20. Not one payer, ever.** The most engaged paying customer in
+**SIX real customers, not seven.** `student_payments` holds 7 rows with
+`status='paid'`, but `Razorpay Review` carries `is_test_account = true`. Real
+customer revenue is **₹6,694**, not ₹7,693. Earlier entries in this archive
+said "seven payers"; that count included the test account.
+
+**Nobody reached 20. Not one payer, ever.** Nor under either alternative
+reading: days logged after payment tops out at 12, and the longest consecutive
+run by any payer is 9. The most engaged paying customer in
 company history missed the bar by five days. Widening to every student who has
 ever logged a single day — 324 of them — exactly **three** reached 20, under
 1%, and none of the three had paid.
@@ -6275,7 +6284,9 @@ a median **0.6h** actually reported by an active student. 1,713 routines in 30
 days, 4.36 tasks planned, 0.44 ticked, **83.7% never receiving a single tick**.
 
 **And why it was the wrong fix.** 413 of those 804 carry
-`study_hours_source = 'student'`: they personally confirmed the number. The
+`study_hours_source = 'student'`: they personally confirmed the number. (Those
+figures are as of 2026-09-16; the query is `current_date`-relative, so unpinned
+it drifts — 784/403 on 17 Sep. Pin the date before re-deriving.) The
 plan is not over-reaching — it is faithfully building the day the student asked
 for. `daily-hours.ts` carries the standing 6 Aug decision that the hours belong
 to the student and *"nothing in this codebase may derive, cap, trim, round
@@ -6313,11 +6324,15 @@ migration. `capBudget` still has no caller, pinned by test.
    to one derivation.
 
 **A negative finding recorded deliberately.** The feared backlog spiral (miss a
-day, tomorrow holds both, abandon) **does not exist**. Within-student over 60
-days, 506 students, 1,347 routines: plans average **19.9 minutes UNDER** the
-student's own claim, and five untouched days move a plan from 378 to 417
-minutes and 4.43 to 4.97 tasks — where stacking would have added ~22 tasks, and
-a backlog would exceed the claim by definition. Priority-based plan healing was
+day, tomorrow holds both, abandon) **was not found in the population and window
+tested** — 506 students, 1,344 routines, 60 days. That is not the same claim as
+"accumulation is impossible", and it must not be quoted as one. Within-student: plans run **under the student's own claim in every bucket** (−14.8 to −31.4
+minutes), and five untouched days move a plan from 383 to 419 minutes and 4.47
+to 5.01 tasks — where stacking would have added ~22 tasks, and a backlog would
+exceed the claim by definition. Re-verified 17 Sep with per-bucket sample
+sizes; the apparent rise in planned minutes tracks a rise in CLAIMED minutes
+(410 → 442), which is the confound, and controlling for it the difference is
+flat and negative throughout. Priority-based plan healing was
 therefore **not built**. It would have been surface area against a problem we
 do not have, and the fact that it was not built is worth as much memory as the
 things that were.

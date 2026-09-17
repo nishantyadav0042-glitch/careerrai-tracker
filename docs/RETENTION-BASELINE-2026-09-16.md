@@ -60,6 +60,16 @@ Last 30 days, **1,713 generated routines across 798 students.**
 | **Median study actually reported** | **0.6 h — 36 minutes** |
 | Routines carrying any calibration | **0.8%** (14 of 1,713) |
 
+**Paying customers: 6 real, not 7.** `student_payments` holds 7 rows with
+`status='paid'`, but one belongs to `Razorpay Review`, which carries
+`is_test_account = true`. Real-customer revenue is **₹6,694**, not ₹7,693.
+Their logged days inside the policy's own window, measured through
+`refundWindow()` (which is INCLUSIVE at both ends, i.e. 31 calendar days):
+**15, 12, 10, 7, 4, 4** — plus 5 for the test account. An earlier draft of this
+page listed 11 for the second student; that used an exclusive 30-day window and
+did not match the route. None of the three possible readings — policy window,
+days after payment (max 12), or longest consecutive run (max 9) — reaches 20.
+
 **We plan a median of five hours a day. Students do a median of thirty-six
 minutes. That is 8.3×**, it regenerates at full size every morning regardless
 of what happened yesterday, and 84% of routines never receive a single tick.
@@ -70,10 +80,19 @@ used on 0.8% of routines.
 
 ## Reproducing these numbers
 
+**PIN THE DATE OR THE NUMBERS MOVE.** Every query below was originally written
+against `current_date`, which means it does not reproduce this page — the
+cohort is defined relative to today, so one more student crosses the 7-day
+boundary each day. Run unpinned on 17 Sep it returns 82/303 = 27.1% for Day-2,
+not 81/302 = 26.8%. A baseline you cannot re-derive is not a baseline, so every
+query starts with the freeze date as a CTE and uses `asof.d`, never
+`current_date`.
+
 Base CTE used by the return queries:
 
 ```sql
-with real as (
+with asof as (select date '2026-09-16' as d),
+real as (
   select d.student_id, d.report_date from daily_reports d
   join profiles p on p.id = d.student_id
   where p.role = 'student'
@@ -83,16 +102,25 @@ with real as (
 ```
 
 **Return rates** — `firsts` is `min(report_date)` per student; the cohort is
-`first_log <= current_date - 7`; `day2` is a log at `first_log + 1`; `w1` is any
-log in `(first_log, first_log + 7]`.
+`first_log <= asof.d - 7`; `day2` is a log at `first_log + 1`; `w1` is any log
+in `(first_log, first_log + 7]`.
 
-**Repeat rate** — for every log with `report_date between current_date - 37 and
-current_date - 8`, whether another log exists in `(report_date, report_date + 7]`.
+**Repeat rate** — for every log with `report_date between asof.d - 37 and
+asof.d - 8`, whether another log exists in `(report_date, report_date + 7]`.
 
 **Plan figures** — `daily_routines` joined to a per-day count from
 `routine_task_completions` on `(student_id, routine_date)`, restricted to
-`routine_date between current_date - 30 and current_date - 1` and
+`routine_date between asof.d - 30 and asof.d - 1` and
 `jsonb_typeof(tasks) = 'array'`.
+
+**Verified reproducible 17 Sep 2026** with the pin in place: Day-2 **81/302**,
+second log **109/302**, one-and-done **174/302**, repeat **332/561** across 242
+students. Numerators are recorded here because a percentage without its
+denominator cannot be checked.
+
+**No double counting is possible.** `daily_reports` carries
+`UNIQUE (student_id, report_date)` — a student cannot file two logs for one
+calendar day. This is a database constraint, not a convention.
 
 **Units, and the trap in them.** `daily_routines.est_minutes` is minutes.
 `daily_reports.study_duration` is **hours** — `/admin/leads/[id]` renders it as
@@ -129,10 +157,12 @@ reported beside it; it is simply not the gate.
 
 ### 1. The five-hour plan is the student's own number
 
-Across the **804 students who have ever been given a routine**: median claimed
-**5h/day**, p90 **8h**, max **16h**. **413 of them carry
-`study_hours_source = 'student'`** — they personally confirmed it. Median study
-actually reported by an active student: **0.6h**.
+Across the **804 students who have ever been given a routine** (as of
+2026-09-16 — unpinned on 17 Sep this reads 784/403 and a 0.5h median, same
+`current_date` drift as above): median claimed **5h/day**, p90 **8h**, max
+**16h**. **413 of them carry `study_hours_source = 'student'`** — they
+personally confirmed it. Median study actually reported by an active student:
+**0.6h** (65 students with 3+ logs in the window).
 
 The plan is not over-reaching. It is faithfully building the day the student
 asked for, and then never mentioning the gap again.
@@ -153,10 +183,13 @@ comment recorded that nothing consumed it. The 8.3× mismatch was never a
 missing model — it was an unwired one, plus a number nobody was ever shown
 again.
 
-### 2. Missed work does not accumulate — VERIFIED
+### 2. No meaningful evidence of accumulating backlog in the tested population
 
 The feared failure mode (*miss Monday → Tuesday holds Monday + Tuesday →
-backlog → abandonment*) **does not exist in this engine.** Each day is
+backlog → abandonment*) **was not found in the population and window tested.**
+That is a statement about 506 students, 1,344 routines and a 60-day window — it
+does not establish that accumulation can never occur under any configuration,
+and it should not be quoted as "backlog is impossible". Each day is
 regenerated from the student's hours and the topic selector's coverage state;
 uncovered topics are re-offered at the same daily size, which is already
 "rescheduled, not accumulated".

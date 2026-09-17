@@ -1,6 +1,6 @@
 import { findSacredFailures } from './sacred-guard';
 import { checkoutStall, stallDetail, ORDER_ATTRIBUTION_FROM } from '@/lib/checkout-stall';
-import { PAYMENT_FUNNEL_EVENTS } from '@/lib/payment-funnel';
+import { PAYMENT_FUNNEL_EVENTS, funnelOrderId } from '@/lib/payment-funnel';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Admin = any;
@@ -108,8 +108,10 @@ export async function assembleRevenueOps(admin: Admin, nowMs: number): Promise<R
       .in('event_type', PAYMENT_FUNNEL_EVENTS as unknown as string[])
       .gte('created_at', new Date(nowMs - 21 * 86_400_000).toISOString());
     for (const e of (funnelRows ?? []) as any[]) {
-      const oid = (e.metadata as Record<string, unknown> | null)?.orderId;
-      if (typeof oid !== 'string' || !orderIds.includes(oid)) continue;
+      // Through funnelOrderId, never a literal: this line read `orderId` while
+      // the route wrote `order_id`, so it matched 0 of 87 production rows.
+      const oid = funnelOrderId(e.metadata);
+      if (oid == null || !orderIds.includes(oid)) continue;
       eventsByOrder.set(oid, [...(eventsByOrder.get(oid) ?? []), { event: e.event_type as string }]);
     }
   }
