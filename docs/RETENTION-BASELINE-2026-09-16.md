@@ -69,6 +69,10 @@ Their logged days inside the policy's own window, measured through
 page listed 11 for the second student; that used an exclusive 30-day window and
 did not match the route. None of the three possible readings — policy window,
 days after payment (max 12), or longest consecutive run (max 9) — reaches 20.
+**The refund bar is 20, by founder decision on 17 Sep 2026**, taken with this
+evidence in front of them. On today's data that guarantee is unclaimable by
+anyone who has ever paid; it is recorded here so the question can be reopened
+without re-deriving anything.
 
 **We plan a median of five hours a day. Students do a median of thirty-six
 minutes. That is 8.3×**, it regenerates at full size every morning regardless

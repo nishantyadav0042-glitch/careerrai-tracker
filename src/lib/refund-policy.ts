@@ -41,8 +41,12 @@
 // copy of the number to drift, and refund-policy.guard.test.ts fails the build
 // the moment one appears.
 
-/** Logged study days required inside the window to claim the refund. */
-export const REFUND_REQUIRED_DAYS = 10;
+/**
+ * Logged study days required inside the window to claim the refund.
+ *
+ * Founder-set, 17 Sep 2026. See the block above for the measured consequence.
+ */
+export const REFUND_REQUIRED_DAYS = 20;
 
 /** Length of the refund window, counted from the day the account was created. */
 export const REFUND_WINDOW_DAYS = 30;

@@ -6144,24 +6144,40 @@ away from disagreeing. And both applied **only the upper bound**
 signup would have counted toward the guarantee. No such row exists today, which
 is precisely why it could have stayed wrong indefinitely.
 
-**The fix.** `src/lib/refund-policy.ts` is now the only place the number
-exists. `REFUND_REQUIRED_DAYS = 10`, `REFUND_WINDOW_DAYS = 30`, one
-`refundWindow()` both counting sites call, one `refundShortfallMessage()` the
-student sees. All five surfaces interpolate the constant; none types a digit.
+**The fix — the ARCHITECTURE, which is what actually mattered.**
+`src/lib/refund-policy.ts` is now the only place the number exists.
+`REFUND_WINDOW_DAYS = 30`, one `refundWindow()` both counting sites call, one
+`refundShortfallMessage()` the student sees. All five surfaces interpolate the
+constant; none types a digit. Five literals in five files became one.
 
-**Why 10.** The condition exists to establish that a student gave CareerRai a
-fair chance before asking for the money back — not that they were exceptional.
-Ten days across a month is a student who came back on ten separate occasions:
-the mentor was used, the plan was filled, the product had every chance to work.
-One day, or four, has not established that, so the condition still costs
-something. At 10, three of the seven payers clear it. And it agrees with what
-we ourselves believe about this product — our own retention research rejected
-daily opening as the behaviour to demand, while the old bar demanded 20 daily
-logs out of 30 in public, in writing.
+**AMENDED 17 Sep 2026 — the threshold is 20 again, by founder decision.** It
+was set to 10 on 16 Sep on the evidence below. The founder reviewed the audit,
+was shown explicitly that at 20 no real customer in company history could have
+claimed, that the best reached 15, and that the guard would have to stop
+blocking it — and chose 20. Pricing and refund policy are the founder's call.
+
+Two things changed to keep that honest rather than silent. The guard no longer
+refuses the number, but it was NOT deleted: it now pins the value to a dated
+`FOUNDER_SET_DAYS`, so an accidental future edit still fails the build, and it
+reports the unclaimability as a recorded fact instead of a veto. And the
+public-surface tests are untouched — the single-source architecture is the part
+of this incident that survives regardless of what the number is, and it is the
+reason changing the threshold took one line instead of five.
+
+**The unclaimability is unchanged by the reversal.** Six real customers, best
+15, none at 20. That is the state of the evidence, recorded here so it never
+has to be re-derived to reopen the question.
+
+**Why 10 was chosen on 16 Sep** (superseded, kept for the reasoning). The
+condition exists to establish that a student gave CareerRai a fair chance
+before asking for the money back — not that they were exceptional. Ten days
+across a month is a student who came back on ten separate occasions. At 10,
+three of the six real payers clear it (15, 12, 10).
 
 **What has teeth now.** `refund-policy.guard.test.ts` records
-`BEST_PAYING_STUDENT_DAYS = 15` as a measured fact and **fails the build if the
-bar is ever set above it**. That is the assertion that was missing: not "is the
+`BEST_PAYING_STUDENT_DAYS = 15` as a measured fact and pins the bar to
+`FOUNDER_SET_DAYS`, so the threshold cannot drift by accident — only by a
+decision someone signs. That is the assertion that was missing: not "is the
 copy in sync" — though it checks that too, on all five files — but *is this
 number reachable by a real customer*. Verified to fail against both
 reintroduced faults (bar back to 20; a hand-typed "20 study days" in the public

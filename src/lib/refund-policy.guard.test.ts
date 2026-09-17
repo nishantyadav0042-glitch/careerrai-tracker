@@ -35,26 +35,52 @@ const FILES = {
 const src = (k: keyof typeof FILES) => codeOnly(readFileSync(join(process.cwd(), FILES[k]), 'utf8'));
 
 /**
- * Logged days in the first 30 by the most engaged student who has ever paid
- * us. Measured 16 Sep 2026 across all seven payers: 15, 11, 10, 7, 5, 4, 4.
+ * Logged days in the first 30 by the most engaged student who has ever paid.
  *
- * This is the ceiling on the bar, and it is the whole point of the fix. A
- * refund condition set above this is not a condition — it is a refusal written
- * in advance, and we would be advertising it on three public pages.
+ * Re-verified 17 Sep 2026 through `refundWindow()` itself across the SIX real
+ * customers (a seventh paid row belongs to `Razorpay Review`, which carries
+ * is_test_account = true): 15, 12, 10, 7, 4, 4.
  */
 const BEST_PAYING_STUDENT_DAYS = 15;
 
-describe('the bar is one a real customer can actually reach', () => {
-  it('never exceeds what our most engaged payer has ever logged', () => {
+/**
+ * The bar the founder set, 17 Sep 2026.
+ *
+ * This test used to assert `REFUND_REQUIRED_DAYS <= BEST_PAYING_STUDENT_DAYS`,
+ * and that assertion is what caught the original defect. The founder reviewed
+ * the audit — shown that at 20 no real customer in company history could have
+ * claimed, and that this guard would have to stop blocking it — and chose 20.
+ *
+ * Pricing and policy are the founder's call, so the guard no longer refuses
+ * the number. It is NOT deleted either, because deleting it would erase the
+ * measurement along with the veto and leave the next reader with a bare
+ * constant and no way to know it had ever been examined. Instead it pins the
+ * value to an explicit, dated decision: an accidental future edit still fails,
+ * and the unclaimability stays on the record where it can be reopened.
+ */
+const FOUNDER_SET_DAYS = 20;
+
+describe('the bar is a decision on the record, not a default', () => {
+  it('matches the number the founder set', () => {
     expect(REFUND_REQUIRED_DAYS,
-      `${REFUND_REQUIRED_DAYS} days is above the ${BEST_PAYING_STUDENT_DAYS} our best-ever paying student logged. `
-      + 'Raising it there makes the guarantee unclaimable again — the exact fault this module was created to end.')
-      .toBeLessThanOrEqual(BEST_PAYING_STUDENT_DAYS);
+      'The refund bar is a founder decision (17 Sep 2026). Changing it is a policy '
+      + 'change, not a refactor — update FOUNDER_SET_DAYS in the same commit and say who decided.')
+      .toBe(FOUNDER_SET_DAYS);
+  });
+
+  it('records, without blocking, that no real customer has ever reached it', () => {
+    // Deliberately an assertion about the EVIDENCE, not about the policy. If
+    // the bar ever drops to something a payer has reached, this flips and the
+    // message below stops being true — which is the day to celebrate, not fix.
+    const reachable = REFUND_REQUIRED_DAYS <= BEST_PAYING_STUDENT_DAYS;
+    expect(reachable,
+      `FYI, not a failure: the bar is ${REFUND_REQUIRED_DAYS} days and the most engaged of our six real `
+      + `paying customers reached ${BEST_PAYING_STUDENT_DAYS}. On today's evidence the guarantee is `
+      + 'unclaimable by anyone who has ever paid. Founder-approved 17 Sep; see Incident #96.')
+      .toBe(false);
   });
 
   it('still asks for a genuine trial, not a single visit', () => {
-    // Below a handful of days the condition stops meaning anything: a student
-    // who logged twice has not given the mentor or the plan a real chance.
     expect(REFUND_REQUIRED_DAYS).toBeGreaterThanOrEqual(5);
   });
 
