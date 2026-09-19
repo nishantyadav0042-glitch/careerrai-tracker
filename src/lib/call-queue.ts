@@ -705,8 +705,13 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
   // "newest TYPED remark", which is deliberately not the same as the newest
   // row: no_answer is the commonest disposition in production and its
   // auto-note must never bury the conversation that came before it.
+  // The viewer is passed so a colleague who has left the team stops appearing
+  // by name on the cards they handed over (founder, 19 Sep 2026). The words
+  // stay and so does "somebody else wrote this"; only the identity goes.
+  // lib/sales-remarks owns the rule and derives the name from the row itself.
   const remarksBy = buildRemarkHistories(
     (lastActs ?? []) as any[], staff?.labelById ?? null, MAX_REMARKS_ON_CARD,
+    viewer?.id ?? null,
   );
   const tapBy = new Map<string, string>();
   for (const t of ((tapRows ?? []) as any[])) {

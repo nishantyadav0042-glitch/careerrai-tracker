@@ -125,23 +125,86 @@ export function isTypedRemark(status: string | null, note: string | null): boole
  * `total` counts every human touch seen, so a card can honestly say "3 of 7"
  * even though only the newest `cap` travel with it.
  */
+// ── A COLLEAGUE WHO LEFT IS NOT A NAME THE NEXT REP NEEDS ───────────────────
+//
+// Founder, 19 Sep 2026, on the book a departing rep left behind: "think like
+// we have only one rep with us … never use her name in [the remaining rep's]
+// profile." Measured the same night, that name was reaching him two ways:
+// the attribution line on 770 remarks across 245 of his students, and the
+// body of 251 more that she had typed in the first person — "This is <name>
+// from CareerRai."
+//
+// NO NAME IS WRITTEN IN THIS FILE, and none should ever be. This repository
+// is public, so a hard-coded "hide this person" list would publish the very
+// fact it exists to conceal, and would need editing every time the team
+// changes. The name to mask is derived at runtime from the row's own author,
+// which also means this works for the next departure without a code change.
+//
+// DISPLAY ONLY. Nothing is rewritten in the database: those notes are the
+// true record of what a student was actually told, and a student who says
+// "somebody called me last week" is still right. Masking the screen keeps
+// that record intact while keeping a former colleague out of the working day.
+//
+// THE SIGNAL SURVIVES, ONLY THE IDENTITY GOES. The 4 Sep rule — attribution
+// appears when somebody else wrote the remark, so a rep knows they are
+// quoting a colleague rather than remembering their own call — still holds.
+// Take the name away entirely and the next rep reads a stranger's words as
+// his own and tells a student "as I mentioned last time" about a call he
+// never made.
+export const TEAM_LABEL = 'CareerRai team';
+
+/**
+ * Replace a former colleague's own name, wherever it appears in what they
+ * typed, with the team label. Word-boundary and case-insensitive, first name
+ * and full name both, so "This is <name> from CareerRai" reads as the team.
+ *
+ * Returns the note unchanged when there is no name to act on — a note is
+ * never mangled on a guess.
+ */
+export function maskAuthorName(note: string | null, authorLabel: string | null): string | null {
+  if (!note || !authorLabel) return note;
+  const parts = authorLabel.trim().split(/\s+/).filter((p) => p.length >= 3);
+  if (parts.length === 0) return note;
+  // Longest first, so a full name is replaced before its own first name
+  // turns half of it into the label and leaves the surname stranded.
+  const needles = [authorLabel.trim(), ...parts].sort((a, b) => b.length - a.length);
+  let out = note;
+  for (const n of needles) {
+    const esc = n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    out = out.replace(new RegExp(`\\b${esc}\\b`, 'gi'), TEAM_LABEL);
+  }
+  // One pass can turn "<first> <last>" into "<label> <label>".
+  return out.replace(new RegExp(`(?:${TEAM_LABEL}\\s+){2,}`, 'g'), `${TEAM_LABEL} `);
+}
+
 export function buildRemarkHistories(
   rows: RemarkRow[] | null | undefined,
   labelById?: Map<string, string> | null,
   cap: number = MAX_REMARKS_ON_CARD,
+  /**
+   * The rep reading the card. When given, every remark written by ANYONE
+   * else is shown as the team: no name on the attribution line, and no name
+   * left inside the words they typed. Omitted (the 360, tests), nothing is
+   * masked and the history reads as it always did.
+   */
+  currentActorId?: string | null,
 ): Map<string, RemarkHistory> {
   const byStudent = new Map<string, Remark[]>();
   for (const r of (rows ?? [])) {
     if (!isHumanTouch(r.provenance ?? null, r.actor_id ?? null)) continue;
     const actorId = (r.actor_id as string | null) ?? null;
     const list = byStudent.get(r.student_id);
+    const authorLabel = (actorId && labelById?.get(actorId)) ?? null;
+    const someoneElse = currentActorId != null && actorId != null && actorId !== currentActorId;
     const remark: Remark = {
       atIso: r.created_at,
       outcome: (r.status as string | null) ?? null,
-      note: (r.note as string | null) ?? null,
+      note: someoneElse
+        ? maskAuthorName((r.note as string | null) ?? null, authorLabel)
+        : ((r.note as string | null) ?? null),
       typed: isTypedRemark(r.status ?? null, r.note ?? null),
       actorId,
-      by: (actorId && labelById?.get(actorId)) ?? null,
+      by: someoneElse ? TEAM_LABEL : authorLabel,
     };
     if (list) list.push(remark);
     else byStudent.set(r.student_id, [remark]);
