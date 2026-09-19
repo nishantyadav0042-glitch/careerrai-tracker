@@ -12,6 +12,7 @@ import { resolveConvertedClaim } from '@/lib/sales-conversion-truth';
 import { markSkipped, markWorked } from '@/lib/sales-opportunity-record';
 import { captureStateSnapshot, recordIntervention, interventionTypeForLane } from '@/lib/intervention-ledger';
 import { isReasonCategory, reasonNeedsVerbatim } from '@/lib/intervention-taxonomy';
+import { templateByKey, templateNote } from '@/lib/sales-templates';
 
 // Disposition endpoint — the heart of the dialer CRM. Every call MUST end in a
 // disposition. The vocabulary and the disposition → state mapping live in ONE
@@ -50,6 +51,11 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const { studentId, outcome, note, callbackAt, hot, skipReason,
           reasonCategory, reasonVerbatim, askMade, microCommitment, channel,
+          // Which clipboard template was sent, if one was. Never trusted as
+          // typed: resolved through templateByKey below, and an unrecognised
+          // key is dropped rather than stored, so the column can only ever
+          // hold a key this build actually ships.
+          templateKey,
           // The rep's answer to the contradiction question below. Only ever
           // set by a rep who was SHOWN the contradiction and said "yes, they
           // really did answer" — never a default, never sent blind.
@@ -93,6 +99,11 @@ export async function POST(request: NextRequest) {
   }
 
   const noteText = typeof note === 'string' ? note.trim() : '';
+  // Resolved, never echoed. A key the client invented resolves to null and is
+  // written as NULL — the column cannot hold a template this build does not
+  // ship. Only a message can carry one: a template on a `no_answer` row would
+  // claim a send that never happened.
+  const template = outcome === 'messaged' ? templateByKey(templateKey) : null;
   // Remarks are mandatory wherever the rep has something only they know
   // (founder order, 3 Sep - SALES-OS 8 amendment): every connected outcome,
   // AND a sent message. The auto-note said only that a message was sent,
@@ -100,7 +111,16 @@ export async function POST(request: NextRequest) {
   // no_answer keeps its truthful auto-note: there is nothing to say about a
   // call nobody picked up, and extorting text there breeds the ok/x junk
   // remarks this rule exists to kill.
-  if ((isConnectedOutcome(outcome) || outcome === 'messaged') && noteText.length === 0) {
+  //
+  // A RESOLVED TEMPLATE SATISFIES IT (19 Sep 2026). The rule exists so the row
+  // says WHAT was sent, not merely that something was. A template says that
+  // exactly, and better than prose: the text is fixed in
+  // lib/sales-templates.ts and its key is stored in its own column, so the row
+  // is readable and countable without parsing a sentence. This is not the
+  // "free square" the 3 Sep order killed — that was one tap producing "Sent a
+  // WhatsApp message", which named nothing. A rep who writes their own message
+  // still owes the sentence, because nothing else records it.
+  if ((isConnectedOutcome(outcome) || outcome === 'messaged') && noteText.length === 0 && !template) {
     const msg = outcome === 'messaged'
       ? 'Say what you messaged them - that is the record.'
       : 'Feedback is required for a connected call.';
@@ -340,7 +360,10 @@ export async function POST(request: NextRequest) {
     // call took place — no call id, no duration, no recording.
     provenance: 'self_reported',
     status: outcome,
-    note: noteText || (outcome === 'no_answer' ? 'Did not pick up' : outcome === 'messaged' ? 'Sent a WhatsApp message' : null),
+    note: noteText || (outcome === 'no_answer' ? 'Did not pick up' : outcome === 'messaged' ? (template ? templateNote(template) : 'Sent a WhatsApp message') : null),
+    // NULL when they wrote their own — the honest value, and what every row
+    // before 19 Sep 2026 holds. Never guessed from the note's wording.
+    template_key: template?.key ?? null,
     callback_at: plan.callbackAt,
   }).select('id').single();
   if (historyError) {
