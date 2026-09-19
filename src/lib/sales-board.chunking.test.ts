@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CHUNK_SIZE } from '@/lib/truth/batch';
+import type { OpenFollowup } from '@/lib/sales-followup';
+
+// The query-builder double below is a chainable stub whose methods return
+// itself, which has no honest static type. Same convention, and the same
+// disable, as sales-pages.render.test.tsx and sales-board.ts itself.
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 // ── THE CALLING LIST THAT FORGOT EVERY NAME ─────────────────────────────────
 //
@@ -20,7 +26,7 @@ import { CHUNK_SIZE } from '@/lib/truth/batch';
 // Grepping for `chunkIds` would prove nothing about request size, so this
 // test counts the ids that actually reach the client.
 
-const followups = vi.hoisted(() => ({ rows: [] as any[] }));
+const followups = vi.hoisted(() => ({ rows: [] as OpenFollowup[] }));
 const cfg = vi.hoisted(() => ({
   repId: 'rep-1', active: true, employmentType: 'full_time' as const,
   workDays: [1, 2, 3, 4, 5, 6, 7], workStartIst: '00:00', workEndIst: '23:59',
