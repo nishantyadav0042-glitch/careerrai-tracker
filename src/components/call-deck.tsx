@@ -5,7 +5,7 @@ import { REASON_CATEGORIES, REASON_LABEL, reasonNeedsVerbatim,
 import { SKIP_REASONS, SKIP_REASON_LABEL, isUnreached, type SkipReason } from '@/lib/sales-disposition';
 import { MessageCircle, PhoneCall, PhoneOff, PowerOff, ChevronDown, UserRound, Send } from 'lucide-react';
 import type { CallLead } from '@/lib/call-queue';
-import type { Remark, RemarkHistory } from '@/lib/sales-remarks';
+import { TEAM_LABEL, type Remark, type RemarkHistory } from '@/lib/sales-remarks';
 import { NO_ANSWER_CONTRADICTION_CODE } from '@/lib/no-answer-contradiction';
 import { SECTION_ORDER, SECTION_LABEL, type DaySection } from '@/lib/sales-day';
 import { DECK_FILTERS, DECK_FILTER_LABEL, matchesDeckFilter, deckFilterCounts,
@@ -646,8 +646,12 @@ function dayLabel(iso: string): string {
 }
 
 function RemarkLine({ r, repFirstName }: { r: Remark; repFirstName: string }) {
-  const other = r.by && r.by.trim().split(' ')[0].toLowerCase() !== repFirstName.trim().toLowerCase()
-    ? r.by.trim().split(' ')[0] : null;
+  // TEAM_LABEL is shown whole: it is not a person's first name, and clipping
+  // it to one word would print half a label where a colleague used to be.
+  const other = r.by === TEAM_LABEL
+    ? TEAM_LABEL
+    : r.by && r.by.trim().split(' ')[0].toLowerCase() !== repFirstName.trim().toLowerCase()
+      ? r.by.trim().split(' ')[0] : null;
   return (
     <div>
       <p className="text-[10px] font-bold uppercase tracking-wide text-stone-400">
