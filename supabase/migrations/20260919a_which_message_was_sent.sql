@@ -1,0 +1,41 @@
+-- ── WHICH MESSAGE WAS SENT, NOT JUST THAT ONE WAS ───────────────────────────
+--
+-- Anshul, 19 Sep 2026, asked for a message clipboard on the calling screen so
+-- he could stop copying and pasting. Granting that is an efficiency change.
+-- Recording WHICH template he picked is what turns it into an instrument.
+--
+-- MISSION.md, question 2: "A feature whose output disappears into a WhatsApp
+-- thread ... has taught us nothing and is a missed deposit into the only
+-- compounding asset we have." Four templates go out from today. Without this
+-- column we would know 400 messages were sent and never which of the four
+-- earned a reply, so the obvious next question — which message actually works
+-- — would be unanswerable at exactly the moment we had the volume to answer
+-- it. The column has to exist before the first send, not after.
+--
+-- The prose note is NOT replaced. Measured before building: 50 of Anshul's 51
+-- `messaged` notes were distinct, averaging 176 characters, each beginning
+-- with the student's first name — he was pasting the sent message back into
+-- the log by hand. That prose keeps its job of recording what actually
+-- happened; this column takes over the part of it that was structured data
+-- wearing a sentence.
+--
+-- NULLABLE ON PURPOSE, AND NOT BACKFILLED. Every row before today was typed
+-- freehand and belongs to no template. Guessing which one it resembles would
+-- invent a record nobody made (L1, and Incident #69's lesson about our own
+-- bookkeeping masquerading as the student's words). NULL means "no template",
+-- and it is the honest value for all 370 existing rows.
+--
+-- NO CHECK CONSTRAINT AGAINST THE KEY LIST. The keys live in
+-- lib/sales-templates.ts and its guard test pins them; a database constraint
+-- would mean a migration every time a template is retired, and would reject
+-- rows whose template was withdrawn after they were recorded — the history is
+-- supposed to outlive the template. The route validates through
+-- templateByKey() before writing, so an unknown key never reaches this column.
+--
+-- NO INDEX. 370 rows today, and the readout that will use this groups by
+-- actor and date — both already indexed. Adding one now would be the
+-- SCALE-CONTRACT's P2 taking priority over nothing.
+alter table sales_activity add column if not exists template_key text;
+
+comment on column sales_activity.template_key is
+  'Stable key from lib/sales-templates.ts when the counsellor sent a clipboard template; NULL when they wrote their own. Never renamed — a rename orphans the rows recorded under the old key.';

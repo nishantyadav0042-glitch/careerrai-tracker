@@ -223,6 +223,19 @@ refund processed ─▶ settleRefund()      ── stamps refunded_at ───�
   a real outcome (`sales-disposition.ts`); `sales-messages.ts` writes the
   one-tap WhatsApp by lane and journey stage. *Guards: `sales-day.test.ts`,
   `sales-messages.test.ts`, the queue doctrine tests.*
+- **`lib/sales-templates.ts`** — the counsellor's message clipboard (Anshul,
+  19 Sep 2026). `sales-messages.ts` gives each card ONE message; for
+  `callback` / `retry` / `followup` that was a single generic line covering
+  386 of one rep's 1,066 cards over 14 days. Four named templates, offered by
+  lane, opened into WhatsApp for a human to send — never sent by us. **Keys
+  are an append-only contract**: they are written to
+  `sales_activity.template_key`, so renaming one orphans its recorded history;
+  retire a template by emptying its `lanes`. Where the card carries the
+  student's own typed words, `templatesFor` returns a `caution` and the picker
+  stops leading with a template — call-queue's rule that a template "wastes
+  the one moment they chose to tell us something". *Guards:
+  `sales-templates.guard.test.ts` — key list pinned, no placeholder or phantom
+  door in any message (Incident #76), unknown key rejected server-side.*
 - **`lib/telemetry-retention.ts`** — what we stop keeping (Incident #73).
   Production is on Supabase free: a 500 MB ceiling that was 8 days away on
   7 Sep. Retention is per EVENT NAME and **the default is KEEP** — only names in

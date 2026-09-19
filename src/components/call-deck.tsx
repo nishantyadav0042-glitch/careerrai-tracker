@@ -11,6 +11,7 @@ import { SECTION_ORDER, SECTION_LABEL, type DaySection } from '@/lib/sales-day';
 import { DECK_FILTERS, DECK_FILTER_LABEL, matchesDeckFilter, deckFilterCounts,
   addToTally, tallyLine, EMPTY_TALLY, type DeckFilter } from '@/lib/sales-deck-filter';
 import { messageFor, JOURNEY_LABEL } from '@/lib/sales-messages';
+import { templatesFor, templateNote, type MessageTemplate } from '@/lib/sales-templates';
 
 const TIER: Record<string, string> = { hot: 'bg-rose-50 text-rose-700', warm: 'bg-amber-50 text-amber-800', cool: 'bg-stone-100 text-stone-500' };
 const DUE_CLS: Record<string, string> = {
@@ -68,6 +69,15 @@ export function CallDeck({ queue, repFirstName }: { queue: CallLead[]; repFirstN
   // the one-tap auto-note said a message existed, never what it said.
   const [msgOpenId, setMsgOpenId] = useState<string | null>(null);
   const [msgNote, setMsgNote] = useState('');
+  // Which clipboard template was opened for which student, so the log records
+  // WHICH message went out and not merely that one did (19 Sep 2026). Read by
+  // `dispose` rather than passed to it: the template belongs to the card, and
+  // a caller that forgets an eighth positional argument loses the record
+  // silently. Cleared with the card, and ignored by the server for any
+  // outcome other than `messaged`.
+  const [tplById, setTplById] = useState<Record<string, string>>({});
+  // Which card has the template list expanded.
+  const [tplOpenId, setTplOpenId] = useState<string | null>(null);
   // ── THE CLAIM MUST FOLLOW THE ACTION (founder, 15 Sep 2026) ───────────────
   //
   // "Messaged" and the green WA link were independent: the record could be
@@ -81,6 +91,31 @@ export function CallDeck({ queue, repFirstName }: { queue: CallLead[]; repFirstN
   // floor (lib/sales-message-cadence). What it removes is the path where a
   // message gets logged without the rep ever leaving this screen.
   const [waOpened, setWaOpened] = useState<Record<string, boolean>>({});
+
+  /**
+   * Open WhatsApp with a clipboard template, and write the log entry for it.
+   *
+   * The second half is the part Anshul did not ask for and needed most:
+   * measured on 19 Sep, 50 of his 51 `messaged` notes were distinct, averaged
+   * 176 characters and began with the student's first name — he was pasting
+   * the message he had just sent back into "What did you message them?". The
+   * note now arrives written, and stays editable so he can add what actually
+   * happened on top of it.
+   *
+   * It does NOT bypass anything. `waOpened` is set by this tap because this
+   * tap is the one that opens WhatsApp — the same evidence the green button
+   * provides — and the server's cadence gate is untouched, so a burst of
+   * one-tap sends is refused here exactly as it was before.
+   */
+  const sendTemplate = (lead: CallLead, t: MessageTemplate) => {
+    const text = t.body({ firstName: lead.firstName, repFirstName });
+    window.open(`https://wa.me/${lead.waNumber}?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
+    setWaOpened((w) => ({ ...w, [lead.studentId]: true }));
+    setTplById((m) => ({ ...m, [lead.studentId]: t.key }));
+    setTplOpenId(null);
+    setMsgOpenId(lead.studentId);
+    setMsgNote(templateNote(t));
+  };
   const [errorById, setErrorById] = useState<Record<string, string>>({});
   // ── THE CONTRADICTION QUESTION (founder, 4 Sep 2026) ──────────────────────
   // Held per student, with the exact arguments the rep tried to save, so
@@ -130,6 +165,7 @@ export function CallDeck({ queue, repFirstName }: { queue: CallLead[]; repFirstN
           reasonVerbatim: reasonVerbatim ?? null,
           skipReason: skipReason ?? null,
           answeredConfirmed: answeredConfirmed === true,
+          templateKey: tplById[lead.studentId] ?? null,
         }),
       });
       const json = await res.json().catch(() => null);
@@ -265,10 +301,31 @@ export function CallDeck({ queue, repFirstName }: { queue: CallLead[]; repFirstN
                   firstName: lead.firstName, repFirstName, lane: lead.dueReason, stage: lead.journey ?? null, daysSilent: lead.daysSilent ?? null,
                 }))}`}
                 target="_blank" rel="noopener noreferrer"
-                onClick={() => setWaOpened((w) => ({ ...w, [lead.studentId]: true }))}
+                // Clears any template picked earlier on this card: the lane's
+                // own message is not a clipboard template, and recording a key
+                // for text the student never received would be a false record.
+                // The lane itself is already stored on the opportunity row, so
+                // this message stays reconstructable without a key of its own.
+                onClick={() => { setWaOpened((w) => ({ ...w, [lead.studentId]: true })); setTplById((m) => { const n = { ...m }; delete n[lead.studentId]; return n; }); }}
                 className={`flex items-center justify-center gap-1 bg-[#25d366] px-3 py-3 text-[12px] font-bold text-[#04331c] active:scale-95 ${lead.channel === 'message' ? 'flex-1' : ''}`}>
                 <MessageCircle className="h-4 w-4" /> {lead.channel === 'message' ? 'Message' : 'WA'}
               </a>
+            )}
+            {/* THE CLIPBOARD (Anshul, 19 Sep 2026). The green button keeps its
+                one-tap behaviour — the lane's own message, unchanged. This
+                opens the alternatives for lanes that had only one: callback,
+                retry and followup shared a single generic line and were 386 of
+                his 1,066 cards over 14 days. Rendered only where there is a
+                number to open and a template to offer, so it never appears as
+                a dead control. */}
+            {lead.waNumber && templatesFor({ lane: lead.dueReason, hasRemarks: lead.remarks.lastTyped != null }).templates.length > 0 && (
+              <button type="button"
+                onClick={() => setTplOpenId(tplOpenId === lead.studentId ? null : lead.studentId)}
+                aria-expanded={tplOpenId === lead.studentId}
+                title="Other messages"
+                className="flex items-center justify-center gap-1 bg-[#25d366]/15 px-2 py-3 text-[12px] font-bold text-[#04331c] active:scale-95">
+                <ChevronDown className={`h-4 w-4 transition-transform ${tplOpenId === lead.studentId ? 'rotate-180' : ''}`} />
+              </button>
             )}
             {/* A message is a touch the day must record (2 Sep) - and since
                 3 Sep it must record WHAT was sent (founder order): the tap
@@ -317,6 +374,32 @@ export function CallDeck({ queue, repFirstName }: { queue: CallLead[]; repFirstN
           {errorById[lead.studentId] ? (
             <p className="border-t border-rose-100 bg-rose-50 px-4 py-2 text-[12px] font-semibold text-rose-700">{errorById[lead.studentId]}</p>
           ) : null}
+          {tplOpenId === lead.studentId && (() => {
+            const offer = templatesFor({ lane: lead.dueReason, hasRemarks: lead.remarks.lastTyped != null });
+            return (
+              <div className="border-t border-emerald-100 bg-emerald-50/50 px-4 py-2.5">
+                {/* The doctrine, on the screen rather than only in a comment.
+                    call-queue.ts, 15 Sep: answering a student who told us in
+                    their own words why they could not study "with a template
+                    wastes the one moment they chose to tell us something." The
+                    templates stay available — a counsellor who has read the
+                    remark may still want one — they just stop being the
+                    obvious move. */}
+                {offer.caution && (
+                  <p className="mb-2 text-[11px] font-semibold text-amber-800">↑ {offer.caution}</p>
+                )}
+                <div className="flex flex-wrap gap-1.5">
+                  {offer.templates.map((t) => (
+                    <button key={t.key} type="button" onClick={() => sendTemplate(lead, t)}
+                      className="rounded-lg border border-emerald-300 bg-white px-2.5 py-2 text-[12px] font-semibold text-emerald-900 active:scale-95">
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-2 text-[10px] text-stone-500">Opens WhatsApp with the message typed. You still send it, and you can edit it first.</p>
+              </div>
+            );
+          })()}
           {msgOpenId === lead.studentId && (
             <div className="flex items-stretch gap-2 border-t border-amber-100 bg-amber-50/60 px-4 py-2.5">
               <input value={msgNote} onChange={(e) => setMsgNote(e.target.value)} autoFocus
