@@ -6455,3 +6455,71 @@ layer the screen re-groups. #92 put a localStorage fact in a server component.
 #93 put a time-bounded count on a surface with no clock. In all three the rule
 was right and the place was wrong — and in all three the code looked correct
 when read on its own.
+
+---
+
+## Incident #100
+
+**19 Sep 2026 — the counsellor's calling list forgot every name, and nothing
+errored.**
+
+Anshul, by WhatsApp: *"all students are showing as 'Student' in the calling
+list, so I have to open each profile individually to see the actual details."*
+
+Every one of the 332 open follow-ups had a real `full_name` in the database.
+Zero nulls, zero empty strings. The names were never missing.
+
+`getRepFollowupBoard` collected one id list — the rep's open promises plus
+every open lead they own — and passed all of it to a single
+`.in('id', ids)`. PostgREST puts `.in()` values in the REQUEST URL, so that is
+every id in the query string:
+
+| Rep | ids | approx URL | result |
+|---|---|---|---|
+| Neelam | 186 | ~7 KB | fine |
+| Anshul | **1,013** (140 promises + 1,011 leads) | **~37 KB** | request fails |
+
+The read returned nothing, the `Map` was empty, and every row rendered the
+`?? 'Student'` placeholder. No exception, no error banner, no failed build — a
+complete-looking list of anonymous rows.
+
+**This is the 23 Aug incident, unchanged.** `lib/truth/batch.ts` exists because
+of it and its header describes this exact failure at 656 ids and ~24 KB,
+including the sentence *"the audit found 56 more call sites with the same shape
+and not one of them chunked or paginated."* `sales-capacity.ts` was fixed and
+chunks correctly. `sales-board.ts` is one of the 56 that was not, and it was
+the one the counsellor opens every morning.
+
+**Why now, and why only Anshul.** Nothing changed in this code. His book
+crossed the threshold: `FRESH_PIN_PER_DAY` went 5 → 25 on 16 Sep to clear the
+673 never-dealt students, and his owned leads grew past the point where the URL
+fit. A latent defect with a population trigger — it was always going to fire on
+whoever got big first, on a day nobody was looking at this file.
+
+**The fix.** The profile read is chunked through `chunkIds` (100 ids, ~3.7 KB),
+so request size is bounded by the chunk and not by the book. The SLA filter now
+runs BEFORE the id list is built, so a rep owning 1,011 leads only looks up the
+ones that reach a screen. And a failed chunk sets `namesReadable: false`, which
+the page renders as an explicit *"Names didn't load"* banner — the same
+doctrine as the `promises: null` rule already in this file, one field along: a
+board showing 140 rows all called "Student" is not a board of unnamed students,
+it is a broken lookup, and the counsellor cannot tell those apart.
+
+**Shipped with it, because it was the other half of the same report.** The row
+now carries the phone number and a tap-to-dial Call button. Anshul asked for
+"name and details visible directly in the list"; a calling list that makes you
+open a profile to find the number is not finished.
+
+**What has teeth.** `sales-board.chunking.test.ts` builds a fake client that
+RECORDS the ids reaching `.in()` and fails if any request carries more than
+`CHUNK_SIZE`, at Anshul's exact 1,013-id volume. Grepping for `chunkIds` would
+prove nothing about request size. Verified to fail against the original
+single-request code.
+
+**Lesson.** A `.in()` is a URL, and a URL has a length. The rule was written
+down, the helper was built, the incident was recorded — and the fix reached the
+call sites someone happened to be editing, not the ones that would break first.
+When a defect class is found, the audit list is the deliverable; fixing the
+file you are standing in is not the same thing. The remaining sites from that
+audit are still out there, and the next one will surface the same way: as a
+counsellor saying something looks wrong, months later.

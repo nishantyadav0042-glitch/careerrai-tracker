@@ -31,19 +31,30 @@ function lateBy(iso: string, nowMs: number) {
 
 function PromiseRow({ p, nowMs, tone }: { p: BoardPromise; nowMs: number; tone: 'late' | 'now' | 'soon' }) {
   return (
-    <Link href={`/sales/student/${p.studentId}`}
-      className="flex items-start justify-between gap-3 rounded-lg px-1 py-2 hover:bg-stone-50">
-      <div className="min-w-0">
+    <div className="flex items-start justify-between gap-3 rounded-lg px-1 py-2 hover:bg-stone-50">
+      <Link href={`/sales/student/${p.studentId}`} className="min-w-0 flex-1">
         <p className="truncate text-[13px] font-semibold text-stone-800">{p.name ?? 'Student'}</p>
         <p className="truncate text-[11px] text-stone-500">
-          {p.reason || 'Follow-up'}{p.channel ? ` · ${p.channel}` : ''}
+          {/* The number, on the row. Asked for by name (Anshul, 19 Sep): "if
+              the student name and details could be visible directly in the
+              list, it would make calling and follow-ups much faster". */}
+          {p.phone ? <span className="font-mono text-stone-600">{p.phone}</span> : 'no phone on file'}
+          {' · '}{p.reason || 'Follow-up'}{p.channel ? ` · ${p.channel}` : ''}
         </p>
+      </Link>
+      <div className="flex shrink-0 items-center gap-2">
+        <span className={`text-[11px] font-semibold ${
+          tone === 'late' ? 'text-rose-700' : tone === 'now' ? 'text-teal-700' : 'text-stone-400'}`}>
+          {tone === 'late' ? lateBy(p.dueAt, nowMs) : whenIst(p.dueAt)}
+        </span>
+        {p.phone && (
+          <a href={`tel:${p.phone.replace(/[^0-9+]/g, '')}`}
+            className="rounded-lg border border-teal-300 bg-teal-50 px-2.5 py-1 text-[11px] font-bold text-teal-800">
+            Call
+          </a>
+        )}
       </div>
-      <span className={`shrink-0 text-[11px] font-semibold ${
-        tone === 'late' ? 'text-rose-700' : tone === 'now' ? 'text-teal-700' : 'text-stone-400'}`}>
-        {tone === 'late' ? lateBy(p.dueAt, nowMs) : whenIst(p.dueAt)}
-      </span>
-    </Link>
+    </div>
   );
 }
 
@@ -51,23 +62,32 @@ function WaitingRow({ l }: { l: BoardLead }) {
   const breached = l.sla.state === 'awaiting' && l.sla.breached;
   const mins = l.sla.state === 'awaiting' ? l.sla.workingMinutesElapsed : null;
   return (
-    <Link href={`/sales/student/${l.studentId}`}
-      className="flex items-start justify-between gap-3 rounded-lg px-1 py-2 hover:bg-stone-50">
-      <div className="min-w-0">
+    <div className="flex items-start justify-between gap-3 rounded-lg px-1 py-2 hover:bg-stone-50">
+      <Link href={`/sales/student/${l.studentId}`} className="min-w-0 flex-1">
         <p className="truncate text-[13px] font-semibold text-stone-800">{l.name ?? 'Student'}</p>
         <p className="truncate text-[11px] text-stone-500">
+          {l.phone ? <span className="font-mono text-stone-600">{l.phone}</span> : 'no phone on file'}
+          {' · '}
           {l.sla.state === 'unknown'
             // Never rendered as "0 minutes waiting" — we genuinely do not know.
-            ? 'Assigned before we started timing — call when you can'
-            : `${mins} working min since you got this lead`}
+            ? 'assigned before we started timing'
+            : `${mins} working min waiting`}
         </p>
+      </Link>
+      <div className="flex shrink-0 items-center gap-2">
+        {breached && (
+          <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-700">
+            call first
+          </span>
+        )}
+        {l.phone && (
+          <a href={`tel:${l.phone.replace(/[^0-9+]/g, '')}`}
+            className="rounded-lg border border-teal-300 bg-teal-50 px-2.5 py-1 text-[11px] font-bold text-teal-800">
+            Call
+          </a>
+        )}
       </div>
-      {breached && (
-        <span className="shrink-0 rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-700">
-          call first
-        </span>
-      )}
-    </Link>
+    </div>
   );
 }
 
@@ -107,6 +127,20 @@ export default async function SalesFollowupsPage() {
           Retention first, then conversion.
         </p>
       </div>
+
+      {!board.namesReadable && (
+        // Every row below would say "Student". Without this the counsellor
+        // cannot tell a broken lookup from students who have no name on file,
+        // so he opens each profile one at a time — which is exactly what
+        // happened on 19 Sep.
+        <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4">
+          <p className="text-sm font-bold text-amber-900">Names didn’t load.</p>
+          <p className="mt-1 text-[13px] text-amber-800">
+            The list below is real and the times are correct, but we couldn’t read the student names just now.
+            Refresh, and tell Nishant if it keeps happening.
+          </p>
+        </div>
+      )}
 
       {promisesUnreadable ? (
         // The one thing this page must never do is render a failed read as

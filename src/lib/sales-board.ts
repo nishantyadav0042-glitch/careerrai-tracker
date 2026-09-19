@@ -1,6 +1,7 @@
 import { listOpenFollowups, bucketFor, type OpenFollowup, type DueBucket } from '@/lib/sales-followup';
 import { firstContactSla, type SlaState, type SlaTally, tallySla } from '@/lib/sales-sla';
 import { readRepConfigs } from '@/lib/sales-capacity';
+import { chunkIds } from '@/lib/truth/batch';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -32,6 +33,8 @@ export interface BoardLead {
 
 export interface BoardPromise extends OpenFollowup {
   name: string | null;
+  /** So the counsellor can dial from the list instead of opening a profile. */
+  phone: string | null;
   bucket: DueBucket;
 }
 
@@ -43,6 +46,16 @@ export interface FollowupBoard {
   upcoming: BoardPromise[];
   /** Owned, never contacted. Breached first. */
   awaitingFirstContact: BoardLead[];
+  /**
+   * False when the profile read FAILED, so every name on this board is a
+   * placeholder rather than a fact.
+   *
+   * Same doctrine as `promises: null` above, one field along: a board that
+   * silently renders 140 rows all called "Student" is not a board with no
+   * names on it, it is a board whose name lookup broke — and the counsellor
+   * cannot tell those apart, so he opens 140 profiles one at a time.
+   */
+  namesReadable: boolean;
   slaMinutes: number | null;
   sla: SlaTally | null;
 }
@@ -78,30 +91,59 @@ export async function getRepFollowupBoard(
     firstContactAt: (r.first_contact_at as string | null) ?? null,
   }));
 
+  // Who actually needs a name. The SLA filter runs FIRST so the lookup covers
+  // the rows that get rendered, not every lead the counsellor has ever owned —
+  // Anshul owns 1,011 open leads and only the waiting ones reach the screen.
+  const waitingLeads = cfg
+    ? leads
+      .map((l) => ({ ...l, sla: firstContactSla(cfg, l, nowMs) }))
+      .filter((l) => l.sla.state === 'awaiting' || (l.sla.state === 'unknown' && !l.firstContactAt))
+    : [];
+
   const ids = [...new Set([
     ...((promiseRows ?? []).map((p) => p.studentId)),
-    ...leads.map((l) => l.studentId),
+    ...waitingLeads.map((l) => l.studentId),
   ])];
-  const { data: profs } = ids.length
-    ? await admin.from('profiles').select('id, full_name, phone').in('id', ids)
-    : { data: [] as any[] };
-  const byId = new Map(((profs ?? []) as any[]).map((p) => [p.id as string, p]));
+
+  // CHUNKED, because this is the 23 Aug incident's own shape — see
+  // lib/truth/batch: putting every id in one `.in()` puts every id in the
+  // REQUEST URL. 656 ids was ~24KB and broke; Anshul crossed it on 19 Sep with
+  // 1,013 (140 promises + 1,011 open leads), the request failed, `profs` came
+  // back empty, and every row on his calling list rendered the `?? 'Student'`
+  // placeholder. Nothing errored and nothing looked broken — he just could not
+  // see who he was calling.
+  //
+  // A failure here is reported, never absorbed: partial names are worse than
+  // none, because a half-filled list reads as a complete one.
+  const byId = new Map<string, { full_name: string | null; phone: string | null }>();
+  let namesReadable = true;
+  if (ids.length) {
+    const results = await Promise.all(
+      chunkIds(ids).map((chunk) =>
+        admin.from('profiles').select('id, full_name, phone').in('id', chunk)),
+    );
+    for (const r of results as any[]) {
+      if (r.error) { namesReadable = false; continue; }
+      for (const p of (r.data ?? []) as any[]) {
+        byId.set(p.id as string, { full_name: p.full_name ?? null, phone: p.phone ?? null });
+      }
+    }
+  }
 
   const promises: BoardPromise[] | null = promiseRows == null ? null
     : promiseRows.map((p) => ({
       ...p,
-      name: (byId.get(p.studentId)?.full_name as string | null) ?? null,
+      name: byId.get(p.studentId)?.full_name ?? null,
+      phone: byId.get(p.studentId)?.phone ?? null,
       bucket: bucketFor(p.dueAt, nowMs),
     }));
 
   const awaiting: BoardLead[] = cfg
-    ? leads
-      .map((l) => ({ ...l, sla: firstContactSla(cfg, l, nowMs) }))
-      .filter((l) => l.sla.state === 'awaiting' || (l.sla.state === 'unknown' && !l.firstContactAt))
+    ? waitingLeads
       .map((l) => ({
         studentId: l.studentId,
-        name: (byId.get(l.studentId)?.full_name as string | null) ?? null,
-        phone: (byId.get(l.studentId)?.phone as string | null) ?? null,
+        name: byId.get(l.studentId)?.full_name ?? null,
+        phone: byId.get(l.studentId)?.phone ?? null,
         assignedAt: l.assignedAt,
         sla: l.sla,
       }))
@@ -121,6 +163,7 @@ export async function getRepFollowupBoard(
     today: (promises ?? []).filter((p) => p.bucket === 'today'),
     upcoming: (promises ?? []).filter((p) => p.bucket === 'upcoming'),
     awaitingFirstContact: awaiting,
+    namesReadable,
     slaMinutes: cfg?.firstContactSlaMinutes ?? null,
     sla: cfg ? tallySla(cfg, leads, nowMs) : null,
   };

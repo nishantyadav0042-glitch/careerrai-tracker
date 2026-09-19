@@ -248,7 +248,11 @@ describe('/sales/followups — promises and first calls', () => {
       sales_rep_config: CFG, profiles: STUDENTS,
     });
     const html = await render(SalesFollowupsPage() as any);
-    expect(html).toContain('Assigned before we started timing');
+    // Wording moved behind the phone number on 19 Sep ("+9199… · assigned
+    // before we started timing"). The assertion that matters is unchanged and
+    // is the second one: an unknown assignment time must never be rendered as
+    // a measured zero.
+    expect(html).toContain('assigned before we started timing');
     expect(html).not.toContain('0 working min');
   });
 
