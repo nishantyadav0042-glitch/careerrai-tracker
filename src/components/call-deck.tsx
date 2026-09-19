@@ -11,7 +11,7 @@ import { SECTION_ORDER, SECTION_LABEL, type DaySection } from '@/lib/sales-day';
 import { DECK_FILTERS, DECK_FILTER_LABEL, matchesDeckFilter, deckFilterCounts,
   addToTally, tallyLine, EMPTY_TALLY, type DeckFilter } from '@/lib/sales-deck-filter';
 import { messageFor, JOURNEY_LABEL } from '@/lib/sales-messages';
-import { templatesFor, templateNote, type MessageTemplate } from '@/lib/sales-templates';
+import { templatesFor, templateNote, renderTemplate, type MessageTemplate } from '@/lib/sales-templates';
 
 const TIER: Record<string, string> = { hot: 'bg-rose-50 text-rose-700', warm: 'bg-amber-50 text-amber-800', cool: 'bg-stone-100 text-stone-500' };
 const DUE_CLS: Record<string, string> = {
@@ -108,7 +108,9 @@ export function CallDeck({ queue, repFirstName }: { queue: CallLead[]; repFirstN
    * one-tap sends is refused here exactly as it was before.
    */
   const sendTemplate = (lead: CallLead, t: MessageTemplate) => {
-    const text = t.body({ firstName: lead.firstName, repFirstName });
+    // Anshul's copy with `[Name]` filled in, and nothing else done to it —
+    // no sign-off appended, no line trimmed (founder, 19 Sep 2026).
+    const text = renderTemplate(t, { firstName: lead.firstName });
     window.open(`https://wa.me/${lead.waNumber}?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
     setWaOpened((w) => ({ ...w, [lead.studentId]: true }));
     setTplById((m) => ({ ...m, [lead.studentId]: t.key }));

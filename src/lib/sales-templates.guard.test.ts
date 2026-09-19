@@ -3,18 +3,71 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { codeOnly } from '@/lib/test-support/code-only';
 import {
-  MESSAGE_TEMPLATES, TEMPLATE_KEYS, templateByKey, templateNote, templatesFor,
+  MESSAGE_TEMPLATES, TEMPLATE_KEYS, NAME_PLACEHOLDER,
+  templateByKey, templateNote, templatesFor, renderTemplate,
 } from './sales-templates';
 
 // ── WHAT THIS GUARDS ────────────────────────────────────────────────────────
 //
 // The clipboard makes it one tap to send the same sentence to hundreds of
-// students, so the things that can go wrong are not typos. They are: a key
-// renamed and every recorded row orphaned; a message that promises a screen
-// the product does not have; a template that reaches the student with
-// "[Name]" still in it; and the server trusting a key the client made up.
+// students, so the things that can go wrong are not typos. They are: someone
+// editing copy that is not theirs; a key renamed and every recorded row
+// orphaned; a message reaching a student with "[Name]" still in it; and the
+// server trusting a key the client made up.
 
-const VARS = { firstName: 'Rohit', repFirstName: 'Anshul' };
+const VARS = { firstName: 'Rohit' };
+
+// ── ANSHUL'S COPY, PINNED ───────────────────────────────────────────────────
+//
+// Founder, 19 Sep 2026: "Do NOT change Anshul's four WhatsApp message
+// templates ... Do not trim them, rewrite them, add a sender name, or modify
+// them to fit any house style." The first implementation did exactly that, so
+// the instruction is enforced here rather than trusted to memory.
+//
+// These four strings are the record of what he wrote. If a future change —
+// mine, another agent's, a well-meant tidy-up — alters so much as an
+// apostrophe, this test fails and names the template. Changing the copy means
+// changing this block too, which is the point: it cannot happen quietly, and
+// whoever does it is stating that they had the authority to.
+const ANSHUL_COPY: Record<string, string> = {
+  no_answer_reachout:
+    'Hi [Name], I tried reaching you regarding your CAT preparation. I just wanted to understand where you currently stand with your preparation and whether your routine is going the way you planned. Whenever you get a moment, just drop me a message — I’d be happy to connect.',
+  busy_callback:
+    'Hi [Name], no worries, I understand you were occupied. Whenever you get a little time, just drop me a quick message and I’ll connect with you. I’d genuinely like to know how your preparation is shaping up and whether everything is on track.',
+  general_followup:
+    'Hi [Name], just checking in — how are things going with your CAT preparation? Are you able to follow the routine you had planned, or is something making it difficult to stay consistent? Whenever you’re free, feel free to share an update with me. I’ll be happy to help wherever I can.',
+  app_difficulty:
+    'Hi [Name], I wanted to check something with you regarding your preparation. Are you actually able to make the application work around your current routine, or are you facing any difficulty with the schedule/tasks? Just let me know whenever you’re free — we can figure it out together.',
+};
+
+describe("Anshul's copy ships exactly as he wrote it", () => {
+  it.each(Object.keys(ANSHUL_COPY))('%s is verbatim', (key) => {
+    const t = templateByKey(key);
+    expect(t, `template ${key} is missing`).not.toBeNull();
+    expect(t!.copy).toBe(ANSHUL_COPY[key]);
+  });
+
+  it('ships his four labels, named as he named them', () => {
+    expect(MESSAGE_TEMPLATES.map((t) => t.label)).toEqual([
+      'No Answer / First Reach-out',
+      'Busy / Callback',
+      'General Follow-up',
+      'App / Preparation Follow-up',
+    ]);
+  });
+
+  it('adds no sender name and no sign-off', () => {
+    // The rewrite the founder rejected appended "— Anshul, CareerRai". Nothing
+    // may be appended to his text, by us or by the renderer.
+    for (const t of MESSAGE_TEMPLATES) {
+      expect(renderTemplate(t, VARS)).toBe(ANSHUL_COPY[t.key].split(NAME_PLACEHOLDER).join('Rohit'));
+    }
+  });
+
+  it('adds no template the founder did not approve', () => {
+    expect(MESSAGE_TEMPLATES.length).toBe(4);
+  });
+});
 
 describe('message template keys are an append-only contract', () => {
   // Written to sales_activity.template_key. A rename does not migrate the
@@ -35,43 +88,42 @@ describe('message template keys are an append-only contract', () => {
   });
 });
 
-describe('every template produces a message that could be sent as-is', () => {
+describe('the placeholder is filled before the student sees it', () => {
   it.each(MESSAGE_TEMPLATES.map((t) => [t.key, t] as const))(
-    '%s addresses the student by name and names no placeholder',
+    '%s renders the name and leaves no placeholder',
     (_key, t) => {
-      const text = t.body(VARS);
-      expect(text).toContain('Rohit');
-      // The counsellor's own drafts used "[Name]". If one ever ships with the
-      // bracket intact, the student receives it literally.
-      expect(text).not.toMatch(/\[[A-Za-z ]+\]/);
-      expect(text).not.toMatch(/\{\{?\s*\w+\s*\}?\}/);
-      expect(text.trim().length).toBeGreaterThan(40);
+      // His copy carries "[Name]" on purpose — that is the placeholder doing
+      // its job. The RENDERED message must never still contain it, or the
+      // student receives the brackets literally.
+      expect(t.copy).toContain(NAME_PLACEHOLDER);
+      const sent = renderTemplate(t, VARS);
+      expect(sent).toContain('Rohit');
+      expect(sent).not.toContain(NAME_PLACEHOLDER);
+      expect(sent).not.toMatch(/\{\{?\s*\w+\s*\}?\}/);
     },
   );
 
-  it('identifies the sender in every message', () => {
-    // A WhatsApp from an unknown number with no sender is the one that gets
-    // blocked. Either the body introduces the rep or it signs off as them.
-    for (const t of MESSAGE_TEMPLATES) {
-      expect(t.body(VARS)).toContain('Anshul');
-      expect(t.body(VARS)).toContain('CareerRai');
-    }
+  it('fills every occurrence, not only the first', () => {
+    const t = { key: 'x', label: 'x', copy: 'Hi [Name], bye [Name]', lanes: [] as never[] };
+    expect(renderTemplate(t, VARS)).toBe('Hi Rohit, bye Rohit');
   });
+});
 
-  // ── INCIDENT #76 ──────────────────────────────────────────────────────────
-  // Three timetable refusal messages ended "or add your classes by hand" — a
-  // screen that has never existed anywhere in the product. A message that
-  // names a door the student cannot find is worse than no message.
-  it('names no screen or action the product does not have', () => {
+// ── INCIDENT #76 ────────────────────────────────────────────────────────────
+// Three timetable refusal messages ended "or add your classes by hand" — a
+// screen that has never existed anywhere in the product. This guards the
+// templates added AFTER Anshul's four; his are pinned verbatim above and pass
+// it, which is part of why they were safe to ship unedited.
+describe('no template names a door the product does not have', () => {
+  it('names no screen or action that does not exist', () => {
     const PHANTOM = [
       /by hand/i, /manually add/i, /upload your (?:marksheet|report)/i,
       /click the link below/i, /reply\s+(?:YES|STOP|1)\b/i,
       /dashboard/i, /settings page/i,
     ];
     for (const t of MESSAGE_TEMPLATES) {
-      const text = t.body(VARS);
       for (const p of PHANTOM) {
-        expect(text, `${t.key} names a phantom door: ${p}`).not.toMatch(p);
+        expect(renderTemplate(t, VARS), `${t.key} names a phantom door: ${p}`).not.toMatch(p);
       }
     }
   });
@@ -80,14 +132,14 @@ describe('every template produces a message that could be sent as-is', () => {
     // These four are follow-ups, not the conversion lane. A price in a
     // "how is prep going?" message turns a check-in into a sales call.
     for (const t of MESSAGE_TEMPLATES) {
-      expect(t.body(VARS)).not.toMatch(/₹|\brs\.?\s*\d|\bprice\b|\bbuy\b/i);
+      expect(renderTemplate(t, VARS)).not.toMatch(/₹|\brs\.?\s*\d|\bprice\b|\bbuy\b/i);
     }
   });
 });
 
 describe('templateByKey never trusts the client', () => {
   it('resolves a shipped key', () => {
-    expect(templateByKey('busy_callback')?.label).toBe('Busy / call back later');
+    expect(templateByKey('busy_callback')?.label).toBe('Busy / Callback');
   });
 
   it.each([
@@ -131,7 +183,7 @@ describe('the lane offer honours the no-canned-message doctrine', () => {
 describe('the log note carries the template, not the prose', () => {
   it('names the template so the row is readable without a join', () => {
     const t = templateByKey('general_followup')!;
-    expect(templateNote(t)).toBe('Sent: General follow-up');
+    expect(templateNote(t)).toBe('Sent: General Follow-up');
   });
 });
 
@@ -153,5 +205,10 @@ describe('the template key survives the trip to the database', () => {
   it('the call deck sends the key it used', () => {
     const deck = read('src/components/call-deck.tsx');
     expect(deck).toMatch(/templateKey/);
+  });
+
+  it('the card opens WhatsApp with the rendered copy, not the raw placeholder', () => {
+    const deck = read('src/components/call-deck.tsx');
+    expect(deck).toMatch(/renderTemplate/);
   });
 });

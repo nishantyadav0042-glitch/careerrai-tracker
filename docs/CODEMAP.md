@@ -227,7 +227,11 @@ refund processed ─▶ settleRefund()      ── stamps refunded_at ───�
   19 Sep 2026). `sales-messages.ts` gives each card ONE message; for
   `callback` / `retry` / `followup` that was a single generic line covering
   386 of one rep's 1,066 cards over 14 days. Four named templates, offered by
-  lane, opened into WhatsApp for a human to send — never sent by us. **Keys
+  lane, opened into WhatsApp for a human to send — never sent by us. **The
+  copy is Anshul's and is not ours to edit** (founder, 19 Sep 2026, after the
+  first version trimmed it to the house style and added a sign-off): it ships
+  verbatim, the guard test pins every character, and the only transformation
+  is `[Name]` → the student's first name. **Keys
   are an append-only contract**: they are written to
   `sales_activity.template_key`, so renaming one orphans its recorded history;
   retire a template by emptying its `lanes`. Where the card carries the
