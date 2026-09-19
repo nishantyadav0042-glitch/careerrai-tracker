@@ -49,6 +49,32 @@ export const IN_ORBIT_DAYS = 21;
 export const ALIVE_BOOST = 30_000;
 export const IN_ORBIT_BOOST = 12_000;
 
+// ── NEVER ARRIVED IS NOT THE SAME AS WENT QUIET (founder, 19 Sep 2026) ──────
+//
+// "hot means interested or callback or who have logged once or once anytime
+// active on our app. Not the once never opened or tapped anything."
+//
+// Measured that night on the one remaining rep's live book of 1,006: only 72
+// have never opened the app and never tapped anything. Everyone else has been
+// present at least once. So this changes the order of a small tail, not the
+// shape of his day — and that is the point, because the tail was sorting
+// level with students who opened the app a month ago.
+//
+// IT DOES NOT CONTRADICT THE RULE ABOVE, and the distinction is the whole
+// reason it is allowed. That rule protects the student who WENT QUIET: they
+// showed up, then stopped, and being unreachable is not a fault. A student
+// with no `last_seen_at` at all never arrived — they signed up and the app has
+// never once been opened. That is not quietness, it is absence, and it is the
+// one group where a counsellor's hour buys the least.
+//
+// LAST, NOT EXCLUDED — a deliberate softening of the instruction. Dropping
+// them from the queue entirely would make 72 students permanently
+// uncontactable, which is Incident #77's exact harm (609 students unreached)
+// arrived at from the other direction. Sorted last, they are reached on a day
+// with room and skipped on a day without one, which is what "don't spend his
+// time on them" actually means.
+export const NEVER_SEEN_PENALTY = -20_000;
+
 /**
  * Sort adjustment for how recently the student opened the app.
  *
@@ -61,8 +87,14 @@ export function alivenessBoost(input: {
   nowMs: number;
 }): number {
   if (!DISCRETIONARY.has(input.lane)) return 0;
-  if (!input.lastSeenAt) return 0;
+  // Never opened the app at all: sorted below everyone who has ever been
+  // present, including the long-quiet. Never applied outside the
+  // discretionary lanes — a promise is a promise whether they installed
+  // anything or not.
+  if (!input.lastSeenAt) return NEVER_SEEN_PENALTY;
   const seen = Date.parse(input.lastSeenAt);
+  // An unparseable timestamp is missing DATA, not a missing student. Treating
+  // it as "never arrived" would sink a student on a bad string.
   if (!Number.isFinite(seen)) return 0;
   const days = (input.nowMs - seen) / 86_400_000;
   if (days < 0) return ALIVE_BOOST;          // clock skew: treat as present

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   alivenessBoost, livenessNote, ALIVE_DAYS, IN_ORBIT_DAYS, ALIVE_BOOST, IN_ORBIT_BOOST,
+  NEVER_SEEN_PENALTY,
 } from './sales-liveness';
 
 const NOW = Date.parse('2026-09-15T12:00:00Z');
@@ -35,14 +36,27 @@ describe('a student who is in the app outranks one who is gone', () => {
 // Being unreachable is not a fault, and a student who went quiet is exactly
 // who retention is for. They are simply not the cheapest conversation today.
 describe('it lifts the present, it never punishes the quiet', () => {
-  it('never returns a negative', () => {
+  // ── AMENDED 19 Sep 2026, NOT DELETED ──────────────────────────────────────
+  //
+  // This assertion used to read "never returns a negative", covering both a
+  // student who went quiet AND one who never opened the app, because the
+  // module treated them as the same thing. The founder separated them: "Not
+  // the once never opened or tapped anything."
+  //
+  // The load-bearing half is kept exactly as it was and is the half that
+  // matters: a student who HAS been present is never pushed down, however
+  // long ago it was. 400 days quiet still scores zero, not a penalty. Only
+  // the never-arrived case moved, and it has its own test below.
+  it('never punishes a student who has ever been present', () => {
     for (const d of [0, 1, 7, 21, 60, 400]) expect(boost('fresh', daysAgo(d))).toBeGreaterThanOrEqual(0);
-    expect(boost('fresh', null)).toBe(0);
   });
 
-  it('treats an unreadable or missing timestamp as no information', () => {
+  it('treats an UNREADABLE timestamp as no information', () => {
+    // Deliberately still zero, and not the never-arrived penalty: a string
+    // that failed to parse is missing DATA, not a missing student, and
+    // sinking a real student on a bad value would be a data bug wearing a
+    // policy. `undefined` is the absent case and is covered below.
     expect(boost('fresh', 'not-a-date')).toBe(0);
-    expect(boost('fresh', undefined as unknown as string)).toBe(0);
   });
 
   it('does not let clock skew demote somebody', () => {
@@ -74,5 +88,56 @@ describe('the card tells the counsellor what they are walking into', () => {
   it('says nothing rather than guessing', () => {
     expect(livenessNote(null, NOW)).toBeNull();
     expect(livenessNote(daysAgo(90), NOW)).toBeNull();
+  });
+});
+
+// ── NEVER ARRIVED IS NOT THE SAME AS WENT QUIET (founder, 19 Sep 2026) ──────
+//
+// "Not the once never opened or tapped anything." 72 of the one remaining
+// rep's 1,006 live leads have never opened the app; everyone else has been
+// present at least once.
+describe('a student who never opened the app sorts last', () => {
+  const now = Date.parse('2026-09-19T12:00:00.000Z');
+  const at = (days: number) => new Date(now - days * 86_400_000).toISOString();
+
+  it('ranks below a student who opened long ago and went quiet', () => {
+    const neverArrived = alivenessBoost({ lane: 'fresh', lastSeenAt: null, nowMs: now });
+    const wentQuiet = alivenessBoost({ lane: 'fresh', lastSeenAt: at(60), nowMs: now });
+    expect(neverArrived).toBeLessThan(wentQuiet);
+    expect(neverArrived).toBe(NEVER_SEEN_PENALTY);
+  });
+
+  it('keeps the full order: present > in orbit > quiet > never arrived', () => {
+    const order = [at(1), at(14), at(60), null].map(
+      (lastSeenAt) => alivenessBoost({ lane: 'fresh', lastSeenAt, nowMs: now }),
+    );
+    expect(order).toEqual([...order].sort((a, b) => b - a));
+    expect(new Set(order).size).toBe(4);
+  });
+
+  it('never touches a promise', () => {
+    // A promise is a promise whether they installed anything or not.
+    for (const lane of ['callback', 'followup', 'retry', 'checkout_abandoned']) {
+      expect(alivenessBoost({ lane, lastSeenAt: null, nowMs: now })).toBe(0);
+    }
+  });
+
+  it('treats an unreadable timestamp as missing data, not as absence', () => {
+    // Sinking a real student because a string failed to parse would be a
+    // data bug wearing a policy.
+    expect(alivenessBoost({ lane: 'fresh', lastSeenAt: 'not-a-date', nowMs: now })).toBe(0);
+  });
+
+  it('stays far inside its lane', () => {
+    // going_cold's lane band sits at 4,000,000. This orders WITHIN a lane and
+    // must never drag a card out of one.
+    expect(Math.abs(NEVER_SEEN_PENALTY)).toBeLessThan(1_000_000);
+  });
+});
+
+describe('absent is absent however it arrives', () => {
+  it('treats undefined the same as null', () => {
+    expect(boost('fresh', undefined as unknown as string)).toBe(NEVER_SEEN_PENALTY);
+    expect(boost('fresh', null)).toBe(NEVER_SEEN_PENALTY);
   });
 });
