@@ -54,7 +54,15 @@ export default async function SalesSummaryPage() {
           { l: 'Working', v: s.working },
           { l: 'Interested', v: s.interested, sub: inr(s.pipeline), tone: 'amber' },
           { l: 'Callbacks', v: s.callbacks, tone: 'sky' },
-          { l: 'Won', v: s.converted, sub: inr(s.booked), tone: 'good' },
+          // WON = what HE closed, from the attribution ledger this rep is
+          // PAID on (Anshul, 20 Sep: "I have 2 Won conversions, but the
+          // Summary is showing 5"). It used to count paid students in his
+          // book, 3 of whom he had never contacted.
+          // Only what he closed. The book's TOTAL paid count is deliberately
+          // not on this screen (founder, 20 Sep 2026) — it is a founder-level
+          // number, and showing a rep a figure larger than the one he is paid
+          // on is what made this tile wrong in the first place.
+          { l: 'Won by me', v: s.attributedToMe, sub: inr(s.booked), tone: 'good' },
           { l: 'Lost', v: s.lost },
           { l: 'In my book', v: s.total },
         ].map((t) => (

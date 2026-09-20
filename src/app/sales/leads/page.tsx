@@ -9,11 +9,15 @@ export const metadata = { title: 'My leads · CareerRai' };
 
 // SA-1E: 'Won' is the paid ledger, never the typed 'converted' disposition —
 // and a paid student is out of 'Active' work whatever their typed status says.
-const FILTERS: { key: string; label: string; match: (l: { status: string; paid: boolean }) => boolean }[] = [
+const FILTERS: { key: string; label: string; match: (l: { status: string; paid: boolean; attributedToMe: boolean }) => boolean }[] = [
   { key: 'active', label: 'Active', match: (l) => !l.paid && ['interested', 'follow_up', 'no_answer', 'called', 'converted'].includes(l.status) },
   { key: 'interested', label: 'Interested', match: (l) => !l.paid && l.status === 'interested' },
   { key: 'follow_up', label: 'Callbacks', match: (l) => !l.paid && l.status === 'follow_up' },
-  { key: 'converted', label: 'Won', match: (l) => l.paid },
+  // HIS conversions only (founder, 20 Sep 2026: "show him only students paid
+  // through him"). `paid` still runs the filters above — a paying student
+  // leaves active work however they paid, which is SA-1E's real consequence —
+  // but the list he reads as his wins is the attribution ledger he is paid on.
+  { key: 'converted', label: 'Won by me', match: (l) => l.attributedToMe },
   { key: 'not_interested', label: 'Lost', match: (l) => l.status === 'not_interested' },
 ];
 const STATUS_LABEL: Record<string, string> = {
