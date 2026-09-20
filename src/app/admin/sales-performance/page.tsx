@@ -3,6 +3,7 @@ import { requireAdmin } from '@/lib/admin-auth';
 import { cn } from '@/lib/utils';
 import { WorkspaceShell } from '@/components/admin/workspace-shell';
 import { SESSION_PRICE_PAISE } from '@/lib/session-credit';
+import { CONNECT_TARGET_PER_DAY } from '@/lib/os/scale-config';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Sales performance · CareerRai' };
@@ -55,7 +56,20 @@ function ActivityRow({ title, s }: { title: string; s: Tally }) {
       <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
         {[
           { l: 'Calls', v: s.attempts, sub: undefined as string | undefined, good: false },
-          { l: 'Connected', v: s.connected, sub: `${s.connectRate}%`, good: false },
+          // ── THE TARGET LIVES HERE, NOT ON HIS SCREEN (20 Sep 2026) ──────
+          // Founder: "minimum connects he needs to target is 50". Shown on
+          // the founder's surface (P4 — founder visibility) rather than the
+          // counsellor's deck, because SALES-OS §0 names "making call count a
+          // target" as a violation, and CONNECTED_OUTCOMES includes
+          // `not_interested` and `dnd` — a target beside the disposition
+          // buttons pays a rep to mark a ring-out as "not interested".
+          // lib/no-answer-contradiction exists because ~15% of one rep's
+          // dispositions already did that with no target on screen at all.
+          // Measured against reality: 50 has been reached once in twelve days
+          // (51 on 14 Sep) and the median is 26, so a day under target is the
+          // expected reading, not an alarm.
+          { l: 'Connected', v: s.connected, sub: `${s.connectRate}% · target ${CONNECT_TARGET_PER_DAY}`,
+            good: s.connected >= CONNECT_TARGET_PER_DAY },
           { l: 'Interested', v: s.interested, sub: undefined, good: false },
           { l: 'Callbacks', v: s.callback, sub: undefined, good: false },
           { l: 'Marked converted', v: s.converted, sub: `${s.convRate}%`, good: s.converted > 0 },

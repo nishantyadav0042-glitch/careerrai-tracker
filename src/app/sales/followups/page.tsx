@@ -41,6 +41,24 @@ function PromiseRow({ p, nowMs, tone }: { p: BoardPromise; nowMs: number; tone: 
           {p.phone ? <span className="font-mono text-stone-600">{p.phone}</span> : 'no phone on file'}
           {' · '}{p.reason || 'Follow-up'}{p.channel ? ` · ${p.channel}` : ''}
         </p>
+        {/* WHAT THEY SAID LAST TIME (Anshul, 20 Sep): "the detailed data and
+            remarks underneath are missing. I still need to open each profile
+            to check the last update and previous conversation details."
+            `reason` above is why the SYSTEM scheduled this; this is what the
+            student actually said. Typed remarks are quoted and italic, an
+            auto-note is plain, so a real conversation is distinguishable from
+            "Did not pick up" without opening anything. */}
+        {p.lastSaid ? (
+          <p className={`mt-0.5 truncate text-[11px] ${p.lastSaidTyped ? 'font-semibold italic text-stone-700' : 'text-stone-500'}`}>
+            {p.lastSaidTyped ? `“${p.lastSaid}”` : p.lastSaid}
+            {p.lastSaidAt ? <span className="not-italic font-normal text-stone-400"> · {whenIst(p.lastSaidAt)}</span> : null}
+            {p.lastSaidBy ? <span className="not-italic font-normal text-stone-400"> · {p.lastSaidBy}</span> : null}
+          </p>
+        ) : (
+          // Never a blank line where a conversation should be: "nobody has
+          // spoken to them" is a fact the counsellor needs before dialling.
+          <p className="mt-0.5 text-[11px] text-stone-400">No conversation recorded yet</p>
+        )}
       </Link>
       <div className="flex shrink-0 items-center gap-2">
         <span className={`text-[11px] font-semibold ${
@@ -127,6 +145,21 @@ export default async function SalesFollowupsPage() {
           Retention first, then conversion.
         </p>
       </div>
+
+      {board.promisesTruncated && (
+        // A cut list must never read as a complete one. Found 20 Sep 2026 by
+        // cross-check while it was live: 615 open follow-ups against a cap of
+        // 500, ordered by due date, so 24 overdue promises and ALL 91 upcoming
+        // ones were missing and the Upcoming section rendered empty — as
+        // though he had promised nobody anything.
+        <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4">
+          <p className="text-sm font-bold text-amber-900">This list is longer than what fits here.</p>
+          <p className="mt-1 text-[13px] text-amber-800">
+            You have more open follow-ups than this screen can show at once, so the furthest-out ones
+            are missing. Everything shown is real — work the overdue ones first and tell Nishant.
+          </p>
+        </div>
+      )}
 
       {!board.namesReadable && (
         // Every row below would say "Student". Without this the counsellor

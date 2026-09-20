@@ -42,7 +42,9 @@ vi.mock('@/lib/sales-capacity', () => ({
   readRepConfigs: async () => new Map([['rep-1', cfg]]),
 }));
 
-import { getRepFollowupBoard } from '@/lib/sales-board';
+import { getRepFollowupBoard, FOLLOWUP_BOARD_LIMIT } from '@/lib/sales-board';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 /** Records every id list that reaches `.in()`, so request size is observable. */
 function fakeAdmin(leadCount: number, opts: { failProfiles?: boolean } = {}) {
@@ -56,16 +58,38 @@ function fakeAdmin(leadCount: number, opts: { failProfiles?: boolean } = {}) {
       const q: any = {
         select: () => q,
         eq: () => q,
-        not: () => Promise.resolve({ data: leads, error: null }),
+        // lead_outreach ends its chain on .not(); sales_activity CONTINUES
+        // through it to .in().order().limit(), so the double must stay
+        // chainable for one and resolve for the other.
+        not: () => (table === 'sales_activity' ? q : Promise.resolve({ data: leads, error: null })),
         in: (_col: string, ids: string[]) => {
           inCalls.push({ table, ids });
-          if (table === 'profiles' && opts.failProfiles) {
-            return Promise.resolve({ data: null, error: { message: 'URL too long' } });
-          }
-          return Promise.resolve({
-            data: ids.map((id) => ({ id, full_name: `Name ${id}`, phone: `+9199${id}` })),
-            error: null,
-          });
+          const result = table === 'profiles' && opts.failProfiles
+            ? { data: null, error: { message: 'URL too long' } }
+            : table === 'sales_activity'
+              // The remark read added 20 Sep. Chains .order().limit() AFTER
+              // .in(), so the stub must stay chainable and still be awaited —
+              // a stub that only returned a promise here would have made the
+              // board throw and this whole file fail, which is what it did.
+              ? {
+                data: ids.map((id) => ({
+                  student_id: id, created_at: '2026-09-18T10:00:00.000Z',
+                  status: 'interested', note: `Said something about ${id}`,
+                  actor_id: 'rep-1', provenance: 'self_reported',
+                })),
+                error: null,
+              }
+              : {
+                data: ids.map((id) => ({ id, full_name: `Name ${id}`, phone: `+9199${id}` })),
+                error: null,
+              };
+          // Thenable AND chainable: awaiting it resolves, chaining keeps it.
+          const chain: any = {
+            order: () => chain,
+            limit: () => Promise.resolve(result),
+            then: (res: any, rej: any) => Promise.resolve(result).then(res, rej),
+          };
+          return chain;
         },
       };
       return q;
@@ -139,5 +163,52 @@ describe('a broken lookup is reported, never disguised as "Student"', () => {
     // The promises themselves still load: the times are real even when the
     // names are not, and hiding them would lose the follow-up entirely.
     expect(board.promises).not.toBeNull();
+  });
+});
+
+// ── FOUND BY CROSS-CHECK, 20 SEP 2026 ───────────────────────────────────────
+//
+// Two silent truncations, neither of which anyone reported because neither
+// looks like a failure on screen.
+describe('nothing about this board is silently cut', () => {
+  it('reads far more follow-ups than one rep actually holds', async () => {
+    // Live at the time of the check: 615 open follow-ups against a cap of 500.
+    // Ordered by due_at ascending with 524 already due, the 500 taken were all
+    // overdue — so 24 overdue promises and ALL 91 upcoming ones vanished, and
+    // the Upcoming section rendered empty as though he had promised nobody.
+    expect(FOLLOWUP_BOARD_LIMIT).toBeGreaterThanOrEqual(2000);
+  });
+
+  it('says so when the list IS cut, instead of looking complete', async () => {
+    followups.rows = Array.from({ length: FOLLOWUP_BOARD_LIMIT }, (_, i) => ({
+      id: i, studentId: `lead-${i}`, ownerId: 'rep-1',
+      dueAt: '2026-09-19T12:00:00.000Z', reason: 'Student asked for a callback',
+      channel: 'phone', createdAt: '2026-09-18T00:00:00.000Z',
+    }));
+    const { admin } = fakeAdmin(0);
+    const board = await getRepFollowupBoard(admin, 'rep-1', Date.parse('2026-09-19T18:00:00.000Z'));
+    expect(board.promisesTruncated, 'a cut list must announce itself').toBe(true);
+  });
+
+  it('does not cry truncation on an ordinary day', async () => {
+    followups.rows = Array.from({ length: 140 }, (_, i) => ({
+      id: i, studentId: `lead-${i}`, ownerId: 'rep-1',
+      dueAt: '2026-09-19T12:00:00.000Z', reason: 'Student asked for a callback',
+      channel: 'phone', createdAt: '2026-09-18T00:00:00.000Z',
+    }));
+    const { admin } = fakeAdmin(0);
+    const board = await getRepFollowupBoard(admin, 'rep-1', Date.parse('2026-09-19T18:00:00.000Z'));
+    expect(board.promisesTruncated).toBe(false);
+  });
+
+  it('never caps remarks at a flat number that a busy chunk can eat', async () => {
+    // The defect this replaces was mine, shipped hours earlier: a flat
+    // .limit(400) across a 100-student chunk is 4 rows each, against a
+    // measured average of 3.4 and a maximum of 16 on one student. A heavy
+    // chunk would drop the newest remark for whoever sorted last — producing
+    // the same "remarks are missing" report this read exists to answer.
+    const src = readFileSync(join(process.cwd(), 'src/lib/sales-board.ts'), 'utf8');
+    expect(src, 'the remark cap must scale with the chunk').toMatch(/limit\(chunk\.length \* MAX_REMARKS_ON_CARD/);
+    expect(src, 'null-actor rows must not eat the cap').toMatch(/not\('actor_id', 'is', null\)/);
   });
 });

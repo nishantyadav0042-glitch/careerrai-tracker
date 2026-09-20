@@ -5,6 +5,7 @@ import { readToday } from '@/lib/sales-opportunity-record';
 import { buildDayClose, headline, owed, isConversation, type StudentVoice } from '@/lib/sales-day-close';
 import { isTypedRemark } from '@/lib/sales-remarks';
 import { fetchAll } from '@/lib/supabase/fetch-all';
+import { chunkIds } from '@/lib/truth/batch';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Day close · CareerRai' };
@@ -50,10 +51,18 @@ export default async function DayClosePage() {
 
   const names = new Map<string, string>();
   if (said.length) {
-    const { data: who } = await admin.from('profiles').select('id, full_name')
-      .in('id', [...new Set(said.map((r) => r.student_id))]);
-    for (const p of (who ?? []) as Array<{ id: string; full_name: string | null }>) {
-      names.set(p.id, p.full_name ?? 'Student');
+    // Chunked for consistency, not because it was broken: this list is bounded
+    // by ONE rep's typed conversations in ONE day — at most DAY_CEILING, so
+    // ~70 ids and well inside the URL limit. The two reads that did break
+    // (sales-board 19 Sep, sales-portfolio 20 Sep) were bounded by the BOOK,
+    // which grows; a day cannot. Chunking it anyway removes the shape from the
+    // counsellor workspace entirely, so the next audit has nothing to weigh up.
+    const results = await Promise.all(
+      chunkIds([...new Set(said.map((r) => r.student_id))]).map((chunk) =>
+        admin.from('profiles').select('id, full_name').in('id', chunk)),
+    );
+    for (const r of results as Array<{ data: Array<{ id: string; full_name: string | null }> | null }>) {
+      for (const p of (r.data ?? [])) names.set(p.id, p.full_name ?? 'Student');
     }
   }
   const voices: StudentVoice[] = said.map((r) => ({

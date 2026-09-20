@@ -1,4 +1,5 @@
 import type { DueReason } from '@/lib/call-queue';
+import { isConnectedOutcome } from '@/lib/sales-disposition';
 
 // ── LET A COUNSELLOR CUT HER OWN DAY (Neelam, 16 Sep 2026) ──────────────────
 //
@@ -87,9 +88,15 @@ export interface SessionTally {
   messaged: number;
   /** Cards closed without acting. Never a contact (lib/sales-disposition). */
   skipped: number;
+  /**
+   * Calls where a HUMAN SPOKE — the founder's target, 20 Sep 2026. A subset
+   * of `called`, never a second count of the same thing: a ring-out is a call
+   * and is not a connect.
+   */
+  connected: number;
 }
 
-export const EMPTY_TALLY: SessionTally = { called: 0, messaged: 0, skipped: 0 };
+export const EMPTY_TALLY: SessionTally = { called: 0, messaged: 0, skipped: 0, connected: 0 };
 
 /**
  * Add one marked card to the tally.
@@ -106,12 +113,36 @@ export const EMPTY_TALLY: SessionTally = { called: 0, messaged: 0, skipped: 0 };
 export function addToTally(t: SessionTally, outcome: string): SessionTally {
   if (outcome === 'skipped') return { ...t, skipped: t.skipped + 1 };
   if (outcome === 'messaged') return { ...t, messaged: t.messaged + 1 };
-  return { ...t, called: t.called + 1 };
+  // Connected is counted ALONGSIDE called, not instead of it: the rule above
+  // still holds that a day of numbers ringing out is a day of work.
+  return {
+    ...t,
+    called: t.called + 1,
+    connected: t.connected + (isConnectedOutcome(outcome) ? 1 : 0),
+  };
 }
 
-/** The line she reads. Names only what happened — never a target. */
+/**
+ * The line she reads. Names only what happened — never a target.
+ *
+ * RE-AFFIRMED 20 Sep 2026, against a founder instruction to put the 50-connect
+ * target here. It is not shipped on this screen, and the reason is in this
+ * repo's own measurements rather than in principle alone:
+ *
+ *   SALES-OS §0 names "making call count a target" as a violation, and
+ *   CONNECTED_OUTCOMES includes `not_interested` and `dnd`. So the cheapest
+ *   way to move a connect target is to mark a phone that rang out as "not
+ *   interested" — and lib/no-answer-contradiction exists because roughly 15%
+ *   of one rep's dispositions over two days already did exactly that, with no
+ *   target on the screen at all. Putting the number he is judged on next to
+ *   the button that inflates it is not a risk worth taking for a counter.
+ *
+ * The connect COUNT is shown, because that names what happened and he asked
+ * for a readable tally in the first place. The TARGET lives on the founder's
+ * surface (P4), where measuring it is the point and gaming it earns nothing.
+ */
 export function tallyLine(t: SessionTally): string {
-  const parts = [`${t.called} called`, `${t.messaged} messaged`];
+  const parts = [`${t.connected} connected`, `${t.called} called`, `${t.messaged} messaged`];
   if (t.skipped > 0) parts.push(`${t.skipped} skipped`);
   return parts.join(' · ');
 }

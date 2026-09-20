@@ -109,10 +109,74 @@ export const NEW_LEAD_MAX_AGE_DAYS = 7;
 // students nobody has spoken to in ROTATION_SILENT_DAYS, oldest contact first
 // — fills the rest, with a floor so the silent book always moves. Every card
 // still carries a true printed reason; the floors never manufacture one.
+// ── RAISED TO 100–120 (founder, 20 Sep 2026) ────────────────────────────────
+//
+// "Assign him around 100 students daily ... assign 100 atleast. Minimum
+// connects he needs to target is 50." A single seat now carries the whole
+// book (1,140 live leads), so the arithmetic the 50–70 band was set against
+// no longer holds.
+//
+// MEASURED BEFORE CHANGING IT, 12 days of his own work. The band was a real
+// cap on his best days: he worked 91% of a 70-card deck on 14 Sep and 92% of
+// a 78-card deck on 19 Sep — nearly out of cards both times. So 100 removes a
+// ceiling he was actually hitting.
+//
+// WHAT IT WILL NOT DO, recorded here so the next reader does not assume it:
+// more cards has not produced more connected calls. He was dealt 108 on
+// 18 Sep and connected 29. His best day ever — 51 connects — came off a
+// 70-card deck with 119 logged attempts. Connects track ATTEMPTS, not cards
+// on the screen, at a stable 33–43% per attempt.
+//
+// THE RISK THIS REOPENS is Incidents #72 and #74: 111 and 174 cards dealt on
+// 5 Sep, and a 116-card day on 9 Sep that ended with 44 cards unmarked — lists
+// that could not be finished. Those were two reps sharing a book and a day
+// ceiling measured against the screen rather than the day's ledger, both since
+// fixed. The number to watch is UNMARKED cards at day close: if he starts
+// leaving 40+ a night, 100 was too far and this comment is the evidence for
+// putting it back.
+// ── WHY THE CEILING MOVED AND THE FLOOR DID NOT ─────────────────────────────
+//
+// The instruction was "assign 100 atleast", which reads as a floor. It is
+// delivered by the CEILING, and raising the floor to match would have broken
+// something the founder did not ask to change.
+//
+// The day fills toward the ceiling, not the floor: rotation's target is
+// `max(ROTATION_FLOOR, DAY_CEILING - signalsToday)`, so a book that can supply
+// a day supplies one of DAY_CEILING cards. At 120 he receives 100+ every day
+// the book allows, which is the ask.
+//
+// DAY_FLOOR does one other thing, and only one: below it, `assembleDay`
+// back-fills from the cards that LANE CEILINGS held back. At 50 that is a rare
+// safety net for a thin book. At 100 it fires almost every day and the held
+// cards are dealt anyway — measured on the existing tests, a floor of 100
+// dealt 20 `attention` cards against ATTENTION_CEILING of 10, which the
+// founder halved on 16 Sep on measured evidence. A day-level number
+// overriding a lane-level ceiling is Incidents #72 and #74 exactly.
+//
+// So the floor stays where it is. If the intent is ever that 100 must arrive
+// even when it means overriding a lane, that is a separate, deliberate change
+// to the backfill — not a constant edit.
 /** The day is at least this many when the book can supply them. */
 export const DAY_FLOOR = 50;
 /** And never more than this, except for promises, which are never bumped. */
-export const DAY_CEILING = 70;
+export const DAY_CEILING = 120;
+
+/**
+ * Connected calls the counsellor is aiming for in a day (founder, 20 Sep 2026).
+ *
+ * A CONNECTED call only — a human spoke (lib/sales-disposition's
+ * CONNECTED_OUTCOMES). A ring-out, a switched-off phone and a WhatsApp message
+ * are all work and all counted elsewhere, but none of them is a connect.
+ *
+ * It is a TARGET, not a ceiling or a gate: nothing in the queue reads it, and
+ * no card is withheld or forced because of it. It exists to be shown.
+ *
+ * Against measured reality, this is ambitious: 50 has been reached once in
+ * twelve days (51 on 14 Sep, off 119 attempts) and the median is 26. At his
+ * measured 33–43% connect rate it needs roughly 140 attempts a day, and his
+ * best is 119. Set by the founder with those numbers in front of him.
+ */
+export const CONNECT_TARGET_PER_DAY = 50;
 /** Rotation always gets at least this many slots, so the backlog drains. */
 export const ROTATION_FLOOR = 15;
 /** A student nobody has spoken to in this many days is due a rotation touch. */

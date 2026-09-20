@@ -54,7 +54,7 @@ export const IN_ORBIT_BOOST = 12_000;
 // "hot means interested or callback or who have logged once or once anytime
 // active on our app. Not the once never opened or tapped anything."
 //
-// Measured that night on the one remaining rep's live book of 1,006: only 72
+// Measured that night on a live book of 1,006: only 72
 // have never opened the app and never tapped anything. Everyone else has been
 // present at least once. So this changes the order of a small tail, not the
 // shape of his day — and that is the point, because the tail was sorting

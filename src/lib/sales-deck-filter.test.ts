@@ -91,7 +91,9 @@ describe('the tally tells a call from a message', () => {
     // A skip writes no lead state and starts no clock (lib/sales-disposition).
     // Folding it into either would let a day of skipping read as a day of work.
     const t = addToTally(EMPTY_TALLY, 'skipped');
-    expect(t).toEqual({ called: 0, messaged: 0, skipped: 1 });
+    // `connected: 0` too: a skip is not a conversation, and the 20 Sep
+    // connect count must never be reachable without speaking to anyone.
+    expect(t).toEqual({ called: 0, messaged: 0, skipped: 1, connected: 0 });
   });
 
   it('every connected outcome counts as a call', () => {
@@ -100,6 +102,9 @@ describe('the tally tells a call from a message', () => {
       const total = t.called + t.messaged + t.skipped;
       expect(total, `${o} must land in exactly one bucket`).toBe(1);
       if (o !== 'messaged' && o !== 'skipped') expect(t.called, `${o} is a call`).toBe(1);
+      // `connected` rides ALONGSIDE called (20 Sep 2026) and must never be a
+      // second bucket, or a connected call would count twice in the total.
+      expect(t.connected, `${o} connected must not be its own bucket`).toBeLessThanOrEqual(t.called);
     }
   });
 
@@ -107,13 +112,21 @@ describe('the tally tells a call from a message', () => {
     // SALES-OS §0: a P5 number may never appear as a target or a quota. "At
     // least 40 daily" is an instruction to a person, not a thing the product
     // enforces on her screen.
-    const line = tallyLine({ called: 12, messaged: 3, skipped: 1 });
+    // RE-AFFIRMED 20 Sep 2026 against a founder instruction to show the
+    // 50-connect target here. The count ships; the target does not. §0 names
+    // "making call count a target" as the violation, and CONNECTED_OUTCOMES
+    // includes `not_interested` and `dnd` — so a target on this screen pays a
+    // rep to mark a ring-out as "not interested". lib/no-answer-contradiction
+    // exists because ~15% of one rep's dispositions already did that with no
+    // target present at all. The target lives on the founder's surface.
+    const line = tallyLine({ called: 12, messaged: 3, skipped: 1, connected: 5 });
     expect(line).toContain('12 called');
     expect(line).toContain('3 messaged');
-    expect(line).not.toMatch(/\b40\b|target|goal|quota|%/i);
+    expect(line).toContain('5 connected');
+    expect(line).not.toMatch(/\b40\b|\b50\b|\/|target|goal|quota|%/i);
   });
 
   it('hides the skip count until there is one', () => {
-    expect(tallyLine({ called: 5, messaged: 0, skipped: 0 })).toBe('5 called · 0 messaged');
+    expect(tallyLine({ called: 5, messaged: 0, skipped: 0, connected: 2 })).toBe('2 connected · 5 called · 0 messaged');
   });
 });

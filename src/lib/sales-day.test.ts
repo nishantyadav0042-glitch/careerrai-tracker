@@ -39,28 +39,35 @@ describe('the band', () => {
     day.counts.given.intro + day.counts.given.rotation;
 
   it('signals short of the ceiling: rotation fills the day to the ceiling', () => {
-    const day = assembleDay([...c('going_cold', 5), ...c('conversion', 5), ...c('fresh', 100)]);
+    // Fixture sized off the constant, not a literal: the band moved to
+    // 100-120 on 20 Sep and a hard-coded 100 silently stopped being enough
+    // book to fill a day, which reads as a broken invariant rather than a
+    // short fixture.
+    const day = assembleDay([...c('going_cold', 5), ...c('conversion', 5), ...c('fresh', DAY_CEILING + 20)]);
     expect(day.queue).toHaveLength(DAY_CEILING);
     expect(fromTheBook(day)).toBe(DAY_CEILING - 10);
   });
 
   it('signals near the ceiling: rotation still gets its floor, up to the ceiling', () => {
     const signals = DAY_CEILING - ROTATION_FLOOR;
-    const day = assembleDay([...c('going_cold', signals), ...c('fresh', 100)]);
+    const day = assembleDay([...c('going_cold', signals), ...c('fresh', DAY_CEILING)]);
     expect(day.queue).toHaveLength(DAY_CEILING);
     expect(fromTheBook(day), 'the silent book moves even on a loud day').toBe(ROTATION_FLOOR);
   });
 
   it('signals above the floor: rotation takes only the room left under the ceiling', () => {
-    const day = assembleDay([...c('going_cold', 60), ...c('fresh', 100)]);
+    const signals = DAY_CEILING - 10;
+    const day = assembleDay([...c('going_cold', signals), ...c('fresh', DAY_CEILING)]);
     expect(day.queue).toHaveLength(DAY_CEILING);
-    expect(fromTheBook(day)).toBe(DAY_CEILING - 60);
+    expect(fromTheBook(day)).toBe(DAY_CEILING - signals);
   });
 
   it('signals over the ceiling are trimmed from the bottom — never a promise or a money card', () => {
     const day = assembleDay([
-      ...c('callback', 5), ...c('checkout_abandoned', 3), ...c('going_cold', 40), ...c('broken_streak', 40),
-      ...c('fresh', 50),
+      // Must genuinely EXCEED the ceiling for the trim to be under test.
+      ...c('callback', 5), ...c('checkout_abandoned', 3),
+      ...c('going_cold', DAY_CEILING), ...c('broken_streak', DAY_CEILING),
+      ...c('fresh', DAY_CEILING),
     ]);
     expect(day.queue).toHaveLength(DAY_CEILING);
     expect(day.counts.given.promises).toBe(5);
@@ -68,9 +75,12 @@ describe('the band', () => {
     expect(day.counts.given.rotation).toBe(0);
   });
 
-  it('promises are never bumped: 80 due callbacks make an 80-card day', () => {
-    const day = assembleDay([...c('callback', 80), ...c('fresh', 50)]);
-    expect(day.queue).toHaveLength(80);
+  it('promises are never bumped: due callbacks past the ceiling make a longer day', () => {
+    // The point is that promises are UNCAPPED, so the fixture has to sit
+    // above whatever the ceiling currently is.
+    const promises = DAY_CEILING + 10;
+    const day = assembleDay([...c('callback', promises), ...c('fresh', DAY_CEILING)]);
+    expect(day.queue).toHaveLength(promises);
     expect(day.counts.given.rotation).toBe(0);
   });
 
@@ -90,13 +100,13 @@ describe('the band', () => {
 
 describe('ceilings hold back, never discard', () => {
   it('attention stops at its ceiling when the day is full', () => {
-    const day = assembleDay([...c('attention', 40), ...c('going_cold', 20), ...c('fresh', 100)]);
+    const day = assembleDay([...c('attention', 40), ...c('going_cold', 20), ...c('fresh', DAY_CEILING + 20)]);
     expect(day.counts.given.attention).toBe(ATTENTION_CEILING);
     expect(day.counts.heldBack).toBe(40 - ATTENTION_CEILING);
   });
 
   it('new arrivals stop at their ceiling when the day is full', () => {
-    const day = assembleDay([...c('new_never_logged', 30), ...c('going_cold', 20), ...c('fresh', 100)]);
+    const day = assembleDay([...c('new_never_logged', 30), ...c('going_cold', 20), ...c('fresh', DAY_CEILING + 20)]);
     expect(day.counts.given.new).toBe(NEW_ARRIVAL_CEILING);
   });
 
@@ -262,7 +272,7 @@ describe('a rebuild continues today, it does not deal a second day', () => {
   });
 
   it('with no context it behaves exactly as before — nothing else changes', () => {
-    const cands = [...c('going_cold', 5), ...c('rotation', 100)];
+    const cands = [...c('going_cold', 5), ...c('rotation', DAY_CEILING + 20)];
     expect(assembleDay(cands).queue).toHaveLength(DAY_CEILING);
   });
 });
@@ -297,28 +307,28 @@ describe('the day s ceilings count what was dealt today', () => {
   it('a lane at its ceiling admits nothing new, however many candidates wait', () => {
     // 20 attention cards already dealt and all of them worked, so none are on
     // screen. 40 more students have since opened the app without logging.
-    const day = assembleDay([...c('attention', 40), ...c('rotation', 100)], {
+    const day = assembleDay([...c('attention', 40), ...c('rotation', DAY_CEILING + 20)], {
       openToday: new Set(), usedToday: { attention: ATTENTION_CEILING },
     });
     expect(day.counts.given.attention, 'the lane is spent for the day').toBe(0);
   });
 
   it('a lane part-spent admits only the remainder', () => {
-    const day = assembleDay([...c('attention', 40), ...c('rotation', 100)], {
+    const day = assembleDay([...c('attention', 40), ...c('rotation', DAY_CEILING + 20)], {
       openToday: new Set(), usedToday: { attention: ATTENTION_CEILING - 5 },
     });
     expect(day.counts.given.attention).toBe(5);
   });
 
   it('new arrivals are capped by the day too, not by the screen', () => {
-    const day = assembleDay([...c('new_never_logged', 30), ...c('rotation', 100)], {
+    const day = assembleDay([...c('new_never_logged', 30), ...c('rotation', DAY_CEILING + 20)], {
       openToday: new Set(), usedToday: { new_never_logged: NEW_ARRIVAL_CEILING },
     });
     expect(day.counts.given.new).toBe(0);
   });
 
   it('the DAY ceiling counts the day: 65 dealt leaves room for 5', () => {
-    const day = assembleDay([...c('going_cold', 40), ...c('rotation', 100)], {
+    const day = assembleDay([...c('going_cold', 40), ...c('rotation', DAY_CEILING + 20)], {
       openToday: new Set(),
       usedToday: { attention: 20, new_never_logged: 15, going_cold: 10, rotation: 20 },
     });
@@ -342,7 +352,7 @@ describe('the day s ceilings count what was dealt today', () => {
   it('carried cards always survive, even in a lane that is over its ceiling', () => {
     // The ceiling must never take back a card the counsellor can already see.
     const open = c('attention', 25);
-    const day = assembleDay([...open, ...c('attention', 10), ...c('rotation', 100)], {
+    const day = assembleDay([...open, ...c('attention', 10), ...c('rotation', DAY_CEILING + 20)], {
       openToday: new Set(open.map((x) => x.studentId)),
       usedToday: { attention: 25 },
     });
@@ -376,7 +386,7 @@ describe('the day s ceilings count what was dealt today', () => {
 // leakage. A card dealt after the shift is not work, it is noise in the count.
 describe('after the shift ends', () => {
   it('deals nothing new', () => {
-    const day = assembleDay([...c('attention', 30), ...c('callback', 2), ...c('rotation', 100)], {
+    const day = assembleDay([...c('attention', 30), ...c('callback', 2), ...c('rotation', DAY_CEILING + 20)], {
       openToday: new Set(), usedToday: { attention: 5 }, shiftOver: true,
     });
     expect(day.queue).toHaveLength(0);
@@ -384,7 +394,7 @@ describe('after the shift ends', () => {
 
   it('still shows the cards already dealt, so a late marking lands', () => {
     const open = c('attention', 6);
-    const day = assembleDay([...open, ...c('rotation', 100)], {
+    const day = assembleDay([...open, ...c('rotation', DAY_CEILING + 20)], {
       openToday: new Set(open.map((x) => x.studentId)),
       usedToday: { attention: 6 }, shiftOver: true,
     });
@@ -434,7 +444,7 @@ describe('a card the ledger cannot name still occupies the day', () => {
   it('an unrecognised lane does not hand back a full allowance', () => {
     // 60 cards dealt today, but a lane rename left 40 of them unattributable.
     // The sections sum to 20; the day is still 60 and has room for 10.
-    const day = assembleDay([...c('going_cold', 40), ...c('rotation', 100)], {
+    const day = assembleDay([...c('going_cold', 40), ...c('rotation', DAY_CEILING + 20)], {
       openToday: new Set(), usedToday: { attention: 20 }, dealtToday: 60,
     });
     expect(60 + day.queue.length).toBeLessThanOrEqual(DAY_CEILING);
@@ -478,14 +488,15 @@ describe('retries yield, callbacks do not', () => {
   });
 
   it('a day of nothing but callbacks is still uncapped', () => {
-    const day = assembleDay([...c('callback', 80), ...c('fresh', 50)]);
-    expect(day.queue).toHaveLength(80);
+    const promises = DAY_CEILING + 10;
+    const day = assembleDay([...c('callback', promises), ...c('fresh', DAY_CEILING)]);
+    expect(day.queue).toHaveLength(promises);
   });
 
   it('the ledger counts retries alone, not the whole promises section', () => {
     // 20 retries and 15 callbacks already dealt today. Retries are spent;
     // callbacks are not, and neither state may be read from the other.
-    const day = assembleDay([...c('retry', 30), ...c('callback', 10), ...c('rotation', 100)], {
+    const day = assembleDay([...c('retry', 30), ...c('callback', 10), ...c('rotation', DAY_CEILING + 20)], {
       openToday: new Set(), usedToday: { retry: RETRY_CEILING, callback: 15 },
     });
     const byLane = (l: DueReason) => day.queue.filter((x) => x.dueReason === l).length;
