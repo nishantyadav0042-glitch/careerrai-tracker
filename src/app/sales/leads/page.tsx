@@ -30,7 +30,7 @@ export default async function MyLeadsPage({ searchParams }: { searchParams: Prom
   // R3: the book is keyed on profiles.id. `user.id` IS the authenticated
   // principal, so a rep with no email now sees exactly the same book as one
   // with an email — a missing column can no longer change what she sees.
-  const { leads } = await getRepPortfolio(admin, user.id);
+  const { leads, bookReadable } = await getRepPortfolio(admin, user.id);
   const filter = f && FILTERS.some((x) => x.key === f) ? f : 'active';
   const flt = FILTERS.find((x) => x.key === filter)!;
   const list = leads.filter((l) => flt.match(l));
@@ -41,6 +41,17 @@ export default async function MyLeadsPage({ searchParams }: { searchParams: Prom
         <h1 className="text-xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>My leads</h1>
         <p className="mt-0.5 text-xs text-stone-500">The students you&apos;re working — your book.</p>
       </div>
+      {/* A book of students all called "Student" is not a book of unnamed
+          students, it is a broken lookup — and the rep cannot tell those
+          apart. Same doctrine as the follow-ups board (19 Sep): say it, and
+          say what it costs, because the Won filter is wrong too when this
+          shows. */}
+      {!bookReadable && (
+        <div className="mb-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-[12px] font-semibold text-amber-900">
+          Some of your book didn&apos;t load. Names, phone numbers and Won may be
+          wrong on this screen — reload before working from it.
+        </div>
+      )}
       <div className="mb-3 flex flex-wrap gap-1.5">
         {FILTERS.map((x) => (
           <Link key={x.key} href={`/sales/leads?f=${x.key}`}
@@ -71,6 +82,18 @@ export default async function MyLeadsPage({ searchParams }: { searchParams: Prom
                 </span>
               </div>
               <p className="mt-0.5 text-xs text-stone-500">{l.phone ?? 'no phone'}{l.status === 'follow_up' && l.callbackAt ? ` · callback ${istWhen(l.callbackAt)}` : ''}</p>
+              {/* THE LAST CONVERSATION, ON THE ROW (Anshul, 20 Sep 2026): "I
+                  still need to open each profile to check the last update and
+                  previous conversation details." Typed remarks are quoted and
+                  italic; an auto-note ("Did not pick up") is plain, so the rep
+                  can tell at a glance whether anyone actually said anything. */}
+              {l.lastSaid && (
+                <p className={cn('mt-1 truncate text-[12px]', l.lastSaidTyped ? 'font-semibold italic text-stone-700' : 'text-stone-500')}>
+                  {l.lastSaidTyped ? `“${l.lastSaid}”` : l.lastSaid}
+                  {l.lastSaidAt ? <span className="not-italic font-normal text-stone-400"> · {istWhen(l.lastSaidAt)}</span> : null}
+                  {l.lastSaidBy ? <span className="not-italic font-normal text-stone-400"> · {l.lastSaidBy}</span> : null}
+                </p>
+              )}
               {l.note && <p className="mt-1 truncate text-[12px] text-stone-600">{l.note}</p>}
             </Link>
           ))}

@@ -59,13 +59,32 @@ function fakeAdmin(leadCount: number, opts: { failProfiles?: boolean } = {}) {
         not: () => Promise.resolve({ data: leads, error: null }),
         in: (_col: string, ids: string[]) => {
           inCalls.push({ table, ids });
-          if (table === 'profiles' && opts.failProfiles) {
-            return Promise.resolve({ data: null, error: { message: 'URL too long' } });
-          }
-          return Promise.resolve({
-            data: ids.map((id) => ({ id, full_name: `Name ${id}`, phone: `+9199${id}` })),
-            error: null,
-          });
+          const result = table === 'profiles' && opts.failProfiles
+            ? { data: null, error: { message: 'URL too long' } }
+            : table === 'sales_activity'
+              // The remark read added 20 Sep. Chains .order().limit() AFTER
+              // .in(), so the stub must stay chainable and still be awaited —
+              // a stub that only returned a promise here would have made the
+              // board throw and this whole file fail, which is what it did.
+              ? {
+                data: ids.map((id) => ({
+                  student_id: id, created_at: '2026-09-18T10:00:00.000Z',
+                  status: 'interested', note: `Said something about ${id}`,
+                  actor_id: 'rep-1', provenance: 'self_reported',
+                })),
+                error: null,
+              }
+              : {
+                data: ids.map((id) => ({ id, full_name: `Name ${id}`, phone: `+9199${id}` })),
+                error: null,
+              };
+          // Thenable AND chainable: awaiting it resolves, chaining keeps it.
+          const chain: any = {
+            order: () => chain,
+            limit: () => Promise.resolve(result),
+            then: (res: any, rej: any) => Promise.resolve(result).then(res, rej),
+          };
+          return chain;
         },
       };
       return q;

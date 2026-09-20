@@ -2,6 +2,7 @@ import { listOpenFollowups, bucketFor, type OpenFollowup, type DueBucket } from 
 import { firstContactSla, type SlaState, type SlaTally, tallySla } from '@/lib/sales-sla';
 import { readRepConfigs } from '@/lib/sales-capacity';
 import { chunkIds } from '@/lib/truth/batch';
+import { buildRemarkHistories, HUMAN_PROVENANCE } from '@/lib/sales-remarks';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -36,6 +37,17 @@ export interface BoardPromise extends OpenFollowup {
   /** So the counsellor can dial from the list instead of opening a profile. */
   phone: string | null;
   bucket: DueBucket;
+  /**
+   * The last real conversation, so "what did they say last time" is on the
+   * row rather than a profile away (Anshul, 20 Sep 2026). Newest TYPED remark
+   * where there is one, else the newest human touch.
+   */
+  lastSaid: string | null;
+  lastSaidAt: string | null;
+  /** True when a rep wrote these words, false for an auto-note. */
+  lastSaidTyped: boolean;
+  /** Set only when somebody else wrote it (see lib/sales-remarks). */
+  lastSaidBy: string | null;
 }
 
 export interface FollowupBoard {
@@ -130,13 +142,57 @@ export async function getRepFollowupBoard(
     }
   }
 
+  // ── WHY THE CALL IS DUE IS NOT WHAT WAS SAID (Anshul, 20 Sep 2026) ──────
+  //
+  // "Although call options appear, the detailed data and remarks underneath
+  // are missing. I still need to open each profile to check the last update
+  // and previous conversation details."
+  //
+  // The 19 Sep fix gave the row a name and a dial button, and stopped there.
+  // The row still only carried `reason` — "Cadence after 'no_answer'", which
+  // is the SYSTEM's account of why the card exists, not the student's. So the
+  // board answered "who do I ring" and left "what did they say" a profile
+  // away, on every row.
+  //
+  // lib/sales-remarks is the one definition of a remark, and the reason to
+  // reuse it rather than read the newest row is Incident #69: the newest row
+  // for 272 of 319 touched students was our own intake bookkeeping, and
+  // `no_answer`'s auto-note buried the conversation before it.
+  //
+  // Only the students actually on this board are read, and the read is
+  // chunked. A failure costs the remark, never the row.
+  const promiseIds = [...new Set((promiseRows ?? []).map((p) => p.studentId))];
+  const remarkRows: any[] = [];
+  if (promiseIds.length) {
+    const actResults = await Promise.all(chunkIds(promiseIds).map((chunk) =>
+      admin.from('sales_activity')
+        .select('student_id, created_at, status, note, actor_id, provenance')
+        .eq('provenance', HUMAN_PROVENANCE)
+        .in('student_id', chunk)
+        .order('created_at', { ascending: false })
+        .limit(400)));
+    for (const r of actResults as any[]) {
+      if (r.error) continue;
+      remarkRows.push(...((r.data ?? []) as any[]));
+    }
+  }
+  const historyBy = buildRemarkHistories(remarkRows, null, 1, repId);
+
   const promises: BoardPromise[] | null = promiseRows == null ? null
-    : promiseRows.map((p) => ({
-      ...p,
-      name: byId.get(p.studentId)?.full_name ?? null,
-      phone: byId.get(p.studentId)?.phone ?? null,
-      bucket: bucketFor(p.dueAt, nowMs),
-    }));
+    : promiseRows.map((p) => {
+      const h = historyBy.get(p.studentId);
+      const said = h?.lastTyped ?? h?.last ?? null;
+      return {
+        ...p,
+        name: byId.get(p.studentId)?.full_name ?? null,
+        phone: byId.get(p.studentId)?.phone ?? null,
+        bucket: bucketFor(p.dueAt, nowMs),
+        lastSaid: said?.note ?? null,
+        lastSaidAt: said?.atIso ?? null,
+        lastSaidTyped: said?.typed ?? false,
+        lastSaidBy: said?.by ?? null,
+      };
+    });
 
   const awaiting: BoardLead[] = cfg
     ? waitingLeads

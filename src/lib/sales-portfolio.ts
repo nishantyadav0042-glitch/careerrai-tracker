@@ -1,5 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { SESSION_PRICE_PAISE } from '@/lib/session-credit';
+import { chunkIds } from '@/lib/truth/batch';
+import { buildRemarkHistories, HUMAN_PROVENANCE, type RemarkHistory } from '@/lib/sales-remarks';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -20,6 +22,17 @@ export interface PortfolioLead {
   status: string; callbackAt: string | null; note: string | null; updatedAt: string | null;
   /** SA-1E: financial truth — a 'paid' row exists in student_payments. */
   paid: boolean;
+  /**
+   * The last real conversation, so the rep does not have to open the profile
+   * to remember it (Anshul, 20 Sep 2026). Newest TYPED remark where there is
+   * one, else the newest human touch. `null` when nobody has spoken to them.
+   */
+  lastSaid: string | null;
+  lastSaidAt: string | null;
+  /** True when the rep wrote these words, false for an auto-note. */
+  lastSaidTyped: boolean;
+  /** Set only when somebody else wrote it (see lib/sales-remarks). */
+  lastSaidBy: string | null;
 }
 export interface PortfolioSummary {
   total: number; working: number; interested: number; callbacks: number;
@@ -72,36 +85,121 @@ const RANK: Record<string, number> = { interested: 0, follow_up: 1, no_answer: 2
 // held ZERO rows when this changed, so `owner`/`actor` now carry the uuid with
 // nothing to migrate. A caller that cannot identify the rep must pass an id
 // that matches nothing — never an empty string, which would widen the query.
-export async function getRepPortfolio(admin: any, repId: string): Promise<{ leads: PortfolioLead[]; summary: PortfolioSummary }> {
+export async function getRepPortfolio(admin: any, repId: string): Promise<{
+  leads: PortfolioLead[];
+  summary: PortfolioSummary;
+  /**
+   * False when a chunk of the profile or payment read failed. The page says
+   * so instead of rendering a book of students called "Student" and a Won
+   * column of zero, which is what shipped silently until 20 Sep 2026.
+   */
+  bookReadable: boolean;
+}> {
   const db = admin ?? createAdminClient();
   const { data: rows } = await db.from('lead_outreach')
     .select('student_id, status, callback_at, notes, updated_at')
     .eq('owner_id', repId);
   const list = (rows ?? []) as any[];
   if (list.length === 0) {
-    return { leads: [], summary: summarizePortfolio([], []) };
+    return { leads: [], summary: summarizePortfolio([], []), bookReadable: true };
   }
   const ids = list.map((r) => r.student_id);
-  const [{ data: profs }, { data: paidRows }] = await Promise.all([
-    db.from('profiles').select('id, full_name, phone').in('id', ids),
+
+  // ── THE BOOK DOES NOT FIT IN A URL (Anshul, 20 Sep 2026) ────────────────
+  //
+  // "All entries are showing as generic 'Student' instead of individual
+  // names. I have to open each profile to see the student's name."
+  //
+  // Both reads below used to pass the rep's WHOLE BOOK to one `.in()`.
+  // PostgREST puts those values in the request URL: at 1,140 leads that is a
+  // ~42 KB request, and it fails. Neither error was inspected — the rows came
+  // back empty, the maps came back empty, and every row fell through to
+  // `?? 'Student'`. Nothing threw and nothing logged.
+  //
+  // This is the 23 Aug defect for the third time (lib/truth/batch exists
+  // because of it, Incident #57 was the same shape at 975 ids, and
+  // `sales-board.ts` was fixed for it on 19 Sep). When that fix shipped it
+  // said the remaining call sites were "none on the counsellor workspace" —
+  // that was wrong, and this file is why. `/sales/leads` IS his workspace.
+  //
+  // THE PAYMENTS READ IS THE WORSE HALF, and nobody reported it because it is
+  // invisible. When it fails, `paid` is false for every lead: the Won filter
+  // empties, and SA-1E's rule that a paying student leaves active work stops
+  // holding, so a student who has already paid keeps being worked as a lead.
+  const chunks = chunkIds(ids);
+  let bookReadable = true;
+  const byId = new Map<string, { full_name: string | null; phone: string | null }>();
+  const paidSet = new Set<string>();
+  const paidAmounts: number[] = [];
+
+  const [profResults, paidResults] = await Promise.all([
+    Promise.all(chunks.map((c) => db.from('profiles').select('id, full_name, phone').in('id', c))),
     // The financial ledger is the ONE source of WON (SA-1E). client events
     // and typed dispositions are signals, never money truth.
-    db.from('student_payments').select('student_id, amount').eq('status', 'paid').in('student_id', ids),
+    Promise.all(chunks.map((c) =>
+      db.from('student_payments').select('student_id, amount').eq('status', 'paid').in('student_id', c))),
   ]);
-  const byId = new Map((profs ?? []).map((p: any) => [p.id, p]));
-  const paidSet = new Set((paidRows ?? []).map((r: any) => r.student_id as string));
+  for (const r of profResults as any[]) {
+    if (r.error) { bookReadable = false; continue; }
+    for (const p of (r.data ?? []) as any[]) {
+      byId.set(p.id, { full_name: p.full_name ?? null, phone: p.phone ?? null });
+    }
+  }
+  for (const r of paidResults as any[]) {
+    // A failed payments chunk must not quietly read as "nobody paid": that is
+    // the direction that puts a paying student back in the calling queue.
+    if (r.error) { bookReadable = false; continue; }
+    for (const p of (r.data ?? []) as any[]) {
+      paidSet.add(p.student_id as string);
+      paidAmounts.push((p.amount as number | null) ?? 0);
+    }
+  }
+
+  // ── WHAT WAS SAID, ON THE ROW (Anshul, 20 Sep 2026) ─────────────────────
+  //
+  // "I still need to open each profile to check the last update and previous
+  // conversation details." `lead_outreach.notes` is a pipeline field, not the
+  // conversation — the student's own words live in `sales_activity`, and
+  // lib/sales-remarks is the one definition of which rows count (typed, human,
+  // self-reported). Incident #69 is exactly what happens when that filter is
+  // skipped: our own intake bookkeeping surfaces as the student's last remark.
+  //
+  // Chunked like the rest, and a failure here costs the remark only — never
+  // the row. A book you can read without names is broken; a book you can read
+  // without the last remark is merely poorer.
+  const remarkRows: any[] = [];
+  const actRes = await Promise.all(chunks.map((c) => db.from('sales_activity')
+    .select('student_id, created_at, status, note, actor_id, provenance')
+    .eq('provenance', HUMAN_PROVENANCE)
+    .in('student_id', c)
+    .order('created_at', { ascending: false })
+    .limit(400)));
+  for (const r of actRes as any[]) {
+    if (r.error) continue;
+    remarkRows.push(...((r.data ?? []) as any[]));
+  }
+  const historyBy = buildRemarkHistories(remarkRows, null, 1, repId);
 
   const leads: PortfolioLead[] = list.map((r) => {
     const p = byId.get(r.student_id) as any;
+    const h: RemarkHistory | undefined = historyBy.get(r.student_id);
+    const said = h?.lastTyped ?? h?.last ?? null;
     return {
       studentId: r.student_id, name: p?.full_name ?? 'Student', phone: p?.phone ?? null, waNumber: waNumber(p?.phone ?? null),
       status: r.status ?? 'working', callbackAt: r.callback_at ?? null, note: r.notes ?? null, updatedAt: r.updated_at ?? null,
       paid: paidSet.has(r.student_id),
+      // Prefer what the rep TYPED over the newest row: `no_answer` is the
+      // commonest disposition and its auto-note would otherwise bury the
+      // actual conversation from the call before it (the 4 Sep rule).
+      lastSaid: said?.note ?? null,
+      lastSaidAt: said?.atIso ?? null,
+      lastSaidTyped: said?.typed ?? false,
+      lastSaidBy: said?.by ?? null,
     };
   }).sort((a, b) => (RANK[a.status] ?? 5) - (RANK[b.status] ?? 5) || (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''));
 
-  const summary = summarizePortfolio(leads, (paidRows ?? []).map((r: any) => (r.amount as number | null) ?? 0));
-  return { leads, summary };
+  const summary = summarizePortfolio(leads, paidAmounts);
+  return { leads, summary, bookReadable };
 }
 
 // Her own call activity (from the append-only log), for her summary.
