@@ -58,11 +58,11 @@ export default async function SalesSummaryPage() {
           // PAID on (Anshul, 20 Sep: "I have 2 Won conversions, but the
           // Summary is showing 5"). It used to count paid students in his
           // book, 3 of whom he had never contacted.
+          // Only what he closed. The book's TOTAL paid count is deliberately
+          // not on this screen (founder, 20 Sep 2026) — it is a founder-level
+          // number, and showing a rep a figure larger than the one he is paid
+          // on is what made this tile wrong in the first place.
           { l: 'Won by me', v: s.attributedToMe, sub: inr(s.booked), tone: 'good' },
-          // Money truth kept beside it, labelled as what it is. The gap
-          // between these two is students who paid without him — information,
-          // not a discrepancy.
-          { l: 'Paid in my book', v: s.converted },
           { l: 'Lost', v: s.lost },
           { l: 'In my book', v: s.total },
         ].map((t) => (

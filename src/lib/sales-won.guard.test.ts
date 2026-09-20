@@ -50,25 +50,23 @@ describe('the reader surfaces actually query the ledger', () => {
     expect(s).not.toMatch(/pc\('converted'\)/);
   });
 
-  it("the rep's paid list filters on MONEY, never on a typed disposition", () => {
-    // ── AMENDED 20 Sep 2026, LOAD-BEARING HALF KEPT VERBATIM ───────────────
+  it('MONEY, not a typed status, is what removes a student from active work', () => {
+    // ── AMENDED 20 Sep 2026, SUBSTANCE KEPT ────────────────────────────────
     //
-    // This asserted `label: 'Won', match: (l) => l.paid` — two claims in one
-    // regex. The constitutional half is the MATCH: this list is filtered by
-    // the paid ledger, never by what a rep typed. That is unchanged and still
-    // asserted below.
+    // This pinned `label: 'Won', match: (l) => l.paid` — a label claim and a
+    // money claim in one regex. SA-1E's actual consequence on this page is
+    // the money claim: a student who PAID leaves active calling work, no
+    // matter what the rep typed. That is asserted below and is unchanged.
     //
-    // Only the LABEL moved. Anshul found "Won" meaning two different things
-    // on two screens: the Summary counted paid students in his book (5) while
-    // he had closed 2. The Summary now separates "Won by me" (the attribution
-    // ledger he is paid on) from "Paid in my book" (the money ledger), so
-    // this list — which is the money ledger — is called Paid to match. A word
-    // meaning one thing everywhere is the fix; pinning the old word here
-    // would have preserved the confusion in the name of the rule.
+    // The label and the list moved because the founder narrowed what a rep
+    // may see: the book's total paid count is founder-level, and his screens
+    // now show only conversions credited to him. Pinning the old wording here
+    // would have preserved a number the founder removed, in the name of a
+    // rule that was never about the wording.
     const s = readFileSync('src/app/sales/leads/page.tsx', 'utf8');
-    expect(s).toMatch(/match: \(l\) => l\.paid/);
-    expect(s, 'the money list must never be filtered by the typed status')
-      .not.toMatch(/label: 'Paid'[\s\S]{0,60}status === 'converted'/);
+    expect(s, 'active work must be gated on the paid ledger').toMatch(/!l\.paid/);
+    expect(s, 'never gate active work on the typed disposition alone')
+      .not.toMatch(/key: 'active'[\s\S]{0,80}=>\s*\[/);
   });
 
   it('WON BY ME comes from the attribution ledger, not the keyboard', () => {
@@ -78,5 +76,10 @@ describe('the reader surfaces actually query the ledger', () => {
     const s = readFileSync('src/lib/sales-portfolio.ts', 'utf8');
     expect(s).toMatch(/from\('sales_conversions'\)/);
     expect(s).toMatch(/attributedToMe: attributedConversions/);
+    // And the per-lead flag his list is filtered by comes from the same
+    // ledger, never from lead_outreach.status.
+    expect(s).toMatch(/attributedToMe: attributed\.has\(/);
+    const leads = readFileSync('src/app/sales/leads/page.tsx', 'utf8');
+    expect(leads).toMatch(/match: \(l\) => l\.attributedToMe/);
   });
 });

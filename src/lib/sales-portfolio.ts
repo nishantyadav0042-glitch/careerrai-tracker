@@ -33,6 +33,16 @@ export interface PortfolioLead {
   lastSaidTyped: boolean;
   /** Set only when somebody else wrote it (see lib/sales-remarks). */
   lastSaidBy: string | null;
+  /**
+   * This sale is CREDITED TO THIS REP in `sales_conversions`.
+   *
+   * Distinct from `paid` above, which is true for anyone in his book who paid
+   * by any route. Founder, 20 Sep 2026: "don't share the total number of
+   * students paid. Show him only students paid through him." So his screens
+   * count and list THIS, and `paid` is left to do its other job — keeping a
+   * paying student out of active calling work (SA-1E).
+   */
+  attributedToMe: boolean;
 }
 export interface PortfolioSummary {
   total: number; working: number; interested: number; callbacks: number;
@@ -252,6 +262,7 @@ export async function getRepPortfolio(admin: any, repId: string): Promise<{
       lastSaidAt: said?.atIso ?? null,
       lastSaidTyped: said?.typed ?? false,
       lastSaidBy: said?.by ?? null,
+      attributedToMe: attributed.has(r.student_id),
     };
   }).sort((a, b) => (RANK[a.status] ?? 5) - (RANK[b.status] ?? 5) || (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''));
 
