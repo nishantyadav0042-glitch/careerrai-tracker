@@ -37,8 +37,32 @@ export interface PortfolioLead {
 export interface PortfolioSummary {
   total: number; working: number; interested: number; callbacks: number;
   /** WON = a paid ledger row (student_payments.status='paid') — NEVER the
-   *  typed 'converted' disposition. SA-1E: one financial truth. */
+   *  typed 'converted' disposition. SA-1E: one financial truth.
+   *  UNCHANGED, deliberately: see `attributedToMe` below. */
   converted: number;
+  /**
+   * Conversions CREDITED TO THIS REP, from `sales_conversions`.
+   *
+   * Anshul, 20 Sep 2026, verifying the fixes: "Won count seems incorrect. I
+   * have 2 Won conversions, but the Summary is showing 5. Booked looks fine."
+   * He was right, and the system already agreed: the attribution ledger held
+   * exactly 2 rows, both his. `converted` above was showing paid students in
+   * his book — 2 his, and 3 typed `not_contacted` who paid on their own and
+   * whom he has never spoken to. No test accounts.
+   *
+   * THIS IS A NEW FIELD, NOT A REDEFINITION, and that is the point. SA-1E
+   * fixes what `converted` means and its guard asserts it; repurposing that
+   * name to mean "attributed" would have made a constitutional test fail and
+   * tempted an amendment. Both numbers are legitimate and they answer
+   * different questions — how much money landed in this book, and how much of
+   * it this rep is credited with.
+   *
+   * Money-backed, not a keyboard claim: `sales_conversions` is keyed on our
+   * payment id, withdrawn when a refund lands, and is the single source rep
+   * PAY is computed from (lib/sales-earnings). So this is the number that
+   * agrees with his payslip — which is why showing him 5 mattered.
+   */
+  attributedToMe: number;
   lost: number;
   /** Speculative: interested × price. */
   pipeline: number;
@@ -51,6 +75,12 @@ export interface PortfolioSummary {
 export function summarizePortfolio(
   leads: { status: string; paid: boolean }[],
   paidPaiseByStudent: number[],
+  /**
+   * Conversions credited to this rep (`sales_conversions`). Defaults to 0
+   * rather than to the paid count: an unknown attribution must never silently
+   * borrow someone else's number (L1).
+   */
+  attributedConversions: number = 0,
 ): PortfolioSummary {
   const cnt = (s: string) => leads.filter((r) => r.status === s).length;
   const won = leads.filter((r) => r.paid).length;
@@ -63,6 +93,7 @@ export function summarizePortfolio(
     interested,
     callbacks: cnt('follow_up'),
     converted: won,
+    attributedToMe: attributedConversions,
     lost,
     pipeline: interested * PRICE,
     booked: Math.round(bookedPaise / 100),
@@ -187,6 +218,25 @@ export async function getRepPortfolio(admin: any, repId: string): Promise<{
   }
   const historyBy = buildRemarkHistories(remarkRows, null, 1, repId);
 
+  // ── WON IS WHAT HE CLOSED, NOT WHAT LANDED IN HIS BOOK ──────────────────
+  //
+  // sales_conversions is the attribution ledger: keyed on our payment id,
+  // withdrawn on refund, and the single source rep PAY is computed from
+  // (lib/sales-earnings). Reading it here is what makes the Won tile agree
+  // with his payslip.
+  //
+  // Chunked and error-inspected like every other read on this surface. A
+  // failure sets bookReadable rather than quietly reporting zero conversions,
+  // because "you closed nothing" is the most damaging wrong number this page
+  // could show a counsellor.
+  const attributed = new Set<string>();
+  const convResults = await Promise.all(chunks.map((c) =>
+    db.from('sales_conversions').select('student_id').in('student_id', c)));
+  for (const r of convResults as any[]) {
+    if (r.error) { bookReadable = false; continue; }
+    for (const row of (r.data ?? []) as any[]) attributed.add(row.student_id as string);
+  }
+
   const leads: PortfolioLead[] = list.map((r) => {
     const p = byId.get(r.student_id) as any;
     const h: RemarkHistory | undefined = historyBy.get(r.student_id);
@@ -205,7 +255,7 @@ export async function getRepPortfolio(admin: any, repId: string): Promise<{
     };
   }).sort((a, b) => (RANK[a.status] ?? 5) - (RANK[b.status] ?? 5) || (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''));
 
-  const summary = summarizePortfolio(leads, paidAmounts);
+  const summary = summarizePortfolio(leads, paidAmounts, attributed.size);
   return { leads, summary, bookReadable };
 }
 

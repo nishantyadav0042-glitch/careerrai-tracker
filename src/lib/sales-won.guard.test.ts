@@ -50,8 +50,33 @@ describe('the reader surfaces actually query the ledger', () => {
     expect(s).not.toMatch(/pc\('converted'\)/);
   });
 
-  it("the rep's Won list is the paid list", () => {
+  it("the rep's paid list filters on MONEY, never on a typed disposition", () => {
+    // ── AMENDED 20 Sep 2026, LOAD-BEARING HALF KEPT VERBATIM ───────────────
+    //
+    // This asserted `label: 'Won', match: (l) => l.paid` — two claims in one
+    // regex. The constitutional half is the MATCH: this list is filtered by
+    // the paid ledger, never by what a rep typed. That is unchanged and still
+    // asserted below.
+    //
+    // Only the LABEL moved. Anshul found "Won" meaning two different things
+    // on two screens: the Summary counted paid students in his book (5) while
+    // he had closed 2. The Summary now separates "Won by me" (the attribution
+    // ledger he is paid on) from "Paid in my book" (the money ledger), so
+    // this list — which is the money ledger — is called Paid to match. A word
+    // meaning one thing everywhere is the fix; pinning the old word here
+    // would have preserved the confusion in the name of the rule.
     const s = readFileSync('src/app/sales/leads/page.tsx', 'utf8');
-    expect(s).toMatch(/label: 'Won', match: \(l\) => l\.paid/);
+    expect(s).toMatch(/match: \(l\) => l\.paid/);
+    expect(s, 'the money list must never be filtered by the typed status')
+      .not.toMatch(/label: 'Paid'[\s\S]{0,60}status === 'converted'/);
+  });
+
+  it('WON BY ME comes from the attribution ledger, not the keyboard', () => {
+    // The new number Anshul verified against. It must be read from
+    // sales_conversions — payment-keyed, refund-withdrawn, and the single
+    // source rep pay is computed from — never from lead_outreach.status.
+    const s = readFileSync('src/lib/sales-portfolio.ts', 'utf8');
+    expect(s).toMatch(/from\('sales_conversions'\)/);
+    expect(s).toMatch(/attributedToMe: attributedConversions/);
   });
 });

@@ -13,7 +13,11 @@ const FILTERS: { key: string; label: string; match: (l: { status: string; paid: 
   { key: 'active', label: 'Active', match: (l) => !l.paid && ['interested', 'follow_up', 'no_answer', 'called', 'converted'].includes(l.status) },
   { key: 'interested', label: 'Interested', match: (l) => !l.paid && l.status === 'interested' },
   { key: 'follow_up', label: 'Callbacks', match: (l) => !l.paid && l.status === 'follow_up' },
-  { key: 'converted', label: 'Won', match: (l) => l.paid },
+  // Filters on `paid`, so it lists students who PAID — not the conversions
+  // credited to this rep. Named accordingly (20 Sep 2026), because 'Won'
+  // meaning two different things on two screens is what made the Summary
+  // number look wrong.
+  { key: 'converted', label: 'Paid', match: (l) => l.paid },
   { key: 'not_interested', label: 'Lost', match: (l) => l.status === 'not_interested' },
 ];
 const STATUS_LABEL: Record<string, string> = {
