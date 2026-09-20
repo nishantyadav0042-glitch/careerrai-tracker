@@ -112,9 +112,9 @@ export const NEW_LEAD_MAX_AGE_DAYS = 7;
 // ── RAISED TO 100–120 (founder, 20 Sep 2026) ────────────────────────────────
 //
 // "Assign him around 100 students daily ... assign 100 atleast. Minimum
-// connects he needs to target is 50." One rep now carries the whole book
-// (1,140 live leads) after the 18 Sep offboarding, so the two-seat arithmetic
-// the 50–70 band was set against no longer holds.
+// connects he needs to target is 50." A single seat now carries the whole
+// book (1,140 live leads), so the arithmetic the 50–70 band was set against
+// no longer holds.
 //
 // MEASURED BEFORE CHANGING IT, 12 days of his own work. The band was a real
 // cap on his best days: he worked 91% of a 70-card deck on 14 Sep and 92% of

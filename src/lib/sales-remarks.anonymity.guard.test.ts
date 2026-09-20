@@ -6,12 +6,12 @@ import { buildRemarkHistories, maskAuthorName, TEAM_LABEL } from './sales-remark
 
 // ── A COLLEAGUE WHO LEFT IS NOT A NAME THE NEXT REP NEEDS ───────────────────
 //
-// Founder, 19 Sep 2026: "think like we have only one rep with us … never use
-// her name in [the remaining rep's] profile."
+// Founder, 19 Sep 2026: a colleague who has left must never appear by name on
+// the screen of whoever inherited their students.
 //
-// Measured that night against production, the departing rep's name reached
-// the remaining rep two ways, and a fix for only the first would have looked
-// complete while 251 rows still carried it:
+// Measured that night against production, one such name reached the new owner
+// two ways, and a fix for only the first would have looked complete while 251
+// rows still carried it:
 //   1. the attribution line — 770 remarks across 245 of his students;
 //   2. inside the words she typed — "This is <name> from CareerRai".
 //

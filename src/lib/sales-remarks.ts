@@ -127,9 +127,10 @@ export function isTypedRemark(status: string | null, note: string | null): boole
  */
 // ── A COLLEAGUE WHO LEFT IS NOT A NAME THE NEXT REP NEEDS ───────────────────
 //
-// Founder, 19 Sep 2026, on the book a departing rep left behind: "think like
-// we have only one rep with us … never use her name in [the remaining rep's]
-// profile." Measured the same night, that name was reaching him two ways:
+// Founder, 19 Sep 2026, on a book handed from one counsellor to another: a
+// colleague who has left must never appear BY NAME on the screen of whoever
+// inherited their students. Measured the same night, one such name was still
+// reaching the new owner two ways:
 // the attribution line on 770 remarks across 245 of his students, and the
 // body of 251 more that she had typed in the first person — "This is <name>
 // from CareerRai."
