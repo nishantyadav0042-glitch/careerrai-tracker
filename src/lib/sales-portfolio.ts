@@ -1,7 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { SESSION_PRICE_PAISE } from '@/lib/session-credit';
 import { chunkIds } from '@/lib/truth/batch';
-import { buildRemarkHistories, HUMAN_PROVENANCE, type RemarkHistory } from '@/lib/sales-remarks';
+import { buildRemarkHistories, HUMAN_PROVENANCE, MAX_REMARKS_ON_CARD, type RemarkHistory } from '@/lib/sales-remarks';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -171,9 +171,16 @@ export async function getRepPortfolio(admin: any, repId: string): Promise<{
   const actRes = await Promise.all(chunks.map((c) => db.from('sales_activity')
     .select('student_id, created_at, status, note, actor_id, provenance')
     .eq('provenance', HUMAN_PROVENANCE)
+    // BOTH halves of isHumanTouch at the database, so null-actor rows cannot
+    // eat the limit below before JS discards them.
+    .not('actor_id', 'is', null)
     .in('student_id', c)
     .order('created_at', { ascending: false })
-    .limit(400)));
+    // Scaled to the chunk, never flat — the shape call-queue.ts already uses.
+    // A flat 400 across 100 students was 4 rows each against a measured
+    // average of 3.4 and a max of 16, so a heavy chunk would silently drop
+    // the newest remark for whoever sorted last.
+    .limit(c.length * MAX_REMARKS_ON_CARD * 4)));
   for (const r of actRes as any[]) {
     if (r.error) continue;
     remarkRows.push(...((r.data ?? []) as any[]));

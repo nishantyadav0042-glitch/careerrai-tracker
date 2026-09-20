@@ -13,7 +13,7 @@ export default async function SalesSummaryPage() {
   const { user, admin } = await requireSales();
 
   // R3: keyed on profiles.id (the authenticated principal), not the email.
-  const [{ summary: s, leads }, calls, remarks] = await Promise.all([
+  const [{ summary: s, leads, bookReadable }, calls, remarks] = await Promise.all([
     getRepPortfolio(admin, user.id),
     getRepCallStats(admin, user.id),
     // Founder order, 4 Sep: a rep must be able to read back every remark they
@@ -35,6 +35,18 @@ export default async function SalesSummaryPage() {
             while the script (and Razorpay) sold the Rs 299 session. */}
         <p className="mt-0.5 text-xs text-stone-500">Your book of business. Rs {SESSION_PRICE_PAISE / 100} per session.</p>
       </div>
+
+      {/* Every number below comes from the same two reads as My Leads, so it
+          carries the same risk: a failed payments chunk renders Won 0 and
+          Booked Rs 0 — a wrong number that looks exactly like a true one.
+          The rep must never be shown a figure we know to be unreliable
+          without being told. */}
+      {!bookReadable && (
+        <div className="mb-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-[12px] font-semibold text-amber-900">
+          Some of your book didn&apos;t load, so these numbers may be wrong — especially Won and Booked.
+          Reload before trusting them.
+        </div>
+      )}
 
       {/* Portfolio */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">

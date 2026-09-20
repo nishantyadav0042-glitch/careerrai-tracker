@@ -146,6 +146,21 @@ export default async function SalesFollowupsPage() {
         </p>
       </div>
 
+      {board.promisesTruncated && (
+        // A cut list must never read as a complete one. Found 20 Sep 2026 by
+        // cross-check while it was live: 615 open follow-ups against a cap of
+        // 500, ordered by due date, so 24 overdue promises and ALL 91 upcoming
+        // ones were missing and the Upcoming section rendered empty — as
+        // though he had promised nobody anything.
+        <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4">
+          <p className="text-sm font-bold text-amber-900">This list is longer than what fits here.</p>
+          <p className="mt-1 text-[13px] text-amber-800">
+            You have more open follow-ups than this screen can show at once, so the furthest-out ones
+            are missing. Everything shown is real — work the overdue ones first and tell Nishant.
+          </p>
+        </div>
+      )}
+
       {!board.namesReadable && (
         // Every row below would say "Student". Without this the counsellor
         // cannot tell a broken lookup from students who have no name on file,

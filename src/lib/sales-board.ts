@@ -2,7 +2,7 @@ import { listOpenFollowups, bucketFor, type OpenFollowup, type DueBucket } from 
 import { firstContactSla, type SlaState, type SlaTally, tallySla } from '@/lib/sales-sla';
 import { readRepConfigs } from '@/lib/sales-capacity';
 import { chunkIds } from '@/lib/truth/batch';
-import { buildRemarkHistories, HUMAN_PROVENANCE } from '@/lib/sales-remarks';
+import { buildRemarkHistories, HUMAN_PROVENANCE, MAX_REMARKS_ON_CARD } from '@/lib/sales-remarks';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -68,6 +68,20 @@ export interface FollowupBoard {
    * cannot tell those apart, so he opens 140 profiles one at a time.
    */
   namesReadable: boolean;
+  /**
+   * True when the follow-up read hit its cap, so this board is a PREFIX of his
+   * promises rather than all of them.
+   *
+   * Found 20 Sep 2026 by cross-check, live in production at the time: he had
+   * 615 open follow-ups against a cap of 500. Ordered by due_at ascending and
+   * 524 already due, the 500 taken were all overdue — so 24 overdue promises
+   * and every one of his 91 upcoming ones were invisible, and the Upcoming
+   * section rendered empty as though he had promised nobody anything.
+   *
+   * The same doctrine as `promises: null` and `namesReadable`: a truncated
+   * list is not a complete one, and he cannot tell them apart by looking.
+   */
+  promisesTruncated: boolean;
   slaMinutes: number | null;
   sla: SlaTally | null;
 }
@@ -81,11 +95,22 @@ export interface FollowupBoard {
  * expensive lie this surface could tell — the counsellor closes the tab and
  * three students never get called.
  */
+/**
+ * How many open follow-ups the rep's own board will read.
+ *
+ * 500 until 20 Sep 2026, when a cross-check found him holding 615 — so his
+ * board silently dropped 115 promises while the FOUNDER'S control tower was
+ * already reading 2000. The person the list belongs to had the smaller cap.
+ * Matched to the control tower, and truncation is now reported rather than
+ * absorbed, because any fixed cap can be crossed again.
+ */
+export const FOLLOWUP_BOARD_LIMIT = 2000;
+
 export async function getRepFollowupBoard(
   admin: any, repId: string, nowMs: number = Date.now(),
 ): Promise<FollowupBoard> {
   const [promiseRows, { data: leadRows }, cfgs] = await Promise.all([
-    listOpenFollowups(admin, { ownerId: repId, limit: 500 }),
+    listOpenFollowups(admin, { ownerId: repId, limit: FOLLOWUP_BOARD_LIMIT }),
     admin.from('lead_outreach')
       .select('student_id, assigned_at, first_contact_at, status')
       .eq('owner_id', repId)
@@ -168,9 +193,18 @@ export async function getRepFollowupBoard(
       admin.from('sales_activity')
         .select('student_id, created_at, status, note, actor_id, provenance')
         .eq('provenance', HUMAN_PROVENANCE)
+        // BOTH halves of isHumanTouch, at the database. Filtering provenance
+        // alone let null-actor rows come back and EAT THE LIMIT below before
+        // buildRemarkHistories discarded them in JS.
+        .not('actor_id', 'is', null)
         .in('student_id', chunk)
         .order('created_at', { ascending: false })
-        .limit(400)));
+        // Scaled to the chunk, never a flat number — the shape call-queue.ts
+        // already uses. A flat 400 across 100 students was 4 rows each against
+        // a measured average of 3.4 and a maximum of 16, so a heavy chunk
+        // would have dropped the newest remark for the students sorted last:
+        // the very "remarks are missing" report this read exists to answer.
+        .limit(chunk.length * MAX_REMARKS_ON_CARD * 4)));
     for (const r of actResults as any[]) {
       if (r.error) continue;
       remarkRows.push(...((r.data ?? []) as any[]));
@@ -215,6 +249,7 @@ export async function getRepFollowupBoard(
 
   return {
     promises,
+    promisesTruncated: (promiseRows?.length ?? 0) >= FOLLOWUP_BOARD_LIMIT,
     overdue: (promises ?? []).filter((p) => p.bucket === 'overdue'),
     today: (promises ?? []).filter((p) => p.bucket === 'today'),
     upcoming: (promises ?? []).filter((p) => p.bucket === 'upcoming'),

@@ -38,6 +38,8 @@ function fakeAdmin(bookSize: number, opts: { failProfiles?: boolean; failPaid?: 
         select: () => q,
         // lead_outreach is read with .eq('owner_id') and awaited directly.
         eq: () => (table === 'lead_outreach' ? Promise.resolve({ data: book, error: null }) : q),
+        // sales_activity filters actor_id with .not() before .in().
+        not: () => q,
         in: (_col: string, ids: string[]) => {
           inCalls.push({ table, ids });
           const result =
