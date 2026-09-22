@@ -1,140 +1,167 @@
 # Security review — 22 September 2026
 
-Independent review of the application, not a restatement of the dependency
-upgrade. Scope: the ten domains the founder specified. Every finding carries
-evidence, exploitability, blast radius, remediation and verification.
+Independent review of the application, separate from the dependency upgrade.
 
-**Headline: three findings, none exploitable. Two were defects in the
-remediation rather than in the application, and are already fixed.**
+## Conclusion, in evidence language
+
+> **No exploitable vulnerability was identified in the reviewed scope.** Two
+> review-detected supply-chain regressions, introduced by the same day's
+> remediation, were fixed before production. One CI/CD least-privilege finding
+> was analysed workflow-by-workflow and closed. The push receipt endpoint is
+> intentionally unauthenticated and is classified informational, with a
+> telemetry-integrity abuse analysis recorded. CSP remains an accepted,
+> documented risk with a review date. **Credential rotation remains the only
+> remediation action outside the repository.**
+
+That is deliberately not "three findings, none exploitable" — this review
+traced and cleared a set of paths; it did not prove non-exploitability.
 
 ---
 
 ## Findings
 
-| # | Finding | Class | Exploitability | Blast radius | Status |
+| # | Finding | Class | Status |
+|---|---|---|---|
+| 1 | `next` exact pin turned into a range | Review-detected remediation regression | **Fixed before production** (`ed6fc78`) |
+| 2 | Unbounded `>=` in `overrides` | Review-detected remediation regression | **Fixed before production** (`ed6fc78`) |
+| 3 | 4 of 5 workflows declared no `permissions:` | Hardening debt | **CLOSED** — analysed and set |
+| 4 | `/api/push/received` unauthenticated | Informational / integrity | **Open by design**, analysed below |
+
+**#1 and #2 are not weaknesses CareerRai carries.** They existed for roughly
+two hours inside the same day's security work and were caught by this review.
+They are recorded because the lesson matters — a security patch can introduce
+a supply-chain regression — not because the repository is exposed to them.
+
+---
+
+### 3 — CI/CD least privilege (CLOSED)
+
+Analysed per workflow rather than blanket-applied, because a wrong
+`contents: read` breaks a deploy. This is the `is_admin` rule: trace what the
+thing actually does before changing the privilege.
+
+| workflow | uses `GITHUB_TOKEN` | checks out | GitHub API writes | minimum set | reducible |
 |---|---|---|---|---|---|
-| 1 | `next` exact pin turned into a range | Supply chain | Not exploitable today | Build inputs | **Fixed** `ed6fc78` |
-| 2 | Unbounded `>=` in `overrides` | Supply chain | Not exploitable today | Build inputs | **Fixed** `ed6fc78` |
-| 3 | 4 of 5 GitHub workflows declare no `permissions:` | Hardening debt | Requires a prior compromise | `GITHUB_TOKEN` scope | **Open — not blind-fixed** |
-| 4 | `/api/push/received` is unauthenticated | Informational | Requires knowing a notification UUID | Delivery telemetry only | **Open by design** |
+| `ci.yml` | No | Yes | No | `contents: read` | Yes |
+| `vercel-deploy.yml` | No | Yes | No — Vercel CLI uses its own `VERCEL_TOKEN` | `contents: read` | Yes |
+| `build-android.yml` | No | Yes | No — `upload-artifact@v4` uses the **Actions runtime token** | `contents: read` | Yes |
+| `cron-fallback.yml` | No | **No** — no `uses:` at all, pure `curl` | No | **`{}`** (none) | Yes |
+| `security.yml` | No | Yes | No | `contents: read` (already declared) | — |
+
+**Applied.** All five now declare a minimum. Verified by parsing each file:
+four at `{'contents': 'read'}`, `cron-fallback` at `{}`.
+
+**Residual risk.** None identified. If a future step needs a write scope it
+must be added explicitly, which is the point.
 
 ---
 
-### 1 & 2 — supply chain (fixed)
+### 4 — `/api/push/received` (informational, by design)
 
-**Evidence.** `main` pinned `"next": "16.2.11"` with no caret; `next`, `react`
-and `react-dom` are the only three exact-pinned dependencies in the file. The
-security upgrade rewrote it to `"^16.3.6"` and added `"sharp": ">=0.35.4"`,
-`"baseline-browser-mapping": ">=2.11.0"` — `>=` accepts any future **major**.
+**Unauthenticated ≠ unauthorized.** The route is reachable without a session
+because it is the service-worker receipt beacon and the SW may hold none.
+Authorization is enforced by what it will accept, not by who calls it.
 
-**Exploitability.** None today; the lockfile pins exact versions. The risk is
-that a future `npm install` outside the lockfile silently accepts an
-unreviewed minor of a forked framework, or a hostile major of a transitive
-dependency.
+Abuse analysis, answered from the source:
 
-**Remediation.** Exact pin restored; ranges bounded with `^`.
-**Verification.** Resolved versions unchanged (next 16.3.6, sharp 0.35.4, bbm
-2.11.25); `npm audit` 0; build exit 0; 6,727 tests; lint 0 errors.
-**Residual risk.** None identified.
+| question | answer | evidence |
+|---|---|---|
+| Enumerate notification UUIDs? | **No** | v4 UUID (~122 bits); no unauthenticated endpoint lists or returns ids |
+| Manufacture arbitrary UUIDs? | Syntactically yes, usefully no | format-validated, but the space is ~2^122 against ~10^5 rows |
+| Alter another student's telemetry? | **Only with an id they already hold** | write is `.is('received_at', null)` — **set-once**, cannot overwrite or clear |
+| Inflate metrics materially? | **Bounded by id possession** | marking N deliveries needs N valid ids; no enumeration path |
+| Rate limited? | **No** | no application rate limiter exists; platform limits only |
+| Reveals whether a UUID exists? | **Partially** | `device` returns `confirmed`/`already` vs `rejected`, so a *fully valid pair* is distinguishable — but both ids must already be known |
+| Storage / DB cost? | **No row growth** | UPDATE only, never INSERT; unbounded request volume is DB load, not storage |
 
----
+**Classification: integrity / abuse risk, not data compromise.** No student
+data is read, written or returned. The realistic worst case is falsified
+delivery statistics by a party who already holds notification ids.
 
-### 3 — workflow permissions (OPEN, deliberately not fixed)
+**That is not nothing.** Incident #102 was precisely about push delivery
+numbers being decision-grade, and a push strategy for 1,041 unreachable
+students is being decided on them. Corruptible telemetry is a product risk
+even when it is not a data risk.
 
-**Evidence.** Only `security.yml` declares `permissions: contents: read`.
-`ci.yml`, `cron-fallback.yml`, `vercel-deploy.yml` and `build-android.yml`
-declare none, so each runs with the repository's **default `GITHUB_TOKEN`
-scope** rather than least privilege.
-
-**Exploitability.** Not directly exploitable. It is an amplifier: it widens
-what a compromised action or a malicious dependency in a workflow could do.
-No `pull_request_target`, no script injection, and every third-party action
-is SHA-pinned — so there is no current path to reach it.
-
-**Why this is NOT fixed in this pass.** Adding `contents: read` blindly could
-break a workflow that legitimately needs write (a deploy status, a release, a
-commit). **That is the `is_admin` lesson applied**: a scanner-style
-recommendation must be traced against what the thing actually does before the
-privilege is changed. Each workflow's required scopes should be established
-first, then declared explicitly.
-
-**Remediation (proposed).** Per workflow, declare the minimum verified scope;
-`contents: read` for `ci.yml` and `security.yml`; establish what
-`vercel-deploy.yml`, `cron-fallback.yml` and `build-android.yml` genuinely
-require before restricting.
-**Residual risk until done.** Excess standing privilege, no known reach.
+**Proposed hardening, not urgent.** Require the endpoint pair for the receipt
+(not just the display half) so a notification id alone is insufficient; and
+rate-limit the route. Both are changes to the Incident #102 beacon path and
+should not be made casually — that beacon always landing is what the fix
+depends on.
 
 ---
 
-### 4 — `/api/push/received` unauthenticated (open by design)
+## Accepted risk — no Content-Security-Policy
 
-**Evidence.** The route takes a notification `id` from the request body, marks
-the delivery confirmed and stamps `push_verified_at` on the owning profile,
-with no session check.
+Recorded in full, so "accepted risk" does not become a place things disappear.
 
-**Exploitability.** Requires knowing a notification UUID, which is not
-enumerable. No data is returned to the caller.
-
-**Blast radius.** **Delivery telemetry integrity only** — no student data is
-read, written or exposed. A party holding valid ids could falsify delivery
-statistics. That matters more than it sounds given Incident #102: these are
-exactly the numbers a push strategy is being decided on.
-
-**Why it is unauthenticated.** It is the service-worker receipt beacon. The
-Incident #102 fix turns on that beacon always landing; making it fail closed
-on a session edge case would reintroduce the defect it was built to fix.
-
-**Proposed hardening (not urgent).** Bind the receipt to the endpoint that
-was actually pushed to, so an id alone is insufficient.
-**Residual risk.** Telemetry falsification by a party holding notification ids.
+- **Why absent.** `next.config.ts` ships HSTS, `X-Frame-Options: SAMEORIGIN`,
+  `X-Content-Type-Options: nosniff` and `Referrer-Policy`, and states that CSP
+  and `Permissions-Policy` are deliberately excluded.
+- **What makes it hard here.** An enforced policy risks breaking the Razorpay
+  checkout iframe (third-party scripts and frames on the one path that takes
+  money) and microphone-based voice notes, plus inline styles.
+- **Compensating controls.** Framing blocked by `X-Frame-Options`; MIME
+  sniffing blocked; HSTS forces HTTPS; React escapes by default, and a Semgrep
+  rule flags `dangerouslySetInnerHTML`.
+- **Accepted by.** The founder, recorded in `next.config.ts`.
+- **Reconsider when.** Any of: the checkout moves off an iframe; a
+  report-only CSP can be run long enough to enumerate real sources; or the
+  first XSS-class finding appears. **Report-Only mode is the cheap next step
+  and breaks nothing.**
 
 ---
 
-## Traced and cleared — the checks that found nothing
+## What this review did NOT test
 
-Recorded because a review that lists only its findings cannot be told apart
+Route enumeration is not security testing, and the scope should not be read as
+more than it is. These are residual, not cleared:
+
+- **Payment state machine, adversarially.** Signatures, server-side amounts,
+  activation idempotency and the refund→credit invariant were read and traced.
+  What was *not* done: replay, races, duplicate callbacks, mismatched ids and
+  hostile state transitions across
+  `order → payment → credit → ownership → refund → reversal`. Incident #103
+  was a latent defect in exactly this area, which is the argument for doing it.
+- **Cross-user RLS matrix.** The IDOR sweep is static. The real boundary is
+  *student A attempts every relevant read and write against student B's
+  identifiers*, executed.
+- **Admin authorization matrix.** Traced, not exercised. The gold standard is
+  *authenticated non-admin → every admin route → expect 403/redirect*, then
+  *admin → expect access*.
+- **Push receipt abuse**, executed rather than reasoned.
+
+Each is a bounded exercise. None is a reason to hold the current state.
+
+---
+
+## Traced and cleared
+
+Recorded because a review listing only its findings cannot be distinguished
 from a shallow one.
 
-- **207 API routes enumerated.** Every `admin/*` route authorises, not merely
-  authenticates — via `isRequestAdmin()` or an explicit
-  `me?.role !== 'admin'` → 403. **Two of my own scans produced false
-  positives** (missing `isRequestAdmin`, then missing the inline role check);
-  both were my regex, not the code.
-- **IDOR sweep.** 25 routes take an identity from the request *and* write.
-  24 are guarded. The 25th, `install/exchange`, is the PWA hand-off and is
-  sound: a 192-bit single-use token (`randomBytes(24)`), burned before any
-  other work, expiry checked, and **identity established by Supabase's own
-  `setSession()` validation** — the `user_id` on the row only picks a redirect.
-- **`user_role` cookie is a routing hint, not an authorization grant.** It is
-  read in three places: a diagnostic log, a logged-out `/login` vs `/start`
-  choice, and a post-authentication redirect. `/admin/layout.tsx` calls
-  `requireAdmin()` regardless, so a forged `user_role=admin` lands on `/admin`
-  and is bounced. Traced end to end rather than assumed.
+- **207 API routes enumerated.** Every `admin/*` route **authorises**, not
+  merely authenticates. **Two of my own scans produced false positives** —
+  first missing `isRequestAdmin()`, then missing the inline
+  `me?.role !== 'admin'` check. Eight admin routes looked unguarded; all eight
+  were correct. Both were my regex. **Static pattern matching is discovery
+  tooling, not authorization analysis** — the same lesson as `is_admin`.
+- **IDOR sweep.** 25 routes take an identity from the request *and* write; 24
+  guarded. The 25th, `install/exchange`, is sound: 192-bit single-use token
+  (`randomBytes(24)`), burned before any other work, expiry checked, and
+  identity established by Supabase's own `setSession()` validation — the row's
+  `user_id` only picks a redirect.
+- **`user_role` cookie is a routing hint, not an authorization grant.** Read in
+  a diagnostic log, a logged-out `/login` vs `/start` choice, and a
+  post-authentication destination. `/admin/layout.tsx` calls `requireAdmin()`
+  regardless, so a forged `user_role=admin` lands on `/admin` and is bounced.
 - **Payments.** Both inbound paths verify signatures with `timingSafeEqual`.
-  Order amounts derive server-side from the pricing authority; the browser
-  sends a plan id, never an amount. Activation is guarded by a status
-  precondition and a UNIQUE constraint.
-- **Database.** 25 SECURITY DEFINER functions, **`anon` EXECUTE false on all
-  of them**; 41 functions carry a fixed `search_path`. Inventory:
-  `docs/security/SECURITY-DEFINER-INVENTORY.md`.
-- **CI/CD.** No `pull_request_target`. No `${{ github.event.* }}` interpolation
-  inside `run:`. Third-party actions SHA-pinned. The Android signing keystore
-  is decoded to disk but **not** in the artifact upload (explicit `.aab`/`.apk`
-  paths) and is removed with `if: always()`.
-- **Headers.** HSTS, `X-Frame-Options: SAMEORIGIN`, `nosniff` and
-  `Referrer-Policy` are applied to every response. **No CSP** — a documented
-  deliberate choice, because an enforced policy risks breaking the Razorpay
-  checkout iframe and microphone-based voice notes. Standing accepted risk,
-  not an oversight.
+  Amounts derive server-side; the browser sends a plan id, never an amount.
+- **Database.** `anon` EXECUTE false on all 25 SECURITY DEFINER functions; 41
+  functions carry a fixed `search_path`.
+- **CI/CD.** No `pull_request_target`; no `${{ github.event.* }}` inside
+  `run:`; third-party actions SHA-pinned; the Android signing keystore is
+  **not** in the artifact upload and is removed with `if: always()`.
 - **Secrets.** No literal credential in the working tree. Three history
-  patterns (`rzp_live_`, `sk_live_`, `BEGIN PRIVATE KEY`) traced to a
-  live-vs-test prefix check, a comment describing an env var format, and
-  Semgrep's own rule definitions — **all false positives**.
-
----
-
-## The one open security action
-
-**Credential rotation**, tracked as Incident #105 and unchanged by this review.
-It is the only item whose remediation lives outside the repository: everything
-else here is either fixed or enforced by something that fails.
+  patterns traced to a prefix check, a comment and Semgrep's own rules — all
+  false positives.

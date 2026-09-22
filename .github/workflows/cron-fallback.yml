@@ -61,6 +61,10 @@ on:
         required: false
         type: string
 
+# Least privilege (security review, 22 Sep 2026). NO permissions at all: this workflow has no `uses:` step, never checks out the
+# repository, and only curls application cron endpoints with an app secret.
+permissions: {}
+
 jobs:
   trigger:
     runs-on: ubuntu-latest

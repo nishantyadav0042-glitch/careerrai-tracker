@@ -22,6 +22,10 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Least privilege (security review, 22 Sep 2026). Checkout + node only. No GITHUB_TOKEN, no gh CLI, no API write.
+permissions:
+  contents: read
+
 jobs:
   verify:
     name: typecheck · lint · unit tests
