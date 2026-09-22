@@ -6916,3 +6916,82 @@ in-memory table that actually applies the query's filters, so they assert what
 the query does to ROWS rather than which methods were called. A shape-only
 assertion passes against a filter that matches nothing. Verified to fail
 against the defect: 5 of 12 red when the write is removed.
+
+## Incident #104 — the deck is not dealt at 4 AM, and three places said it was (22 Sep 2026)
+
+**Severity:** P2 (Sales / operational truth). **Impact: zero students.** No
+defect in the queue itself. What was wrong was a shared BELIEF about when the
+day is assembled — held by a watch, by the counsellor's own screen, and by the
+founder's tower page.
+
+**Recorded as an explicitly INCORRECT HISTORICAL ASSUMPTION rather than
+silently overwritten**, at the founder's instruction, so that anyone who later
+finds the old 02:00 UTC check and wonders why its timing changed has the
+answer here instead of re-deriving it.
+
+### The assumption
+
+That `sales_opportunity` is built by a scheduled job at 4 AM IST, so a check
+at 07:30 IST would always find a completed deck.
+
+### What is actually true
+
+**There is no deck-building cron.** `vercel.json` schedules `lead-intake` at
+22:30 UTC (4 AM IST) — that populates the BOOK, which students enter a
+counsellor's ownership — and `day-close` at 16:15 UTC, which sweeps. Neither
+assembles the deck. `sales_opportunity` rows are created ON DEMAND, when the
+counsellor first opens the list.
+
+First-card times, seven consecutive days (IST):
+
+| day | first card | cards |
+|---|---|---|
+| 22 Sep | 10:50 | 132 |
+| 21 Sep | 12:29 | 125 |
+| 20 Sep | 00:25 | 128 |
+| 19 Sep | 12:02 | 78 |
+| 18 Sep | 10:31 | 108 |
+| 17 Sep | 06:20 | 164 |
+| 16 Sep | 00:07 | 154 |
+
+Five of seven are after 06:20; two are just after midnight. Nothing about that
+series is a 4 AM schedule.
+
+### What it would have cost
+
+A check written for "the 4 AM deck" was scheduled at 07:30 IST to verify that
+the `checkout_abandoned` lane had stopped being empty — the proof of the
+PR #213 queue fix. On five of the last seven days it would have found NO DECK
+AT ALL and reported the lane empty: **a false P1 on the exact signal the
+founder was waiting for**, and one that would have sent someone hunting a
+working fix. The watch is now event-driven: it waits for rows to exist, treats
+their absence as normal, and only calls it a finding if no deck has built by
+14:00 IST.
+
+### The same sentence was in the product, twice
+
+Not just in the watch. Both of these tell a human something untrue:
+
+- `components/call-deck.tsx` tells the counsellor **"tomorrow's list is dealt
+  at 4 AM"** — it is dealt when he opens it.
+- `admin/sales/tower/page.tsx` tells the founder **"The day is 50–70 per
+  counsellor, dealt from 4 AM IST"** — wrong twice over, because `DAY_CEILING`
+  moved 70 -> 120 and that sentence did not move with it.
+
+Both are FOUND AND REPORTED, not fixed in this commit: the founder had called
+a stop on code changes for the night, and a copy fix on a counsellor-facing
+screen is not worth overriding that. Logged here so it cannot be lost.
+
+### The lesson, which is Incident #93 in a new costume
+
+Incident #93 is "a watch is a copy of the code with no compiler behind it," and
+the counsellor-day watch already records it biting FOUR times on CONSTANTS —
+`retry`-in-untrimmable, ATTENTION_CEILING, RETRY_CEILING/FRESH_PIN, and
+DAY_CEILING 70->120. This is the fifth, and the first about **timing** rather
+than a number. The class is wider than constants: any belief about the system
+that is written down and not derived will drift.
+
+**Prevention:** before scheduling a check against an event, verify the event
+happens when you think it does — read the schedule, or read the timestamps the
+event actually produced. `min(surfaced_at)` per day for a week answered this in
+one query and would have answered it before the check was written.
