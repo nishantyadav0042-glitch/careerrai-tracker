@@ -71,7 +71,14 @@ function runtimeTypes(): string[] {
     .map((m) => `companion_${m[1]}`);
   const decision = [...strip(readFileSync('src/lib/decision-engine.ts', 'utf8'))
     .matchAll(/type:\s*'([a-z_]+)'/g)].map((m) => m[1]);
-  return [...new Set([...companion, ...decision, 'brain_example_action_id'])];
+  // The price-change notice dispatches `type: PRICE_NOTICE_TYPE` rather than a
+  // literal, because the same constant keys the dedupe and the cron route and
+  // a third copy of the string is a third chance to mistype it. Resolved from
+  // its producer for exactly the reason stated above: read the value out of
+  // the file that defines it, so deleting the notice removes it from here too.
+  const priceNotice = [...strip(readFileSync('src/lib/price-change-notice.ts', 'utf8'))
+    .matchAll(/PRICE_NOTICE_TYPE\s*=\s*'([a-z_]+)'/g)].map((m) => m[1]);
+  return [...new Set([...companion, ...decision, ...priceNotice, 'brain_example_action_id'])];
 }
 
 const sites = callSites();
@@ -82,6 +89,9 @@ describe('every live event has exactly one declared policy', () => {
     // Every string-matching guard's failure mode is finding nothing.
     expect(sites.length).toBeGreaterThan(30);
     expect(runtimeTypes().length).toBeGreaterThan(10);
+    // Each resolver must actually resolve something. A regex that quietly
+    // stops matching turns this whole guard back into decoration.
+    expect(runtimeTypes()).toContain('price_change');
   });
 
   it('no dispatched type falls through to DEFAULT_POLICY', () => {

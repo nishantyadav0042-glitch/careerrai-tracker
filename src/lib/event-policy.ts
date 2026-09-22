@@ -153,6 +153,11 @@ export const EVENT_POLICY: Readonly<Record<string, EventPolicy>> = {
   // ── Commercial — governed by the one-pitch-a-day authority, not by us ────
   buddy_evening:       { importance: 'P2', taxonomy: 'commercial', ladder: ['push'] },
   broadcast:           { importance: 'P2', taxonomy: 'commercial', ladder: ['push'] },
+  // A price change notice. Commercial by taxonomy — it concerns what the
+  // product costs — but it is a NOTICE, not a sell: no urgency, one price,
+  // and it is sent once per revision per student. Same ladder as broadcast;
+  // it is separate so it can be counted, capped and stopped on its own.
+  price_change:        { importance: 'P2', taxonomy: 'commercial', ladder: ['push'] },
 
   // ─────────────────────────────────────────────────────────────────────────
   // COMPLETED 27 Aug — the registry now covers EVERY type dispatch() emits.
