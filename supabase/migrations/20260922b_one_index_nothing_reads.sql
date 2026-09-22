@@ -1,0 +1,56 @@
+-- ── ONE INDEX NOTHING READS ─────────────────────────────────────────────────
+--
+-- Measured 22 Sep 2026, after the notification sweep (20260922a) took the
+-- database from 161,956 notification rows to 106,193 and the capacity watch
+-- still read 431 MB of a 500 MB ceiling.
+--
+-- It still read 431 MB because `student_events` is 204.8 MB of which about 56
+-- is data. Sampled over 5,000 random rows the average is 386 bytes, so
+-- 151,677 live rows are ~55.8 MB inside a 113.5 MB heap; the rest is space the
+-- nightly telemetry sweep freed by deleting ~13,000 rows a night and which
+-- Postgres then kept. On that ~56 MB of data the table carries 91.2 MB of
+-- indexes, of which one earns nothing:
+--
+--   idx_student_events_anon   (anon_id, created_at DESC)   30.4 MB   497 scans
+--
+-- against idx_student_events_created at 13.2 MB for 890,421 scans. It is the
+-- largest index in the database — 6% of the entire 500 MB plan — and nothing
+-- in this repository can use it. `anon_id` appears in five source files and
+-- not one of them filters, joins or orders `student_events` on it.
+-- `admin/buddy-funnel` SELECTS the column and filters on `event`, which is a
+-- different index. An index is earned by the WHERE clause, never by the
+-- select list, and that is what the guard test beside this migration pins.
+--
+-- ── WHAT THIS MIGRATION DELIBERATELY DOES NOT DROP ──────────────────────────
+--
+-- `idx_student_events_mode` (display_mode, 3.0 MB, 59 scans) was proposed for
+-- the same treatment on the same reasoning and SURVIVED VERIFICATION, so it
+-- stays. Its one reader is cron/notification-reach-watch, whose query leads
+-- with a 14-day `created_at` range — the shape that usually makes a
+-- low-cardinality index dead weight. Measured on production instead of
+-- assumed, by dropping it inside a transaction and rolling back:
+--
+--   with the index      73 ms   BitmapAnd(mode, created), 4,178 buffers
+--   without it         107 ms   Bitmap(created) + display_mode as a filter
+--
+-- The planner picks it and is right to. 34 ms once a day is a small prize for
+-- 3.0 MB, but the number is positive and the claim "nothing reads it" was
+-- simply false. A first, colder run showed 2,748 ms vs 107 ms and would have
+-- justified the drop spectacularly in the wrong direction; both figures above
+-- are warm-cache and comparable. Recorded here because the near-miss is the
+-- useful part: scan COUNTS say how often an index is chosen, never whether
+-- dropping it costs anything, and only one of those two questions matters.
+--
+-- ── REVERSIBLE ──────────────────────────────────────────────────────────────
+--
+-- The CREATE is in 20260715_student_events_tracking.sql and rebuilding on
+-- 151,677 rows takes seconds. If a query appears that needs it, recreate it in
+-- a new migration rather than working around its absence — and if /admin/perf
+-- shows a page slowing after this lands, that is the first thing to suspect.
+--
+-- NOT `CONCURRENTLY`, deliberately: a concurrent drop cannot run inside a
+-- transaction, and a plain DROP INDEX is a catalogue operation measured in
+-- milliseconds. It is applied at 03:40 IST behind a lock_timeout, which is a
+-- better guarantee than concurrency buys here.
+
+drop index if exists public.idx_student_events_anon;

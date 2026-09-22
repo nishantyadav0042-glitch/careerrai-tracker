@@ -98,11 +98,22 @@ describe('the service worker can never fail a push event', () => {
     expect(block, 'and it may not reject either').toContain('.catch(');
   });
 
-  it('the outcome rides the existing beacon rather than adding network calls', () => {
-    // A waking radio is the most expensive moment to spend a request in, and it
-    // is exactly the moment these beacons are lost. One call, richer payload.
+  it('the outcome rides the same route and the same function — but no longer the same call', () => {
+    // AMENDED 22 Sep 2026, Incident #102. The original assertion was "one call,
+    // richer payload", reasoning that a waking radio is the most expensive
+    // moment to spend a request in. That reasoning was never wrong; it was
+    // outweighed. Chaining the receipt behind showNotification to save the
+    // request cost 82% of all receipts — device confirmation fell 62% -> 12%
+    // over four days as the worker propagated. The receipt now fires unchained
+    // and the display outcome follows as a second call.
+    //
+    // What this assertion was really protecting, and still does: the display
+    // outcome must not grow its own endpoint, its own payload shape or its own
+    // transport. One route, one function, one body format.
     expect(SW).toContain('if (display) body.display = display;');
-    expect((SW.match(/beaconWithRetry\(/g) ?? []).length, 'declaration + one call site').toBeLessThanOrEqual(3);
+    const routes = [...SW.matchAll(/beaconWithRetry\(\s*'([^']+)'/g)].map((m) => m[1]);
+    expect(new Set(routes), 'no new endpoint may appear for the display outcome')
+      .toEqual(new Set(['/api/push/received', '/api/push/click']));
   });
 });
 

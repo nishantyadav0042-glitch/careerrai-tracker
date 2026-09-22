@@ -122,7 +122,13 @@ describe('chat notifications collapse to one tray entry (sw.js v8, executed)', (
     await sw.push(chatPayload('two', 'n2'));
     // received_at measurement is a Notification-OS non-negotiable — collapsing
     // the tray must never collapse the delivery record.
-    expect(sw.beacons.filter((u) => u.includes('/api/push/received'))).toHaveLength(2);
+    //
+    // FOUR, not two, since Incident #102: each push now sends the receipt
+    // immediately and the display outcome once showNotification settles. The
+    // load-bearing claim is unchanged and is what this test is for — two
+    // messages that share a tray entry still produce two independent delivery
+    // records. The count moved; the invariant did not.
+    expect(sw.beacons.filter((u) => u.includes('/api/push/received'))).toHaveLength(4);
   });
 
   it('non-chat pushes are untouched — unique tags, own entries, no counting', async () => {
@@ -163,7 +169,11 @@ describe('push/click beacons — retried, never blocking, never silent (sw.js, e
     await vi.advanceTimersByTimeAsync(1500);
     await pushPromise;
     expect(sw.shown).toHaveLength(1); // never blocked on the beacon
-    expect(calls).toBe(2); // one retry, not more
+    // THREE since Incident #102, and the arithmetic is the point: the receipt
+    // fails once and retries (2), then the display outcome sends once (1). The
+    // claim this test exists for — ONE retry, never a loop — is unchanged.
+    expect(calls).toBe(3);
+    expect(sw.beacons.filter((u) => u.includes('/api/push/received'))).toHaveLength(3);
     expect(sw.warnings).toHaveLength(0); // recovered — nothing to warn about
   });
 

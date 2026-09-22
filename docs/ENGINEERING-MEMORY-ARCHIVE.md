@@ -6523,3 +6523,270 @@ When a defect class is found, the audit list is the deliverable; fixing the
 file you are standing in is not the same thing. The remaining sites from that
 audit are still out there, and the next one will surface the same way: as a
 counsellor saying something looks wrong, months later.
+
+---
+
+## Incident #101 — the database's largest table was notifications nobody was sent (22 Sep 2026)
+
+**Severity:** P1 (Notification / Capacity). **Impact:** no student harmed yet;
+production was on a calculable path to read-only on ~10 October, at which point
+no student can log study and no counsellor can mark a card.
+
+### What was found
+
+The database capacity watch (built after Incident #73) fired on 21 and again on
+22 September: **431 MB against the free tier's 500 MB**, growing **3.9 MB a
+day** measured over nine days. Sixty-nine megabytes of headroom is about
+eighteen days.
+
+`notifications` is 106.7 MB of it and the fastest-growing table we have —
+73 MB on 7 Sep, 88 on 13 Sep, 106.7 on 22 Sep, roughly **57% of all database
+growth**. The telemetry sweep (20260908a) cannot touch it and should not: its
+rails allow two tables, and this one also holds payment receipts, session
+reminders and buddy escalations.
+
+What is growing is not the table. It is one feature inside it.
+
+**128,537 of the table's 161,956 rows (79%) are the Study Companion's four
+daily slots.** Broken down over the last seven days:
+
+| | rows / 7 days | students | read |
+|---|---|---|---|
+| `created` — written, never sent | **20,921** | 754 | **0** |
+| `provider_accepted` / `unknown` — pushed | 4,849 | 195 | 18 |
+| `failed` | 4,069 | 158 | 0 |
+
+Over fourteen days the whole cadence produced **58,543 rows, 9,725 pushes
+(17%), 128 reads and 48 clicks** — a 0.08% click rate on the single largest
+consumer of the database.
+
+The 20,921 are the finding. Those students have **no push subscription**. The
+cadence builds them a notification anyway, four times a day, and it lands in an
+in-app tray they are not opening — DAU is 40-45 against 754 recipients. We were
+paying disk to store messages that were never sent to people who were never
+going to see them.
+
+### Root cause
+
+**The row that records an attempt and the row that records a delivery are the
+same row.** `push.ts` inserts into `notifications` first and discovers at
+dispatch that there is no endpoint, so `send_status = 'created'` is
+simultaneously "we built this" and "this is in your tray" — and nothing in the
+product ever divided one by the other. `/admin/notification-health` reports how
+many were *sent today*; it does not report the ratio of rows written to rows
+delivered, so a 5:1 waste ratio stayed invisible for two months while being the
+largest single line item in a resource we were eighteen days from exhausting.
+
+This is Incident #95's shape in a new place: the number that existed was
+plausible, and the number that would have shown the defect was never computed.
+
+Two second-order findings in the same pass, both student-visible:
+
+- `chat-unread.getNotifUnreadCount` counts **every unread row ever**, no time
+  filter. A student with no push subscription carries a bell badge in the
+  hundreds that they cannot clear and never asked for.
+- The Value Proof card on the tracker (`remindersSent`) counts **every
+  notification row ever** and tells the student "N reminders sent". Average
+  across the 942 affected students: **148**. The true number of reminders they
+  received is zero. We are advertising a delivery that did not happen.
+
+Neither is caused by this sweep. Both are the same mistake the sweep is fixing:
+counting the row instead of counting the delivery.
+
+### What now prevents it
+
+Migration **20260922a** adds `sweep_notifications`, deliberately a separate
+function from `sweep_telemetry` rather than a third branch of it — the
+telemetry sweep destroys instrumentation, this one destroys rows a student can
+see, and different blast radii belong on different sides of a wall. Its rails
+live in the database, not the caller:
+
+1. **Companion types only**, enforced by pattern (`^companion_[a-z]+$`) inside
+   the function. Not "an explicit list" — an explicit list every element of
+   which the database itself checks. No deploy, typo or compromised caller can
+   reach `payment_success`, `session_reminder` or `escalation`.
+2. **The delivery half must be named**, `pushed` or `unpushed`, never both and
+   never omitted: the two have different readers and therefore different
+   windows, and a sweep that does not know which it is deleting is a bug.
+3. **Cutoff at least 14 days old** — twice the telemetry rail, because these
+   rows are student-visible.
+4. **Never a row `decision_log` still references.** That FK is NO ACTION, so
+   one referenced row would have raised and taken the whole batch with it,
+   every night, silently. Zero such rows today; the guard is for the code that
+   populates the column, not for history.
+
+The policy (`lib/notification-retention.ts`) is keep-by-default and per
+delivery half: **unpushed 14 days** (the deepest reader that can see one is the
+student's bell at 20 rows — five days at four slots a day), **pushed 45 days**
+(every analytics reader is ≤7 days; `student-360` reads the last 200 pushed
+rows per student with no time filter, and 45 days keeps a month and a half of
+it). First run: **55,763 rows, 34% of the table.** Steady state: the table
+stops growing.
+
+Guard tests pin all of it — that only companion types are sweepable, that a
+list of 29 real production notification types can never be reached, that every
+companion slot is accounted for, that the bell still limits to 20 and
+`student-360` still reads pushed rows only, and that the migration still
+carries all four rails.
+
+### What was deliberately NOT fixed
+
+**The write.** 3,016 rows a day are still created for students who cannot
+receive them. Deleting them nightly is the capacity fix; not writing them is
+the real one, and it is a student-facing product change that a production
+freeze was in force over. Recorded here so it is not lost.
+
+The sweep therefore ships **switched off** — the opposite default to the
+telemetry sweep. Deleting a `tap` event changes nothing anyone can see;
+deleting a notification moves two numbers on 942 students' home screens (the
+bell badge, and "reminders sent" from an average of 148 to 88). Both counts get
+*more* honest, which is exactly why the decision is the founder's and not the
+sweep's.
+
+### The lesson
+
+**A row that records an attempt and a row that records a delivery must not be
+the same row — and if they are, something must divide one by the other.** The
+capacity watch caught the symptom on schedule and did its job. But eighteen
+days of runway were consumed by a feature whose delivery rate nobody had ever
+computed, and the first number that would have exposed it — rows written over
+rows delivered — is one division nobody wrote.
+
+---
+
+## Incident #102 — the fix for the measurement broke the thing being measured (22 Sep 2026)
+
+**Severity:** P1 (Notification / Measurement). **Impact:** no student harmed; every
+push-delivery number computed between 18 and 22 September is wrong, downward,
+by our own hand — including the ones a founder was using to decide a push
+strategy for 1,041 unreachable students.
+
+### What was found
+
+The founder asked why `notification_deliveries.displayed_at` was NULL on all
+7,469 deliveries in seven days while `/api/push/received` returned 200s. It was
+NULL because **every** display column was: `display_attempted_at`,
+`display_status`, `display_error` — 0 of 7,460. That ruled out the obvious
+reading. A rejected `showNotification()` writes `display_status = 'error'`; a
+resolved one writes `displayed_at`. Nothing at all means the payload never
+arrived.
+
+Then the column beside it:
+
+| day | pushes | device confirmed | rate |
+|---|---|---|---|
+| 15 Sep | 1,150 | 708 | 62% |
+| 16 Sep | 1,147 | 712 | 62% |
+| 17 Sep | 986 | 615 | 62% |
+| 18 Sep | 951 | 543 | 57% |
+| 19 Sep | 956 | 355 | 37% |
+| 20 Sep | 1,225 | 311 | 25% |
+| 21 Sep | 1,099 | 189 | 17% |
+| 22 Sep | 386 | 48 | 12% |
+
+**94 endpoints stopped confirming deliveries and never resumed**, while still
+being sent pushes. The day each one went dark:
+
+```
+13 Sep   1      15 Sep   1      17 Sep   4
+18 Sep  40      19 Sep  29      20 Sep  19
+```
+
+88 of 94 in the three days after PR #204 deployed, in a decay curve. That shape
+is service-worker ADOPTION, not an event: devices pick up a new worker at
+different times — next navigation, or the 24-hour update check — and each one
+stops beaconing the moment it does. Across every platform in proportion
+(Android 70/148, unknown 16/42, desktop 4/11, iOS 4/9), so not a platform quirk.
+None revoked.
+
+**The clincher: 16 of those 94 students CLICKED a notification in the same
+window.** The notification rendered. The `notificationclick` handler ran.
+`/api/push/click` arrived — same file, same `beaconWithRetry`, same network,
+same device. Only the receipt was missing.
+
+### Root cause
+
+PR #204 (`5579c87`, 17 Sep) moved the receipt beacon behind the display promise
+so a single request could carry both:
+
+```js
+- beaconWithRetry('/api/push/received', notifId, endpointId)
++ settled.then(function () {
++   return beaconWithRetry('/api/push/received', notifId, endpointId, display);
++ })
+```
+
+The commit named the trade and judged it small, in its own words: *"the beacon
+used to race alongside showNotification and now waits for it. `showNotification()`
+is a local call that settles in milliseconds, so the added exposure is small."*
+
+**That assumption is the defect.** On Chrome for Android `showNotification()` is
+an IPC round-trip to the platform notification service, and on a phone waking
+from Doze — which is when all four Study Companion slots fire — a network
+request chained behind it is lost. What is proven here is that the request is
+lost and which change lost it; the precise browser-internal reason is not
+proven and is not claimed.
+
+And the two symptoms are one symptom: **the beacon that carries the display
+outcome is the beacon that stopped arriving.** `displayed_at` was never going to
+fill, because the request that would fill it no longer leaves the device.
+
+### Why nothing went red
+
+Nothing could. `public/sw.js` runs in a browser and no test runner executes it
+in CI, so the only guards on it were greps — and the greps all passed, because
+the code was exactly what its author intended. `/api/push/received` kept
+returning 200 to the devices still on the old worker. The failure was
+invisible from every surface we own: no error, no exception, no failed check,
+just a number quietly sliding for four days in a table nobody reads daily.
+
+One measurement did exist and did not save us: `sw_receipt_at` climbed to match
+`device_confirmed_at` from 18 Sep, which proved the SERVER half had deployed —
+and was mistaken for the whole path being healthy.
+
+### The fix
+
+Two beacons. The receipt fires **unchained**, exactly as it did before 17 Sep;
+the display outcome follows once `showNotification()` settles and is allowed to
+be lost. That is the correct risk ordering and it is the one PR #204 stated
+itself: the receipt is *"the older and more important signal."*
+
+`confirmDelivery` had to change with it. Its update is conditional on
+`device_confirmed_at IS NULL`, so once the receipt wins the race — which it now
+always does — a display outcome arriving second would match nothing and be
+silently discarded, reproducing the exact symptom from the other direction. An
+already-confirmed row now accepts a display outcome, write-once via
+`.is('display_status', null)`.
+
+**The cost is one extra request on a waking radio, which is precisely what the
+single-beacon design existed to avoid.** The measured price of avoiding it was
+82% of all receipts.
+
+Three assertions were AMENDED, not deleted, and each kept its load-bearing
+half: "the outcome rides the existing beacon rather than adding network calls"
+now pins that the display outcome gains no new ENDPOINT, payload shape or
+transport; the executed-worker tests that counted beacons moved from 2 to 4 and
+from 2 to 3 calls, with the invariants they exist for — one delivery record per
+message, one retry and never a loop — unchanged.
+
+A new guard (`push-receipt-beacon.guard.test.ts`, 12 tests) fails if the receipt
+call is ever chained behind `settled` again, and separately fails if the
+migration-era measurement is stripped from the comments. **Verified to fail
+against the reintroduced bug:** collapsing the two beacons back into one chained
+call fails exactly two of its assertions.
+
+### The lesson
+
+**Never pay a proven signal to buy a new one.** The request this saved was real;
+a waking radio is genuinely the most expensive moment to spend one in. But the
+receipt had four months of evidence behind it and the display outcome had none,
+and the change put the unproven thing in front of the proven one. When a new
+measurement can only be obtained by re-routing an existing measurement, ship
+them side by side first and merge them later — if the merge is still worth it
+once both are instrumented.
+
+Second, smaller, and the reason this ran for four days: **a file no test runner
+executes is a file with no tests, whatever the greps say.** `sw-chat-collapse.test.ts`
+already boots and runs `sw.js` in a harness; that harness is where a beacon's
+TIMING belongs, not only its presence, and it is the only reason the amended
+counts above could be verified at all.
