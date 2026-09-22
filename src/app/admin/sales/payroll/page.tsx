@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { requireAdmin } from '@/lib/admin-auth';
 import { WorkspaceShell } from '@/components/admin/workspace-shell';
-import { getTeamPayslips, istMonthOf, rs, planLabel } from '@/lib/sales-earnings';
+import { getTeamPayslips, istMonthOf, rs, planLabel, INCENTIVE_FLOOR_PAISE } from '@/lib/sales-earnings';
+import { PLANS } from '@/lib/plans';
 import { getRepFollowupBoard } from '@/lib/sales-board';
 
 export const dynamic = 'force-dynamic';
@@ -104,6 +105,15 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
                   {s.terms.stated ? (
                     <p className="text-[12px] text-stone-500">
                       {rs(s.terms.fixedPaise)}/month + {s.terms.incentivePercent}% per conversion
+                      {/* The floor is part of the terms, so it is part of the
+                          sentence that states them. A payroll screen saying
+                          "10% per conversion" beside a Till CAT line paying
+                          ₹200 is a screen disagreeing with its own arithmetic
+                          — Incident #96's shape on the one page where being
+                          wrong costs the most trust. */}
+                      {s.terms.incentivePercent > 0 && (
+                        <>, minimum {rs(INCENTIVE_FLOOR_PAISE[PLANS.tillcat.id])} on {PLANS.tillcat.label}</>
+                      )}
                     </p>
                   ) : (
                     <p className="text-[12px] font-semibold text-amber-700">
