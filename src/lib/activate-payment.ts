@@ -374,7 +374,7 @@ async function activateSessionCredit(
   // ever bought and assigned in production (Dhruv Vakadia, 24 Aug) got zero
   // notifications in the ten minutes after paying. The subscription path's
   // own premium-grant helper (lib/premium.ts) already closes this exact
-  // silence for the ₹999/₹2,599 plans; this is its session-credit sibling.
+  // silence for the ₹999/₹1,599 plans; this is its session-credit sibling.
   //
   // Two honest variants, not one. A confirmed mentor is a stronger claim than
   // "we're looking" — and the "still looking" copy promises NO timeframe on

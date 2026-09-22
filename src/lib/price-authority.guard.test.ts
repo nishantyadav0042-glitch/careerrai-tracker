@@ -74,7 +74,7 @@ describe('the authority states exactly what the founder ruled', () => {
     expect(SESSION_PRICING.listPaise).toBe(49900);
     expect(PLANS.monthly.offerPaise).toBe(99900);
     expect(PLANS.monthly.listPaise).toBe(129900);
-    expect(PLANS.tillcat.offerPaise).toBe(259900);
+    expect(PLANS.tillcat.offerPaise).toBe(159900);
     expect(PLANS.tillcat.listPaise).toBe(399900);
   });
 
@@ -142,7 +142,7 @@ describe('THE TRANSACTION PATH charges the founder\'s number, not the card\'s', 
   const EXPECTED: Array<[string, string, number, number]> = [
     ['single session', SESSION_PLAN_ID, SESSION_PRICING.offerPaise, 39900],
     ['monthly',        'monthly',       PLANS.monthly.offerPaise,   99900],
-    ['till CAT',       'tillcat',       PLANS.tillcat.offerPaise,  259900],
+    ['till CAT',       'tillcat',       PLANS.tillcat.offerPaise,  159900],
   ];
 
   it.each(EXPECTED)('%s is charged exactly its offer price', (_name, planId, offerPaise, founderPaise) => {

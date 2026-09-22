@@ -31,8 +31,19 @@ describe('the incentive matches the table printed in the letter', () => {
     expect(incentiveForPaise(PLANS.monthly.offerPaise, 10)).toBe(10_000);
   });
 
-  it('Till CAT Day at ₹2,599 earns ₹260', () => {
-    expect(incentiveForPaise(PLANS.tillcat.offerPaise, 10)).toBe(26_000);
+  it('Till CAT Day at ₹1,599 earns ₹160', () => {
+    // AMENDED 22 Sep 2026 with the price cut 2,599 -> 1,599. The RULE is
+    // unchanged and is the thing this file exists to pin: 10% of the amount
+    // realised. What moved is the amount, so the incentive moved with it —
+    // from ₹260 to ₹160 on the plan the counsellor is asked to lead with.
+    //
+    // FLAGGED TO THE FOUNDER RATHER THAN QUIETLY ABSORBED: the engagement
+    // letters print a per-plan table, and Anshul's signed copy says ₹260. A
+    // price change that silently cuts a person's per-sale earning by 38% is
+    // Incident #96's shape — a number in a document drifting away from the
+    // number in the code — and it is his decision whether the letter's figure
+    // is honoured or restated.
+    expect(incentiveForPaise(PLANS.tillcat.offerPaise, 10)).toBe(16_000);
   });
 
   it('rounds to whole rupees, because a payslip in paise is not readable', () => {
@@ -202,7 +213,7 @@ describe('the month window is IST and half-open', () => {
 });
 
 describe('the first payslip, as the letters describe it', () => {
-  it('2 Sept to 30 Sept: fixed ₹8,000 + one of each plan = ₹8,400', () => {
+  it('2 Sept to 30 Sept: fixed ₹8,000 + one of each plan = ₹8,300', () => {
     const slip = computePayslip({
       repId: 'anshul', month: '2026-09', terms: TERMS,
       conversions: [
@@ -211,7 +222,9 @@ describe('the first payslip, as the letters describe it', () => {
         conv({ payment_id: 'c', amount_paise: PLANS.tillcat.offerPaise, plan: 'tillcat' }),
       ],
     });
-    expect(slip.incentivePaise).toBe(4_000 + 10_000 + 26_000);  // ₹40 + ₹100 + ₹260
-    expect(slip.totalPaise).toBe(800_000 + 40_000);             // ₹8,000 + ₹400
+    // ₹40 + ₹100 + ₹160. Was ₹400 before the 22 Sep Till-CAT cut; the rule is
+    // untouched (10% of what was realised) and only the realised amount moved.
+    expect(slip.incentivePaise).toBe(4_000 + 10_000 + 16_000);
+    expect(slip.totalPaise).toBe(800_000 + 30_000);             // ₹8,000 + ₹300
   });
 });
