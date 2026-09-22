@@ -1,5 +1,9 @@
 import { getServerConfig } from '@/lib/server-config';
 import { BUDDY_INTEREST_LOOKBACK_DAYS } from '@/lib/os/buddy-interest';
+import {
+  NOTIFICATION_RETENTION_RULES, NOTIFICATION_RETENTION_ENABLED_KEY,
+  notificationSweepEnabled, type NotificationRetentionRule, type DeliveryHalf,
+} from '@/lib/notification-retention';
 
 // ── WHAT WE STOP KEEPING, AND WHY IT IS SAFE ────────────────────────────────
 //
@@ -116,9 +120,18 @@ export const SWEEP_MAX_BATCHES = 40;
 export const cutoffIso = (rule: RetentionRule, nowMs: number): string =>
   new Date(nowMs - rule.keepDays * 86_400_000).toISOString();
 
+/** Same arithmetic, different rule shape. Kept separate so neither type widens. */
+export const notificationCutoffIso = (rule: NotificationRetentionRule, nowMs: number): string =>
+  new Date(nowMs - rule.keepDays * 86_400_000).toISOString();
+
+/** Everything one run may touch. `notifications` goes through its own RPC. */
+export type SweptTable = SweepTable | 'notifications';
+
 export interface SweepLine {
-  table: SweepTable;
+  table: SweptTable;
   events: readonly string[] | null;
+  /** Set only on a notifications line: which delivery half this rule swept. */
+  delivery?: DeliveryHalf;
   keepDays: number;
   cutoff: string;
   deleted: number;
@@ -136,15 +149,19 @@ export interface SweepResult {
 
 const off = (v: string | null) => v != null && ['false', '0', 'off'].includes(v.trim().toLowerCase());
 
+type CountResult = { count: number | null; error: { message: string } | null };
+
+/** The slice of PostgREST's builder a dry run needs, and nothing more. */
+interface CountQuery extends Promise<CountResult> {
+  lt(col: string, v: string): CountQuery;
+  in(col: string, v: readonly string[]): CountQuery;
+  is(col: string, v: null): CountQuery;
+  not(col: string, op: 'is', v: null): CountQuery;
+}
+
 interface SweepDb {
   rpc(fn: string, args: Record<string, unknown>): Promise<{ data: unknown; error: { message: string } | null }>;
-  from(table: string): {
-    select(cols: string, opts: { count: 'exact'; head: true }): {
-      lt(col: string, v: string): {
-        in(col: string, v: readonly string[]): Promise<{ count: number | null; error: { message: string } | null }>;
-      } & Promise<{ count: number | null; error: { message: string } | null }>;
-    };
-  };
+  from(table: string): { select(cols: string, opts: { count: 'exact'; head: true }): CountQuery };
 }
 
 /**
@@ -196,6 +213,56 @@ export async function runRetentionSweep(
     }
     lines.push(line);
     total += line.deleted;
+  }
+
+  // ── The notification tray ─────────────────────────────────────────────────
+  //
+  // Second engine, second switch, same run. It is here rather than in its own
+  // cron because one nightly job that reports every deletion in one
+  // `cron_runs` row is easier to watch than two that each report half — and
+  // the capacity watch reads exactly that row.
+  //
+  // Its switch DEFAULTS OFF (see notification-retention.ts): these rows are
+  // student-visible, so the code ships inert and someone decides.
+  if (notificationSweepEnabled(
+    await getServerConfig(NOTIFICATION_RETENTION_ENABLED_KEY, NOTIFICATION_RETENTION_ENABLED_KEY),
+  )) {
+    for (const rule of NOTIFICATION_RETENTION_RULES) {
+      const cutoff = notificationCutoffIso(rule, nowMs);
+      const line: SweepLine = {
+        table: 'notifications', events: rule.types, delivery: rule.delivery,
+        keepDays: rule.keepDays, cutoff, deleted: 0, more: false,
+      };
+
+      if (opts.dryRun) {
+        const base = db.from('notifications').select('id', { count: 'exact', head: true })
+          .lt('created_at', cutoff).in('type', rule.types);
+        const { count, error } = await (rule.delivery === 'unpushed'
+          ? base.is('pushed_at', null)
+          : base.not('pushed_at', 'is', null));
+        if (error) line.error = error.message;
+        line.deleted = count ?? 0;
+        lines.push(line);
+        total += line.deleted;
+        continue;
+      }
+
+      for (let i = 0; i < budget; i++) {
+        const { data, error } = await db.rpc('sweep_notifications', {
+          p_types: rule.types,
+          p_delivery: rule.delivery,
+          p_cutoff: cutoff,
+          p_limit: SWEEP_BATCH,
+        });
+        if (error) { line.error = error.message; break; }
+        const n = Number(data ?? 0);
+        line.deleted += n;
+        if (n < SWEEP_BATCH) break;
+        if (i === budget - 1) line.more = true;
+      }
+      lines.push(line);
+      total += line.deleted;
+    }
   }
 
   return {

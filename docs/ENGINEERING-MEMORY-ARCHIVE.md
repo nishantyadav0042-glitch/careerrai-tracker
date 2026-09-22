@@ -6523,3 +6523,131 @@ When a defect class is found, the audit list is the deliverable; fixing the
 file you are standing in is not the same thing. The remaining sites from that
 audit are still out there, and the next one will surface the same way: as a
 counsellor saying something looks wrong, months later.
+
+---
+
+## Incident #101 — the database's largest table was notifications nobody was sent (22 Sep 2026)
+
+**Severity:** P1 (Notification / Capacity). **Impact:** no student harmed yet;
+production was on a calculable path to read-only on ~10 October, at which point
+no student can log study and no counsellor can mark a card.
+
+### What was found
+
+The database capacity watch (built after Incident #73) fired on 21 and again on
+22 September: **431 MB against the free tier's 500 MB**, growing **3.9 MB a
+day** measured over nine days. Sixty-nine megabytes of headroom is about
+eighteen days.
+
+`notifications` is 106.7 MB of it and the fastest-growing table we have —
+73 MB on 7 Sep, 88 on 13 Sep, 106.7 on 22 Sep, roughly **57% of all database
+growth**. The telemetry sweep (20260908a) cannot touch it and should not: its
+rails allow two tables, and this one also holds payment receipts, session
+reminders and buddy escalations.
+
+What is growing is not the table. It is one feature inside it.
+
+**128,537 of the table's 161,956 rows (79%) are the Study Companion's four
+daily slots.** Broken down over the last seven days:
+
+| | rows / 7 days | students | read |
+|---|---|---|---|
+| `created` — written, never sent | **20,921** | 754 | **0** |
+| `provider_accepted` / `unknown` — pushed | 4,849 | 195 | 18 |
+| `failed` | 4,069 | 158 | 0 |
+
+Over fourteen days the whole cadence produced **58,543 rows, 9,725 pushes
+(17%), 128 reads and 48 clicks** — a 0.08% click rate on the single largest
+consumer of the database.
+
+The 20,921 are the finding. Those students have **no push subscription**. The
+cadence builds them a notification anyway, four times a day, and it lands in an
+in-app tray they are not opening — DAU is 40-45 against 754 recipients. We were
+paying disk to store messages that were never sent to people who were never
+going to see them.
+
+### Root cause
+
+**The row that records an attempt and the row that records a delivery are the
+same row.** `push.ts` inserts into `notifications` first and discovers at
+dispatch that there is no endpoint, so `send_status = 'created'` is
+simultaneously "we built this" and "this is in your tray" — and nothing in the
+product ever divided one by the other. `/admin/notification-health` reports how
+many were *sent today*; it does not report the ratio of rows written to rows
+delivered, so a 5:1 waste ratio stayed invisible for two months while being the
+largest single line item in a resource we were eighteen days from exhausting.
+
+This is Incident #95's shape in a new place: the number that existed was
+plausible, and the number that would have shown the defect was never computed.
+
+Two second-order findings in the same pass, both student-visible:
+
+- `chat-unread.getNotifUnreadCount` counts **every unread row ever**, no time
+  filter. A student with no push subscription carries a bell badge in the
+  hundreds that they cannot clear and never asked for.
+- The Value Proof card on the tracker (`remindersSent`) counts **every
+  notification row ever** and tells the student "N reminders sent". Average
+  across the 942 affected students: **148**. The true number of reminders they
+  received is zero. We are advertising a delivery that did not happen.
+
+Neither is caused by this sweep. Both are the same mistake the sweep is fixing:
+counting the row instead of counting the delivery.
+
+### What now prevents it
+
+Migration **20260922a** adds `sweep_notifications`, deliberately a separate
+function from `sweep_telemetry` rather than a third branch of it — the
+telemetry sweep destroys instrumentation, this one destroys rows a student can
+see, and different blast radii belong on different sides of a wall. Its rails
+live in the database, not the caller:
+
+1. **Companion types only**, enforced by pattern (`^companion_[a-z]+$`) inside
+   the function. Not "an explicit list" — an explicit list every element of
+   which the database itself checks. No deploy, typo or compromised caller can
+   reach `payment_success`, `session_reminder` or `escalation`.
+2. **The delivery half must be named**, `pushed` or `unpushed`, never both and
+   never omitted: the two have different readers and therefore different
+   windows, and a sweep that does not know which it is deleting is a bug.
+3. **Cutoff at least 14 days old** — twice the telemetry rail, because these
+   rows are student-visible.
+4. **Never a row `decision_log` still references.** That FK is NO ACTION, so
+   one referenced row would have raised and taken the whole batch with it,
+   every night, silently. Zero such rows today; the guard is for the code that
+   populates the column, not for history.
+
+The policy (`lib/notification-retention.ts`) is keep-by-default and per
+delivery half: **unpushed 14 days** (the deepest reader that can see one is the
+student's bell at 20 rows — five days at four slots a day), **pushed 45 days**
+(every analytics reader is ≤7 days; `student-360` reads the last 200 pushed
+rows per student with no time filter, and 45 days keeps a month and a half of
+it). First run: **55,763 rows, 34% of the table.** Steady state: the table
+stops growing.
+
+Guard tests pin all of it — that only companion types are sweepable, that a
+list of 29 real production notification types can never be reached, that every
+companion slot is accounted for, that the bell still limits to 20 and
+`student-360` still reads pushed rows only, and that the migration still
+carries all four rails.
+
+### What was deliberately NOT fixed
+
+**The write.** 3,016 rows a day are still created for students who cannot
+receive them. Deleting them nightly is the capacity fix; not writing them is
+the real one, and it is a student-facing product change that a production
+freeze was in force over. Recorded here so it is not lost.
+
+The sweep therefore ships **switched off** — the opposite default to the
+telemetry sweep. Deleting a `tap` event changes nothing anyone can see;
+deleting a notification moves two numbers on 942 students' home screens (the
+bell badge, and "reminders sent" from an average of 148 to 88). Both counts get
+*more* honest, which is exactly why the decision is the founder's and not the
+sweep's.
+
+### The lesson
+
+**A row that records an attempt and a row that records a delivery must not be
+the same row — and if they are, something must divide one by the other.** The
+capacity watch caught the symptom on schedule and did its job. But eighteen
+days of runway were consumed by a feature whose delivery rate nobody had ever
+computed, and the first number that would have exposed it — rows written over
+rows delivered — is one division nobody wrote.
