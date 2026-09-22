@@ -665,6 +665,124 @@ action rather than by absence.
 
 ---
 
+## 14. Behavioural autopsy — the earliest durable divergence
+
+Added 22 Sep, same read-only session. Founder's reframe: stop treating log
+abandonment as the problem; find the earliest observable behaviour that
+separates a student who starts preparing from one who does not.
+
+### 14.1 The intent ladder
+
+Behaviour, not signup, defines each rung. All 1,209 real students, all time.
+
+| rung | n | of registered |
+|---|---|---|
+| L0 registered | 1,209 | 100% |
+| L1 onboarding complete | 1,072 | 88.7% |
+| L2 plan generated | 1,080 | 89.3% |
+| L3 returned on a later day | 587 | 48.6% |
+| L4 opened the real log | 577 | 47.7% |
+| **L5 ticked >=1 plan task** | **160** | **13.2%** |
+| L6 recorded real study (>0h) | 219 | 18.1% |
+| L7 studied on 2+ days | 70 | 5.8% |
+| L8 studied on 3+ days | 44 | 3.6% |
+
+**L5 and L6 are out of order on purpose.** 63 students recorded real study
+without ever ticking a task — the log sheet is a parallel route to the plan
+card — and only 4 ticked without ever recording study. So "15% executed a
+task" understates execution; the honest statement is that **160 students ever
+touched the study mechanism and 219 ever claimed study.**
+
+### 14.2 The divergence, measured forward
+
+Outcome cohorts: **A** = real study on >=2 days (70) · **B** = exactly 1 study
+day (149) · **C** = never recorded study (990).
+
+First 24 hours after signup:
+
+| first-24h behaviour | A (70) | B (149) | C (990) |
+|---|---|---|---|
+| **ticked a plan task** | **45.7%** | **35.6%** | **0.4%** |
+| opened the real log | 78.6% | 65.1% | 31.3% |
+| installed the app | 18.6% | 10.7% | 8.3% |
+| median events | 73 | 41 | 20 |
+| returned day 2-7 | 87% | 47% | 23% |
+
+**The task tick separates; the log does not.** 45.7 / 35.6 / **0.4** is a
+near-binary split. 78.6 / 65.1 / 31.3 is a gradient — consistent with the log
+being *downstream* of whatever actually divides these students.
+
+Across all history only **4 of the 990 never-studied students ever ticked a
+task** (source: `routine_task_completions`, which runs from 12 Jul).
+
+### 14.3 Ruling out the circularity
+
+The tick is not clean on its face: `complete-task` **writes** a study row when
+the plan is completed, so "ticked -> studied" is partly definitional.
+
+Forward test, with an outcome the first-24h behaviour cannot have produced —
+real study recorded on a day **>= 2 days after signup**:
+
+| first-24h behaviour | n | studied on day 3+ | 2+ such days |
+|---|---|---|---|
+| ticked a task | 89 | **33.7%** | 15 |
+| opened the log, no tick | 396 | **11.6%** | 23 |
+| neither | 724 | **4.4%** | 9 |
+
+**2.9x over log-opening, 7.7x over neither, on a non-circular outcome.**
+The first task tick is the earliest durable divergence this data contains.
+
+**Still not causal.** Ticking a task may simply be what a committed student
+does, not what creates commitment. Hypotheses 1-7 remain open; this narrows
+*where* to look, not *why*.
+
+### 14.4 Instrumentation verdict — the branch the founder named
+
+> *"If repeat learners and failures have almost identical behavioural
+> sequences, then our instrumentation isn't capturing the mechanism we need.
+> That itself is a valuable conclusion."*
+
+**That branch is live, and here is the specific gap:**
+
+1. **There is no client event for task interaction before 19 Aug.**
+   `completion_write` (`TodaysRoutineCard.tsx:378-394`) first appears
+   **2026-08-19** — roughly a third of the product's history. Task behaviour
+   before that date exists only as `routine_task_completions` rows, which
+   record *successes*, never attempts, hesitation or failures.
+2. **There is no event distinguishing "looked at the plan" from "opened the
+   tracker".** `plan_snapshot_shown` fires in
+   `src/components/onboarding/plan-snapshot.tsx:89` — an **onboarding**
+   component, not the tracker. It must not be read as "inspected their plan".
+3. Consequence: **a first-ten-minutes sequence comparison cannot be run
+   cleanly on the study mechanism for most of the population.** The log path is
+   fully instrumented; the study path is not. We have been measuring the thing
+   that is easy to measure.
+
+### 14.5 An error in this section's own first draft
+
+The first sequence query tokenised task completion as `task_complete`. **That
+event does not exist.** `TASK` appeared in zero paths across all three cohorts
+and read as a dramatic finding — *"no student touches a task in their first ten
+minutes"* — when it was an artifact of querying a name that was never emitted.
+Caught by checking `src/lib/journey.ts` before reporting it. Recorded because
+the failure mode (absence in a query read as absence in the world) is the same
+class of error as the 266 and the 7.6 minutes.
+
+### 14.6 What this does and does not license
+
+**Does:** move the investigative object from the log sheet to the plan-to-first-task
+boundary; make cohort A (70 students who came back and studied again) a research
+population in its own right, since it is the only group that demonstrably worked.
+
+**Does not:** license a plan redesign. Whether the plan is wrong, unexecutable,
+misunderstood, badly timed, or simply met by students who never intended to
+study is **not distinguished by this data**, and the instrumentation gap in
+14.4 is why.
+
+**No build, no instrumentation change, no redesign was made in producing this.**
+
+---
+
 ## Note on identifiers in this document
 
 Student names and phone numbers are **deliberately absent**. This repository is
