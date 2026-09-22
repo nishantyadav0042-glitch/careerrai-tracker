@@ -392,12 +392,37 @@ export async function confirmDelivery(
       // about to write; the unique index makes the two writers converge on one.
       const { data: existing } = await admin
         .from('notification_deliveries')
-        .select('id, device_confirmed_at')
+        .select('id, device_confirmed_at, display_status')
         .eq('notification_id', notificationId)
         .eq('endpoint_id', endpointId)
         .maybeSingle();
-      if (existing?.device_confirmed_at) return 'already';
-      if (existing) return 'already'; // row exists, our conditional update lost a race
+      if (existing) {
+        // ── AN ALREADY-CONFIRMED ROW IS THE NORMAL PATH FOR A DISPLAY ──────
+        //
+        // Since Incident #102 the worker sends TWO beacons: the receipt fires
+        // immediately, and the display outcome follows once showNotification
+        // settles. So by the time a display outcome arrives, this row is
+        // ALWAYS already confirmed — the conditional update above matched
+        // nothing not because this is a replay to discard, but because the
+        // receipt beacon got here first, which is exactly what we want.
+        //
+        // Writing it here is therefore the ONLY path by which a display
+        // outcome is ever recorded. Returning 'already' without this is what
+        // would leave display_status null forever while every other column
+        // filled in correctly — the same silent shape as the bug it replaced.
+        //
+        // Ownership is proven above. `.is('display_status', null)` keeps it
+        // write-once, so a replayed display beacon cannot overwrite the first
+        // outcome with a later one.
+        if (display && !existing.display_status) {
+          await admin
+            .from('notification_deliveries')
+            .update(displayCols)
+            .eq('id', existing.id)
+            .is('display_status', null);
+        }
+        return 'already';
+      }
 
       await admin.from('notification_deliveries').upsert({
         notification_id: notificationId,

@@ -173,18 +173,48 @@ self.addEventListener('push', (event) => {
   // behaves exactly as it did before and stays student-level.
   const endpointId = notificationData.data && notificationData.data.endpointId;
   if (notifId) {
-    // Best-effort — must never delay or block showNotification above — but
-    // "best-effort" used to mean "vanishes with zero trace on ANY failure",
-    // including a momentary network blip right as the device wakes from
-    // Doze to process this exact push (the most likely moment for one).
-    // One retry, and a console line so a failure is at least visible if
-    // DevTools is ever open — matching push.ts's own transient-failure
-    // retry, not inventing a new pattern.
+    // ── TWO BEACONS, AND THE REASON IS MEASURED ─────────────────────────────
+    //
+    // These were ONE beacon between 17 and 22 Sep 2026, with the receipt
+    // chained behind `settled` so the display outcome could ride along and
+    // save a request. The commit that did it said the added exposure was
+    // small because "showNotification() is a local call that settles in
+    // milliseconds". That assumption was wrong, and Incident #102 is what it
+    // cost: device confirmation fell 62% -> 12% over four days as the worker
+    // propagated, in a decay curve matching adoption, and 94 endpoints
+    // stopped confirming entirely while still displaying notifications and
+    // still delivering the CLICK beacon from this same file. Chaining a
+    // network request behind that promise on a phone waking from Doze — which
+    // is when all four companion slots fire — loses the request.
+    //
+    // So the receipt goes back to firing IMMEDIATELY, exactly as it did
+    // before, and the display outcome becomes the second, losable signal.
+    // That is the correct risk ordering and it is the one the original commit
+    // stated itself: the receipt is "the older and more important signal".
+    //
+    // The cost is one extra request on a waking radio, which is precisely what
+    // the single-beacon design was avoiding. The measured price of avoiding it
+    // was 82% of all receipts. Never trade a proven signal for a new one.
+    //
+    // Both are best-effort with one retry: "best-effort" used to mean
+    // "vanishes with zero trace on ANY failure", including a momentary blip
+    // as the radio wakes — the most likely moment for one.
+
+    // 1. RECEIPT — unchained, first thing, nothing may be allowed in front of it.
+    work.push(
+      beaconWithRetry('/api/push/received', notifId, endpointId).catch(function (e) {
+        console.warn('[Service Worker] received beacon failed after retry:', e);
+      })
+    );
+
+    // 2. DISPLAY OUTCOME — chained behind showNotification, because there is no
+    // outcome to send until it settles. If this one is lost we lose a
+    // measurement; if the one above is lost we lose the delivery record.
     work.push(
       settled.then(function () {
         return beaconWithRetry('/api/push/received', notifId, endpointId, display);
       }).catch(function (e) {
-        console.warn('[Service Worker] received beacon failed after retry:', e);
+        console.warn('[Service Worker] display beacon failed after retry:', e);
       })
     );
   }

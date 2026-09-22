@@ -6651,3 +6651,142 @@ capacity watch caught the symptom on schedule and did its job. But eighteen
 days of runway were consumed by a feature whose delivery rate nobody had ever
 computed, and the first number that would have exposed it — rows written over
 rows delivered — is one division nobody wrote.
+
+---
+
+## Incident #102 — the fix for the measurement broke the thing being measured (22 Sep 2026)
+
+**Severity:** P1 (Notification / Measurement). **Impact:** no student harmed; every
+push-delivery number computed between 18 and 22 September is wrong, downward,
+by our own hand — including the ones a founder was using to decide a push
+strategy for 1,041 unreachable students.
+
+### What was found
+
+The founder asked why `notification_deliveries.displayed_at` was NULL on all
+7,469 deliveries in seven days while `/api/push/received` returned 200s. It was
+NULL because **every** display column was: `display_attempted_at`,
+`display_status`, `display_error` — 0 of 7,460. That ruled out the obvious
+reading. A rejected `showNotification()` writes `display_status = 'error'`; a
+resolved one writes `displayed_at`. Nothing at all means the payload never
+arrived.
+
+Then the column beside it:
+
+| day | pushes | device confirmed | rate |
+|---|---|---|---|
+| 15 Sep | 1,150 | 708 | 62% |
+| 16 Sep | 1,147 | 712 | 62% |
+| 17 Sep | 986 | 615 | 62% |
+| 18 Sep | 951 | 543 | 57% |
+| 19 Sep | 956 | 355 | 37% |
+| 20 Sep | 1,225 | 311 | 25% |
+| 21 Sep | 1,099 | 189 | 17% |
+| 22 Sep | 386 | 48 | 12% |
+
+**94 endpoints stopped confirming deliveries and never resumed**, while still
+being sent pushes. The day each one went dark:
+
+```
+13 Sep   1      15 Sep   1      17 Sep   4
+18 Sep  40      19 Sep  29      20 Sep  19
+```
+
+88 of 94 in the three days after PR #204 deployed, in a decay curve. That shape
+is service-worker ADOPTION, not an event: devices pick up a new worker at
+different times — next navigation, or the 24-hour update check — and each one
+stops beaconing the moment it does. Across every platform in proportion
+(Android 70/148, unknown 16/42, desktop 4/11, iOS 4/9), so not a platform quirk.
+None revoked.
+
+**The clincher: 16 of those 94 students CLICKED a notification in the same
+window.** The notification rendered. The `notificationclick` handler ran.
+`/api/push/click` arrived — same file, same `beaconWithRetry`, same network,
+same device. Only the receipt was missing.
+
+### Root cause
+
+PR #204 (`5579c87`, 17 Sep) moved the receipt beacon behind the display promise
+so a single request could carry both:
+
+```js
+- beaconWithRetry('/api/push/received', notifId, endpointId)
++ settled.then(function () {
++   return beaconWithRetry('/api/push/received', notifId, endpointId, display);
++ })
+```
+
+The commit named the trade and judged it small, in its own words: *"the beacon
+used to race alongside showNotification and now waits for it. `showNotification()`
+is a local call that settles in milliseconds, so the added exposure is small."*
+
+**That assumption is the defect.** On Chrome for Android `showNotification()` is
+an IPC round-trip to the platform notification service, and on a phone waking
+from Doze — which is when all four Study Companion slots fire — a network
+request chained behind it is lost. What is proven here is that the request is
+lost and which change lost it; the precise browser-internal reason is not
+proven and is not claimed.
+
+And the two symptoms are one symptom: **the beacon that carries the display
+outcome is the beacon that stopped arriving.** `displayed_at` was never going to
+fill, because the request that would fill it no longer leaves the device.
+
+### Why nothing went red
+
+Nothing could. `public/sw.js` runs in a browser and no test runner executes it
+in CI, so the only guards on it were greps — and the greps all passed, because
+the code was exactly what its author intended. `/api/push/received` kept
+returning 200 to the devices still on the old worker. The failure was
+invisible from every surface we own: no error, no exception, no failed check,
+just a number quietly sliding for four days in a table nobody reads daily.
+
+One measurement did exist and did not save us: `sw_receipt_at` climbed to match
+`device_confirmed_at` from 18 Sep, which proved the SERVER half had deployed —
+and was mistaken for the whole path being healthy.
+
+### The fix
+
+Two beacons. The receipt fires **unchained**, exactly as it did before 17 Sep;
+the display outcome follows once `showNotification()` settles and is allowed to
+be lost. That is the correct risk ordering and it is the one PR #204 stated
+itself: the receipt is *"the older and more important signal."*
+
+`confirmDelivery` had to change with it. Its update is conditional on
+`device_confirmed_at IS NULL`, so once the receipt wins the race — which it now
+always does — a display outcome arriving second would match nothing and be
+silently discarded, reproducing the exact symptom from the other direction. An
+already-confirmed row now accepts a display outcome, write-once via
+`.is('display_status', null)`.
+
+**The cost is one extra request on a waking radio, which is precisely what the
+single-beacon design existed to avoid.** The measured price of avoiding it was
+82% of all receipts.
+
+Three assertions were AMENDED, not deleted, and each kept its load-bearing
+half: "the outcome rides the existing beacon rather than adding network calls"
+now pins that the display outcome gains no new ENDPOINT, payload shape or
+transport; the executed-worker tests that counted beacons moved from 2 to 4 and
+from 2 to 3 calls, with the invariants they exist for — one delivery record per
+message, one retry and never a loop — unchanged.
+
+A new guard (`push-receipt-beacon.guard.test.ts`, 12 tests) fails if the receipt
+call is ever chained behind `settled` again, and separately fails if the
+migration-era measurement is stripped from the comments. **Verified to fail
+against the reintroduced bug:** collapsing the two beacons back into one chained
+call fails exactly two of its assertions.
+
+### The lesson
+
+**Never pay a proven signal to buy a new one.** The request this saved was real;
+a waking radio is genuinely the most expensive moment to spend one in. But the
+receipt had four months of evidence behind it and the display outcome had none,
+and the change put the unproven thing in front of the proven one. When a new
+measurement can only be obtained by re-routing an existing measurement, ship
+them side by side first and merge them later — if the merge is still worth it
+once both are instrumented.
+
+Second, smaller, and the reason this ran for four days: **a file no test runner
+executes is a file with no tests, whatever the greps say.** `sw-chat-collapse.test.ts`
+already boots and runs `sw.js` in a harness; that harness is where a beacon's
+TIMING belongs, not only its presence, and it is the only reason the amended
+counts above could be verified at all.
