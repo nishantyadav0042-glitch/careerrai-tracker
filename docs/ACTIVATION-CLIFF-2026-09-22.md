@@ -78,6 +78,32 @@ Of those 159, time on the tracker before leaving for good:
 
 The 59 averaged **7.6 minutes**. 60% of the 159 stayed 15 seconds or longer.
 
+### 4a. CORRECTION — the 7.6-minute average is not attention
+
+Pulling the 59 individually (22 Sep, to build a call list) showed the average
+was inflated by sessions with **zero scroll**. Split by scroll depth:
+
+| band | n | avg dwell | reading |
+|---|---|---|---|
+| scroll ≥ 50% — **read the page** | **28** | **3.2 min** (193s) | attention, evidenced |
+| scroll 1–49% | 3 | 3.1 min (188s) | partial |
+| **scroll 0%** | **28** | 12.4 min (743s) | **open tab, not attention** |
+
+The 0% band contains the outliers that produced the headline number: one
+session of **2.5 hours at 0% scroll**, then 1,219s, 1,139s, 888s, 870s — all
+at 0%. A page open for two and a half hours that was never scrolled is a tab
+left open, not a student deliberating.
+
+**Strike "7.6 minutes of sustained attention" from the argument.** The
+defensible statement is:
+
+> 28 students demonstrably read the tracker page — median-scroll ≥ 50%,
+> averaging 3.2 minutes — and did not log a study day.
+
+That is a smaller number and a stronger claim. 28 students who scrolled the
+screen and still did not act is a sharper signal than 59 students of whom half
+may have walked away from an open tab.
+
 ### 5. Setup state does not distinguish them
 
 | cohort | n | has `student_dna` |
@@ -98,6 +124,11 @@ This is a *reading* of the dwell evidence, not a measurement. Seven and a half
 minutes on a study tracker is consistent with intent — and also with
 confusion, with waiting for something to load, or with a phone left unlocked
 on a table.
+
+**The last of those is no longer hypothetical.** Section 4a shows 28 of the 59
+never scrolled at all, averaging 12.4 minutes. The caution was correct, and
+the original phrasing overstated the evidence. Carry the 28 scroll-engaged
+students, not the 59.
 
 **What the database actually establishes is narrower and still strong:**
 
@@ -123,8 +154,11 @@ the ask unclear, or whether something failed silently.
 
 1. **Reproduce the first-time experience** on a genuinely fresh account with
    no logged days, and see what those 59 saw.
-2. **Interview ~5 students** from the high-dwell, never-logged cohort. They
-   are identifiable from the query below.
+2. **Interview ~5 students** from the **28 scroll-engaged** never-loggers
+   (section 4a) — not the raw 59. They are identifiable from the query below;
+   all 28 have a name and phone, only one has an email, so this is a phone
+   call, not a mail-out. **49 of the 59 signed up and left the same day**,
+   which is the window the interview should ask about.
 
 The interviews are the higher-value evidence. The database has gone as far as
 it can: it has localised the failure but cannot explain the mechanism.
@@ -160,10 +194,16 @@ last_exit as (
          row_number() over (partition by e.user_id order by e.created_at desc) rn
   from student_events e join one_day n on n.user_id = e.user_id
   where e.event='screen_exit' and e.created_at > now()-interval '30 days')
-select p.full_name, p.phone, round((l.props->>'dwell_ms')::numeric/1000) seconds_on_tracker
+select p.full_name, p.phone,
+       round((l.props->>'dwell_ms')::numeric/1000) seconds_on_tracker,
+       (l.props->>'scroll_pct')::numeric scroll_pct
 from last_exit l join profiles p on p.id = l.user_id
 where l.rn = 1
   and l.props->>'screen' = '/student/tracker'
   and (l.props->>'dwell_ms')::numeric > 60000
 order by seconds_on_tracker desc;
 ```
+
+`scroll_pct` is the column that separates the 28 who read the page from the 28
+open tabs (section 4a). **Do not run this query without it** — dwell alone
+reproduces the overstated 7.6-minute number.
