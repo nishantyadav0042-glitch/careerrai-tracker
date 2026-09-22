@@ -1,5 +1,8 @@
 # CareerRai — The Knowledge Document
 
+> **Activation cliff (22 Sep 2026).** 412 students have opened the app and never logged a study day; 266 of them came once, 94% having completed onboarding, and 60% last exited from `/student/tracker` — 37% of those after more than a minute on it, averaging 7.6. The failure is ACTIVATION on day one, not retention, not onboarding, not navigation. Mechanism unknown and not yet earned by evidence — see `docs/ACTIVATION-CLIFF-2026-09-22.md`.
+
+
 **The single entry point to everything this company knows about itself.**
 Written 29 Jul 2026, against the live database and the code at commit `1962f8a`.
 
