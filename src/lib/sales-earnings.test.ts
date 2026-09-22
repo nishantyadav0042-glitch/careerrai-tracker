@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   incentiveForPaise, istMonthWindow, istMonthOf, readTerms, computePayslip,
+  INCENTIVE_FLOOR_PAISE,
   type RawConversion, type RepTerms,
 } from './sales-earnings';
 import { PLANS, SESSION_PRICING } from './plans';
@@ -31,8 +32,20 @@ describe('the incentive matches the table printed in the letter', () => {
     expect(incentiveForPaise(PLANS.monthly.offerPaise, 10)).toBe(10_000);
   });
 
-  it('Till CAT Day at ₹2,599 earns ₹260', () => {
-    expect(incentiveForPaise(PLANS.tillcat.offerPaise, 10)).toBe(26_000);
+  it('Till CAT Day at ₹1,599 earns ₹200 — the floor, not the 10%', () => {
+    // AMENDED TWICE ON 22 Sep 2026, and the second amendment is the one that
+    // matters. The price cut 2,599 -> 1,599 took 10% from ₹260 to ₹160, and
+    // that was flagged to the founder rather than quietly absorbed — a price
+    // change silently cutting a person's per-sale earning by 38% is Incident
+    // #96's shape, a number in a document drifting from the number in code.
+    //
+    // His decision: "Keep his Till CAT incentive at ₹200." So Till CAT now
+    // carries a FLOOR. The 10% rule is untouched everywhere else; on this one
+    // plan a minimum sits under it, because the cut had made the best plan for
+    // the student the worst-paying plan for the person recommending it.
+    expect(incentiveForPaise(PLANS.tillcat.offerPaise, 10, 'tillcat')).toBe(20_000);
+    // And 10% of that price really is ₹160 — the floor is what lifts it.
+    expect(incentiveForPaise(PLANS.tillcat.offerPaise, 10)).toBe(16_000);
   });
 
   it('rounds to whole rupees, because a payslip in paise is not readable', () => {
@@ -44,6 +57,106 @@ describe('the incentive matches the table printed in the letter', () => {
   it('a rate that is not 10 still works — the rate is configuration, not code', () => {
     expect(incentiveForPaise(100_000, 15)).toBe(15_000);
     expect(incentiveForPaise(100_000, 0)).toBe(0);
+  });
+});
+
+describe('the Till CAT floor: it only ever raises, and never invents', () => {
+  // Founder, 22 Sep 2026: "Keep his Till CAT incentive at ₹200." Cutting the
+  // price to ₹1,599 had made 2 × One Month (₹1,998, ₹200 to the counsellor)
+  // pay better than the cheaper, simpler Till CAT (₹1,599, ₹160). The floor
+  // removes that conflict. These tests pin the rails so it can never leak.
+
+  const tillcat = (o: Partial<RawConversion> = {}) => conv({
+    plan: 'tillcat', amount_paise: PLANS.tillcat.offerPaise, ...o,
+  });
+
+  it('a Till CAT sale on a real payslip pays ₹200, not ₹160', () => {
+    // The end-to-end assertion: it is not enough that incentiveForPaise CAN
+    // apply a floor — computePayslip has to pass the plan through. Dropping
+    // that third argument is the silent-underpay bug this guards.
+    const slip = computePayslip({
+      repId: 'anshul', month: '2026-09', terms: TERMS, conversions: [tillcat()],
+    });
+    expect(slip.lines[0].incentivePaise).toBe(20_000);
+    expect(slip.totalPaise).toBe(800_000 + 20_000);
+  });
+
+  it('the floor RAISES and never lowers — a rep on 15% keeps ₹240', () => {
+    // 15% of ₹1,599 is ₹239.85 -> ₹240. A floor that replaced the rate instead
+    // of sitting under it would quietly cut this rep's pay by ₹40.
+    expect(incentiveForPaise(PLANS.tillcat.offerPaise, 15, 'tillcat')).toBe(24_000);
+  });
+
+  it('Arnav\u2019s ₹2,999 Till CAT is untouched — 10% already clears the floor', () => {
+    // The one Till CAT ever sold, on 9 Aug at the old price. ₹300 > ₹200, so
+    // the floor does nothing. A floor that was really a flat fee would have
+    // cut this sale by a third.
+    expect(incentiveForPaise(299_900, 10, 'tillcat')).toBe(30_000);
+  });
+
+  it('a 0% rep earns nothing on Till CAT — a floor must not invent pay', () => {
+    // readTerms treats 0 as STATED: "they earn no commission" is a real answer
+    // and must survive. A floor applied unconditionally would pay ₹200 to
+    // someone whose terms say they are paid no incentive at all.
+    expect(incentiveForPaise(PLANS.tillcat.offerPaise, 0, 'tillcat')).toBe(0);
+    const slip = computePayslip({
+      repId: 'r1', month: '2026-09', conversions: [tillcat()],
+      terms: { stated: true, fixedPaise: 0, incentivePercent: 0 },
+    });
+    expect(slip.incentivePaise).toBe(0);
+  });
+
+  it('unstated terms stay NULL on Till CAT — the floor is not a default', () => {
+    // Law L1 outranks the floor. A rep whose terms were never entered must not
+    // get a confident ₹200 the founder might pay.
+    const slip = computePayslip({
+      repId: 'r1', month: '2026-09', conversions: [tillcat()],
+      terms: { stated: false, missing: ['fixed', 'incentive'] },
+    });
+    expect(slip.lines[0].incentivePaise).toBeNull();
+    expect(slip.incentivePaise).toBeNull();
+  });
+
+  it('a REFUNDED Till CAT line earns 0, not the floor', () => {
+    // Clause 7 withdraws the incentive on a refunded transaction. A floor that
+    // applied after the refund check would hand back ₹200 of money that went
+    // out of the door.
+    const slip = computePayslip({
+      repId: 'r1', month: '2026-09', terms: TERMS,
+      conversions: [tillcat({ refunded_at: '2026-09-20T06:00:00.000Z' })],
+    });
+    expect(slip.lines[0].incentivePaise).toBe(0);
+    expect(slip.incentivePaise).toBe(0);
+    expect(slip.totalPaise).toBe(800_000);
+  });
+
+  it('the floor never exceeds what the student actually paid', () => {
+    // No incentive may be larger than the transaction it came from. A ₹150
+    // Till CAT should never pay out ₹200.
+    expect(incentiveForPaise(15_000, 10, 'tillcat')).toBe(15_000);
+    expect(incentiveForPaise(0, 10, 'tillcat')).toBe(0);
+  });
+
+  it('only Till CAT has one — month and session are plain 10%', () => {
+    expect(incentiveForPaise(PLANS.monthly.offerPaise, 10, 'monthly')).toBe(10_000);
+    expect(incentiveForPaise(SESSION_PRICING.offerPaise, 10, 'session')).toBe(4_000);
+    expect(Object.keys(INCENTIVE_FLOOR_PAISE)).toEqual(['tillcat']);
+  });
+
+  it('an unknown or missing plan gets no floor', () => {
+    // A conversion row whose plan never arrived must not fall into a floor by
+    // accident, in either direction.
+    expect(incentiveForPaise(PLANS.tillcat.offerPaise, 10, null)).toBe(16_000);
+    expect(incentiveForPaise(PLANS.tillcat.offerPaise, 10, 'quarterly')).toBe(16_000);
+  });
+
+  it('the floor is the number in Anshul\u2019s message, and beats 2 × monthly', () => {
+    // The alignment this exists for, stated as arithmetic: recommending the
+    // plan that costs the student LESS must not pay the counsellor less.
+    const tillCatPays = incentiveForPaise(PLANS.tillcat.offerPaise, 10, 'tillcat');
+    const twoMonthsPay = 2 * incentiveForPaise(PLANS.monthly.offerPaise, 10, 'monthly');
+    expect(PLANS.tillcat.offerPaise).toBeLessThan(2 * PLANS.monthly.offerPaise);
+    expect(tillCatPays).toBeGreaterThanOrEqual(twoMonthsPay);
   });
 });
 
@@ -202,7 +315,7 @@ describe('the month window is IST and half-open', () => {
 });
 
 describe('the first payslip, as the letters describe it', () => {
-  it('2 Sept to 30 Sept: fixed ₹8,000 + one of each plan = ₹8,400', () => {
+  it('2 Sept to 30 Sept: fixed ₹8,000 + one of each plan = ₹8,300', () => {
     const slip = computePayslip({
       repId: 'anshul', month: '2026-09', terms: TERMS,
       conversions: [
@@ -211,7 +324,11 @@ describe('the first payslip, as the letters describe it', () => {
         conv({ payment_id: 'c', amount_paise: PLANS.tillcat.offerPaise, plan: 'tillcat' }),
       ],
     });
-    expect(slip.incentivePaise).toBe(4_000 + 10_000 + 26_000);  // ₹40 + ₹100 + ₹260
-    expect(slip.totalPaise).toBe(800_000 + 40_000);             // ₹8,000 + ₹400
+    // ₹40 + ₹100 + ₹200. Was ₹400 before the 22 Sep Till-CAT cut. The 10% rule
+    // is untouched; what moved is the realised amount, and then the founder
+    // put a ₹200 floor under Till CAT so the cut could not make the student's
+    // best plan the counsellor's worst one.
+    expect(slip.incentivePaise).toBe(4_000 + 10_000 + 20_000);
+    expect(slip.totalPaise).toBe(800_000 + 34_000);             // ₹8,000 + ₹340
   });
 });

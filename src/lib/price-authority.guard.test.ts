@@ -48,6 +48,10 @@ const SURFACES = [
   'src/app/student/onboarding/onboarding-modal.tsx',
   'src/app/student/layout.tsx',
   'src/app/student/buddy/page.tsx',
+  // ADDED 22 Sep 2026 — all three state a price to a human and none were here.
+  'src/app/pricing/page.tsx',        // the page whose entire job is prices
+  'src/lib/sales-messages.ts',       // WhatsApp copy a counsellor sends a student
+  'src/lib/student-brief.ts',        // the brief a counsellor reads off
 ];
 
 /**
@@ -55,7 +59,18 @@ const SURFACES = [
  * Historical rows in student_payments legitimately hold these numbers — that is
  * a financial record, not pricing. No ACTIVE code may state them.
  */
-const RETIRED = ['₹299', '₹2,999', '₹2,499', '₹4,499', '₹1,999', '₹599', '₹799'];
+const RETIRED = [
+  '₹299', '₹2,999', '₹2,499', '₹4,499', '₹1,999', '₹599', '₹799',
+  // Till CAT, retired 22 Sep 2026 when the calendar made it irrational: with
+  // ~69 days to CAT it cost MORE than the two months of ₹999 it covered.
+  // Added the same day it stopped being the price — a retired price that is
+  // not on this list is a retired price nothing is stopping from coming back.
+  '₹2,599',
+];
+
+/** Comments out, so a sweep sees what the program DOES, not what it explains. */
+const codeOnly = (s: string) =>
+  s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
 
 /** Walk src/, skipping tests — tests may reference historical amounts. */
 function activeSourceFiles(dir = 'src'): string[] {
@@ -74,7 +89,7 @@ describe('the authority states exactly what the founder ruled', () => {
     expect(SESSION_PRICING.listPaise).toBe(49900);
     expect(PLANS.monthly.offerPaise).toBe(99900);
     expect(PLANS.monthly.listPaise).toBe(129900);
-    expect(PLANS.tillcat.offerPaise).toBe(259900);
+    expect(PLANS.tillcat.offerPaise).toBe(159900);
     expect(PLANS.tillcat.listPaise).toBe(399900);
   });
 
@@ -142,7 +157,7 @@ describe('THE TRANSACTION PATH charges the founder\'s number, not the card\'s', 
   const EXPECTED: Array<[string, string, number, number]> = [
     ['single session', SESSION_PLAN_ID, SESSION_PRICING.offerPaise, 39900],
     ['monthly',        'monthly',       PLANS.monthly.offerPaise,   99900],
-    ['till CAT',       'tillcat',       PLANS.tillcat.offerPaise,  259900],
+    ['till CAT',       'tillcat',       PLANS.tillcat.offerPaise,  159900],
   ];
 
   it.each(EXPECTED)('%s is charged exactly its offer price', (_name, planId, offerPaise, founderPaise) => {
@@ -175,25 +190,56 @@ describe('THE TRANSACTION PATH charges the founder\'s number, not the card\'s', 
 });
 
 describe('no surface shows a price the authority cannot produce', () => {
-  it.each(SURFACES)('%s', (file) => {
-    const literals = readFileSync(file, 'utf8').match(/₹[\d,]+/g) ?? [];
-    for (const lit of literals) {
-      expect(ALLOWED.has(lit), `${file} shows ${lit}, which no canonical price produces`).toBe(true);
+  // ── WHY THIS IS NO LONGER A LIST OF FILES (22 Sep 2026) ──────────────────
+  //
+  // This check used to walk SURFACES — eleven paths, maintained by hand. On
+  // the day Till CAT moved 2,599 -> 1,599 that list did not contain
+  // src/app/pricing/page.tsx, the page whose entire job is to state prices.
+  // Nothing was wrong on it (it renders plan.display and holds no literal),
+  // but the guard had no way of knowing that, and a hand-maintained list of
+  // the places prices appear is a list that is wrong the moment someone adds
+  // a twelfth. So the sweep is now the whole tree: EVERY rupee literal in
+  // active code must be one the authority can produce.
+  //
+  // Verified to hold with no exemptions at the time of the change — every
+  // ₹ literal in src/ outside comments is already a canonical price.
+  it('no active file states a rupee amount the authority cannot produce', () => {
+    const offenders: string[] = [];
+    for (const file of activeSourceFiles()) {
+      if (file === join('src', 'lib', 'plans.ts')) continue;
+      // Comments are stripped HERE and only here: an engineering comment that
+      // narrates a price change ("cut 2,599 -> 1,599, and here is why") is
+      // history and must stay readable. What must never drift is what the
+      // program actually prints, which is what survives the strip.
+      for (const lit of new Set(codeOnly(readFileSync(file, 'utf8')).match(/₹[\d,]+/g) ?? [])) {
+        if (!ALLOWED.has(lit)) offenders.push(`${file} → ${lit}`);
+      }
     }
+    expect(offenders, `rupee literals no canonical price produces:\n  ${offenders.join('\n  ')}`).toEqual([]);
   });
 
   it('and no active file anywhere still states a RETIRED price', () => {
-    // The wide net. Surfaces above are the ones a student buys from; this
-    // catches the copy nobody remembers — a push template, an admin hint, a
-    // comment that will be read as truth by the next person.
+    // The wide net, for prices that must never come back at all. Also on
+    // stripped code, for the same reason: plans.ts explains WHY 2,599 is gone
+    // and that explanation is the most useful thing in the file.
     const offenders: string[] = [];
     for (const file of activeSourceFiles()) {
-      const text = readFileSync(file, 'utf8');
-      for (const old of RETIRED) {
-        if (text.includes(old)) offenders.push(`${file} → ${old}`);
-      }
+      const code = codeOnly(readFileSync(file, 'utf8'));
+      for (const old of RETIRED) if (code.includes(old)) offenders.push(`${file} → ${old}`);
     }
     expect(offenders, `retired prices still present:\n  ${offenders.join('\n  ')}`).toEqual([]);
+  });
+
+  it('a purchase surface may not even MENTION a retired price, comments included', () => {
+    // The stricter rule, on the short list of files a student actually buys
+    // from. Next to live copy, a commented-out ₹2,599 is one uncomment away
+    // from being shown, and reads as current to whoever finds it next.
+    const offenders: string[] = [];
+    for (const file of SURFACES) {
+      const text = readFileSync(file, 'utf8');
+      for (const old of RETIRED) if (text.includes(old)) offenders.push(`${file} → ${old}`);
+    }
+    expect(offenders, `retired prices on purchase surfaces:\n  ${offenders.join('\n  ')}`).toEqual([]);
   });
 });
 

@@ -788,6 +788,56 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
     // The lead is not deleted or closed: it keeps its owner and its history,
     // and surfaces to the founder as a data-quality exception. We stopped
     // calling; we did not stop caring who they are.
+    // ── A PAYMENT ATTEMPT MADE SINCE THE LAST CALL RE-OPENS THE DAY ────────
+    //
+    // Founder, 22 Sep 2026, after asking whether abandoned checkouts were the
+    // counsellor's first priority. They were not: on 22 September the deck
+    // held 132 cards and the `checkout_abandoned` lane held ZERO, while ten
+    // students had created an order in the previous fifteen days.
+    //
+    // Two guards below were doing it, and each one alone was enough:
+    //
+    //   · Anushka spoke to Anshul on 20 Sep, said "call me back", and
+    //     `next_action_at` was set to 25 Sep. At 23:53 on 21 Sep she opened
+    //     the ₹2,599 payment window and closed it. The future-promise guard
+    //     dropped her from every deck until the 25th — four days after she
+    //     reached for her wallet, and nothing could tell the queue that the
+    //     situation had changed.
+    //   · Divyam's next action is 15 NOVEMBER. He abandoned a ₹999 checkout
+    //     on 15 September. Eight weeks invisible.
+    //
+    // The rule those guards encode is right in general — a commitment the
+    // student made to US outranks intent we merely observed. But an order
+    // created AFTER that conversation is not intent we merely observed. It is
+    // the student acting, later, in the most concrete way the product allows,
+    // and it makes the promise stale rather than binding.
+    //
+    // So the override is deliberately narrow: only an order NEWER than the
+    // last attempt re-opens the day. An abandoned order from before the call
+    // stays exactly where it was, below the promise lanes, because the
+    // counsellor has already had that conversation.
+    const ab = abandonedBy.get(r.id);
+    const lastAttemptIso = (o?.last_attempt_at as string | null) ?? null;
+    // "Since the last call" presupposes a last call. A student nobody has ever
+    // rung is the ORIGINAL case this lane was built for and is already handled
+    // further down — and crm-end-to-end Scenario F caught this: with
+    // last_attempt_at null, an earlier version of this line fired the branch
+    // below and printed "AFTER you last spoke" to a counsellor who had never
+    // spoken to them. A card that lies about the history is worse than a card
+    // that under-sells the intent.
+    const abandonedSinceLastCall =
+      !!ab && lastAttemptIso !== null && ab.atIso > lastAttemptIso;
+
+    // THE AGE-OUT IS NOT OVERRIDDEN, and that is a deliberate refusal rather
+    // than an oversight. A student capped at MAX_CONSECUTIVE_NO_ANSWER who has
+    // since tried to pay is arguably the one case where six unanswered calls
+    // should not be the last word — leaving them capped makes someone who
+    // reached for their wallet permanently uncontactable. But the cap is the
+    // founder's own standing rule, crm-end-to-end Scenario H guards it by
+    // name, and he asked for abandoned checkouts to be prioritised, not for
+    // the contact ceiling to be reopened. It affects none of the ten students
+    // this change was written for (the highest no_answer_count among them is
+    // two). Raised to him as a decision; not taken here.
     if (((o?.no_answer_count as number | null) ?? 0) >= MAX_CONSECUTIVE_NO_ANSWER) continue;
 
     const nextAction = o?.next_action_at ? new Date(o.next_action_at).getTime() : null;
@@ -796,9 +846,12 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
     const dueNow = nextAction != null && nextAction <= now;
     const attemptedToday = o?.last_attempt_at && istDateStr(o.last_attempt_at) === todayIst;
     // No repeat calls the same day unless a scheduled action is now due.
-    if (attemptedToday && !dueNow) continue;
-    // A future scheduled action that isn't due yet — not today's work.
-    if (nextAction != null && !dueNow) continue;
+    // An order placed since that call is the exception: they acted after we
+    // spoke, and waiting until tomorrow wastes the warmest hour we will get.
+    if (attemptedToday && !dueNow && !abandonedSinceLastCall) continue;
+    // A future scheduled action that isn't due yet — not today's work, unless
+    // they have since tried to pay.
+    if (nextAction != null && !dueNow && !abandonedSinceLastCall) continue;
 
     const prof = profById.get(r.id) as any;
     const e = engById.get(r.id) as any;
@@ -857,7 +910,40 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
     let action: string;
     let sort: number;
     const minutesOverdue = () => Math.min(999_999, Math.max(0, Math.round((now - nextAction!) / 60_000)));
-    if (dueNow && status === 'follow_up') {
+    if (abandonedSinceLastCall) {
+      // ── THEY TRIED TO PAY AFTER WE LAST SPOKE. NOTHING OUTRANKS THAT ────
+      //
+      // The second half of the 22 Sep defect, and it bit even the students
+      // the future-promise guard let through. The chain below classifies by
+      // the DISPOSITION OF THE LAST CALL — callback, retry, followup — and
+      // `checkout_abandoned` sat after all three, so it could only ever fire
+      // for a student nobody had spoken to. Anyone Anshul had actually called
+      // was filed by the conversation, never by the payment.
+      //
+      // shravan patel opened TWO payment windows on the night of 21 Sep. His
+      // status was `no_answer` from an earlier call, so he landed in `retry`
+      // — a trimmable lane that sat at its ceiling of 12 that day with none
+      // of them worked, on a card that said "Retry — no answer" and nothing
+      // about the ₹2,599 he had just walked away from.
+      //
+      // This branch is narrow on purpose: `abandonedSinceLastCall` is already
+      // false for an order older than the last call, so a stale abandoned
+      // checkout still falls through to the promise lanes exactly as before
+      // and lands on the original branch further down. Only "they acted after
+      // we spoke" jumps the queue.
+      const daysAgoAb = Math.floor((Date.now() - Date.parse(ab!.atIso)) / 86_400_000);
+      dueReason = 'checkout_abandoned';
+      dueLabel = 'Tried to pay since your last call';
+      why = [
+        `Created a ${ab!.plan ?? 'plan'} order ${daysAgoLabel(daysAgoAb)} — AFTER you last spoke`,
+        'They went back to the payment screen on their own. Something stopped them there',
+      ];
+      action = 'Ask what happened on the payment screen: price, a failure, or second thoughts';
+      // Above every promise lane. A student who reached for their wallet after
+      // the conversation is a hotter card than the conversation's own
+      // follow-up, and fresher intent sorts first within this lane.
+      sort = 9_000_000 - Math.min(8_000, daysAgoAb);
+    } else if (dueNow && status === 'follow_up') {
       // ── A PROMISE PAST A WEEK SAYS SO (founder, 15 Sep 2026) ───────────
       //
       // "7 din se zyada overdue ho to wo alag dikhe... par deck se hate na."
@@ -912,12 +998,15 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
       // made to US outranks intent we merely observed. Above everything else,
       // because this is the nearest thing to revenue in the whole dataset and
       // nobody has ever called one of these students.
-      const ab = abandonedBy.get(r.id)!;
-      const daysAgoAb = Math.floor((Date.now() - Date.parse(ab.atIso)) / 86_400_000);
+      // Shadowing the outer `ab` here would read as the same fact; it is not.
+      // This branch is the OLD abandoned order — placed before the last call,
+      // so the counsellor has already had that conversation.
+      const stale = abandonedBy.get(r.id)!;
+      const daysAgoAb = Math.floor((Date.now() - Date.parse(stale.atIso)) / 86_400_000);
       dueReason = 'checkout_abandoned';
       dueLabel = 'Started paying, stopped';
       why = [
-        `Created a ${ab.plan ?? 'plan'} order ${daysAgoLabel(daysAgoAb)} and never completed payment`,
+        `Created a ${stale.plan ?? 'plan'} order ${daysAgoLabel(daysAgoAb)} and never completed payment`,
         'They decided to buy and something stopped them — find out what',
       ];
       action = 'Ask what got in the way: price, trust, or not sure it fits';

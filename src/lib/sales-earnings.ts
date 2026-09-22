@@ -31,18 +31,53 @@ import { readRowsForIds } from '@/lib/truth/batch';
 // null, so every surface is forced to render "terms not set" instead of a
 // confident number the founder might pay — or worse, might not.
 
-/** Percent → paise, rounded to whole rupees, PER LINE. */
-export function incentiveForPaise(amountPaise: number, percent: number): number {
+// ── A GUARANTEED MINIMUM PER PLAN (22 Sep 2026) ────────────────────────────
+//
+// The rate is 10% of what was realised and that rule has not moved. On some
+// plans a FLOOR sits under it, and Till CAT has one at ₹200.
+//
+// WHY IT EXISTS. Cutting Till CAT from ₹2,599 to ₹1,599 took the counsellor's
+// 10% from ₹260 to ₹160 — and in doing so it put the student's interest and
+// the counsellor's on opposite sides for the first time:
+//
+//     student buys          they pay    counsellor earns at 10%
+//     Till CAT               ₹1,599              ₹160
+//     2 × One Month          ₹1,998              ₹200
+//
+// The plan that is cheapest and simplest for the student became the one that
+// pays the person recommending it 25% LESS. That is not a thing to leave
+// standing and cover with trust in someone's character; TRUST-OS is explicit
+// that we do not build a structure where doing right by the student costs the
+// person doing it. Founder, 22 Sep: "Keep his Till CAT incentive at ₹200."
+//
+// It costs ₹40 a sale and it buys back the alignment the price cut removed.
+//
+// THREE RAILS, so a floor can never become a leak:
+//   · It only ever RAISES. A rep on a higher rate keeps their higher number.
+//   · It never applies at a 0% rate. "They earn no commission" is a real
+//     answer (readTerms treats 0 as stated), and a floor must not invent pay.
+//   · It never exceeds what the student actually paid. No incentive may be
+//     larger than the transaction it came from.
+// A refunded line is already zeroed in computePayslip before it reaches here,
+// so the floor cannot resurrect an incentive the refund withdrew.
+export const INCENTIVE_FLOOR_PAISE: Readonly<Record<string, number>> = Object.freeze({
+  [PLANS.tillcat.id]: 20_000,   // ₹200 on Till CAT, where 10% would give ₹160.
+});
+
+/** Percent → paise, rounded to whole rupees, PER LINE, floor applied. */
+export function incentiveForPaise(amountPaise: number, percent: number, plan?: string | null): number {
   // Rounded to the rupee, per conversion, deliberately.
   //
   // 10% of ₹399 is ₹39.90. The engagement letter's own table tells Anshul and
-  // Neelam they earn ₹40 on a single session, ₹100 on a month and ₹260 on
-  // Till-CAT. Rounding per line to the nearest rupee is what reproduces those
-  // three numbers exactly, so a counsellor can check any single row against
-  // the letter in their hand and find it agrees. Rounding the monthly total
-  // instead would drift from the letter by a few rupees and cost more trust
-  // than the rupees are worth.
-  return Math.round((amountPaise * percent) / 100 / 100) * 100;
+  // Neelam they earn ₹40 on a single session and ₹100 on a month. Rounding per
+  // line to the nearest rupee is what reproduces those numbers exactly, so a
+  // counsellor can check any single row against the letter in their hand and
+  // find it agrees. Rounding the monthly total instead would drift from the
+  // letter by a few rupees and cost more trust than the rupees are worth.
+  const earned = Math.round((amountPaise * percent) / 100 / 100) * 100;
+  if (percent <= 0) return earned;
+  const floor = plan ? (INCENTIVE_FLOOR_PAISE[plan] ?? 0) : 0;
+  return Math.max(earned, Math.min(floor, amountPaise));
 }
 
 export interface ConversionLine {
@@ -152,7 +187,9 @@ export function computePayslip(args: {
     // worse conversation than the deduction itself.
     incentivePaise: !terms.stated ? null
       : c.refunded_at ? 0
-      : incentiveForPaise(c.amount_paise, terms.incentivePercent),
+      // The PLAN is passed, not just the amount: the Till CAT floor is a
+      // property of what was bought. Dropping it here would silently pay ₹160.
+      : incentiveForPaise(c.amount_paise, terms.incentivePercent, c.plan),
   }));
 
   const kept = lines.filter((l) => !l.refundedAt);

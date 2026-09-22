@@ -378,16 +378,38 @@ describe('Scenario F — the student who tried to pay and stopped', () => {
       'paid closes a student — an old abandoned attempt is history, not intent').toBeFalsy();
   });
 
-  it('a promise the student made still outranks intent we merely observed', async () => {
-    const { queue } = await buildCallQueue(db([{
-      student_id: 'fresh-1', status: 'follow_up',
-      callback_at: new Date(Date.now() - 3600_000).toISOString(),
-      next_action_at: new Date(Date.now() - 3600_000).toISOString(),
-      last_attempt_at: new Date(Date.now() - 86_400_000).toISOString(),
-      no_answer_count: 0, owner: null,
-    }], { abandonedIds: ['fresh-1'] }), asAdmin);
+  // AMENDED 22 Sep 2026. The original assertion was "a callback they asked for
+  // beats a checkout we observed", and its load-bearing half is kept below: a
+  // promise still outranks an abandoned order the counsellor has already had
+  // the conversation about. What the founder changed is the other case — an
+  // order created AFTER that conversation is not "intent we merely observed",
+  // it is the student acting again, later, and it now jumps the queue.
+  const promised = (lastAttemptAgoMs: number) => ([{
+    student_id: 'fresh-1', status: 'follow_up',
+    callback_at: new Date(Date.now() - 3600_000).toISOString(),
+    next_action_at: new Date(Date.now() - 3600_000).toISOString(),
+    last_attempt_at: new Date(Date.now() - lastAttemptAgoMs).toISOString(),
+    no_answer_count: 0, owner: null,
+  }]);
+
+  it('a promise outranks an abandoned order placed BEFORE that conversation', async () => {
+    // Harness dates the abandoned order `now`, so a last call one minute ago
+    // puts the order firmly before it: already discussed, nothing new.
+    const { queue } = await buildCallQueue(
+      db(promised(-60_000), { abandonedIds: ['fresh-1'] }), asAdmin);
     const lead = queue.find((l) => l.studentId === 'fresh-1')!;
-    expect(lead.dueReason, 'a callback they asked for beats a checkout we observed').toBe('callback');
+    expect(lead.dueReason, 'a callback they asked for beats a checkout already discussed').toBe('callback');
+  });
+
+  it('but an order placed AFTER the conversation outranks the promise', async () => {
+    // Anushka, 21 Sep: said "call me back" on the 20th, scheduled for the 25th,
+    // then opened the payment window at 23:53 and closed it. Waiting four more
+    // days because of a promise she made before that is the defect.
+    const { queue } = await buildCallQueue(
+      db(promised(86_400_000), { abandonedIds: ['fresh-1'] }), asAdmin);
+    const lead = queue.find((l) => l.studentId === 'fresh-1')!;
+    expect(lead.dueReason, 'they reached for their wallet after we spoke').toBe('checkout_abandoned');
+    expect(lead.why.join(' ')).toMatch(/AFTER you last spoke/);
   });
 });
 

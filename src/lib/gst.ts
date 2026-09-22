@@ -21,11 +21,11 @@
 // ── DECISION 1: subscription prices are GST-INCLUSIVE ───────────────────────
 //
 // A Till-CAT price stays exactly what the button said at checkout. The tax is
-// carved OUT of it — on today's ₹2,599 that is base ₹2,203 + GST ₹396 — never
+// carved OUT of it — on today's ₹1,599 that is base ₹1,355 + GST ₹244 — never
 // added on top.
 //
-// A student who taps a ₹2,599 button and lands on ₹3,067 has been surprised by
-// ₹468 at the exact moment they were deciding, and 77% of our checkouts are
+// A student who taps a ₹1,599 button and lands on ₹1,887 has been surprised by
+// ₹288 at the exact moment they were deciding, and 77% of our checkouts are
 // already abandoned. It would also silently invalidate every price we have
 // ever published — the pricing card, the sales script, the Pooja manual.
 // Indian consumer pricing is quoted inclusive by convention; we follow it.

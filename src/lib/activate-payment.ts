@@ -5,7 +5,7 @@ import { grantPremiumAndQueueBuddy } from '@/lib/premium';
 import { logSecurityEvent } from '@/lib/security-log';
 import { emitTimeline } from '@/lib/os/timeline';
 import { sendMetaCapiEvent } from '@/lib/meta-capi';
-import { SESSION_PLAN_ID, SESSION_PRICE_PAISE } from '@/lib/session-credit';
+import { SESSION_PLAN_ID, SESSION_PRICE_PAISE, withdrawCreditForRefund } from '@/lib/session-credit';
 import { MENTOR_FREE_MESSAGES } from '@/lib/mentor-doors';
 import { assignBuddyToCredit } from '@/lib/session-assignment';
 import { dispatch } from '@/lib/notification-os';
@@ -193,6 +193,34 @@ export async function settleRefund(
     .eq('status', 'paid');
   if (error) throw new Error(`Could not mark payment refunded: ${error.message}`);
   await markConversionRefunded(admin, target.paymentId, at);
+
+  // ── FOUR PLACES, NOT THREE (22 Sep 2026) ──────────────────────────────────
+  //
+  // revokePremium covers a PLAN. It does not cover a single session, because a
+  // session's entitlement is not is_premium — it is a row in session_credits.
+  // Nothing in this codebase had ever written status='refunded' onto one. The
+  // state existed and was honoured on READ (two call sites treat it as
+  // terminal) and simply had no writer, which is the quietest shape a defect
+  // takes: every reader agreed on what it meant and none had ever seen one.
+  //
+  // Found via a TEST-ACCOUNT production row, not a student report: of the two
+  // refunded session payments in the ledger, one credit was 'refunded' (set by
+  // hand) and the other still 'assigned'. Both are founder test accounts, so
+  // no real student was affected and nothing is owed to anyone. The defect is
+  // the missing transition, not that row.
+  //
+  // Routed through session-credit.ts rather than written here. This file mints
+  // credits; it does not settle them. A terminal state has to carry an owner
+  // and a next_action, and the authority is the only place that knows that —
+  // the first version of this fix wrote the status directly and the credit
+  // writer guard caught it, correctly.
+  const withdrawal = await withdrawCreditForRefund(admin, target.paymentId);
+  if (withdrawal.error) {
+    // Throws for the same reason as everything else on this path: a refund we
+    // ACKed but never finished is the silent-loss shape this module exists to
+    // prevent. Razorpay redelivers, and the withdrawal is idempotent.
+    throw new Error(`Could not withdraw session credit: ${withdrawal.error}`);
+  }
 }
 
 /**
@@ -374,7 +402,7 @@ async function activateSessionCredit(
   // ever bought and assigned in production (Dhruv Vakadia, 24 Aug) got zero
   // notifications in the ten minutes after paying. The subscription path's
   // own premium-grant helper (lib/premium.ts) already closes this exact
-  // silence for the ₹999/₹2,599 plans; this is its session-credit sibling.
+  // silence for the ₹999/₹1,599 plans; this is its session-credit sibling.
   //
   // Two honest variants, not one. A confirmed mentor is a stronger claim than
   // "we're looking" — and the "still looking" copy promises NO timeframe on

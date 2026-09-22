@@ -220,7 +220,7 @@ describe('one pricing authority, one allowance authority', () => {
   it('the subscription plans are unchanged and all of them are continuous', () => {
     // Read, not assumed: the repo has THREE subscription plans.
     expect(PLANS.monthly.offerPaise).toBe(99900);
-    expect(PLANS.tillcat.offerPaise).toBe(259900);
+    expect(PLANS.tillcat.offerPaise).toBe(159900);
   });
 
   it('the free allowance is three', () => {

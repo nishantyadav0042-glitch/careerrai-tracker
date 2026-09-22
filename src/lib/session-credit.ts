@@ -611,3 +611,80 @@ async function settle(
   if (!released || released.length === 0) return { settled: 'none', reason: 'already_settled' };
   return { settled: 'released', creditId: credit.id as string };
 }
+
+/**
+ * A refund went back — withdraw the entitlement it paid for.
+ *
+ * THE FOURTH PLACE A REFUND HAS TO REACH (22 Sep 2026). The refund path
+ * revoked premium, took the payment out of the paid ledger and withdrew the
+ * counsellor's incentive. A single session is none of those things: its
+ * entitlement is a row here. Nothing had ever written status='refunded' onto
+ * one — the value was in CreditStatus and two readers already treated it as
+ * terminal, so every reader agreed what it meant and none had ever seen one.
+ *
+ * HOW IT WAS FOUND, stated precisely because the distinction matters to the
+ * incident record: a TEST-ACCOUNT production row exposed it. Of the two
+ * refunded session payments in the ledger, one credit was 'refunded' (set by
+ * hand) and the other was still 'assigned'. Both belong to founder test
+ * accounts. NO REAL STUDENT WAS AFFECTED and there is no compensation
+ * exposure — this is a latent defect found in production data, not a customer
+ * incident. What makes it worth fixing is not that row: it is that there was
+ * no writer for this state ANYWHERE, so the next real refund would have left
+ * a redeemable credit.
+ *
+ * Lives HERE, not in the refund path, because this file is the terminal
+ * writer: rule (9) says a terminal credit owes nobody anything, so the owner
+ * and next_action are cleared with the status in the same write. A version of
+ * this that set the status alone from activate-payment.ts was caught by the
+ * credit-writer guard, which was right to.
+ *
+ * NEVER THROWS, like everything else here — the caller decides whether a
+ * failure should 500 the webhook. Idempotent: excluding the terminal states
+ * makes a redelivered refund match zero rows.
+ */
+export async function withdrawCreditForRefund(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: { from: (t: string) => any },
+  paymentId: string,
+): Promise<{ withdrawn: string[]; kept: Array<{ id: string; why: string }>; error?: string }> {
+  try {
+    const { data: done, error } = await admin
+      .from('session_credits')
+      // Rule (9): a terminal credit owes nobody anything.
+      .update({ status: 'refunded', owner: null, next_action: null })
+      .eq('payment_id', paymentId)
+      // A session already DELIVERED is not withdrawn: the mentor did the work
+      // and the student had the value. Clawing that back is a founder's
+      // decision, not a side effect of a webhook. Excluding 'refunded' is what
+      // makes a redelivery a clean no-op.
+      .not('status', 'in', '("completed","refunded")')
+      // A credit already spent as a discount toward a plan has moved its value
+      // into a different purchase; unpicking that from here would be guessing.
+      .is('credited_to_payment_id', null)
+      .select('id');
+    if (error) return { withdrawn: [], kept: [], error: error.message };
+
+    const withdrawn = (done ?? []).map((r: { id: string }) => r.id);
+
+    // A credit that SURVIVED the withdrawal is not an error, but it is money
+    // that went back while the entitlement stayed. Being silent about that is
+    // the original defect, so it is reported rather than assumed away.
+    const { data: rows } = await admin
+      .from('session_credits')
+      .select('id, status, credited_to_payment_id')
+      .eq('payment_id', paymentId);
+    const kept = (rows ?? [])
+      .filter((r: { id: string }) => !withdrawn.includes(r.id))
+      .map((r: { id: string; status: string; credited_to_payment_id: string | null }) => ({
+        id: r.id,
+        why: r.credited_to_payment_id != null ? 'already spent as a discount' : `status=${r.status}`,
+      }));
+    for (const k of kept) {
+      console.warn(`[refund] payment ${paymentId} refunded but credit ${k.id} NOT withdrawn (${k.why}) — needs a human decision`);
+    }
+    return { withdrawn, kept };
+  } catch (err) {
+    console.error('[withdrawCreditForRefund] threw for payment', paymentId, err);
+    return { withdrawn: [], kept: [], error: err instanceof Error ? err.message : String(err) };
+  }
+}

@@ -8,7 +8,19 @@
 //
 //     Single session   ₹499  →  ₹399     SESSION_PRICING (below)
 //     Monthly          ₹1,299 → ₹999     PLANS.monthly
-//     Till CAT day     ₹3,999 → ₹2,599   PLANS.tillcat
+//     Till CAT day     ₹3,999 → ₹1,599   PLANS.tillcat
+//
+// TILL CAT CUT 2,599 → 1,599 ON 22 SEP 2026, and the reason is the calendar
+// rather than a campaign. Founder: "we are now in September end and 2599 is
+// more amount than per month 999 as CAT is in November end." He is right, and
+// the old price had quietly become irrational: with roughly two months left to
+// the exam, Till CAT at 2,599 cost MORE than buying the two months it covers
+// at 999 each. A student doing that arithmetic finds the hero plan is the
+// expensive one, and the honest response is to move the price, not the copy.
+//
+// `months` is deliberately NOT cut with it. Four months from today runs past
+// CAT, which over-delivers; two months would expire in late November, which
+// would break the one promise the product's name makes.
 //
 // Founder, 27 Aug 2026. There is no annual plan, no quarterly, no half-year
 // and no campaign price. Those existed and are gone: quarterly and half-year
@@ -34,7 +46,7 @@ export const PLANS = {
   // moment the runway is short. months:4 ≈ late-July → late-Nov (CAT).
   tillcat: {
     id: 'tillcat', label: 'Till CAT', months: 4,
-    offerPaise: 259900, display: '₹2,599',
+    offerPaise: 159900, display: '₹1,599',
     listPaise:  399900, listDisplay: '₹3,999',
     tagline: 'Your buddy till exam day', recommended: true, journey: true,
   },
