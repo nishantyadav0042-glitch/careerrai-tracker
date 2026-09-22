@@ -372,3 +372,36 @@ It is read-only, needs no new instrumentation, and is the only way to learn
 whether the tick finding survives when undone ticks are counted. If it holds on
 the instrumented cohort, it is real. If it collapses, we were reading a deletion
 artifact — and we would have built on it.
+
+---
+
+## 12. The provenance standard (binding)
+
+Founder, 22 Sep. Every product claim must be able to traverse this chain:
+
+> **What happened in the UI? → What event recorded it? → What server action
+> happened? → What DB state proves it? → What does that state NOT prove?**
+
+**If the chain cannot be traversed, the claim is labelled NOT ESTABLISHED.**
+Not "probably", not "suggests" — NOT ESTABLISHED.
+
+Three forms of self-deception were caught in a single day, and this standard
+exists because each one produced a confident, plausible, wrong number:
+
+1. **Wrong event name → invented absence.** A sequence query tokenised the task
+   tick as `task_complete`, which is never emitted. The empty column read as a
+   finding.
+2. **Current-state table → invented history.** `routine_task_completions` is a
+   toggle; undone ticks leave nothing. "Only N ever ticked" was a floor
+   presented as a count.
+3. **Proxy read as reality.** `study_duration > 0` is self-report or credited
+   hours. It was reported as "studied".
+
+Two operational rules follow, and they are cheap:
+
+- **Check every event name against `src/lib/journey.ts` before the query runs.**
+  The union is necessary but not sufficient — 7 events fire that are not in it,
+  so also confirm the name appears in `student_events`.
+- **Never read absence from a table that supports deletion.** Ask what the
+  table forgets before asking what it shows.
+

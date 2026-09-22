@@ -783,6 +783,102 @@ study is **not distinguished by this data**, and the instrumentation gap in
 
 ---
 
+## 15. Falsification test on the instrumented cohort (>= 19 Aug)
+
+Read-only. Run because §14's tick finding rested on `routine_task_completions`,
+which the Behavioural Truth Map established is **toggle state, not an
+interaction record** — untick deletes the row.
+
+**Cohort:** 1,209 real students narrowed to the **746** who signed up on or
+after **19 Aug 2026**, the date `completion_write` began. Their entire task
+history is instrumented. A = 52 repeat, B = 83 one-time, C = 611 no study.
+
+**Attempts vs surviving rows, measured:** 123 students ever attempted a task
+(`completion_write`); 101 have a surviving row; **22 attempted and have no
+surviving row.** The old method mislabels those 22 as non-tickers — an **18%
+undercount** of task interaction in this cohort alone.
+
+### The four arms, forward outcome
+
+Day-0 behaviour (first 24 h) against **real study recorded on a day >= signup+2**
+— an outcome day-0 behaviour cannot have written.
+
+| Day-0 study-path behaviour | n | studied day 2+ | 95% CI |
+|---|---|---|---|
+| **1. task attempted, row survived** | 57 | **40.4%** | [27.6, 53.1] |
+| **2. task attempted, row undone** | 26 | **19.2%** | [4.1, 34.4] |
+| **3. log opened, no task attempt** | 231 | **10.8%** | [6.8, 14.8] |
+| **4. neither** | 432 | **4.6%** | [2.6, 6.6] |
+
+Pairwise:
+
+| comparison | difference | p |
+|---|---|---|
+| survived vs log-open-only | **+29.5pp** [16.2, 42.9] | **<0.001** |
+| survived vs undone | **+21.1pp** [1.3, 40.9] | **0.036** |
+| log-open-only vs neither | **+6.2pp** [1.7, 10.7] | **0.007** |
+| **undone vs log-open-only** | **+8.4pp** [−7.3, +24.1] | **0.293 — NOT significant** |
+
+### Verdict
+
+**The finding SURVIVES**, on the instrumented cohort, with a forward outcome,
+using attempts rather than surviving rows. A completed task attempt that the
+student kept is the strongest day-0 signal available: **40.4% against 10.8%**
+for opening the log, **p < 0.001**.
+
+**With one correction.** An **undone** attempt is **not** distinguishable from
+merely opening the log (+8.4pp, p = 0.293). The distinction that carries the
+information is not *attempted* versus *not attempted* — it is **attempted and
+kept** versus everything else. An earlier verbal reading of this table, that an
+undone tick carried ~1.8x the signal of a log-open, **over-read a difference
+whose confidence interval spans zero** and is withdrawn here.
+
+### The transition test — a clean null
+
+Founder's hypothesis: *"Repeaters don't simply tick more. They behave
+differently immediately after the first tick."*
+
+Dominant next transition in **both** A and B is another `completion_write` at a
+**median of 2 seconds** — a burst. Shape of that burst, within 10 minutes of
+the first attempt:
+
+| | A repeat (50) | B one-time (69) | difference | p |
+|---|---|---|---|---|
+| writes in 10 min | 2.3 | 2.3 | — | — |
+| distinct tasks touched | 1.9 | 1.8 | — | — |
+| only one task touched | 66% | 67% | −0.7pp | 0.94 |
+| closed the day in that burst | 78% | 80% | −1.7pp | 0.82 |
+| churned the same task | 26% | 32% | −5.9pp | 0.48 |
+
+**NOT SUPPORTED. Repeat learners and one-time learners are indistinguishable in
+the first task burst**, on every measure available.
+
+### What this decomposes into — the useful part
+
+- **The first kept task attempt separates "will study at all" from "won't."**
+  Strong, forward, non-circular, and it survived falsification.
+- **Nothing in the first task burst separates "will repeat" from "will study
+  once."** Those two groups behave identically at the moment we can observe
+  best.
+
+**Therefore the A/B divergence — the one that matters for a habit — happens
+somewhere this data does not reach.** That is a precise result, not a failure:
+it says the repeat question is not answerable at the first tick, and the next
+investigation must look at the interval *between* a first study day and a
+second, which is exactly where the product currently has no observability at
+all (Truth Map §4: no study-session concept, no continuation evidence).
+
+### Cohort C, recorded but not read
+
+Only **4** never-studied students in this cohort ever attempted a task.
+**4 of 4 hit a failed write; 0 of 4 closed a day.** Consistent with the
+technical-failure hypothesis (H7). **n = 4. WE DO NOT KNOW.** It is recorded so
+it can be re-tested when the cohort grows, not so it can be cited.
+
+**No build, no instrumentation, no redesign.**
+
+---
+
 ## Note on identifiers in this document
 
 Student names and phone numbers are **deliberately absent**. This repository is
