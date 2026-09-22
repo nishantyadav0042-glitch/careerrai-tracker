@@ -203,9 +203,11 @@ export async function settleRefund(
   // terminal) and simply had no writer, which is the quietest shape a defect
   // takes: every reader agreed on what it meant and none had ever seen one.
   //
-  // Found in production: of two refunded session payments, one credit was
-  // 'refunded' (set by hand) and the other still 'assigned' — redeemable by a
-  // student whose money had already gone back.
+  // Found via a TEST-ACCOUNT production row, not a student report: of the two
+  // refunded session payments in the ledger, one credit was 'refunded' (set by
+  // hand) and the other still 'assigned'. Both are founder test accounts, so
+  // no real student was affected and nothing is owed to anyone. The defect is
+  // the missing transition, not that row.
   //
   // Routed through session-credit.ts rather than written here. This file mints
   // credits; it does not settle them. A terminal state has to carry an owner

@@ -6790,3 +6790,129 @@ executes is a file with no tests, whatever the greps say.** `sw-chat-collapse.te
 already boots and runs `sw.js` in a harness; that harness is where a beacon's
 TIMING belongs, not only its presence, and it is the only reason the amended
 counts above could be verified at all.
+
+## Incident #103 — a refund never withdrew the session credit, and the state had no writer (22 Sep 2026)
+
+**Severity:** P2 (Trust / Payments integrity). **Impact: ZERO students. No
+customer incident, no compensation exposure.** This was a **latent defect
+discovered using a test-account production row** — not a case of a real
+student using a session they had been refunded for. Founder's own framing,
+adopted verbatim into this record because the distinction matters to the
+incident history:
+
+> The refund path was incomplete. A test-account production row exposed that
+> `settleRefund` did not revoke the associated `session_credits` entitlement.
+> No real student was affected.
+
+### What was found
+
+Cross-checking the whole payment journey end to end at the founder's
+instruction — "take charge as founder and properly cross check everything is
+working" — rather than in response to any report.
+
+`settleRefund`'s own docstring says a refund "has to reach three places now,
+not one": revoke premium, take the payment out of the paid ledger, withdraw
+the counsellor's incentive. **It is four.**
+
+`revokePremium` covers a PLAN. A single session's entitlement is not
+`is_premium` at all — it is a row in `session_credits`. And **nothing in this
+codebase had ever written `status = 'refunded'` onto one.**
+
+The value was in the `CreditStatus` union. Two call sites already treated it as
+terminal on read (`session-credit.ts` lines 401 and 560). Every reader agreed
+on what it meant and **not one of them had ever seen one**, because the state
+had no writer anywhere.
+
+The two refunded session payments in production:
+
+| payment | credit status | reading |
+|---|---|---|
+| 20 Aug, Rs 299 | `refunded` | manually corrected test data |
+| 4 Sep, Rs 399 | `assigned` | test-account evidence exposing the missing transition |
+
+Both belong to founder test accounts. The 4 Sep row is not the finding — it is
+the *evidence*. The finding is that the transition did not exist, so the first
+real single-session refund would have left a redeemable credit.
+
+### Why it was invisible
+
+This is the quietest shape a defect takes: **not a wrong answer, an unreachable
+state.** There was nothing to notice. No reader misbehaved, no query returned
+the wrong thing, no test failed — every consumer correctly honoured a value
+that was never produced. A defect that manifests as a wrong number gets caught
+by someone reading the number. A defect that manifests as a state never being
+entered is only caught by asking "who writes this?" and finding nobody does.
+
+Session purchases are also the entry rung the product pushes hardest, so the
+path with the missing transition is the one most likely to see volume next.
+
+### The fix, and where it belongs
+
+The first version wrote `status = 'refunded'` directly from
+`activate-payment.ts`. The credit-writer guard failed it, and was right twice:
+
+1. that file **mints** credits and never settles one — the guard's declared
+   ownership table says so explicitly;
+2. a terminal credit must also have `owner` and `next_action` cleared
+   (rule 9, "a terminal credit owes nobody anything"), which the direct write
+   did not do.
+
+So the transition lives in `session-credit.ts`, the declared terminal writer,
+as `withdrawCreditForRefund`, and the refund path calls it. **The guard caught
+an architectural mistake that the tests would have passed.**
+
+Two credits are deliberately NOT withdrawn, and both are reported rather than
+assumed away:
+
+- a **completed** session — the mentor did the work and the student had the
+  value, so clawing it back is a founder's decision, not a webhook's;
+- a credit already spent as a **discount** toward a plan — its value moved into
+  another purchase, and unpicking that from here would be guessing.
+
+Either case logs a warning naming the credit and why it survived. Money going
+back while the entitlement stays is precisely what nobody could see before, and
+being silent about it a second time would repeat the defect in a new place.
+
+Idempotent by construction: excluding the terminal states makes a redelivered
+refund match zero rows. The caller throws on failure so Razorpay redelivers —
+an ACKed refund we never finished is the silent-loss shape the module exists to
+prevent.
+
+### Production state
+
+The one affected row was backfilled using the code's own semantics, as a
+generalised statement rather than a hand-edit of an id — it corrects any row
+the defect could have left and today matched exactly one. Done to make
+production internally consistent, **explicitly not as remediation of a customer
+incident**. Three invariants verified clean afterwards: no refunded payment
+with a live credit, no terminal credit still owning an action, no paid session
+without a credit.
+
+### What else was verified in the same pass and NOT changed
+
+Stated because a payment audit that reports only its one finding leaves the
+reader unable to tell thorough from lucky:
+
+- order creation derives the amount server-side from the authority; the browser
+  sends a plan id and never an amount;
+- a stale order is reused only when its amount equals the CURRENT price and it
+  is under 30 minutes old — so the 16 open orders at the old Till CAT price
+  cannot be resumed after the cut; they fall through and a fresh order is
+  minted;
+- `create-order` is the only path that hands an order id to a client;
+- both inbound paths verify signatures with `timingSafeEqual`;
+- activation is guarded by a status precondition AND a UNIQUE constraint on
+  `session_credits.payment_id` (after a real double-mint on the first Rs 299
+  payment, 12 ms apart);
+- the service worker caches nothing, so no device can hold a stale price page.
+
+### The lesson, with teeth
+
+**A state in a union type with no writer is a defect, not a design.** Grep for
+the writer of every terminal state before trusting that a lifecycle closes.
+
+Encoded: `refund-withdraws-credit.guard.test.ts` — 12 tests against an
+in-memory table that actually applies the query's filters, so they assert what
+the query does to ROWS rather than which methods were called. A shape-only
+assertion passes against a filter that matches nothing. Verified to fail
+against the defect: 5 of 12 red when the write is removed.

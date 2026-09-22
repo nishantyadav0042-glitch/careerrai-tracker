@@ -19,8 +19,11 @@ import { settleRefund } from './activate-payment';
 // them had ever seen one. That is the quietest shape a defect takes.
 //
 // Production at the time: two refunded session payments, one credit correctly
-// 'refunded' (set by hand) and one still 'assigned' — redeemable by a student
-// whose money had already gone back.
+// 'refunded' (set by hand) and one still 'assigned'. BOTH are founder test
+// accounts — this was a latent defect exposed by a test-account row, not a
+// case of a real student using a session they had been refunded for. The
+// severity is in the missing transition, which every future refund would have
+// hit, rather than in the row that revealed it.
 
 type Row = Record<string, unknown>;
 

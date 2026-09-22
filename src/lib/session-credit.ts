@@ -622,8 +622,15 @@ async function settle(
  * one — the value was in CreditStatus and two readers already treated it as
  * terminal, so every reader agreed what it meant and none had ever seen one.
  *
- * Found in production: two refunded session payments, one credit correctly
- * 'refunded' (by hand) and one still 'assigned' and redeemable.
+ * HOW IT WAS FOUND, stated precisely because the distinction matters to the
+ * incident record: a TEST-ACCOUNT production row exposed it. Of the two
+ * refunded session payments in the ledger, one credit was 'refunded' (set by
+ * hand) and the other was still 'assigned'. Both belong to founder test
+ * accounts. NO REAL STUDENT WAS AFFECTED and there is no compensation
+ * exposure — this is a latent defect found in production data, not a customer
+ * incident. What makes it worth fixing is not that row: it is that there was
+ * no writer for this state ANYWHERE, so the next real refund would have left
+ * a redeemable credit.
  *
  * Lives HERE, not in the refund path, because this file is the terminal
  * writer: rule (9) says a terminal credit owes nobody anything, so the owner
