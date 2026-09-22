@@ -166,6 +166,45 @@ it can: it has localised the failure but cannot explain the mechanism.
 **Do not change the product first.** A narrow hypothesis is exactly what earns
 qualitative evidence rather than a guess.
 
+### The interview protocol (founder, 22 Sep)
+
+Open without a theory:
+
+> "You signed up for CareerRai a little while ago. I'm trying to understand
+> what you did when you first opened it. Can you walk me through what you
+> remember doing after you opened it?"
+
+Then reconstruct, in order: what were you expecting · what did you do first ·
+what did you see on the study-plan screen · what did you do after that · at
+what point did you stop · what were you going to do next · why didn't you do
+that.
+
+**Contamination rules, binding:**
+
+- **Never tell a student why they were selected.** Not the minutes, not the
+  scroll depth. Naming the evidence hands them the answer.
+- **"I don't remember" is evidence. Do not rescue it** by offering candidate
+  answers.
+- **Do not lead with a product theory** — including the tempting one. 21 of
+  the 28 reached 100% scroll, so visual discoverability is *not* the
+  established blocker.
+- **Keep the space open:** understanding · plan relevance · action clarity ·
+  effort · trust · technical failure · interruption · something else. The
+  interviews exist to collapse that uncertainty, not to confirm a pick from it.
+- **Do not redesign after one or two calls.** Wait until several independently
+  point at the same mechanism, or reveal competing ones.
+
+### Known limit of this cohort — recall age
+
+26 of the 28 visited **15–29 days** before the interview date; only two fall
+inside two weeks. "I don't remember" therefore carries two readings that this
+cohort cannot separate — an unmemorable experience, and ordinary forgetting.
+Order the calls by recency, not by dwell, and treat the freshest as the
+highest-fidelity reconstructions.
+
+A date-and-weekday anchor ("a Sunday evening, around the 6th") aids recall
+without suggesting an answer. Dwell and scroll do not.
+
 ---
 
 ## Reproducibility
