@@ -64,16 +64,47 @@ weeks of its return. The daily report is the record.
 
 ## Daily report (08:30 IST, 24–30 Sep)
 
-1. Sample: episodes, returns, and how many returns carry instrumentation.
-2. New A / B / C since yesterday.
-3. First-action distribution by cohort, raw counts.
-4. Seconds to first action and to first task, by cohort, median plus raw values while N < 10.
-5. The earliest point at which A and B differ, or "no divergence visible".
-6. Limitations and data-quality notes, including instrumentation coverage and any pipeline gap.
-7. Hypotheses, only where the counts support one, labelled INFERRED.
+**Amendment 1, 23 Sep 04:10 UTC, before the first report ran.** This changes
+the report format and adds the archive rule. It does not change any
+definition.
 
-Also checked each day, without analysis: `app_resume` volume, since it is the
-signal most likely to be silently broken.
+### The archive is the record
+
+Every run commits `docs/day2-observation/episodes-YYYY-MM-DD.csv` to this
+branch: one row per episode, holding every column the query returns. That
+means an 8-character pseudonymous id (no name, phone or email), D1, cohort,
+D2, entry kind, launch, session_new, surface, seconds to first tap, the first
+tap's label and category, seconds to first task, the five 120-second flags,
+and studied_later. Earlier files are never edited. A cohort that changes
+later (for example, pending to A) appears in the next day's file, so every
+Day-7 number can be traced to the rows and the date that produced it after
+the underlying `tap` rows are swept.
+
+### Format (brief; no recommendations)
+
+```
+Day-2 Observation — Day N (YYYY-MM-DD)
+Sample: eligible episodes · pending · A repeat · B returned/no recorded study · C gone
+First 120 s (by cohort, raw counts): first action · median s to first action ·
+  task · resource · log · exit
+Earliest divergence: one sentence, or "none yet"
+Evidence quality: N, cells < 10 flagged "directional only", limitations
+Founder conclusion — exactly one of:
+  Evidence emerging — continue observation
+  Ambiguous — instrument, don't build
+  Mechanism sufficiently supported — candidate experiment
+Pipeline: app_resume rows · app_open rows with launch
+```
+
+The daily report states what happened. It never proposes what to build.
+Interpretation belongs to the Day-7 memo only. Before any pattern is
+called a divergence, it must pass these checks: was the cut pre-registered,
+does it repeat across days, could launch route or surface explain it, and is
+it plausibly a marker of motivation that existed before the return rather
+than something that happened after it.
+
+`app_resume` is not debugged unless it is still zero at a point when hidden
+exits followed by 30-minute absences are visible in the data.
 
 ## Day-7 decision memo (30 Sep)
 
