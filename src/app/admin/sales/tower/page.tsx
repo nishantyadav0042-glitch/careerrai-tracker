@@ -9,6 +9,10 @@ import { TeamYesterday } from '@/components/admin/team-yesterday';
 import { teamYesterday } from '@/lib/sales-yesterday';
 import { getTeamCapacity } from '@/lib/sales-capacity';
 import { repAllocationLimit, EMPLOYMENT_LABEL, REFUSAL_COPY } from '@/lib/sales-rep-provisioning';
+// The band is DERIVED, never retyped. This line read "50–70" for weeks after
+// DAY_CEILING moved to 120 (Incident #105): a human-facing operational belief
+// that is not read from the system's authority will drift away from it.
+import { DAY_FLOOR, DAY_CEILING } from '@/lib/os/scale-config';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Sales Control Tower · CareerRai' };
@@ -236,7 +240,8 @@ export default async function SalesControlTower() {
         </div>
       )}
       <p className="mt-1 text-[11px] text-stone-500">
-        The day is 50–70 per counsellor, dealt from 4 AM IST: signals first, then rotation through everyone untouched for 21 days.
+        The day is {DAY_FLOOR}–{DAY_CEILING} per counsellor, assembled when he first opens the list — the book behind it is
+        topped up at 4 AM IST. Signals first, then rotation through everyone untouched for 21 days.
         &ldquo;Given&rdquo; is what the system offered; &ldquo;worked&rdquo; is a logged outcome, never a tap. Worked + skipped +
         unmarked always equals given — every card ends the day marked, and the 21:45 IST sweep records the ones nobody touched.
       </p>
