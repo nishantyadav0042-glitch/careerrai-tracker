@@ -117,7 +117,19 @@ describe('the onboarding mapping exists in exactly one place', () => {
     // surface — so it is recorded here as a KNOWN second writer rather than
     // quietly excluded. What this assertion buys is that no THIRD one appears,
     // and that the pre-auth mapping never gets copied.
+    //
+    // WIDENED 23 Sep 2026, knowingly, to a third entry:
+    //   · api/student/post-signup/route.ts — the Home "Edit plan" sheet. It is
+    //     NOT a draft mapping: it edits ONE answer at a time, after onboarding,
+    //     each whitelisted and validated on its own (date, hours through
+    //     setDailyHours, and now CAT year and focus section, because students
+    //     told the sales team they could not change either). It trips this
+    //     fingerprint because a chosen focus section must also record
+    //     self_report_status = SELECTED_SECTION, or the two columns disagree.
+    //     The pre-auth mapping is still in exactly one place; a FOURTH writer
+    //     still fails.
     expect(writers.sort(), 'a new place now writes onboarding columns to profiles').toEqual([
+      'app/api/student/post-signup/route.ts',
       'app/student/onboarding/onboarding-modal.tsx',
       'lib/onboarding-apply.ts',
     ]);
