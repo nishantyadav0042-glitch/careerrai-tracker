@@ -130,6 +130,37 @@ How the observation treats it (no definition changes):
   `plan_focus_*`, `plan_add_timetable`, `how_it_works_link`) are listed as
   observed, not as first-action categories; they fall under "other".
 
+## Amendment 3 — the Amendment 2 change was withdrawn before any student saw it (23 Sep, 19:31 UTC)
+
+Founder decision, 23 Sep, option A: roll back PR #217, keep PR #218. Recorded
+in the founder's words: **we are not rolling back because the #217 changes are
+bad; we are rolling them back because we have not earned the right to change
+the experiment yet.** They may return on 1 Oct, shipped against this week's
+baseline.
+
+- PR #219 (`eae950d`), production deployment
+  `dpl_6K91uXJ7cMEq5H7mVeQdSUsV1jdz`, READY 23 Sep 19:31 UTC. The Home card,
+  the edit sheet and the routine card are byte-identical to before #217, and
+  /how-it-works returns 404.
+- Exposure to #217: it was live 18:47 to 19:31 UTC. **Zero student events of
+  any kind** were recorded in that window, so no episode saw it.
+- Therefore Amendment 2's `post_change` split and its new-tap-label rule are
+  **void**. Returns are not split at 18:47 UTC, and no `plan_year_*`,
+  `plan_focus_*`, `plan_add_timetable` or `how_it_works_link` taps can occur.
+
+What stays changed during 24–30 Sep: only PR #218's bug fixes. Neither changes
+what a returning student sees first.
+- **Exam year.** The 13 students whose finish date implies CAT 2027 now count
+  down to 2027. Their ids are in admin_audit_log, action
+  `attempt_year_backfilled_from_finish_date`. Mark their episodes
+  `examyear_corrected`, report them, and never exclude them.
+- **Timetable scanner quota.** It was 6 an hour; it is now 16 an hour and 32 a
+  day. This touches only students who upload a timetable.
+
+Standing rule from here on: a BUG (the product breaks its intended
+behaviour) is fixed during a freeze. A DESIGN GAP (it works as designed and
+students struggle) is observed.
+
 ## Day-7 decision memo (30 Sep)
 
 Established behaviour · strongest plausible mechanism · competing
