@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { setDailyHours } from '@/lib/daily-hours';
 import { serverError } from '@/lib/api-error';
-import { selectableCatCycles } from '@/lib/cat-cycle';
+import { selectableCatCycles, impliedAttemptYear } from '@/lib/cat-cycle';
 
 const FOCUS_SECTIONS = ['VARC', 'DILR', 'QA'] as const;
 
@@ -74,6 +74,25 @@ export async function POST(request: NextRequest) {
   }
 
   const admin = createAdminClient();
+
+  // ── A NEW FINISH DATE NEVER LEAVES THE EXAM YEAR UNKNOWN (sprint, 23 Sep) ──
+  //
+  // When a student with NO stored exam year saves a finish date, store the
+  // year that date implies (impliedAttemptYear). Without this the year stays
+  // NULL, every reader falls back to the calendar year, and a finish date in
+  // 2027 is shown a CAT 2026 countdown. A year the student already chose is
+  // never touched here: they can change it themselves, and an explicit
+  // answer outranks an inference.
+  if (typeof update.syllabus_target_date === 'string' && update.attempt_year === undefined) {
+    const { data: cur } = await admin.from('profiles').select('attempt_year').eq('id', user.id).maybeSingle();
+    if (cur && cur.attempt_year == null) {
+      const implied = impliedAttemptYear(update.syllabus_target_date);
+      // Only a cycle the product can still honour — the same set the student's
+      // own year picker offers. A past or far-future date stores nothing.
+      const open = selectableCatCycles(new Date(), 3).map((c) => c.year);
+      if (implied != null && open.includes(implied)) update.attempt_year = implied;
+    }
+  }
 
   // A DATE CHANGE NO LONGER TOUCHES THE HOURS.
   //
