@@ -106,6 +106,30 @@ than something that happened after it.
 `app_resume` is not debugged unless it is still zero at a point when hidden
 exits followed by 30-minute absences are visible in the data.
 
+## Amendment 2 — the product changed mid-observation (23 Sep, 18:47 UTC)
+
+Founder decision, 23 Sep: ship the fixes for app problems students reported
+to the sales team today rather than after 30 Sep, knowing it changes what
+returning students see. Deployed as PR #217 (`184b141`), production
+deployment `dpl_2AkkWMMX3i9kEeCnTycxm5hPeGp7`, READY 23 Sep 18:47 UTC.
+
+What changed on screen:
+- Home card counts down to a named CAT year; its button now reads "Edit plan"
+  (tap label unchanged: `reschedule`).
+- The edit sheet lets a student pick their CAT year and the section the plan
+  leads with, and opens the timetable upload.
+- The plan card's first-timer hint links to a new public page, /how-it-works.
+
+How the observation treats it (no definition changes):
+- Every episode whose return falls after 18:47 UTC on 23 Sep is flagged
+  `post_change` in the daily report and the memo.
+- Pre- and post-change returns are reported side by side, never pooled, and
+  neither half is read as the effect of the change: 7 days, split in two, is
+  not a test.
+- New tap labels that appear only after the change (`plan_year_*`,
+  `plan_focus_*`, `plan_add_timetable`, `how_it_works_link`) are listed as
+  observed, not as first-action categories; they fall under "other".
+
 ## Day-7 decision memo (30 Sep)
 
 Established behaviour · strongest plausible mechanism · competing
