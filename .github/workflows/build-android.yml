@@ -6,6 +6,11 @@ name: Build Android app (Play Store)
 on:
   workflow_dispatch: {}
 
+# Least privilege (security review, 22 Sep 2026). Checkout + java + upload-artifact. upload-artifact v4 uses the ACTIONS runtime
+# token, not GITHUB_TOKEN, so read is sufficient.
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest

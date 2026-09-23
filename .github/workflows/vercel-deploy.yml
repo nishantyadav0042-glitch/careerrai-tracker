@@ -31,6 +31,10 @@ env:
   VERCEL_ORG_ID: team_A1UBxPMxuPnMiXsWP094LD35
   VERCEL_PROJECT_ID: prj_u0nHt9NEO8a5UmItuDe3ESA4dFh7
 
+# Least privilege (security review, 22 Sep 2026). Checkout + node, then the Vercel CLI with its own VERCEL_TOKEN. No GitHub API write.
+permissions:
+  contents: read
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
