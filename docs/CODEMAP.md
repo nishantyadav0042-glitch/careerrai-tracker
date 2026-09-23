@@ -371,6 +371,18 @@ and most have a guard test that fails the build if violated.
    *Guard: `population-cap.guard.test.ts` — a shrink-only baseline of the
    files still unmigrated; a NEW unbounded read fails the build.*
    (Incident #65)
+11. **Every new table says who may reach it.** From 30 Oct 2026 Supabase no
+   longer grants a new `public` table to `anon` / `authenticated` /
+   `service_role` by default; without a GRANT the Data API refuses it, and
+   PostgREST reports that as an `error` field, not a throw — so an unchecked
+   read sees an empty table, not a broken one (the shape of Incident #104).
+   The migration that creates a table therefore also grants it:
+   `service_role` always; `authenticated` only when the browser genuinely
+   reads it, and then only with row-level security enabled in the same
+   file; `anon` almost never, same condition. Older migrations are
+   grandfathered — their tables already hold grants in production.
+   *Guard: `migration-table-grants.guard.test.ts` (every migration after
+   `20260923a`).*
 
 ---
 
@@ -382,6 +394,10 @@ npx tsc --noEmit && npx vitest run && npm run lint    # the gate — ALWAYS &&-c
 ```
 - **Ship path:** feature branch → `npx tsc --noEmit && npx vitest run && npm run lint`
   → merge to `main` → Vercel auto-deploys careerrai.in (~60s). Verify READY.
+- **New table?** Grant it in the same migration (invariant 11):
+  `grant select, insert, update, delete on public.<t> to service_role;` and,
+  only if the browser reads it, `enable row level security` plus a narrow
+  grant to `authenticated`.
 - **Schema changes:** apply via Supabase MCP / dashboard AND write the same SQL
   to `supabase/migrations/` with a comment saying why. Both, always.
 - **Debugging production:** audit log → student_events → Vercel runtime
