@@ -324,6 +324,23 @@ export type EventName =
   // here touches permission or subscription, only navigation.
   | 'reopen_nudge_shown' | 'reopen_nudge_dismissed'
   | 'shield_intro_shown'
+  // ── The Restore funnel's three unobservable steps (23 Sep) ───────────────
+  //
+  // Declared BEFORE first use, per docs/BEHAVIORAL-TRUTH-MAP.md §12. Only the
+  // steps that are NOT already derivable: a completed restore is provable from
+  // streak_data.restored_dates, a spend from shields < 3, and what happened
+  // afterwards from daily_reports. Exposure, intent and failure are provable
+  // from nothing, so only those three are added.
+  //
+  // Categories are deliberate and must not be conflated:
+  //   restore_shown   IMPRESSION — the product showed it; the student did nothing
+  //   restore_tapped  ACT        — the student chose
+  //   restore_failed  ERROR      — the choice did not land
+  //
+  // There is no `restore_succeeded`: success already leaves a durable row, and
+  // a second record of it would be one more number that can drift from the
+  // table it duplicates.
+  | 'restore_shown' | 'restore_tapped' | 'restore_failed'
   | 'buddy_plan_click' | 'buddy_unlock_open'
   // Independence Day campaign (12 Aug): one funnel, measured end to end —
   // card seen → clicked → offer page → checkout (pay_* above carries the rest).
