@@ -230,6 +230,17 @@ const KNOWN_PARKED_MODULES: Record<string, string> = {
     'they cannot see the code; they pass. Wiring it into product code is not ' +
     'the way out and never will be: the way out is deleting it, once no guard ' +
     'needs to read source as text.',
+  'src/lib/os/day-bridge.ts':
+    'PARKED 22 Sep (Day-1 → Day-2 mission). The one derivation of what a ' +
+    'study day left a student with and whether their return resumed it — ' +
+    'pure, tested, and the authority for the classification the founder ' +
+    'report uses. Unwired because the FIRST report was produced from ' +
+    'production with docs/sql/day1-day2-bridge-bootstrap.sql before any ' +
+    'reader existed, and a reader needs the new app_open{session_new, ' +
+    'launch} / app_resume rows to be at least a week old to say anything. ' +
+    'UNPARK by writing the reader (paged, fetch-all) that feeds this module ' +
+    'and retiring the SQL to a cross-check in the same commit. Never ' +
+    're-implement the rules in SQL a second time: this file is the rule.',
   'src/lib/reachability.ts':
     'KEEP. Build-time analysis, not product code: it walks the import graph ' +
     'from routed entrypoints so reachability.guard.test.ts can fail the build ' +

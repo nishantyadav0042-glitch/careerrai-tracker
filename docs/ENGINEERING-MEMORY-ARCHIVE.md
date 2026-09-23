@@ -6916,3 +6916,102 @@ in-memory table that actually applies the query's filters, so they assert what
 the query does to ROWS rather than which methods were called. A shape-only
 assertion passes against a filter that matches nothing. Verified to fail
 against the defect: 5 of 12 red when the write is removed.
+
+## Incident #104 — the display outcome was rejected by a check constraint the code never knew about (22 Sep 2026)
+
+**Severity:** P1 (Notification / Measurement). **Impact:** no student harmed;
+`notification_deliveries.display_*` has been NULL on every one of ~7,200
+deliveries a week since 17 Sep despite two shipped fixes (#204, #212), and
+the receipt collapse Incident #102 attributed to beacon chaining had a second,
+provable cause that the fix for #102 did not remove.
+
+### What was found
+
+The Day-1 → Day-2 mission (Phase 10) inspected the display instrumentation
+before touching it. Seven days of `notification_deliveries`:
+
+| day | deliveries | sw_receipt | device_confirmed | display_attempted | displayed |
+|---|---|---|---|---|---|
+| 18 Sep | 916 | 516 | 516 | 0 | 0 |
+| 20 Sep | 1,225 | 311 | 311 | 0 | 0 |
+| 22 Sep | 891 | 178 | 178 | 0 | 0 |
+
+The server half was provably deployed (`sw_receipt_at` written), the worker
+half was provably running (receipts recovered after #212), and still nothing
+display-shaped had ever landed.
+
+The constraint on the column:
+
+```
+notification_deliveries_display_status_chk
+  CHECK (display_status IS NULL OR display_status = ANY (ARRAY['shown','failed','unknown']))
+```
+
+The code that writes the column (`lib/notification-endpoints.ts displayColumns()`):
+
+```
+display_status: d.resolved ? 'resolved' : d.attempted ? 'error' : 'not_attempted'
+```
+
+Postgres logs for the same day, five times an hour:
+
+```
+new row for relation "notification_deliveries" violates check constraint
+"notification_deliveries_display_status_chk"
+```
+
+### Root cause
+
+Two migrations on one day, from two branches, on one column.
+
+- `20260917a_display_instrumentation.sql` (PR #203, **never merged**, but
+  applied to production by its author — me — on 17 Sep as part of building
+  that PR) added `display_status` WITH a CHECK on `shown | failed | unknown`.
+- `20260917b_display_is_not_receipt.sql` (PR #204, merged the same day)
+  found the column already present — *"displayed_at / display_status /
+  display_error ALREADY EXIST on this table and are 100% NULL"* — reused it,
+  and wrote a different vocabulary.
+
+Nobody looked at the constraint because a NULL column reads as a plain
+column. `confirmDelivery()` did not read `error` from its updates, so the
+refusal was invisible: `updated` came back null, the code took the
+"already confirmed" branch, and returned `'already'`.
+
+**What this did to Incident #102.** Between 17 and 22 Sep the display outcome
+rode the SAME update as the receipt. A refused update is refused in full, so
+every beacon from a v10 worker lost its receipt too — on the server, after
+the request had arrived. That produces exactly the decay curve #102 measured
+(receipts falling as the new worker propagated, 94 endpoints going dark, click
+beacons from the same devices arriving fine): the request was not lost on the
+device; the write was refused on the server. #102's fix (two beacons, receipt
+unchained) restored receipts because the receipt beacon no longer carries a
+display object, and left the display beacon refused as before — which is why
+`display_status` stayed NULL after it too. Chaining may also have cost
+requests on waking radios; that part is not disproved. But the part that is
+proven is this constraint, and #102 did not name it.
+
+### The fix
+
+- `20260923a_display_status_vocabulary.sql` replaces the constraint with the
+  code's vocabulary. The code is the authority: on main, tested, and richer.
+  Reversible; touches no rows.
+- `confirmDelivery()` logs the `error` of all three writes it makes. A
+  refused write is a line in Vercel's runtime log, not silence.
+- `day1-day2-bridge.guard.test.ts` derives the set of values
+  `displayColumns()` can write and asserts the migration's `IN (...)` list is
+  exactly that set — Invariant #2, a rule in code AND config tied by a test.
+- PR #203 closed as superseded, with the reason.
+
+### The lesson
+
+**A migration applied to production is production, whether or not its pull
+request merged.** The unmerged branch had no code reading the constraint it
+created; the merged branch had no migration creating the column it wrote;
+production had both. When a column "already exists", read its constraints
+before reusing it — `pg_get_constraintdef` is one query.
+
+Second: **an unchecked `error` from PostgREST is a swallowed exception.** The
+client never throws on a refused statement; it returns `{ data: null, error }`.
+Every write whose failure would matter must read the second field. This is
+the third measurement incident in a week whose common shape is "the write
+failed and nothing said so" (#95, #102, #104).

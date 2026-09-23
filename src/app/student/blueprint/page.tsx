@@ -44,9 +44,13 @@ const VERDICT: Record<FinishProjection['status'], { label: string; color: string
   stalled: null,
 };
 
-function PlanRow({ href, icon, label, cta }: { href: string; icon: string; label: string; cta: string }) {
+// `analytics` is the stable name autocapture records for the tap. Without it
+// the label is used, and the label carries a COUNT ("146 finished view"), so
+// the same row was a different event for every student on every day and the
+// Blueprint could not be read at all (Day-1 → Day-2 mission, 22 Sep).
+function PlanRow({ href, icon, label, cta, analytics }: { href: string; icon: string; label: string; cta: string; analytics: string }) {
   return (
-    <Link href={href} className="flex items-center gap-3 px-4 py-3.5 hover:bg-stone-50 transition-colors">
+    <Link href={href} data-analytics={analytics} className="flex items-center gap-3 px-4 py-3.5 hover:bg-stone-50 transition-colors">
       <span className="text-lg w-6 text-center shrink-0">{icon}</span>
       <span className="flex-1 text-sm font-semibold text-stone-800">{label}</span>
       <span className="text-xs font-bold text-stone-900 whitespace-nowrap">{cta} →</span>
@@ -117,7 +121,7 @@ export default function MyCatPlanPage() {
     <div className="min-h-screen bg-gradient-to-b from-stone-50 to-white p-4 sm:p-6">
       <div className="max-w-md mx-auto space-y-4">
         <div className="flex items-center gap-3">
-          <Link href="/student/tracker" className="p-2 hover:bg-stone-100 rounded-lg transition-colors">
+          <Link href="/student/tracker" data-analytics="back_to_tracker" aria-label="Back to today" className="p-2 hover:bg-stone-100 rounded-lg transition-colors">
             <ArrowLeft className="w-5 h-5 text-stone-600" />
           </Link>
           <div>
@@ -135,19 +139,19 @@ export default function MyCatPlanPage() {
             student's first line should be what they're DOING, not a zero. */}
         <div className="bg-white rounded-2xl border border-stone-200 divide-y divide-stone-100 overflow-hidden">
           {studiedOnceCount === 0 && learningCount > 0 && (
-            <PlanRow href="/student/plan/topics?status=learning" icon="📖" label={`${learningCount} started — finish these first`} cta="Continue" />
+            <PlanRow href="/student/plan/topics?status=learning" icon="📖" label={`${learningCount} started — finish these first`} cta="Continue" analytics="plan_row_learning" />
           )}
-          <PlanRow href="/student/plan/topics?status=finished" icon="✅" label={`${studiedOnceCount}/${totalTopics} finished`} cta="View" />
+          <PlanRow href="/student/plan/topics?status=finished" icon="✅" label={`${studiedOnceCount}/${totalTopics} finished`} cta="View" analytics="plan_row_finished" />
           {studiedOnceCount > 0 && learningCount > 0 && (
-            <PlanRow href="/student/plan/topics?status=learning" icon="📖" label={`${learningCount} started, not finished`} cta="Continue" />
+            <PlanRow href="/student/plan/topics?status=learning" icon="📖" label={`${learningCount} started, not finished`} cta="Continue" analytics="plan_row_learning" />
           )}
           {/* Revision only appears once something is ACTUALLY due — a brand-new
               student who hasn't studied anything should never see a "0 due for
               revision" line implying they're behind on revision they never started. */}
           {dueForRevisionCount > 0 && (
-            <PlanRow href="/student/plan/topics?status=revision" icon="🔄" label={`${dueForRevisionCount} due for revision`} cta="View" />
+            <PlanRow href="/student/plan/topics?status=revision" icon="🔄" label={`${dueForRevisionCount} due for revision`} cta="View" analytics="plan_row_revision" />
           )}
-          <PlanRow href="/student/plan/topics?status=not_started" icon="⚪" label={`${notStartedCount} not started`} cta="Start" />
+          <PlanRow href="/student/plan/topics?status=not_started" icon="⚪" label={`${notStartedCount} not started`} cta="Start" analytics="plan_row_not_started" />
           {/* Same logic for mocks — no "0 mocks completed" noise before the first one. */}
           {mocksCompleted > 0 && (
             <PlanRow
@@ -155,6 +159,7 @@ export default function MyCatPlanPage() {
               icon="📝"
               label={`${mocksCompleted} mock${mocksCompleted === 1 ? '' : 's'} completed`}
               cta="View"
+              analytics="plan_row_mocks"
             />
           )}
         </div>

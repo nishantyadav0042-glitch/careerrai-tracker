@@ -253,6 +253,17 @@ refund processed ─▶ settleRefund()      ── stamps refunded_at ───�
   service_role only. Cron `/api/cron/telemetry-retention` at 03:20 IST;
   `?dry=1` counts without deleting. *Guards: `telemetry-retention.guard.test.ts`
   — fails the moment a swept event acquires a reader.*
+- **The Day-1 → Day-2 bridge (22 Sep).** `lib/session-boundary.ts` is the one
+  definition of a re-entry (`REENTRY_GAP_MS`, `classifyLaunch`); the journey
+  tracker writes `app_open{session_new, launch}` and `app_resume{hidden_ms,
+  launch}` from it, and the push ask's Later (`lib/push-ask-snooze.ts`) expires
+  on the same boundary. `lib/os/day-bridge.ts` derives the state a study day
+  left behind and classifies the return (resume / continue / new / browse /
+  log-only / elsewhere / gone) from durable rows — nothing is stored twice.
+  Contract: `docs/DAY1-DAY2-EVENT-CONTRACT.md`. Bootstrap report:
+  `docs/sql/day1-day2-bridge-bootstrap.sql`. *Guards:
+  `day1-day2-bridge.guard.test.ts`, `session-boundary.test.ts`,
+  `push-ask-snooze.test.ts`, `os/day-bridge.test.ts`.*
 - **Closing the day (Incident #67).** Every card dealt ends as `worked`,
   `skipped` (with a reason, and it changes NOTHING about the student) or
   `not_marked` (the 21:45 IST sweep, `api/cron/day-close`). `worked_at` keeps

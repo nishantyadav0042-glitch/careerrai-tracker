@@ -374,13 +374,22 @@ export async function confirmDelivery(
     // but a push already in flight can still land and be displayed afterwards;
     // refusing that receipt would throw away true evidence of a real display.
     // The row keeps its own revoked_at, so the two facts stay separable.
-    const { data: updated } = await admin
+    const { data: updated, error: updateErr } = await admin
       .from('notification_deliveries')
       .update({ ...receipt, ...displayCols })
       .eq('notification_id', notificationId)
       .eq('endpoint_id', endpointId)
       .is('device_confirmed_at', null)
       .select('id');
+    // ── A REJECTED WRITE MUST SAY SO (Incident #104) ─────────────────────────
+    //
+    // PostgREST reports a constraint violation as `error`, never as a throw,
+    // so the catch below never saw one. For five days every update carrying a
+    // display outcome was refused by a CHECK constraint whose vocabulary the
+    // code did not match, and this line read `updated = null` as "already
+    // confirmed" and moved on. The receipt — the older, more important signal
+    // — was refused in the same statement. Logged, never swallowed.
+    if (updateErr) console.error('[endpoints] delivery receipt update refused:', updateErr.message);
 
     if (!updated || updated.length === 0) {
       // Either already confirmed (replay) or the delivery row does not exist
@@ -415,22 +424,24 @@ export async function confirmDelivery(
         // write-once, so a replayed display beacon cannot overwrite the first
         // outcome with a later one.
         if (display && !existing.display_status) {
-          await admin
+          const { error: displayErr } = await admin
             .from('notification_deliveries')
             .update(displayCols)
             .eq('id', existing.id)
             .is('display_status', null);
+          if (displayErr) console.error('[endpoints] display outcome update refused:', displayErr.message);
         }
         return 'already';
       }
 
-      await admin.from('notification_deliveries').upsert({
+      const { error: upsertErr } = await admin.from('notification_deliveries').upsert({
         notification_id: notificationId,
         endpoint_id: endpointId,
         attempted_at: now,
         ...receipt,
         ...displayCols,
       }, { onConflict: 'notification_id,endpoint_id' });
+      if (upsertErr) console.error('[endpoints] delivery receipt upsert refused:', upsertErr.message);
     }
 
     // The endpoint's own last-confirmed watermark: what lets a reach query ask

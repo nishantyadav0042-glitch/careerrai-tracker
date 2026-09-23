@@ -122,7 +122,7 @@ function TopicsInner() {
     <div className="min-h-screen bg-gradient-to-b from-stone-50 to-white p-4 sm:p-6">
       <div className="max-w-md mx-auto space-y-4">
         <div className="flex items-center gap-3">
-          <Link href="/student/blueprint" className="p-2 hover:bg-stone-100 rounded-lg transition-colors">
+          <Link href="/student/blueprint" data-analytics="back_to_blueprint" aria-label="Back to My CAT Plan" className="p-2 hover:bg-stone-100 rounded-lg transition-colors">
             <ArrowLeft className="w-5 h-5 text-stone-600" />
           </Link>
           <div>

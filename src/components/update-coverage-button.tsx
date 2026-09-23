@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { WeeklyCoverageReview } from '@/components/weekly-coverage-review';
-import { track } from '@/lib/journey';
 
 // ── "UPDATE WHERE I STAND", ON DEMAND ───────────────────────────────────────
 //
@@ -29,9 +28,15 @@ export function UpdateCoverageButton() {
 
   return (
     <>
+      {/* ONE producer for the tap. This used to call track('tap', { what })
+          itself AND be autocaptured as a <button>, so every press was two rows
+          with different shapes — one of them with no `el` at all (the 39
+          blank-label taps in the 22 Sep forensic report). data-analytics is
+          what autocapture reads for a stable name; the manual call is gone. */}
       <button
         type="button"
-        onClick={() => { track('tap', { what: 'update_coverage_on_demand' }); setOpen(true); }}
+        data-analytics="update_coverage_on_demand"
+        onClick={() => setOpen(true)}
         className="flex w-full items-start gap-3 rounded-xl border border-stone-200 bg-white p-4 text-left transition-colors hover:border-stone-900 active:scale-[0.99]"
       >
         <RefreshCw className="mt-0.5 h-5 w-5 shrink-0 text-stone-700" />

@@ -72,7 +72,7 @@ export default async function DebugPage() {
       <div className="max-w-md mx-auto space-y-4 pb-24">
         {/* Header */}
         <div className="flex items-center gap-3">
-          <Link href="/student/tracker" className="p-2 hover:bg-stone-100 rounded-lg transition-colors">
+          <Link href="/student/tracker" data-analytics="back_to_tracker" aria-label="Back to today" className="p-2 hover:bg-stone-100 rounded-lg transition-colors">
             <ArrowLeft className="w-5 h-5 text-stone-600" />
           </Link>
           <div>
