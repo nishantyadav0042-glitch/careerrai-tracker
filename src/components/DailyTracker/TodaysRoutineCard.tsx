@@ -718,7 +718,10 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
               furniture. */}
           {doneCount === 0 && (
             <p className="mb-1.5 rounded-lg bg-stone-900 px-2.5 py-1.5 text-[11px] font-semibold text-white">
-              Finished a task? Tap anywhere on it — that&apos;s it, your day is marked.
+              Finished a task? Tap anywhere on it — that&apos;s it, your day is marked.{' '}
+              {/* The four first steps, for the students who told sales they
+                  "didn't know what to do after downloading" (23 Sep). */}
+              <Link href="/how-it-works" data-analytics="how_it_works_link" className="underline underline-offset-2">How it works</Link>
             </p>
           )}
 
