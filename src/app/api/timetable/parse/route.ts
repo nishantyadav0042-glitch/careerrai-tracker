@@ -7,6 +7,7 @@ import { EXTRACT_PROMPT, spreadsheetPrompt, salvageTruncatedJson } from '@/lib/t
 import { workbookToSheets, csvToSheet, sheetsToPromptText, windowDatedSheets, type SheetText } from '@/lib/workbook-text';
 import { emitTimeline } from '@/lib/os/timeline';
 import { refusal, type RefusalCode } from '@/lib/timetable-refusal';
+import { scannerQuotaExceeded } from '@/lib/timetable-quota';
 
 export const maxDuration = 60;
 
@@ -99,7 +100,9 @@ export async function POST(request: NextRequest) {
     admin.from('student_events').select('id', { count: 'exact', head: true })
       .eq('user_id', user.id).eq('event', 'timetable_parsed').gte('created_at', dayAgo),
   ]);
-  if ((lastHour ?? 0) >= 6 || (lastDay ?? 0) >= 15) {
+  // Sized in whole uploads, not bare numbers: see lib/timetable-quota.ts for
+  // why 6 an hour refused a single 8-photo upload.
+  if (scannerQuotaExceeded(lastHour ?? 0, lastDay ?? 0)) {
     return refuse('quota_exceeded');
   }
 

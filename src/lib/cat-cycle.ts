@@ -73,3 +73,28 @@ export function isTargetExpired(targetIso: string | null | undefined, now: Date 
   if (Number.isNaN(t)) return false;
   return t < now.getTime();
 }
+
+/**
+ * The CAT a finish date implies, for a student whose exam year was never
+ * stored (bug-fix sprint, 23 Sep 2026).
+ *
+ * 299 accounts, almost all from the July onboarding that never asked, have
+ * attempt_year NULL, and every reader falls back to the CURRENT calendar year.
+ * For 13 of them that fallback contradicts their own answer: they chose a
+ * syllabus finish date AFTER this year's exam (Harsh Pawar: 31 Dec 2026, with
+ * CAT 2026 on 29 Nov), so the app counted down to an exam they are not sitting.
+ *
+ * The rule is the one fact the date can prove: a syllabus finishing after
+ * year Y's exam day cannot be for CAT Y, so it is for Y + 1. A date on or
+ * before exam day stays in its own year. Nothing is inferred beyond that.
+ * `targetIso` is a YYYY-MM-DD string, compared as a calendar date so the
+ * server's timezone cannot move the boundary.
+ */
+export function impliedAttemptYear(targetIso: string): number | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(targetIso);
+  if (!m) return null;
+  const year = Number(m[1]);
+  const exam = catExamDate(year);
+  const examIso = `${exam.getFullYear()}-${String(exam.getMonth() + 1).padStart(2, '0')}-${String(exam.getDate()).padStart(2, '0')}`;
+  return targetIso > examIso ? year + 1 : year;
+}

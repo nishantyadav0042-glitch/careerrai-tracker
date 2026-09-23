@@ -5,6 +5,7 @@ import { CalendarClock, Loader2, Upload, X, Check, Trash2 } from 'lucide-react';
 import { track } from '@/lib/journey';
 import { prepareImage } from '@/lib/image-downscale';
 import { whenLabel, timeLabel, type TimetableBlock, type TimetableKind, type CoachingTarget } from '@/lib/timetable';
+import { MAX_FILES_PER_UPLOAD } from '@/lib/timetable-quota';
 
 // "Upload your coaching timetable" — offered in a student's first days.
 //
@@ -278,7 +279,7 @@ export function TimetableUpload({ onClose, kind = 'weekly' }: {
               accept="image/*,application/pdf,.xlsx,.xlsm,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
               multiple className="hidden"
               onChange={(e) => {
-                const fs = Array.from(e.target.files ?? []).slice(0, 8);
+                const fs = Array.from(e.target.files ?? []).slice(0, MAX_FILES_PER_UPLOAD);
                 if (fs.length) void handleFiles(fs);
                 e.target.value = '';
               }}
