@@ -10,10 +10,6 @@ import type { PaceResult } from '@/lib/study-pace';
 import { TONE } from '@/lib/pace-tone';
 import { MIN_DAILY_HOURS, MAX_DAILY_HOURS } from '@/lib/daily-hours';
 import type { PrepGain } from '@/lib/prep-gain';
-import { TimetableUpload } from '@/components/timetable-upload';
-
-type FocusSection = 'VARC' | 'DILR' | 'QA';
-const FOCUS_OPTIONS: FocusSection[] = ['QA', 'VARC', 'DILR'];
 
 // The redesigned Home progress card (15 Jul mockup): a %-of-syllabus ring, the
 // steady-pace headline, three at-a-glance pace facts, a weekly study sparkline,
@@ -90,12 +86,6 @@ interface PaceCardProps {
    *  again; repeating it was half of what made the old stack redundant. */
   mocksLabel: string;
   revisionLabel: string;
-  /** The CAT this card counts down to (tracker/page.tsx examYear). */
-  examYear: number;
-  /** The student's saved attempt year; null for the July accounts never asked. */
-  attemptYear: number | null;
-  /** The section the plan leads with, as the student last chose it. */
-  focusSection: FocusSection | null;
 }
 
 // ── One card, not three (founder, 13 Aug) ───────────────────────────────────
@@ -111,7 +101,7 @@ interface PaceCardProps {
 // untouched. Nothing was dropped: streak, shields, hours-today, coverage
 // ring, pace verdict, days left, the week sparkline, the finish date, mocks
 // and revision anchors are all still on screen — each said exactly once.
-export function PaceCard({ pace, targetIso: serverTargetIso, week, weekLabels, streak, shields, gain, isPremium, mocksLabel, revisionLabel, examYear, attemptYear, focusSection }: PaceCardProps) {
+export function PaceCard({ pace, targetIso: serverTargetIso, week, weekLabels, streak, shields, gain, isPremium, mocksLabel, revisionLabel }: PaceCardProps) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -136,21 +126,6 @@ export function PaceCard({ pace, targetIso: serverTargetIso, week, weekLabels, s
   const [savedTargetIso, setSavedTargetIso] = useState<string | null>(null);
   const targetIso = savedTargetIso ?? serverTargetIso;
   const [date, setDate] = useState('');
-  // ── Which CAT, and what the plan leads with (sales-reported, 23 Sep) ─────
-  //
-  // A 2027 aspirant was shown a CAT 2026 countdown with no way to change it,
-  // and no student could change the section their plan leads with after
-  // signup. Both are their own answers; both save through the same endpoint
-  // as the date and hours, and both shape tomorrow's plan, not today's.
-  const [yearChoice, setYearChoice] = useState<number | null>(null);
-  const [focusChoice, setFocusChoice] = useState<FocusSection | null>(null);
-  const [savedYear, setSavedYear] = useState<number | null>(null);
-  const [savedFocus, setSavedFocus] = useState<FocusSection | null>(null);
-  const [timetableOpen, setTimetableOpen] = useState(false);
-  const shownYear = savedYear ?? examYear;
-  const currentFocus = savedFocus ?? focusSection;
-  const yearChanged = yearChoice != null && yearChoice !== (savedYear ?? attemptYear);
-  const focusChanged = focusChoice != null && focusChoice !== currentFocus;
   // The golden rule: the plan is built around the student's OWN daily hours, and
   // the date is theirs. So the reschedule sheet lets them change BOTH here — set
   // a date, and if it needs more, set the hours it needs, in one place. null =
@@ -202,14 +177,12 @@ export function PaceCard({ pace, targetIso: serverTargetIso, week, weekLabels, s
   }
 
   async function save() {
-    if (!date && !hoursChanged && !yearChanged && !focusChanged) return;
+    if (!date && !hoursChanged) return;
     setBusy(true); setErr(null);
     try {
       const payload: Record<string, unknown> = {};
       if (date) payload.syllabus_target_date = date;
       if (hoursChanged) payload.daily_hours = hoursOverride;
-      if (yearChanged) payload.attempt_year = yearChoice;
-      if (focusChanged) payload.weakest_section = focusChoice;
       const res = await fetch('/api/student/post-signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -217,13 +190,9 @@ export function PaceCard({ pace, targetIso: serverTargetIso, week, weekLabels, s
       });
       if (!res.ok) throw new Error();
       if (date) setSavedTargetIso(date);
-      if (yearChanged) setSavedYear(yearChoice);
-      if (focusChanged) setSavedFocus(focusChoice);
       setEditing(false);
       setDate('');
       setHoursOverride(null);
-      setYearChoice(null);
-      setFocusChoice(null);
       // A changed date or hours can rebuild today's plan (plan-freshness.ts);
       // the plan card listens for this and drops its 30-second cache.
       try { window.dispatchEvent(new Event('cr-routine-updated')); } catch { /* ignore */ }
@@ -358,7 +327,7 @@ export function PaceCard({ pace, targetIso: serverTargetIso, week, weekLabels, s
           {/* The tone chip lives in the row above now — it was appearing twice
               across the old three-card stack. */}
           <p className="text-[13px] font-extrabold leading-tight text-white">{headline}</p>
-          <p className="mt-0.5 flex items-center gap-1 text-[10.5px] text-stone-300"><CalendarDays className="h-3 w-3" />CAT {shownYear} · {pace.daysLeft} days to syllabus</p>
+          <p className="mt-0.5 flex items-center gap-1 text-[10.5px] text-stone-300"><CalendarDays className="h-3 w-3" />{pace.daysLeft} days to CAT syllabus</p>
         </div>
 
         {/* Weekly sparkline — always inline */}
@@ -376,9 +345,9 @@ export function PaceCard({ pace, targetIso: serverTargetIso, week, weekLabels, s
           <span className="text-stone-400">Mocks <b className="text-white">{mocksLabel}</b></span>
           <span className="text-stone-400">Revision <b className="text-white">{revisionLabel}</b></span>
         </div>
-        <button type="button" data-analytics="reschedule" onClick={() => { setEditing((v) => !v); setErr(null); }}
+        <button type="button" onClick={() => { setEditing((v) => !v); setErr(null); }}
           className="inline-flex shrink-0 items-center gap-0.5 text-[12px] font-bold text-orange-400 hover:underline">
-          Edit plan <ChevronRight className="h-3.5 w-3.5" />
+          Reschedule <ChevronRight className="h-3.5 w-3.5" />
         </button>
       </div>
 
@@ -390,53 +359,6 @@ export function PaceCard({ pace, targetIso: serverTargetIso, week, weekLabels, s
 
           {/* Golden rule, made visible: the plan is built around YOUR hours. The
               date is yours; if it needs more, set the hours it needs — here. */}
-          <div className="space-y-1.5">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-stone-400">Which CAT are you writing?</span>
-            <div className="flex gap-1.5">
-              {selectableCatCycles(new Date(), 2).map((c) => {
-                const active = (yearChoice ?? savedYear ?? attemptYear) === c.year;
-                return (
-                  <button key={c.year} type="button" data-analytics={`plan_year_${c.year}`}
-                    onClick={() => setYearChoice(c.year)}
-                    className={`flex-1 rounded-lg border px-2 py-1.5 text-xs font-semibold ${active ? 'border-stone-900 bg-stone-900 text-white' : 'border-stone-300 text-stone-700'}`}>
-                    {c.label}
-                  </button>
-                );
-              })}
-            </div>
-            {attemptYear == null && savedYear == null && yearChoice == null && (
-              <p className="text-[11px] text-stone-500">Not set yet, so we&apos;re counting down to CAT {examYear}. Pick yours.</p>
-            )}
-          </div>
-
-          <div className="space-y-1.5">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-stone-400">Put more focus on</span>
-            <div className="flex gap-1.5">
-              {FOCUS_OPTIONS.map((sec) => {
-                const active = (focusChoice ?? currentFocus) === sec;
-                return (
-                  <button key={sec} type="button" data-analytics={`plan_focus_${sec.toLowerCase()}`}
-                    onClick={() => setFocusChoice(sec)}
-                    className={`flex-1 rounded-lg border px-2 py-1.5 text-xs font-semibold ${active ? 'border-stone-900 bg-stone-900 text-white' : 'border-stone-300 text-stone-700'}`}>
-                    {sec}
-                  </button>
-                );
-              })}
-            </div>
-            <p className="text-[11px] leading-relaxed text-stone-500">
-              Your plan leads with this section each day. A mock score you enter will take over from this choice.
-            </p>
-          </div>
-
-          <button type="button" data-analytics="plan_add_timetable" onClick={() => setTimetableOpen(true)}
-            className="w-full rounded-lg border border-stone-300 px-3 py-2 text-left text-xs font-semibold text-stone-800">
-            In coaching? Add your class timetable and your plan follows your classes →
-          </button>
-
-          {(yearChanged || focusChanged) && (
-            <p className="text-[11px] text-stone-500">Today&apos;s plan stays as it is; the change starts from tomorrow&apos;s plan.</p>
-          )}
-
           <div className="flex items-center justify-between gap-2">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-stone-400">Finish by</span>
             <input type="date" value={date} min={todayIso} onChange={(e) => setDate(e.target.value)}
@@ -485,7 +407,7 @@ export function PaceCard({ pace, targetIso: serverTargetIso, week, weekLabels, s
                 it's a broken promise. The only way to a sooner date is more
                 self-study hours — so Save stays disabled until the date is
                 reachable at the hours in play. */}
-            <button type="button" disabled={busy || refreshing || (!date && !hoursChanged && !yearChanged && !focusChanged) || tooDemanding} onClick={save}
+            <button type="button" disabled={busy || refreshing || (!date && !hoursChanged) || tooDemanding} onClick={save}
               className="rounded-lg bg-stone-900 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">
               {busy || refreshing ? 'Saving…' : 'Save'}
             </button>
@@ -494,9 +416,6 @@ export function PaceCard({ pace, targetIso: serverTargetIso, week, weekLabels, s
             {err && <span className="text-[11px] text-rose-600">{err}</span>}
           </div>
         </div>
-      )}
-      {timetableOpen && (
-        <TimetableUpload onClose={() => setTimetableOpen(false)} />
       )}
     </div>
   );

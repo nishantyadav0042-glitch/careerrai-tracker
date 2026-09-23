@@ -734,9 +734,6 @@ export default async function DailyTrackerPage() {
             streak={currentStreak} shields={momentum.shields}
             gain={prepGain} isPremium={!!profile?.is_premium}
             mocksLabel={mockLabel} revisionLabel={revLabel}
-            examYear={examYear}
-            attemptYear={(profile?.attempt_year as number | null) ?? null}
-            focusSection={(weakestSectionRow?.self_reported_weakest_section as 'VARC' | 'DILR' | 'QA' | null) ?? null}
           />
         )}
 

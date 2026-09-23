@@ -5,8 +5,6 @@ import { setDailyHours } from '@/lib/daily-hours';
 import { serverError } from '@/lib/api-error';
 import { selectableCatCycles, impliedAttemptYear } from '@/lib/cat-cycle';
 
-const FOCUS_SECTIONS = ['VARC', 'DILR', 'QA'] as const;
-
 // Persists the post-login sequence: the date the student (re)confirms in the
 // reconciliation step, and the one-time "done" flag once they finish it.
 // Every field is whitelisted and validated — the client can only ever move
@@ -21,8 +19,6 @@ export async function POST(request: NextRequest) {
     syllabus_target_date?: unknown;
     daily_hours?: unknown;
     done?: unknown;
-    attempt_year?: unknown;
-    weakest_section?: unknown;
   };
 
   const update: Record<string, unknown> = {};
@@ -38,37 +34,6 @@ export async function POST(request: NextRequest) {
   }
   if (body.done === true) update.post_signup_done = true;
 
-  // ── WHICH CAT, AND WHAT TO LEAD WITH (sales-reported fixes, 23 Sep) ──────
-  //
-  // 190 students who joined in July were never asked their exam year, so
-  // every surface fell back to the current year: a 2027 aspirant was shown a
-  // CAT 2026 countdown and had no way to change it (Neelam's call with Harsh,
-  // 9 Sep). And the section a student is weakest in — the section the plan
-  // LEADS with every day (routine-engine dayShape) — was asked once at signup
-  // and could never be changed ("difficulty customising the schedule when he
-  // wants more focus on Quant", Anshul, 23 Sep).
-  //
-  // Both are the student's own answers, so both are writable only from here,
-  // only by them, and only to values the product can honour: a cycle whose
-  // syllabus window is still open, and one of the three sections. Either
-  // change shapes TOMORROW's plan; today's frozen plan is left alone
-  // (plan-freshness.ts owns when a plan may rebuild, and this is not one).
-  if (body.attempt_year !== undefined) {
-    const years = selectableCatCycles(new Date(), 3).map((c) => c.year);
-    if (typeof body.attempt_year !== 'number' || !years.includes(body.attempt_year)) {
-      return NextResponse.json({ error: `Exam year must be one of ${years.join(', ')}.` }, { status: 400 });
-    }
-    update.attempt_year = body.attempt_year;
-  }
-  if (body.weakest_section !== undefined) {
-    if (typeof body.weakest_section !== 'string' || !(FOCUS_SECTIONS as readonly string[]).includes(body.weakest_section)) {
-      return NextResponse.json({ error: 'Focus section must be VARC, DILR or QA.' }, { status: 400 });
-    }
-    update.self_reported_weakest_section = body.weakest_section;
-    // A chosen section is a SELECTED_SECTION answer, never "not sure".
-    update.self_report_status = 'SELECTED_SECTION';
-  }
-
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ error: 'Nothing to update.' }, { status: 400 });
   }
@@ -81,14 +46,13 @@ export async function POST(request: NextRequest) {
   // year that date implies (impliedAttemptYear). Without this the year stays
   // NULL, every reader falls back to the calendar year, and a finish date in
   // 2027 is shown a CAT 2026 countdown. A year the student already chose is
-  // never touched here: they can change it themselves, and an explicit
-  // answer outranks an inference.
+  // never touched here: an explicit answer outranks an inference.
   if (typeof update.syllabus_target_date === 'string' && update.attempt_year === undefined) {
     const { data: cur } = await admin.from('profiles').select('attempt_year').eq('id', user.id).maybeSingle();
     if (cur && cur.attempt_year == null) {
       const implied = impliedAttemptYear(update.syllabus_target_date);
-      // Only a cycle the product can still honour — the same set the student's
-      // own year picker offers. A past or far-future date stores nothing.
+      // Only a cycle the product can still honour (selectableCatCycles). A
+      // past or far-future date stores nothing.
       const open = selectableCatCycles(new Date(), 3).map((c) => c.year);
       if (implied != null && open.includes(implied)) update.attempt_year = implied;
     }
