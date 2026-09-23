@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import { CalendarDays, ChevronRight, Flame, Shield } from 'lucide-react';
 import { isTargetExpired, selectableCatCycles } from '@/lib/cat-cycle';
 import { HOURS_ARE_ESTIMATES } from '@/lib/prep-model';
@@ -100,9 +101,30 @@ interface PaceCardProps {
 // untouched. Nothing was dropped: streak, shields, hours-today, coverage
 // ring, pace verdict, days left, the week sparkline, the finish date, mocks
 // and revision anchors are all still on screen — each said exactly once.
-export function PaceCard({ pace, targetIso, week, weekLabels, streak, shields, gain, isPremium, mocksLabel, revisionLabel }: PaceCardProps) {
+export function PaceCard({ pace, targetIso: serverTargetIso, week, weekLabels, streak, shields, gain, isPremium, mocksLabel, revisionLabel }: PaceCardProps) {
+  const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
+  // ── SAVE USED TO RELOAD THE WHOLE PAGE (Day-1 → Day-2 mission, 22 Sep) ──
+  //
+  // `window.location.reload()` after a successful save restarted the app:
+  // JourneyTracker re-mounted (a fresh `app_open` that was never an open), the
+  // notification ask re-armed (one repeat student tapped Later four times in
+  // an hour, two of them because of this), and the plan card refetched cold.
+  // One student ran reschedule → Save eight times in thirty minutes; whether
+  // the date was "not sticking" or the reload simply looked like nothing
+  // happened is not established — but the reload is, and it is gone.
+  //
+  // The server-rendered numbers on this card come from tracker/page.tsx, so
+  // the state-preserving way to refresh them is router.refresh(): the RSC
+  // payload is re-fetched and merged without losing client state (Next 16,
+  // use-router.md). `refreshing` keeps the button honest while that lands,
+  // and `savedTargetIso` shows the date the student just chose the instant
+  // the save succeeds rather than a few hundred milliseconds later. Once the
+  // server catches up the two agree and the override is inert.
+  const [refreshing, startRefresh] = useTransition();
+  const [savedTargetIso, setSavedTargetIso] = useState<string | null>(null);
+  const targetIso = savedTargetIso ?? serverTargetIso;
   const [date, setDate] = useState('');
   // The golden rule: the plan is built around the student's OWN daily hours, and
   // the date is theirs. So the reschedule sheet lets them change BOTH here — set
@@ -167,8 +189,14 @@ export function PaceCard({ pace, targetIso, week, weekLabels, streak, shields, g
         body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error();
+      if (date) setSavedTargetIso(date);
       setEditing(false);
-      window.location.reload();
+      setDate('');
+      setHoursOverride(null);
+      // A changed date or hours can rebuild today's plan (plan-freshness.ts);
+      // the plan card listens for this and drops its 30-second cache.
+      try { window.dispatchEvent(new Event('cr-routine-updated')); } catch { /* ignore */ }
+      startRefresh(() => { router.refresh(); });
     } catch {
       setErr('Could not update — try again.');
     } finally {
@@ -379,9 +407,9 @@ export function PaceCard({ pace, targetIso, week, weekLabels, streak, shields, g
                 it's a broken promise. The only way to a sooner date is more
                 self-study hours — so Save stays disabled until the date is
                 reachable at the hours in play. */}
-            <button type="button" disabled={busy || (!date && !hoursChanged) || tooDemanding} onClick={save}
+            <button type="button" disabled={busy || refreshing || (!date && !hoursChanged) || tooDemanding} onClick={save}
               className="rounded-lg bg-stone-900 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">
-              {busy ? 'Saving…' : 'Save'}
+              {busy || refreshing ? 'Saving…' : 'Save'}
             </button>
             <button type="button" onClick={() => { setEditing(false); setDate(''); setHoursOverride(null); setErr(null); }}
               className="text-xs font-medium text-stone-500 hover:text-stone-700">Cancel</button>

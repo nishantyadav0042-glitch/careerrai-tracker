@@ -6,6 +6,14 @@ import { BellRing } from 'lucide-react';
 import { setNotifAskVisible as setAskVisible, NOTIF_ASK_SETTLED_EVENT } from '@/lib/first-run-events';
 import { getLiveSubscription, persistSubscription } from '@/lib/push-client';
 import { pushCapabilityFrom, readSurfaceSignals, type PushCapability } from '@/lib/push-capability';
+import { snoozeLater, laterSnoozed, clearSnooze, type SnoozeStore } from '@/lib/push-ask-snooze';
+import { isReentry, noteHidden, noteVisible, type AwayClock } from '@/lib/session-boundary';
+
+// sessionStorage dies with the app — exactly what "the next app open" means
+// for a tab. A resident PWA keeps it, and the re-entry clock below covers that.
+function snoozeStore(): SnoozeStore | null {
+  try { return typeof sessionStorage === 'undefined' ? null : sessionStorage; } catch { return null; }
+}
 
 // Founder order (21 July): the notification ask is JOB #1 in the installed
 // app — it fires BEFORE the app tour (the tour and the buddy pitch both wait
@@ -98,6 +106,11 @@ export function StandaloneNotifAsk({ pushEnabled, serverSubDead = false, appInst
     const evaluate = () => {
       const signals = readSurfaceSignals();
       if (!signals) { setAskVisible(false); report('skipped', 'unsupported'); return; }
+      // "Later" holds for this session until a real re-entry (lib/push-ask-
+      // snooze.ts). A reload or a thirty-second excursion is not an app open;
+      // a new session or a return after REENTRY_GAP_MS is, and re-asks.
+      const store = snoozeStore();
+      if (store && laterSnoozed(store)) { setAskVisible(false); report('skipped', 'later_snoozed'); return; }
       const cap = pushCapabilityFrom(signals);
 
       if (!cap.canReceive) {
@@ -137,8 +150,19 @@ export function StandaloneNotifAsk({ pushEnabled, serverSubDead = false, appInst
     evaluate();
 
     // Reopening a resident iOS PWA fires visibilitychange, not a remount —
-    // re-ask there so "Later" only hides it until the next time they open the app.
-    const onVisible = () => { if (document.visibilityState === 'visible') evaluate(); };
+    // re-ask there so "Later" only hides it until the next time they open the
+    // app. "Open" is a return after REENTRY_GAP_MS away (the same boundary
+    // JourneyTracker writes `app_resume` on); a shorter absence — a resource
+    // link, a WhatsApp reply — keeps the Later.
+    let clock: AwayClock = { hiddenAt: null };
+    const onVisible = () => {
+      if (document.visibilityState === 'hidden') { clock = noteHidden(clock, Date.now()); return; }
+      if (document.visibilityState !== 'visible') return;
+      const { hiddenMs, clock: next } = noteVisible(clock, Date.now());
+      clock = next;
+      if (isReentry(hiddenMs)) { const store = snoozeStore(); if (store) clearSnooze(store); }
+      evaluate();
+    };
     document.addEventListener('visibilitychange', onVisible);
     return () => {
       document.removeEventListener('visibilitychange', onVisible);
@@ -241,10 +265,15 @@ export function StandaloneNotifAsk({ pushEnabled, serverSubDead = false, appInst
   }
 
   function later() {
-    // Hide for now only — no persistence, so it returns on the next app open.
+    // Hide until the next real app open (lib/push-ask-snooze.ts): the rest of
+    // this session, or until the app has been away for REENTRY_GAP_MS. Before
+    // 22 Sep this persisted nothing, so the product's own reloads and a nine-
+    // second trip to a resource link each re-asked.
     // Tracked because a student who repeatedly taps Later is telling us the
     // copy is not landing, which looks identical to "never asked" without it.
     track('push_ask_later', { reconnect, context: detectDisplayMode() });
+    const store = snoozeStore();
+    if (store) snoozeLater(store, Date.now());
     setAskVisible(false);
     setShow(false);
   }

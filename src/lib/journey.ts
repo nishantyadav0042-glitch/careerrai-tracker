@@ -58,6 +58,13 @@ function getAnonId(): string {
 }
 
 // One id per browsing session (cleared when the tab/app is closed).
+//
+// Whether THIS page load minted the id is the difference between a student
+// opening the app and the app reloading itself (reschedule Save, push enable,
+// the login redirect all used to reload). `app_open` carries it as
+// `session_new` — see lib/session-boundary.ts for why that distinction is the
+// start of the Day-1 → Day-2 bridge.
+let sessionMintedThisLoad = false;
 function getSessionId(): string {
   try {
     const k = 'cr_sid';
@@ -67,11 +74,18 @@ function getSessionId(): string {
         ? crypto.randomUUID()
         : `s${Date.now()}${Math.random().toString(36).slice(2, 8)}`;
       sessionStorage.setItem(k, id);
+      sessionMintedThisLoad = true;
     }
     return id;
   } catch {
     return 'sess';
   }
+}
+
+/** True when this page load is the first of its browsing session. */
+export function sessionIsNew(): boolean {
+  getSessionId();
+  return sessionMintedThisLoad;
 }
 
 export function detectDisplayMode(): DisplayMode {
@@ -426,7 +440,16 @@ export type EventName =
   // must never double just because somebody told us why. Join on `verdictId`.
   | 'resource_verdict_reason'
   // The one-time in-app announcement for the concept-resource layer.
-  | 'resource_announce_shown' | 'resource_announce_dismissed';
+  | 'resource_announce_shown' | 'resource_announce_dismissed'
+  // ── The Day-1 → Day-2 bridge (22 Sep) ────────────────────────────────────
+  // A resident PWA is reopened by a visibilitychange, not a remount, so a
+  // student who left at 09:00 and came back at 21:00 produced no `app_open`
+  // at all. `app_resume` is that return: fired once when the app becomes
+  // visible after REENTRY_GAP_MS hidden (lib/session-boundary.ts), with how
+  // long it was away and which door it came through. `app_open` now carries
+  // `session_new` (a cold start, not a reload) and `launch` (the door) for the
+  // same reason. Neither is intent; a door is a fact about the URL.
+  | 'app_resume';
 
 export function track(event: EventName, props: Record<string, unknown> = {}): void {
   try {
