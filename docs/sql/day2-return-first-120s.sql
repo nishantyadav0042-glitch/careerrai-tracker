@@ -65,6 +65,7 @@ select w.sday::text d1, left(w.student_id::text,8) sid,
        else 'B_returned_no_recorded_study' end cohort,
   rday::text d2, first_kind, coalesce(launch,'pre-instr') launch, session_new, surface,
   round(extract(epoch from first_tap_at-first_at)) s_to_first_tap,
+  first_tap_el,
   case when first_tap_el is null then null
        when first_tap_el ilike 'mark_progress%' or first_tap_el in ('finished_it','got_halfway','half','done') then 'task'
        when first_tap_el ilike 'learn_it%' then 'resource'
