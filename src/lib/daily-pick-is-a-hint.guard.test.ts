@@ -69,15 +69,16 @@ describe('the Daily Pick surface cannot serve a question', () => {
     expect(src).not.toMatch(/dailyPick:\s*\{[^}]*question:/);
   });
 
-  // The feed sits on the same tab, below the hint. It kept both kinds for a few
-  // hours on the argument that the questions were student contributions worth
-  // protecting — until the data said otherwise: all 50 are ours, written under
-  // the admin account, and in six weeks exactly one non-curated row had ever
-  // arrived (the founder's own test). The tab serves ONE kind now, top to
-  // bottom. Server-side, so no client can drift back.
-  it('the feed below the hint is tips-only', () => {
+  // The feed that sat below the hint went hints-only on 31 Aug, and went
+  // altogether on 24 Sep (founder: "One hint only daily visible to students.
+  // Hint of the day."). The route no longer reads the live pool at all, so no
+  // hint but today's can reach a student, of either kind. Server-side, so no
+  // client can drift back.
+  it('no hint but today\'s leaves the server', () => {
     const src = read('app/api/community/insights/route.ts');
-    expect(src).toMatch(/orderFeed\(all\.filter\(\(r\) => r\.kind === 'tip'/);
+    expect(src).toMatch(/const feed: never\[\] = \[\];/);
+    expect(src).not.toMatch(/orderFeed\(/);
+    expect(src).not.toMatch(/\.limit\(60\)/);
   });
 });
 

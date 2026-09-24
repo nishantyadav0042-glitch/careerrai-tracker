@@ -92,7 +92,10 @@ describe('no student is turned into a superstar', () => {
     expect(s).toContain('<SectionLabel>More hints</SectionLabel>');
     // And it must not claim peer authorship over content we wrote ourselves.
     expect(s).not.toMatch(/from students preparing alongside you/);
+    // The card's own label is "Hint of the day" since 24 Sep (founder), and
+    // it is the only hint on the screen: the feed below it is empty.
     const card = readFileSync('src/components/community-vote-card.tsx', 'utf8');
-    expect(card).toContain("Today&apos;s Pick");
+    expect(card).toContain('💡 Hint of the day');
+    expect(card).not.toContain("Today&apos;s Pick");
   });
 });

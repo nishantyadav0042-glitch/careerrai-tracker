@@ -142,12 +142,15 @@ export function CommunityVoteCard() {
           className="rounded-xl border border-l-4 border-amber-200 border-l-amber-500 bg-gradient-to-br from-amber-50 to-white p-3"
         >
           <div className="flex items-center gap-1.5">
+            {/* One name for one thing (founder, 24 Sep: "Hint of the day").
+                It sat second, beside a "Today's Pick" badge that said the same
+                thing louder; the section is all the second line needs. */}
             <span className="inline-block rounded-full bg-amber-500 px-2 py-0.5 text-[9.5px] font-extrabold uppercase tracking-wider text-white">
-              🏆 Today&apos;s Pick
+              💡 Hint of the day
             </span>
-            <span className="text-[10px] font-bold text-amber-700">
-              💡 Hint of the day{item.section ? ` · ${item.section}` : ''}
-            </span>
+            {item.section && (
+              <span className="text-[10px] font-bold text-amber-700">{item.section}</span>
+            )}
           </div>
 
           {item.text && (

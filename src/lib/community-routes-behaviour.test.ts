@@ -155,30 +155,30 @@ describe('feed: a DB failure is never "Be the one who adds something"', () => {
     expect((await res.json()).code).toBe('FEED_UNAVAILABLE');
   });
 
-  it('the feed carries the REAL net score, so the Top tab ranks on votes', async () => {
-    const sub = (id: string, created: string) => ({
+  it('sends the hint of the day and no other hint — the live pool is never read', async () => {
+    // Founder, 24 Sep: "One hint only daily visible to students. Hint of the
+    // day." Until then this route also read the newest 60 live hints and sent
+    // them as a feed under the day's one, which turned the queue into a menu.
+    // Now the only submission reads are the day's stamp and the student's own
+    // share, so an unserved hint cannot reach a client by any path.
+    const tip = (id: string, featured: string | null) => ({
       id, kind: 'tip', payload: { text: `t-${id}`, section: 'QA' }, image_path: null,
-      display_name: 'Aryan', student_id: 'someone-else', created_at: created, featured_on: null, status: 'live',
+      display_name: 'CareerRai', student_id: 'admin', created_at: '2026-08-01', featured_on: featured, status: 'live',
     });
     currentAdmin = makeAdmin({
-      // call 1: live feed; call 2: featured-by-stamp; call 3: my own share
+      // call 1: featured-by-stamp; call 2: my own share
       'student_submissions.select': (call) =>
-        call === 1 ? { data: [sub('new', '2026-08-21'), sub('old', '2026-08-01')], error: null }
-        : { data: [], error: null },
-      'submission_votes.select': (call) =>
-        call === 1
-          ? { data: [{ submission_id: 'old', helpful: true }, { submission_id: 'old', helpful: true }], error: null }
-          : { data: [], error: null },
+        call === 1 ? { data: [tip('today', '2026-09-24')], error: null } : { data: [], error: null },
+      'submission_votes.select': () => ({ data: [], error: null }),
     });
     const res = await insightsGet();
     expect(res.status).toBe(200);
-    const { feed } = await res.json();
-    const old = feed.find((f: { id: string }) => f.id === 'old');
-    const fresh = feed.find((f: { id: string }) => f.id === 'new');
-    expect(old.netScore).toBe(2);
-    expect(fresh.netScore).toBe(0);
+    const json = await res.json();
+    expect(json.dailyPick.tip.id).toBe('today');
+    expect(json.feed).toEqual([]);
+    expect(currentAdmin.counts['student_submissions.select'], 'stamp + own share, nothing else').toBe(2);
     // helpfulPct stays null at zero votes — never 0%.
-    expect(fresh.helpfulPct).toBeNull();
+    expect(json.dailyPick.tip.helpfulPct).toBeNull();
   });
 
   it("today's pick is fetched by its stamp — found even OUTSIDE the newest-60 window", async () => {
@@ -190,9 +190,10 @@ describe('feed: a DB failure is never "Be the one who adds something"', () => {
       display_name: 'Aryan', student_id: 'someone-else', created_at: '2026-07-01', featured_on: featured, status: 'live',
     });
     currentAdmin = makeAdmin({
+      // The newest-60 slice this test once raced against is gone (24 Sep);
+      // the stamp is now the ONLY way a hint reaches the card.
       'student_submissions.select': (call) =>
-        call === 1 ? { data: [mk('recent', null)], error: null }             // newest-60 slice WITHOUT the pick
-        : call === 2 ? { data: [mk('old-featured', '2026-08-21')], error: null } // featured-by-stamp query
+        call === 1 ? { data: [mk('old-featured', '2026-08-21')], error: null } // featured-by-stamp query
         : { data: [], error: null },
       'submission_votes.select': () => ({ data: [], error: null }),
     });
@@ -266,42 +267,40 @@ describe('deduplication is server-side, so no client can drift', () => {
     // pick. Then, once it was established that ALL 50 questions are ours and
     // not a single student had ever submitted one, the feed went hints-only
     // too — so the same row must not surface below the hint either.
+    // Since 24 Sep there is no feed at all, so "below the hint" is empty for
+    // every kind.
     const today = '2026-08-21';
     currentAdmin = makeAdmin({
       'student_submissions.select': (call) =>
-        call === 1 ? { data: [mk('picked-q', 'question', today), mk('other', 'tip', null)], error: null }
-        : call === 2 ? { data: [mk('picked-q', 'question', today)], error: null }
+        call === 1 ? { data: [mk('picked-q', 'question', today)], error: null }
         : { data: [], error: null },
       'submission_votes.select': () => ({ data: [], error: null }),
     });
     const json = await (await insightsGet()).json();
     expect(json.dailyPick.question).toBeUndefined();
     expect(json.dailyPick.tip ?? null).toBeNull();
-    const feedIds = json.feed.map((f: { id: string }) => f.id);
-    expect(feedIds, 'a question must not appear in the feed').not.toContain('picked-q');
-    expect(feedIds, 'tips still render').toContain('other');
+    expect(json.feed).toEqual([]);
   });
 
-  it("today's TIP is removed from the feed too", async () => {
+  it("today's TIP is the hint of the day, and the only hint sent", async () => {
     const today = '2026-08-21';
     currentAdmin = makeAdmin({
       'student_submissions.select': (call) =>
-        call === 1 ? { data: [mk('picked-t', 'tip', today), mk('other', 'tip', null)], error: null }
-        : call === 2 ? { data: [mk('picked-t', 'tip', today)], error: null }
+        call === 1 ? { data: [mk('picked-t', 'tip', today)], error: null }
         : { data: [], error: null },
       'submission_votes.select': () => ({ data: [], error: null }),
     });
     const json = await (await insightsGet()).json();
     expect(json.dailyPick.tip.id).toBe('picked-t');
-    expect(json.feed.map((f: { id: string }) => f.id)).not.toContain('picked-t');
+    expect(json.feed).toEqual([]);
   });
 
   it('no submission id appears more than once across the whole surface', async () => {
     const today = '2026-08-21';
     currentAdmin = makeAdmin({
       'student_submissions.select': (call) =>
-        call === 1 ? { data: [mk('q', 'question', today), mk('t', 'tip', today), mk('a', 'tip', null), mk('b', 'question', null)], error: null }
-        : call === 2 ? { data: [mk('q', 'question', today), mk('t', 'tip', today)], error: null }
+        call === 1 ? { data: [mk('q', 'question', today), mk('t', 'tip', today)], error: null }
+        : call === 2 ? { data: [mk('t', 'tip', today)], error: null }            // my own share
         : { data: [], error: null },
       'submission_votes.select': () => ({ data: [], error: null }),
     });

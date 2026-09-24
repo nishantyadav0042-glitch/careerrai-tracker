@@ -2,14 +2,22 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getLogDateString } from '@/lib/streak-utils';
-import { orderFeed, voteDisplay, FEED_PAGE_SIZE, type InsightRow, netScore } from '@/lib/os/insight-feed';
+import { voteDisplay, FEED_PAGE_SIZE, type InsightRow } from '@/lib/os/insight-feed';
 import { promoteDailyPick } from '@/lib/daily-pick-runner';
 import { VOTE_PROMPT } from '@/lib/community-pipeline';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 20;
 
-// GET /api/community/insights — Today's Top Pick + the Student Insights feed.
+// GET /api/community/insights — the Hint of the day, and the student's own share.
+//
+// ONE hint a day, and only one (founder, 24 Sep: "One hint only daily visible
+// to students. Hint of the day."). The feed of up to 60 other live hints that
+// sat under it is gone, and it is gone HERE rather than hidden in a component:
+// the stock a student has not been served yet never leaves the server, so
+// every hint in the queue is still new on the day it becomes the hint of the
+// day. `feed` stays in the response, always empty, so an older client that
+// still maps over it renders nothing instead of crashing.
 //
 // The vote counts are stripped HERE, not in the component. A number that must
 // not be seen should never leave the server: a client-side hide survives
@@ -44,12 +52,7 @@ export async function GET() {
   // so a late vote can never swap the winner mid-day.
   try { await promoteDailyPick(admin); } catch (e) { console.error('[community/insights] promote failed', e); }
 
-  const [subsR, votesR, myVotesR, featuredR, myOwnR] = await Promise.all([
-    admin.from('student_submissions')
-      .select('id, kind, payload, image_path, display_name, student_id, created_at, featured_on, status')
-      .eq('status', 'live')
-      .order('created_at', { ascending: false })
-      .limit(60),
+  const [votesR, myVotesR, featuredR, myOwnR] = await Promise.all([
     // Explicit bound (SCALE-CONTRACT): PostgREST silently truncates unbounded
     // selects, which would quietly flatten every percentage on screen.
     admin.from('submission_votes').select('submission_id, helpful').limit(10000),
@@ -75,12 +78,12 @@ export async function GET() {
   // myVotes read displayed the student's own votes as never cast. An
   // infrastructure error is UNKNOWN — a 503 the client retries, never a
   // false empty state.
-  const readErr = subsR.error ?? votesR.error ?? myVotesR.error ?? featuredR.error ?? myOwnR.error;
+  const readErr = votesR.error ?? myVotesR.error ?? featuredR.error ?? myOwnR.error;
   if (readErr) {
     console.error('[community/insights] read failed', readErr.message);
     return NextResponse.json({ error: 'Could not load the community right now — try again.', code: 'FEED_UNAVAILABLE', retryable: true }, { status: 503 });
   }
-  const subs = subsR.data; const votes = votesR.data; const myVotes = myVotesR.data;
+  const votes = votesR.data; const myVotes = myVotesR.data;
 
   const tally = new Map<string, { helpful: number; total: number }>();
   for (const v of (votes ?? []) as { submission_id: string; helpful: boolean }[]) {
@@ -124,7 +127,6 @@ export async function GET() {
     };
   };
 
-  const all = ((subs ?? []) as SubmissionRow[]).map(toRow);
 
   // Today's Top Pick — chosen by promoteDailyPick, which already runs from the
   // 07:30 cron and lazily from the ballot route. RANK, not count: "today's most
@@ -152,36 +154,14 @@ export async function GET() {
   // must remember to ignore is how the duplicate-render bug of 21 Aug happened
   // in the first place.
   const pickTip = featured.find((r) => r.kind === 'tip');
-  const pickIds = new Set([pickTip?.id].filter(Boolean) as string[]);
 
-  // The Top tab was a lie (hardening sprint, 21 Aug): the client sorted on a
-  // delta map that is empty on load, so "Top" rendered the New order. The
-  // server now sends each card's netScore; the client sorts on real votes.
-  const withScore = (r: InsightRow) => {
-    const s2 = shape(r);
-    return s2 ? { ...s2, netScore: netScore(r) } : null;
-  };
-  // DEDUPLICATION IS SERVER-SIDE, so no client can drift back into rendering
-  // the same submission twice. Today's pick lives in the Daily Pick card; the
-  // feed is everything else.
-  //
-  // HINTS ONLY, 31 Aug — and the reason matters more than the rule.
-  //
-  // This was left carrying both kinds earlier the same day, on the argument
-  // that the 50 questions were student contributions and hiding them was a
-  // bigger change than the founder had asked for. That argument was simply
-  // WRONG ON THE FACTS: every one of them is ours, written under the admin
-  // account with display_name 'CareerRai'. In six weeks the feature has taken
-  // exactly one non-curated submission, and that was the founder's own test
-  // post. There is no student content to protect.
-  //
-  // So the tab now does one thing. Questions are hidden, not deleted — the
-  // rows keep their history and their votes, and restoring this filter
-  // restores them. Filtered server-side, like the pick dedup above, so no
-  // client can drift back into rendering them.
-  const feed = orderFeed(all.filter((r) => r.kind === 'tip' && !pickIds.has(r.id)))
-    .slice(0, FEED_PAGE_SIZE * 5) // room for "See more" paging client-side
-    .map(withScore);
+  // No feed (24 Sep). Until today the other live hints were listed under this
+  // one, up to 60 of them, ordered by votes. That made the queue a menu: a
+  // student could read tomorrow's hint and the next month's today, so the hint
+  // of the day was only the first card of a list. Now the day's hint is the
+  // whole surface. The 31 Aug hints-only rule and the server-side dedup it
+  // relied on are moot, since nothing else is sent.
+  const feed: never[] = [];
 
   // Contributor rank retired 20 Aug (founder: no superstars, no board).
 
@@ -202,8 +182,8 @@ export async function GET() {
   // opened Daily Pick, 0 voted, and telling "got nothing" apart from "chose
   // not to" took an hour of SQL). Moved here from the retired ballot route —
   // this is now the one place that knows a student was handed nothing.
-  if (!pickTip && feed.length === 0) {
-    console.warn(`[community/insights] EMPTY surface student=${user.id} day=${day} livePool=${all.length}`);
+  if (!pickTip) {
+    console.warn(`[community/insights] EMPTY surface student=${user.id} day=${day}: no hint of the day`);
   }
 
   return NextResponse.json({

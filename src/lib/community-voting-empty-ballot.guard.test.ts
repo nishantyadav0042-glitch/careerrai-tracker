@@ -20,16 +20,21 @@ describe('the community surface announces an empty state instead of staying sile
   it('logs when an authenticated student is handed nothing at all', () => {
     const route = readFileSync('src/app/api/community/insights/route.ts', 'utf8');
     expect(route).toContain('EMPTY surface');
-    // Must fire on the ACTUAL empty case: no hint, no feed. The question half
-    // of this condition went with the question kind (31 Aug) — there is only
-    // one pick now, so a surviving `!pickQuestion &&` would be a clause that
-    // can never be false, which is how a guard quietly stops guarding.
-    expect(route).toMatch(/!pickTip && feed\.length === 0/);
+    // Must fire on the ACTUAL empty case. The question half of this condition
+    // went with the question kind (31 Aug), and the feed half went with the
+    // feed (24 Sep: one hint a day, nothing else sent). The hint of the day is
+    // now the whole surface, so its absence alone is "handed nothing". A
+    // surviving `&& feed.length === 0` would be a clause that can never be
+    // false, which is how a guard quietly stops guarding.
+    expect(route).toMatch(/if \(!pickTip\) \{/);
+    expect(route).not.toMatch(/feed\.length === 0/);
   });
 
   it('the log carries enough to diagnose without a database query', () => {
     const route = readFileSync('src/app/api/community/insights/route.ts', 'utf8');
     expect(route).toContain('student=${user.id}');
-    expect(route).toContain('livePool=${all.length}');
+    // The day is what joins the log line to the promoter's stamp. The live
+    // pool size went with the feed read; runway is the Daily Pick watch's job.
+    expect(route).toContain('day=${day}');
   });
 });

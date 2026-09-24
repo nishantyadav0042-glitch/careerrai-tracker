@@ -131,3 +131,53 @@ describe('runway — "at least one month"', () => {
     expect(runwayFor(pool, 'question').meetsMonth).toBe(true);
   });
 });
+
+describe('the most valuable hint goes first (editorial rank, 24 Sep)', () => {
+  const r = (id: string, day: string, rank: number | null, featuredOn: string | null = null): PickCandidate =>
+    ({ ...t(id, 0, day, featuredOn), rank });
+
+  it('a lower rank beats an older hint', () => {
+    // Founder: "keep the most relevant and valuable hints on top." With no
+    // feed there are no votes on unserved stock, so without a rank the queue
+    // was insertion order.
+    const pick = pickForKind([r('old', '01', 40), r('best', '20', 1), r('mid', '10', 7)], 'tip');
+    expect(pick.id).toBe('best');
+  });
+
+  it('ranked stock is served before unranked, whatever its age', () => {
+    const pick = pickForKind([r('unranked-old', '01', null), r('ranked-new', '25', 90)], 'tip');
+    expect(pick.id).toBe('ranked-new');
+  });
+
+  it('among unranked items the old order still holds', () => {
+    const pick = pickForKind([r('b', '09', null), r('a', '03', null)], 'tip');
+    expect(pick.id).toBe('a');
+  });
+
+  it('walks the ranks in order across days, and never repeats while stock lasts', () => {
+    let pool = [r('third', '01', 3), r('first', '02', 1), r('second', '03', 2)];
+    const served: string[] = [];
+    for (const day of ['2026-10-01', '2026-10-02', '2026-10-03']) {
+      const id = pickForKind(pool, 'tip').id!;
+      served.push(id);
+      pool = pool.map((c) => (c.id === id ? { ...c, featuredOn: day } : c));
+    }
+    expect(served).toEqual(['first', 'second', 'third']);
+  });
+
+  it('a rank does not bring an already-served hint back while fresh stock remains', () => {
+    const pick = pickForKind([r('served', '01', 1, '2026-09-20'), r('fresh', '02', 50)], 'tip');
+    expect(pick.id).toBe('fresh');
+  });
+});
+
+describe('payload.rank is read strictly', () => {
+  it('only a positive integer is a rank; anything else is unranked, never a guess', async () => {
+    const { rankOf } = await import('./daily-pick-runner');
+    expect(rankOf({ rank: 1 })).toBe(1);
+    expect(rankOf({ rank: 160 })).toBe(160);
+    for (const bad of [{ rank: 0 }, { rank: -3 }, { rank: 2.5 }, { rank: '1' }, { rank: null }, {}, null, undefined]) {
+      expect(rankOf(bad as { rank?: unknown } | null | undefined), JSON.stringify(bad)).toBeNull();
+    }
+  });
+});

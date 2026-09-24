@@ -146,7 +146,10 @@ export function StudentInsights() {
   if (!data) return null;
 
   const { feed } = data;
-  if (feed.length === 0 && !data.myShare) return <EmptyState />;
+  // The server sends no feed since 24 Sep (one hint a day; see the insights
+  // route). With no share of their own there is nothing to add under the hint
+  // of the day, and the pinned "Pass it on" button already asks for one.
+  if (feed.length === 0 && !data.myShare) return null;
 
   const liveVote = (i: Item) => (myVotes[i.id] !== undefined ? myVotes[i.id] : i.myVote);
   // Ranking still runs on the real score — it is just never printed. The
@@ -349,24 +352,5 @@ function Card({
         </div>
       )}
     </article>
-  );
-}
-
-/**
- * The empty state matters more than the full one at our size — it is what the
- * first contributor sees. So it does not apologise, does not say "no posts
- * yet", and above all does not report how many contributions exist. It makes an
- * invitation, which is the only honest and useful thing to do with an empty
- * shelf.
- */
-function EmptyState() {
-  return (
-    <div className="rounded-2xl border border-dashed border-stone-300 bg-white px-4 py-6 text-center">
-      <p className="text-[14px] font-bold text-stone-800">Be the one who adds something</p>
-      <p className="mx-auto mt-1.5 max-w-[15rem] text-[12.5px] leading-relaxed text-stone-500">
-        A question worth asking, a shortcut you found, or something you learned the hard way.
-        The next student gets it tomorrow.
-      </p>
-    </div>
   );
 }

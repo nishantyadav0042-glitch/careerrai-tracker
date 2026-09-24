@@ -37,10 +37,10 @@ export default function CommunityPage() {
           daily habit. */}
       <DailySlotCard />
 
-      {/* Below the day's one curated thing: what other students have added.
-          This is the community loop — browse, find something useful, vote, and
-          eventually add your own. No counts anywhere on it (see
-          lib/os/insight-feed.ts); rank carries the signal instead. */}
+      {/* Below the hint of the day: only the student's own latest share, if
+          they have one. The feed of other hints that used to sit here is gone
+          (founder, 24 Sep: "One hint only daily visible to students"), removed
+          at the server so the queue stays unseen until each hint's day. */}
       <StudentInsights />
 
       {/* Share CTA is PINNED above the bottom nav (founder, 26 Jul: "scroll

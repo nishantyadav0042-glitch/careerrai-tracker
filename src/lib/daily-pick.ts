@@ -20,7 +20,8 @@
 //      single date, and the picker only ever considers items that have never
 //      held the slot, so nothing can repeat while fresh stock exists.
 //   4. Zero votes is not a blocker. With an empty scoreboard the queue order
-//      decides, oldest first, so the shelf still turns over every day.
+//      decides, so the shelf still turns over every day. Since 24 Sep that
+//      order is the editorial rank first, then oldest first.
 //   5. The shelf cannot run dry: once every item has had its day, the one that
 //      held the slot longest ago comes back round.
 //
@@ -47,6 +48,12 @@ export interface PickCandidate {
    * when absent, every vote is treated as helpful — the old behaviour.
    */
   helpful?: number;
+  /**
+   * Editorial rank, 1 = serve first. Founder, 24 Sep: "keep the most relevant
+   * and valuable hints on top." Stored in the hint's payload (payload.rank), so
+   * reordering the queue is a data change, never a deploy. Absent = unranked.
+   */
+  rank?: number | null;
 }
 
 export type PickReason =
@@ -59,6 +66,23 @@ export interface KindPick {
   id: string | null;
   reason: PickReason;
   votes: number;
+}
+
+/**
+ * Fresh-stock order: editorial rank first, then quality, then oldest.
+ *
+ * RANK LEADS (24 Sep). With one hint visible a day and no feed, an unserved
+ * hint can collect no votes, so for fresh stock "quality" is 0 for everyone
+ * and the queue was decided by created_at alone: insertion order, not value.
+ * The rank puts the most useful hint for a student nine weeks from CAT first.
+ * Unranked items (a student's own contribution, or anything added without a
+ * rank) queue after every ranked one, in the old order among themselves.
+ */
+function byRankThenQualityThenOldest(a: PickCandidate, b: PickCandidate): number {
+  const ra = a.rank ?? Number.POSITIVE_INFINITY;
+  const rb = b.rank ?? Number.POSITIVE_INFINITY;
+  if (ra !== rb) return ra < rb ? -1 : 1;
+  return byQualityThenOldest(a, b);
 }
 
 /**
@@ -88,7 +112,7 @@ export function pickForKind(candidates: PickCandidate[], kind: PickKind): KindPi
 
   const fresh = ofKind.filter((c) => c.featuredOn == null);
   if (fresh.length > 0) {
-    const winner = [...fresh].sort(byQualityThenOldest)[0];
+    const winner = [...fresh].sort(byRankThenQualityThenOldest)[0];
     return {
       id: winner.id,
       reason: winner.votes > 0 ? 'by_votes' : 'queue_order',

@@ -18,6 +18,14 @@ import { studyDayString } from '@/lib/study-day';
 // cleared the safety gate and 'blocked' failed it; neither reaches a student.
 const ELIGIBLE_STATUSES = ['live'] as const;
 
+/** payload.rank as a positive integer, or null. Anything else (missing, a
+ *  string, zero, negative) is unranked rather than a guess: a malformed rank
+ *  must not jump the queue. */
+export function rankOf(payload: { rank?: unknown } | null | undefined): number | null {
+  const r = payload?.rank;
+  return typeof r === 'number' && Number.isInteger(r) && r > 0 ? r : null;
+}
+
 export interface PromoteResult {
   date: string;
   questionId: string | null;
@@ -47,11 +55,12 @@ export async function promoteDailyPick(admin: any, now: Date = new Date()): Prom
 
   const { data: rows } = await admin
     .from('student_submissions')
-    .select('id, kind, created_at, featured_on, status')
+    .select('id, kind, created_at, featured_on, status, payload')
     .in('status', ELIGIBLE_STATUSES);
 
   const submissions = (rows ?? []) as {
     id: string; kind: string; created_at: string; featured_on: string | null; status: string;
+    payload: { rank?: unknown } | null;
   }[];
 
   // Vote totals AND helpful counts. Counted here rather than trusted from a
@@ -83,6 +92,7 @@ export async function promoteDailyPick(admin: any, now: Date = new Date()): Prom
       helpful: votes.get(s.id)?.helpful ?? 0,
       createdAt: s.created_at,
       featuredOn: s.featured_on,
+      rank: rankOf(s.payload),
     }));
 
   // Runway is a TIPS-ONLY question now. `candidates` holds no questions at all,
