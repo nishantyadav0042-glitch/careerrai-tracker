@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   logBreakerOf, dailyLoggerOf, isConversation,
-  LOG_BREAKER_MAX_ATTEMPTS, FEEDBACK_EVERY_DAYS,
+  FEEDBACK_EVERY_DAYS,
 } from './sales-log-breakers';
 import { assembleDay, SECTION_ORDER, SECTION_OF } from './sales-day';
 import type { DueReason } from './call-queue';
@@ -21,7 +21,7 @@ const SOMYA = ['2026-09-15', '2026-09-16', '2026-09-17', '2026-09-18', '2026-09-
 describe('who is a log breaker', () => {
   it('a 3+ day habit, then 2–7 days without a log', () => {
     const lb = logBreakerOf(SOMYA, TODAY, []);
-    expect(lb).toEqual({ lastLog: '2026-09-21', gapDays: 3, habitDays: 6, attemptsSinceBreak: 0 });
+    expect(lb).toEqual({ lastLog: '2026-09-21', gapDays: 3, habitDays: 6, streak: 2, attemptsSinceBreak: 0 });
     // Missed only yesterday: the break has begun.
     expect(logBreakerOf(['2026-09-20', '2026-09-21', '2026-09-22'], TODAY, [])?.gapDays).toBe(2);
     // Seven days silent is still a fresh break.
@@ -33,8 +33,15 @@ describe('who is a log breaker', () => {
     expect(logBreakerOf([...SOMYA, '2026-09-24'], TODAY, [])).toBeNull();
   });
 
-  it('not a habit: fewer than 3 log days in the week that ended at the last log', () => {
+  it('a 2-day streak is enough (founder: "more than 1 day streak")', () => {
+    // Logged 21 and 22 Sep, missed 23 Sep: 24 Sep is the must-connect day.
+    expect(logBreakerOf(['2026-09-21', '2026-09-22'], TODAY, [])).toMatchObject({ gapDays: 2, streak: 2 });
+  });
+
+  it('not a habit: one-off days, never two in a row and fewer than 3 in the week', () => {
     expect(logBreakerOf(['2026-09-14', '2026-09-21'], TODAY, [])).toBeNull();
+    expect(logBreakerOf(['2026-09-20', '2026-09-22'], TODAY, [])).toBeNull();
+    expect(logBreakerOf(['2026-09-22'], TODAY, [])).toBeNull();
   });
 
   it('too long ago: after 7 days the older lanes own them', () => {
@@ -46,11 +53,11 @@ describe('who is a log breaker', () => {
     expect(logBreakerOf(SOMYA, TODAY, [{ atIso: at('2026-09-21'), status: 'interested' }])).not.toBeNull();
   });
 
-  it(`try up to ${LOG_BREAKER_MAX_ATTEMPTS} times: unanswered tries are counted, then the card stands down`, () => {
+  it('non-negotiable: unanswered tries are counted and the card never stands down on its own', () => {
     const miss = (d: string, h = '15:00') => ({ atIso: at(d, h), status: 'no_answer' });
     expect(logBreakerOf(SOMYA, TODAY, [miss('2026-09-22')])?.attemptsSinceBreak).toBe(1);
     expect(logBreakerOf(SOMYA, TODAY, [miss('2026-09-22'), { atIso: at('2026-09-23'), status: 'switched_off' }])?.attemptsSinceBreak).toBe(2);
-    expect(logBreakerOf(SOMYA, TODAY, [miss('2026-09-22'), miss('2026-09-22', '18:30'), miss('2026-09-23')])).toBeNull();
+    expect(logBreakerOf(SOMYA, TODAY, [miss('2026-09-22'), miss('2026-09-22', '18:30'), miss('2026-09-23')])?.attemptsSinceBreak).toBe(3);
     // A WhatsApp message is not a connection and not a try.
     expect(logBreakerOf(SOMYA, TODAY, [{ atIso: at('2026-09-22'), status: 'messaged' }])?.attemptsSinceBreak).toBe(0);
   });
@@ -98,6 +105,12 @@ describe('where they sit in the counsellor\'s day', () => {
     expect(day.queue.filter((c) => c.dueReason === 'log_breaker')).toHaveLength(12);
     expect(day.queue.filter((c) => c.dueReason === 'daily_logger')).toHaveLength(10);
     expect(day.queue[0].section).toBe('logbreakers');
+  });
+
+  it('refreshes daily: no retry or promise clock hides a log breaker past today', () => {
+    const src = readFileSync(join(__dirname, 'call-queue.ts'), 'utf8');
+    expect(src).toMatch(/const untouchedBreak = logBreaker != null && !attemptedToday;/);
+    expect(src).toMatch(/if \(nextAction != null && !dueNow && !abandonedSinceLastCall && !untouchedBreak\) continue;/);
   });
 
   it('the queue routes them ahead of the re-dial — the defect that hid every daily logger', () => {
