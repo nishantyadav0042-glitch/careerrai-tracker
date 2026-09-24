@@ -87,7 +87,7 @@ export const MESSAGE_TEMPLATES: MessageTemplate[] = [
     key: 'no_answer_reachout',
     label: 'No Answer / First Reach-out',
     copy: 'Hi [Name], I tried reaching you regarding your CAT preparation. I just wanted to understand where you currently stand with your preparation and whether your routine is going the way you planned. Whenever you get a moment, just drop me a message — I’d be happy to connect.',
-    lanes: ['retry', 'fresh'],
+    lanes: ['log_breaker', 'daily_logger', 'retry', 'fresh'],
   },
   {
     key: 'busy_callback',
@@ -109,7 +109,7 @@ export const MESSAGE_TEMPLATES: MessageTemplate[] = [
     key: 'app_difficulty',
     label: 'App / Preparation Follow-up',
     copy: 'Hi [Name], I wanted to check something with you regarding your preparation. Are you actually able to make the application work around your current routine, or are you facing any difficulty with the schedule/tasks? Just let me know whenever you’re free — we can figure it out together.',
-    lanes: ['attention', 'new_never_logged', 'broken_streak'],
+    lanes: ['log_breaker', 'attention', 'new_never_logged', 'broken_streak'],
   },
 ];
 

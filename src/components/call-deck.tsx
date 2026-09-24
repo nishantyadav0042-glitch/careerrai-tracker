@@ -15,6 +15,7 @@ import { templatesFor, templateNote, renderTemplate, type MessageTemplate } from
 
 const TIER: Record<string, string> = { hot: 'bg-rose-50 text-rose-700', warm: 'bg-amber-50 text-amber-800', cool: 'bg-stone-100 text-stone-500' };
 const DUE_CLS: Record<string, string> = {
+  log_breaker: 'bg-red-600 text-white', daily_logger: 'bg-green-700 text-white',
   callback: 'bg-sky-600 text-white', retry: 'bg-orange-500 text-white', followup: 'bg-amber-500 text-white',
   going_cold: 'bg-rose-600 text-white', broken_streak: 'bg-violet-600 text-white',
   restart: 'bg-fuchsia-600 text-white',

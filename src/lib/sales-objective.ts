@@ -39,6 +39,9 @@ export type SalesObjective = 'retention' | 'conversion';
  */
 const RETENTION_LANES: ReadonlySet<string> = new Set<DueReason>([
   'going_cold', 'broken_streak', 'new_never_logged',
+  // Log breakers and daily loggers (24 Sep 2026): the call is about their
+  // logging, never a pitch.
+  'log_breaker', 'daily_logger',
   // Came back once, then stopped (15 Sep 2026). The student has already shown
   // us the product works for them — twice. Getting them studying again is
   // retention in its purest form, and a card that opened with a pitch would

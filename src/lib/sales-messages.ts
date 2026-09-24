@@ -92,6 +92,10 @@ export function messageFor(m: MessageInput): string {
       return `${firstName}, welcome to CareerRai. The first study log is the one that matters.\n${step()}\n${sign(rep)}`;
     case 'going_cold':
       return `${firstName}, you were studying steadily and then it stopped a few days ago. What changed?\n${step()}\n${sign(rep)}`;
+    case 'log_breaker':
+      return `${firstName}, you were logging your study regularly and it stopped a couple of days ago. Is something getting in the way — time, the app, anything missing?\n${step()}\n${sign(rep)}`;
+    case 'daily_logger':
+      return `${firstName}, you've been logging your study almost every day — that's rare. Can I ask what's working for you, and what's missing or annoying in the app? Two lines is plenty.\n${sign(rep)}`;
     case 'broken_streak':
       return `${firstName}, your streak just broke. The habit is still warm — restart today.\n${step()}\n${sign(rep)}`;
     // Dealt as a CALL, so this is the fallback for a rep who could not reach

@@ -41,7 +41,9 @@ describe('a payment attempt made since the last call re-opens the day', () => {
   });
 
   it('a future promise date no longer deletes a student who has since tried to pay', () => {
-    expect(SRC).toMatch(/if \(nextAction != null && !dueNow && !abandonedSinceLastCall\) continue;/);
+    // The abandoned-checkout override survives the 24 Sep log-breaker override
+    // added beside it (lib/sales-log-breakers).
+    expect(SRC).toMatch(/if \(nextAction != null && !dueNow && !abandonedSinceLastCall(?: && !untouchedBreak)?\) continue;/);
   });
 
   it('nor does having already been called today', () => {

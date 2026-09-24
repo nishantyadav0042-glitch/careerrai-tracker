@@ -189,6 +189,7 @@ export async function recordIntervention(
 export function interventionTypeForLane(lane: string | null): InterventionType {
   switch (lane) {
     case 'new_never_logged': return 'activation';
+    case 'log_breaker':
     case 'going_cold':
     case 'broken_streak':
     case 'restart':
