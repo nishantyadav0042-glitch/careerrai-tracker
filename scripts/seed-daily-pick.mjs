@@ -29,7 +29,13 @@ import { fileURLToPath } from 'node:url';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const seed = JSON.parse(readFileSync(join(HERE, 'daily-pick-seed.json'), 'utf-8'));
 
-const VOTING_WINDOW_HOURS = 72; // mirrors lib/community-pipeline
+// Every row is written 'live' with no voting window. Since 20 Aug there is one
+// live pool (migration 20260820e_community_one_live_pool): the status check
+// constraint admits only live / pending / blocked / rejected, and the promoter
+// reads 'live' alone (daily-pick-runner ELIGIBLE_STATUSES). This script still
+// wrote 'voting' for a month after that, so every re-run would have failed on
+// the constraint, and the shelf could not be restocked from the repo (24 Sep).
+const STATUS = 'live';
 const SECTIONS = ['QA', 'DILR', 'VARC'];
 
 /** Interleave by section so consecutive days rotate sections. */
@@ -73,13 +79,13 @@ function toSql() {
     `${sq(r.kind)},`,
     `${sq(r.topic)},`,
     `${sq(JSON.stringify(r.payload))}::jsonb,`,
-    `'voting',`,
+    `${sq(STATUS)},`,
     `'CareerRai',`,
     'true,',
     // Strict ordering: one second apart, so the queue's oldest-first tie-break
     // is deterministic rather than whatever order Postgres returns.
     `now() + make_interval(secs => ${i}),`,
-    `now() + interval '${VOTING_WINDOW_HOURS} hours'`,
+    'null::timestamptz',
     ')',
   ].join(' ')).join(',\n  ');
 
@@ -128,11 +134,11 @@ if (process.argv.includes('--print-sql')) {
       kind: r.kind,
       topic: r.topic,
       payload: r.payload,
-      status: 'voting',
+      status: STATUS,
       display_name: 'CareerRai',
       curated: true,
       created_at: new Date(base + i * 1000).toISOString(),
-      voting_ends_at: new Date(base + VOTING_WINDOW_HOURS * 3600_000).toISOString(),
+      voting_ends_at: null,
     })),
   );
   if (error) { console.error(error); process.exit(1); }

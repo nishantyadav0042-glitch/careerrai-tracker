@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
-import { MAX_TIP_CHARS } from './community-pipeline';
+import { MAX_TIP_CHARS, VISIBLE_STATUSES } from './community-pipeline';
 import { RUNWAY_TARGET_DAYS } from './daily-pick';
 
 // The founder's brief for this content was a set of hard constraints, not a
@@ -89,6 +89,19 @@ describe('curated Daily Pick seed', () => {
     for (const t of seed.tips) {
       expect(t.text.length, `too vague to act on: ${t.text}`).toBeGreaterThan(60);
     }
+  });
+
+  it('is loaded with a status the database accepts and the promoter reads', () => {
+    // The loader wrote 'voting' for a month after the 20 Aug one-live-pool
+    // migration made that value illegal, so the shelf could not be restocked
+    // from this file at all (found 24 Sep, with QA stock at 19). The loader's
+    // status must be the one the promoter serves.
+    const loader = readFileSync(join(process.cwd(), 'scripts/seed-daily-pick.mjs'), 'utf-8')
+      .replace(/^\s*\/\/.*$/gm, '');   // comments may name the old value
+    const status = /const STATUS = '([a-z]+)'/.exec(loader)?.[1];
+    expect(status).toBeDefined();
+    expect(VISIBLE_STATUSES as readonly string[]).toContain(status);
+    expect(loader).not.toMatch(/'voting'/);
   });
 
   it('has no duplicates', () => {
