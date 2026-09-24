@@ -272,8 +272,8 @@ export default function PostSignupSequence({ regEventId }: { regEventId?: string
         {step === 'promises' && (
           <div className="space-y-5">
             <JourneyRail current={isIphone ? 1 : 2} stations={stations} />
-            {/* The one place the product is explained (24 Sep): you study,
-                CareerRai plans. It replaced the six promises, and nothing
+            {/* The one place the product is explained (24 Sep): you have
+                the material, CareerRai decides the work. It replaced the six promises, and nothing
                 after it explains the product again. */}
             <WhatCareerRaiIs onNext={() => { void persist({ done: true }); setStep('whatsapp'); }} />
           </div>

@@ -15,6 +15,10 @@ import { cn } from '@/lib/utils';
 // explains it again: the Home card carries a single line, and the first real
 // task teaches the rest.
 //
+// Headline (founder, 24 Sep): "You have the material. CareerRai decides the
+// work." It answers the category question first: coaching teaches, books and
+// mocks give practice, CareerRai decides what to do next.
+//
 // Every line is true of every student:
 //   · the plan is sized by routine-engine from the hours asked on /start
 //   · every engine task carries a reason and an estimate
@@ -36,11 +40,11 @@ export function WhatCareerRaiIs({ onNext }: { onNext: () => void }) {
       <div className="text-center">
         <p className="text-[10px] font-bold uppercase tracking-widest text-orange-600">What is CareerRai</p>
         <h1 className="mt-1.5 text-[22px] font-bold leading-[1.15] text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
-          You study.<br />CareerRai plans.
+          You have the material.<br />CareerRai decides the work.
         </h1>
         <p className="mx-auto mt-2 max-w-[19rem] text-[13px] leading-snug text-stone-600">
-          CareerRai isn&apos;t a coaching app. Keep your books, classes, notes and videos.{' '}
-          <b className="text-stone-900">CareerRai tells you what to do with them.</b>
+          CareerRai isn&apos;t a coaching app. You study from your own books, coaching, notes and videos.{' '}
+          <b className="text-stone-900">CareerRai tells you what to do with them, every day.</b>
         </p>
       </div>
 

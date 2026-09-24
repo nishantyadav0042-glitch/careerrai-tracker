@@ -65,7 +65,7 @@ describe('the screen that introduces the product keeps its way forward reachable
     // Founder, 24 Sep: the student must leave able to say "it decides what I
     // study today; I study from my own material; I tell it how much got done."
     const src = readFileSync(SRC, 'utf8');
-    expect(src).toContain('You study.<br />CareerRai plans.');
+    expect(src).toContain('You have the material.<br />CareerRai decides the work.');
     expect(src).toContain('CareerRai isn&apos;t a coaching app.');
     for (const step of ['CareerRai plans', 'You study', 'You mark it']) expect(src).toContain(`head: '${step}'`);
     // The two gestures, named exactly as the Home card names them.
