@@ -13,6 +13,8 @@ import { FirstWeekAskCard } from '@/components/first-week-ask-card';
 import type { CoverageStatus } from '@/lib/coverage-status';
 import { track } from '@/lib/journey';
 import { reportHandledError } from '@/lib/report-error';
+import { FirstTaskFlow, FirstTaskReminder, type FirstTask } from '@/components/first-task-flow';
+import { firstOpenTask, planSizeLine } from '@/lib/first-task';
 
 // The ladder is imported, never re-spelled — a local copy is how exam_ready
 // goes missing from one screen and nowhere else.
@@ -235,7 +237,11 @@ function MockScoreButton({ className, recorded }: {
   );
 }
 
-export function TodaysRoutineCard({ planSource = null }: { planSource?: string | null }) {
+export function TodaysRoutineCard({ planSource = null, firstDay = false }: {
+  planSource?: string | null;
+  /** Never logged and onboarding finished: offer the first task (24 Sep). */
+  firstDay?: boolean;
+}) {
   const [data, setData] = useState<RoutineResponse | null>(null);
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
   const [fullyDone, setFullyDone] = useState(false);
@@ -354,8 +360,10 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
     return () => window.removeEventListener('cr-routine-updated', onUpdated);
   }, [load]);
 
-  async function toggleTask(task: RoutineTask, confidence?: ConfidenceSignal, portion?: 'full' | 'half') {
-    if (busyTaskId) return;
+  // Resolves true when the tick saved. The first-task flow needs to know; every
+  // other caller ignores it.
+  async function toggleTask(task: RoutineTask, confidence?: ConfidenceSignal, portion?: 'full' | 'half'): Promise<boolean> {
+    if (busyTaskId) return false;
     setBusyTaskId(task.id);
     try {
       const res = await fetch('/api/routine/complete-task', {
@@ -381,7 +389,7 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
         // never recorded. Say so and leave the circle empty.
         const body = (await res.json().catch(() => ({}))) as { error?: string };
         setTickError(body.error ?? 'Could not save that — check your connection and tap again.');
-        return;
+        return false;
       }
       // Server state changed — the 30s GET cache must never serve
       // pre-completion data.
@@ -433,6 +441,7 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
         setTickError(null);
       }
       if (json.fullyDone && json.dayClosed) { setFullyDone(true); reportComplete(); }
+      return true;
     } catch (e) {
       // A network fault REJECTS; a 4xx/5xx resolves and is handled above.
       //
@@ -453,6 +462,7 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
       track('completion_write', { taskId: task.id, ok: false, status: 0, kind: 'network', surface: 'plan_card' });
       reportHandledError(e, { where: 'plan-card:tick', detail: task.id });
       setTickError('Could not save that — check your connection and tap again.');
+      return false;
     } finally {
       setBusyTaskId(null);
     }
@@ -516,8 +526,27 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
   const doneCount = routine.tasks.filter((t) => completedIds.has(t.id)).length;
   const completedWithTopic = routine.tasks.filter((t) => completedIds.has(t.id) && t.topic);
 
+  // Day one (24 Sep): the first task not yet marked, in the shape the
+  // first-task flow needs. markFirst never re-sends a task that is already
+  // marked: complete-task TOGGLES, so a second send would unmark it.
+  const openTask = firstOpenTask(tasks, completedIds);
+  const firstTask: FirstTask | null = openTask
+    ? {
+        id: openTask.id, title: taskTitle(openTask), estMinutes: openTask.estMinutes,
+        topic: openTask.topic, resource: openTask.resource ?? null, secondary: openTask.secondary ?? null,
+      }
+    : null;
+  const markFirst = async (portion: 'full' | 'half'): Promise<boolean> => {
+    if (!openTask) return false;
+    if (completedIds.has(openTask.id)) return true;
+    return toggleTask(openTask, undefined, portion);
+  };
+
   return (
-    <Card className="p-3" data-tour="plan">
+    // data-plan-size feeds the tour's "How CareerRai works" card: this
+    // student's own plan, never a fixed daily load (founder, 24 Sep).
+    <Card className="p-3" data-tour="plan" data-plan-size={planSizeLine(tasks) ?? undefined}>
+      <FirstTaskFlow enabled={firstDay} task={firstTask} onMark={markFirst} />
       {/* Two chips removed here 13 Aug (founder: "remove these 2 extra buttons
           which make no sense").
             "8h today" repeated the hours the position card states two
@@ -716,6 +745,7 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
               screen only." Shown until they have marked anything at all today,
               then it disappears; a hint that outstays its welcome becomes
               furniture. */}
+          <FirstTaskReminder task={firstTask} onMark={markFirst} />
           {doneCount === 0 && (
             <p className="mb-1.5 rounded-lg bg-stone-900 px-2.5 py-1.5 text-[11px] font-semibold text-white">
               Finished a task? Tap anywhere on it — that&apos;s it, your day is marked.

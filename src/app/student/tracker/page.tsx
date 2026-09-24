@@ -475,7 +475,12 @@ export default async function DailyTrackerPage() {
   // the answer in the same glance, not in a settings screen.
   const planBlock = (
     <>
-      <TodaysRoutineCard planSource={(profile?.plan_source as string | null) ?? null} />
+      <TodaysRoutineCard
+        planSource={(profile?.plan_source as string | null) ?? null}
+        // Day one: never logged, onboarding finished. The card offers the
+        // first task now, or asks for a time (components/first-task-flow).
+        firstDay={(logs ?? []).length === 0 && profile?.onboarding_completed === true && profile?.post_signup_done === true}
+      />
       {/* The two things a student wants next to today's plan: the whole plan,
           and the one honest way out of today. Founder, 8 Aug: "sometimes you
           just want to see what your next fifteen days look like." */}

@@ -363,6 +363,19 @@ export type EventName =
   // Whether a finished tour is followed by a first log is a join against
   // daily_reports, not another event.
   | 'app_tour_started' | 'app_tour_step' | 'app_tour_finished'
+  // The first task on day one (24 Sep, components/first-task-flow.tsx). Replaces
+  // first_log_prompt, which asked for a log before anything was studied.
+  //   first_task_offered      IMPRESSION — { minutes, hasVideo }
+  //   first_task_started      ACT        — tapped Start now
+  //   first_task_not_now      ACT        — tapped Not now
+  //   first_task_outcome      ACT        — { outcome: full | half | couldnt,
+  //                                         reason?, seconds?, via? }. full and
+  //                                         half also write the real log through
+  //                                         the card's own completion path
+  //   first_task_later        ACT        — { slot | null }: the time promised
+  //   first_task_reminder_shown / _dismissed — the Home banner after that time
+  | 'first_task_offered' | 'first_task_started' | 'first_task_not_now' | 'first_task_outcome'
+  | 'first_task_later' | 'first_task_reminder_shown' | 'first_task_reminder_dismissed'
   | 'buddy_plan_click' | 'buddy_unlock_open'
   // Independence Day campaign (12 Aug): one funnel, measured end to end —
   // card seen → clicked → offer page → checkout (pay_* above carries the rest).

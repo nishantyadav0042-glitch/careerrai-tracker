@@ -31,9 +31,24 @@ import { track } from '@/lib/journey';
 //   3. records itself (app_tour_started / _step / _finished), so whether a
 //      finished tour is followed by a first log can be read from data instead
 //      of guessed. The old tour had no telemetry at all.
-interface TourStep { id: string; sel: string; title: string; body: string }
+// sel null = no spotlight: a card in the middle of a dimmed screen. Only the
+// opening step uses it, because "how does this app work" is not a thing on the
+// screen to point at.
+interface TourStep { id: string; sel: string | null; title: string; body: string }
+
+// OPENING CARD (founder, 24 Sep: "think like a student who knows zero").
+// A student who arrived from a reel expects lessons. Nothing told them that
+// CareerRai does not teach, where the studying happens, or why tapping a task
+// matters. The plan's size is THIS student's (data-plan-size on the plan card,
+// from the hours they gave), never a fixed daily load.
+export const HOW_IT_WORKS: string[] = [
+  'Every day you get a study plan, sized to the time you said you have.',
+  'CareerRai doesn’t teach. Study each task from your own books or coaching notes, or the free video we link.',
+  'When you finish a task, tap it here. Tomorrow’s plan changes with what you did.',
+];
 
 const STEPS: TourStep[] = [
+  { id: 'how', sel: null, title: 'How CareerRai works', body: '' },
   { id: 'plan', sel: '[data-tour="plan"]', title: 'Your plan for today', body: 'Built around the highest-scoring CAT topics for exactly where you are. Each task tells you why it’s there.' },
   { id: 'daily-pick', sel: '[data-tour="daily-pick"]', title: 'Hint of the day 💡', body: 'One CAT hint a day, the most useful first. It takes twenty seconds to read.' },
   { id: 'buddy', sel: '[data-tour="buddy"]', title: 'Your IIM buddy', body: 'Your 1:1 IIM buddy reviews your prep and tells you what to fix — right here.' },
@@ -41,7 +56,7 @@ const STEPS: TourStep[] = [
   // at the real first task. Founder, 13 Aug: "just guide the new students the
   // way they can log." Skipped automatically when there is no
   // open task on screen (the step's target is then absent).
-  { id: 'first-task', sel: '[data-tour="first-task"]', title: 'Start here', body: 'This is your first task. When you finish it, or get halfway, tap it and choose Finished it or Got halfway. That is your whole log for today.' },
+  { id: 'first-task', sel: '[data-tour="first-task"]', title: 'Start here', body: 'Start with this one. When you’ve studied it, tap it and choose Finished it or Got halfway. That’s how CareerRai knows what you did.' },
 ];
 const KEY = TOUR_KEY;
 // Broadcast the moment the tour ends so the buddy pitch and first-log prompt
@@ -70,12 +85,16 @@ export function AppTour({ enabled = false, neverLogged = false }: { enabled?: bo
   // event arriving mid-tour called setIdx(0) again and sent the student back
   // to step 1.
   const started = useRef(false);
+  // "3 tasks, about 1 h 30 min", read from the plan card when the opening
+  // card shows. Null when the plan has not loaded: the line then stops short.
+  const [planSize, setPlanSize] = useState<string | null>(null);
   // Leaving the page mid-tour must not leave the flag set for the session.
   useEffect(() => () => setTourVisible(false), []);
 
   const measure = useCallback((i: number): DOMRect | null => {
     const step = STEPS[i];
     if (!step) return null;
+    if (!step.sel) return new DOMRect(window.innerWidth / 2, window.innerHeight / 2, 0, 0);
     const el = document.querySelector(step.sel) as HTMLElement | null;
     if (!el) return null;
     return el.getBoundingClientRect();
@@ -156,8 +175,10 @@ export function AppTour({ enabled = false, neverLogged = false }: { enabled?: bo
     if (i !== idx) { setIdx(i); return; }
     track('app_tour_step', { variant, step: STEPS[i].id, n: i + 1 });
 
-    const el = document.querySelector(STEPS[i].sel) as HTMLElement | null;
+    const sel = STEPS[i].sel;
+    const el = sel ? (document.querySelector(sel) as HTMLElement | null) : null;
     el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    if (!sel) setPlanSize(document.querySelector('[data-tour="plan"]')?.getAttribute('data-plan-size') ?? null);
     setRect(measure(i));
     const t = setTimeout(() => setRect(measure(i)), 400);
     const onMove = () => setRect(measure(i));
@@ -171,6 +192,7 @@ export function AppTour({ enabled = false, neverLogged = false }: { enabled?: bo
   if (idx < 0 || !rect) return null;
 
   const step = STEPS[idx];
+  const intro = step.sel == null;
   const pad = 8;
   const below = rect.bottom < (typeof window !== 'undefined' ? window.innerHeight : 800) * 0.58;
 
@@ -180,7 +202,7 @@ export function AppTour({ enabled = false, neverLogged = false }: { enabled?: bo
           everything else. pointer-events none so it never intercepts taps. */}
       <div
         className="absolute rounded-xl transition-all duration-300"
-        style={{
+        style={intro ? { inset: 0, background: 'rgba(15,23,42,0.74)', pointerEvents: 'none' } : {
           top: rect.top - pad, left: rect.left - pad,
           width: rect.width + pad * 2, height: rect.height + pad * 2,
           boxShadow: '0 0 0 9999px rgba(15,23,42,0.74)',
@@ -189,11 +211,21 @@ export function AppTour({ enabled = false, neverLogged = false }: { enabled?: bo
       />
       <div
         className="absolute left-1/2 w-[min(90vw,20rem)] -translate-x-1/2 rounded-2xl bg-white p-4 shadow-2xl"
-        style={below ? { top: rect.bottom + pad + 12 } : { bottom: (typeof window !== 'undefined' ? window.innerHeight : 800) - rect.top + pad + 12 }}
+        style={intro
+          ? { top: '50%', translate: '-50% -50%' } // Tailwind v4's -translate-x-1/2 is the `translate` property; overriding it, not stacking a transform
+          : below ? { top: rect.bottom + pad + 12 } : { bottom: (typeof window !== 'undefined' ? window.innerHeight : 800) - rect.top + pad + 12 }}
       >
         <p className="text-[10px] font-bold uppercase tracking-widest text-orange-500">Quick tour · {idx + 1}/{STEPS.length}</p>
         <h3 className="mt-1 text-base font-bold text-stone-900">{step.title}</h3>
-        <p className="mt-1 text-sm leading-relaxed text-stone-600">{step.body}</p>
+        {intro ? (
+          <ol className="mt-2 list-decimal space-y-1.5 pl-4 text-sm leading-relaxed text-stone-600">
+            {HOW_IT_WORKS.map((line, n) => (
+              <li key={n}>{line}{n === 0 && planSize ? ` Today: ${planSize}.` : ''}</li>
+            ))}
+          </ol>
+        ) : (
+          <p className="mt-1 text-sm leading-relaxed text-stone-600">{step.body}</p>
+        )}
         <div className="mt-3 flex items-center justify-between">
           <button type="button" onClick={() => finish(false, step.id)} className="text-xs font-medium text-stone-400 hover:text-stone-600">Skip</button>
           <button

@@ -72,6 +72,21 @@ describe('it teaches the real gesture, on the real task', () => {
   });
 });
 
+describe('it opens by saying how the app works', () => {
+  it('the first step has no spotlight and explains the day', () => {
+    const t = TOUR();
+    const steps = t.slice(t.indexOf('const STEPS'), t.indexOf('];', t.indexOf('const STEPS')));
+    const ids = [...steps.matchAll(/\{ id: '([a-z-]+)'/g)].map((m) => m[1]);
+    expect(ids[0]).toBe('how');
+    expect(steps).toContain("{ id: 'how', sel: null, title: 'How CareerRai works'");
+  });
+
+  it('shows this student’s own plan size, read from the plan card', () => {
+    expect(TOUR()).toContain(`getAttribute('data-plan-size')`);
+    expect(TOUR()).toContain('` Today: ${planSize}.`');
+  });
+});
+
 describe('it records itself', () => {
   it('fires started, step and finished, and each is a registered event', () => {
     const t = TOUR();
