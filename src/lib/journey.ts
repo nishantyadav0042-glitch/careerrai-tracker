@@ -261,6 +261,9 @@ export type EventName =
   // student the failure. Observability only; nothing retries or reorders.
   | 'completion_write'
   | 'first_log_prompt'
+  // The Home card's "Couldn't start it?" (24 Sep). props.reason is one of
+  // too_hard | no_time | where_to_study.
+  | 'couldnt_start'
   // The daily "Rai noticed" card on Home (19 Aug). shown fires once per
   // render-day, dismissed on the deliberate close -- the pair that lets the
   // funnel distinguish "delivered" from "read", which the old 7-second toast

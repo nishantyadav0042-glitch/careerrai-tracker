@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { studyDayString } from '@/lib/study-day';
-import { buildValueProof, shouldShowValueProof, type ValueProofInput } from '@/lib/value-proof';
+import { buildValueProof, shouldShowValueProof, VALUE_PROOF_QUIET_DAYS, type ValueProofInput } from '@/lib/value-proof';
 
 // The claim, repeated on a cadence — founder, 8 Aug: tell them what we do for
 // them, free, and keep telling them every two or three days.
@@ -25,8 +25,12 @@ const ROTATION_KEY = 'cr_value_proof_rot';
 export function ValueProofCard({ stats }: { stats: Omit<ValueProofInput, 'rotation'> }) {
   const [show, setShow] = useState(false);
   const [rotation, setRotation] = useState(0);
+  // Checked before storage is touched: a day-0 stamp would push the first
+  // real showing back by another three days.
+  const quiet = stats.daysSinceSignup < VALUE_PROOF_QUIET_DAYS;
 
   useEffect(() => {
+    if (quiet) return;
     try {
       const today = studyDayString();
       if (!shouldShowValueProof(localStorage.getItem(KEY), today)) return;
@@ -45,7 +49,7 @@ export function ValueProofCard({ stats }: { stats: Omit<ValueProofInput, 'rotati
       // message is worth more than the risk of repeating it.
       setShow(true);
     }
-  }, []);
+  }, [quiet]);
 
   if (!show) return null;
   const v = buildValueProof({ ...stats, rotation });

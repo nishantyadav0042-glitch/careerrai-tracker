@@ -27,6 +27,13 @@ import { SIX_PROMISES } from '@/components/six-promises';
 /** Every third day. Frequent enough to be remembered, rare enough to be read. */
 export const VALUE_PROOF_INTERVAL_DAYS = 3;
 
+/**
+ * Not before the third day after signup (24 Sep). On days 0 and 1 this card
+ * repeated, on Home, the product explanation the student had just read once
+ * after signup. The founder's audit: explain it once, then let the plan work.
+ */
+export const VALUE_PROOF_QUIET_DAYS = 2;
+
 export interface ValueProofInput {
   /** Daily plans we generated for them (daily_routines rows). */
   plansBuilt: number;

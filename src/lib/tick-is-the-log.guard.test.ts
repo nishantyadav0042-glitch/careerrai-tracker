@@ -114,9 +114,37 @@ describe('one door, not two', () => {
     // the small circle to the whole card, so the hint must say so — telling
     // a student to "tap the circle" when the circle is no longer the only
     // (or even the primary) target would be actively wrong, not just stale.
+    // Reworded 24 Sep to the founder's sentence: CareerRai says what to study,
+    // the studying happens in the student's own material, then they tap.
     const card = readFileSync(CARD, 'utf8');
-    expect(card).toContain('Tap anywhere on it');
-    expect(card).toContain('your day is marked');
+    expect(card).toContain('CareerRai tells you what to study today.');
+    expect(card).toContain('Then tap the task here.');
+    expect(card).not.toMatch(/tap the circle/i);
+  });
+
+  it('names the free video only when this task has one', () => {
+    // Most tasks carry no resource; promising a video that is not there
+    // sends a student looking for something that does not exist.
+    const card = readFileSync(CARD, 'utf8');
+    expect(card).toContain("{tasks[0]?.resource ? 'Study it from your notes, book, or the free video.' : 'Study it from your notes or book.'}");
+  });
+
+  it('a student who could not start can say why, and the reason is recorded', () => {
+    const card = readFileSync(CARD, 'utf8');
+    for (const label of ['Too hard', 'No time', 'Didn’t know where to study']) expect(card).toContain(label);
+    expect(card).toContain("track('couldnt_start', { reason");
+    expect(readFileSync('src/lib/journey.ts', 'utf8')).toContain("| 'couldnt_start'");
+    // The reply never promises that tomorrow's plan will change.
+    const replies = card.slice(card.indexOf('function couldntReply'), card.indexOf('function couldntReply') + 600);
+    expect(replies).not.toMatch(/tomorrow/i);
+  });
+
+  it('the log sheet never opens by itself for a student who has not studied yet', () => {
+    // 24 Sep: the first-log pop-up opened the sheet in the first session,
+    // before the student could have studied anything. It is gone.
+    const app = readFileSync('src/components/DailyTracker/DailyTrackerApp.tsx', 'utf8');
+    expect(app).not.toContain('cr_first_log_prompt_v1');
+    expect(app).not.toContain("track('first_log_prompt')");
   });
 });
 

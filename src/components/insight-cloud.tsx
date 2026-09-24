@@ -1,10 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { TOUR_KEY, TOUR_DONE_EVENT } from '@/lib/first-run-events';
+import { firstDayOver } from '@/lib/first-run-events';
 
-// Tiny insight cloud (founder, 23 Jul): the LAST first-run beat, after
-// notifications → tour. A very small cloud in the corner with a 4-5 word
+// Tiny insight cloud (founder, 23 Jul). Shown from the student's second study
+// day (24 Sep; it followed the app tour until the tour was retired). A very small cloud in the corner with a 4-5 word
 // insight, shown for ~4.5s then gone on its own. Non-blocking (pointer-events
 // none), once per device, installed-app only. Every word is derived from the
 // student's own coverage map — nothing invented.
@@ -34,18 +34,13 @@ export function InsightCloud({ weakest, fresh }: { weakest: string; fresh: boole
       hideTimer = setTimeout(() => setShow(false), VISIBLE_MS);
     };
 
-    // The tour just ended → show right after. If the tour was already done
-    // on a later first-run visit (they closed before seeing it), show shortly
-    // after load instead of waiting for an event that won't fire again.
-    let tourDone = false;
-    try { tourDone = localStorage.getItem(TOUR_KEY) === '1'; } catch { /* ignore */ }
-    if (tourDone) startTimer = setTimeout(reveal, 700);
-    window.addEventListener(TOUR_DONE_EVENT, reveal);
+    // It followed the app tour until the tour was retired (24 Sep). Now it
+    // waits for the student's second study day, like every other extra.
+    if (firstDayOver()) startTimer = setTimeout(reveal, 700);
 
     return () => {
       if (hideTimer) clearTimeout(hideTimer);
       if (startTimer) clearTimeout(startTimer);
-      window.removeEventListener(TOUR_DONE_EVENT, reveal);
     };
   }, []);
 

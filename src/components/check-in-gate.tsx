@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { track } from '@/lib/journey';
 import { PlanRebuildPayoff } from '@/components/plan-rebuild-payoff';
-import { tourDone, notifAskVisible, insightVisible } from '@/lib/first-run-events';
+import { firstDayOver, notifAskVisible, insightVisible } from '@/lib/first-run-events';
 import {
   OUTCOME_OPTIONS, BLOCKER_REASONS, outcomeAsksWhy, outcomeNeedsDuration, type DayOutcome,
 } from '@/lib/check-in';
@@ -101,7 +101,7 @@ export function CheckInGate({ yesterdayStr, yesterdayLabel, variant = 'A', plann
   useEffect(() => {
     if (done) return;
     const timer = setTimeout(() => {
-      if (!tourDone() || notifAskVisible() || insightVisible()) return;
+      if (!firstDayOver() || notifAskVisible() || insightVisible()) return;
       setVisible(true);
       track('checkin_shown', { forDate: yesterdayStr, variant });
     }, 900);

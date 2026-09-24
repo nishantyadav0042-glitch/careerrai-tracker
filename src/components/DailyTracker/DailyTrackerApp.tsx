@@ -12,7 +12,7 @@ import { getLogDateString } from '@/lib/streak-utils';
 import { RatingPromptSheet } from '@/components/rating-prompt-sheet';
 import type { RatingPromptTrigger } from '@/lib/rating-prompt';
 import { track } from '@/lib/journey';
-import { NOTIF_ASK_SETTLED_EVENT, TOUR_DONE_EVENT, INSIGHT_DONE_EVENT, insightVisible } from '@/lib/first-run-events';
+import { insightVisible } from '@/lib/first-run-events';
 
 import { joinState, canJoinNow, shouldShowLink, countdownLabel } from '@/lib/session-link';
 import type { EvidenceItem } from '@/lib/evidence/mock-evidence';
@@ -89,7 +89,6 @@ interface DailyTrackerAppProps {
   hasLoggedYesterday?: boolean;
   yesterdayStr?: string;   // ISO date for the API
   yesterdayLabel?: string; // "Jun 16" for the UI
-  firstLogNudge?: boolean; // student has NEVER logged — auto-open the log once after tour + notif ask
 }
 
 // Home's second hero, not a buried strip — Today's Log is one of the app's
@@ -103,7 +102,6 @@ export function DailyTrackerApp({
   hasLoggedYesterday = true,
   yesterdayStr = '',
   yesterdayLabel = '',
-  firstLogNudge = false,
 }: DailyTrackerAppProps) {
   const [isLogOpen, setIsLogOpen] = useState(false);
   /** Which door the sheet was opened from — the mock one pre-answers "did you
@@ -219,41 +217,11 @@ export function DailyTrackerApp({
     return () => clearTimeout(timer);
   }, [hasLoggedYesterday, yesterdayStr]);
 
-  // First-log moment (20 July zero-log fix): the journey funnels install →
-  // tour → notifications and then just… ends — the first log was outsourced to
-  // an evening push most new students can't receive. This auto-opens the real
-  // log modal ONCE (per device) for a student who has never logged, after the
-  // tour is done and the notification ask isn't covering the screen. In-app,
-  // at the peak of the first session — not hours later on a dead channel.
-  useEffect(() => {
-    if (!firstLogNudge || hasLoggedToday) return;
-    const KEY = 'cr_first_log_prompt_v1';
-    try { if (localStorage.getItem(KEY)) return; } catch { return; }
-    let fired = false;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const tourDone = () => { try { return localStorage.getItem('cr_app_tour_v1') === '1'; } catch { return false; } };
-    const askUp = () => { try { return (window as Window & { __crNotifAskVisible?: boolean }).__crNotifAskVisible === true; } catch { return false; } };
-    const maybeOpen = () => {
-      if (fired || !tourDone() || askUp() || insightVisible()) return;
-      fired = true;
-      try { localStorage.setItem(KEY, '1'); } catch { /* ignore */ }
-      track('first_log_prompt');
-      setIsLogOpen(true);
-    };
-    // Small delay on each trigger so sibling listeners (the notif ask's own
-    // evaluate) run first and set their visibility flag before we check it.
-    const deferred = () => { if (timer) clearTimeout(timer); timer = setTimeout(maybeOpen, 700); };
-    deferred(); // page load: tour may already be done from a previous session
-    window.addEventListener(TOUR_DONE_EVENT, deferred);
-    window.addEventListener(NOTIF_ASK_SETTLED_EVENT, deferred);
-    window.addEventListener(INSIGHT_DONE_EVENT, deferred);
-    return () => {
-      if (timer) clearTimeout(timer);
-      window.removeEventListener(TOUR_DONE_EVENT, deferred);
-      window.removeEventListener(NOTIF_ASK_SETTLED_EVENT, deferred);
-      window.removeEventListener(INSIGHT_DONE_EVENT, deferred);
-    };
-  }, [firstLogNudge, hasLoggedToday]);
+  // The first-log pop-up (20 July) is gone (24 Sep). It opened the log sheet
+  // for a student who had never logged, in the first session, before they
+  // could have studied anything. Founder, 24 Sep: "Instead of making it simple
+  // you are complicating it." The Home card now says the one thing: study the
+  // task from your own material, then tap it.
 
   const handleLogSubmit = async (data: LoggingData): Promise<{ mockSelected: boolean }> => {
     const backdated = logDateOverride;
