@@ -55,8 +55,10 @@ describe('the order the counsellor actually reads', () => {
   it('the pinned never-contacted block is a SECTION, second only to promises', () => {
     // The whole of Incident #91 in one assertion: pinning must change what the
     // card IS, not only where it sits in an array.
-    expect(SECTION_ORDER[0]).toBe('promises');
-    expect(SECTION_ORDER[1], 'the pin sits directly under the promises').toBe('intro');
+    // Founder, 24 Sep 2026: log breakers are first, and the daily loggers'
+    // feedback calls sit between the promises and the intro block. The pin
+    // still sits above every other discretionary section.
+    expect(SECTION_ORDER.slice(0, 4)).toEqual(['logbreakers', 'promises', 'champions', 'intro']);
 
     const day = assembleDay([...c('callback', 2), ...c('retry', 10), ...c('fresh', 40)]);
     const intro = day.queue.filter((x) => x.section === 'intro');

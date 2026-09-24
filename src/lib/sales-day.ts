@@ -36,7 +36,7 @@ import {
 
 export type Channel = 'call' | 'message';
 
-export type DaySection = 'promises' | 'intro' | 'money' | 'retention' | 'buddy' | 'new' | 'attention' | 'redial' | 'rotation';
+export type DaySection = 'logbreakers' | 'promises' | 'champions' | 'intro' | 'money' | 'retention' | 'buddy' | 'new' | 'attention' | 'redial' | 'rotation';
 
 // ── THE ORDER THE COUNSELLOR ACTUALLY SEES (16 Sep 2026) ────────────────────
 //
@@ -61,9 +61,14 @@ export type DaySection = 'promises' | 'intro' | 'money' | 'retention' | 'buddy' 
 // right: money 19.4% > retention (going_cold 15.4%) > buddy 7.9% > new 4.4% >
 // attention 1.1%. `intro` is the pinned never-contacted block — see
 // assembleDay; it is a section now precisely so the pin can reach the screen.
-export const SECTION_ORDER: readonly DaySection[] = ['promises', 'intro', 'money', 'retention', 'buddy', 'new', 'attention', 'redial', 'rotation'];
+// Founder, 24 Sep 2026: log breakers are the counsellor's FIRST priority and
+// connecting with them is mandatory; the daily loggers' feedback calls come
+// right after the promises (a callback still has a clock on it).
+export const SECTION_ORDER: readonly DaySection[] = ['logbreakers', 'promises', 'champions', 'intro', 'money', 'retention', 'buddy', 'new', 'attention', 'redial', 'rotation'];
 
 export const SECTION_LABEL: Record<DaySection, string> = {
+  logbreakers: 'Log breakers — must connect (try 3×)',
+  champions: 'Daily loggers — ask for feedback',
   promises: 'Promises due',
   intro: 'First conversation',
   redial: 'No answer — try again',
@@ -147,6 +152,7 @@ export function orderForScreen<T extends { section: DaySection }>(queue: readonl
 }
 
 export const SECTION_OF: Record<DueReason, DaySection> = {
+  log_breaker: 'logbreakers', daily_logger: 'champions',
   callback: 'promises', followup: 'promises',
   // A re-dial is our policy, not a promise the student extracted from us — the
   // note under UNTRIMMABLE said so in September and only the CEILING followed.
@@ -175,7 +181,7 @@ export const SECTION_OF: Record<DueReason, DaySection> = {
  * finish. It is still a strong signal; it is just not a commitment, so it
  * takes a ceiling like every other signal lane.
  */
-const UNTRIMMABLE: ReadonlySet<DueReason> = new Set<DueReason>(['callback', 'followup', 'checkout_abandoned']);
+const UNTRIMMABLE: ReadonlySet<DueReason> = new Set<DueReason>(['log_breaker', 'daily_logger', 'callback', 'followup', 'checkout_abandoned']);
 
 const CEILING: Partial<Record<DueReason, number>> = {
   attention: ATTENTION_CEILING,
@@ -265,7 +271,7 @@ export interface AssembledDay<T> {
 }
 
 const emptyCounts = (): Record<DaySection, number> =>
-  ({ promises: 0, intro: 0, money: 0, retention: 0, buddy: 0, new: 0, attention: 0, redial: 0, rotation: 0 });
+  ({ logbreakers: 0, champions: 0, promises: 0, intro: 0, money: 0, retention: 0, buddy: 0, new: 0, attention: 0, redial: 0, rotation: 0 });
 
 /**
  * Deal the day. `cands` must already be ranked, most urgent first; the

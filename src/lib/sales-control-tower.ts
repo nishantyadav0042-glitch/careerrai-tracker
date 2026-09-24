@@ -147,7 +147,7 @@ export interface CoverageView {
  */
 export async function readCoverage(admin: any, staff: StaffDirectory | null, dayStart: string, todayIst: string, nowMs: number): Promise<CoverageView> {
   const nameOf = (id: string) => staff?.labelById.get(id) ?? 'Staff';
-  const empty = (): Record<DaySection, number> => ({ promises: 0, intro: 0, money: 0, retention: 0, buddy: 0, new: 0, attention: 0, redial: 0, rotation: 0 });
+  const empty = (): Record<DaySection, number> => ({ logbreakers: 0, champions: 0, promises: 0, intro: 0, money: 0, retention: 0, buddy: 0, new: 0, attention: 0, redial: 0, rotation: 0 });
   try {
     const book = await fetchAll<{ owner_id: string | null; status: string | null; last_attempt_at: string | null }>(
       () => admin.from('lead_outreach').select('owner_id, status, last_attempt_at').not('owner_id', 'is', null),

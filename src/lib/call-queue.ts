@@ -22,6 +22,7 @@ import { assembleDay, dayAnchorMs, istHour, SECTION_OF, type Channel, type DaySe
 import { readToday } from '@/lib/sales-opportunity-record';
 import { PROMISE_STALE_DAYS } from '@/lib/os/promise-debt';
 import { journeyStage, JOURNEY_NEXT_STEP, type JourneyStage } from '@/lib/sales-messages';
+import { logBreakerOf, dailyLoggerOf, LOG_BREAKER_MAX_ATTEMPTS, LOG_BREAKER_ASK, DAILY_LOGGER_ASK, type Touch } from '@/lib/sales-log-breakers';
 import { buildRemarkHistories, EMPTY_HISTORY, HUMAN_PROVENANCE, MAX_REMARKS_ON_CARD, type RemarkHistory } from '@/lib/sales-remarks';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -60,6 +61,14 @@ function daysAgoLabel(n: number): string {
 }
 
 export type DueReason =
+  /**
+   * Logged 3+ of 7 days, then missed the last 2–7, and nobody has spoken to
+   * them since (founder, 24 Sep 2026: "log breakers call connect is
+   * mandatory"). The first section of the day — lib/sales-log-breakers.
+   */
+  | 'log_breaker'
+  /** Logging 3+ of the last 7 days — a feedback call, not a pitch (24 Sep 2026). */
+  | 'daily_logger'
   | 'callback' | 'retry' | 'followup'
   /** Created an order and never paid — the strongest commercial evidence. */
   | 'checkout_abandoned'
@@ -210,7 +219,7 @@ export interface LaneSignals {
  * events that end, rather than a flag that never does.
  */
 export const RETENTION_LANES: ReadonlySet<DueReason> = new Set<DueReason>([
-  'going_cold', 'broken_streak', 'new_never_logged', 'restart',
+  'going_cold', 'broken_streak', 'new_never_logged', 'restart', 'log_breaker',
 ]);
 
 export interface LaneVerdict {
@@ -718,6 +727,14 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
     const prev = tapBy.get(t.user_id);
     if (!prev || t.clicked_at > prev) tapBy.set(t.user_id, t.clicked_at as string);
   }
+  // Every human attempt per student, for the log-breaker and daily-logger
+  // rules: a conversation since the break clears the first, a conversation in
+  // the last fortnight clears the second.
+  const touchesBy = new Map<string, Touch[]>();
+  for (const a of ((lastActs ?? []) as any[])) {
+    if (!touchesBy.has(a.student_id)) touchesBy.set(a.student_id, []);
+    touchesBy.get(a.student_id)!.push({ atIso: a.created_at as string, status: (a.status as string | null) ?? null });
+  }
   const profById = new Map((profs ?? []).map((p: any) => [p.id, p]));
   const engById = new Map((eng ?? []).map((e: any) => [e.student_id, e]));
   // Per-student log DATES, not just counts — the lane classifier reads the
@@ -849,9 +866,23 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
     // An order placed since that call is the exception: they acted after we
     // spoke, and waiting until tomorrow wastes the warmest hour we will get.
     if (attemptedToday && !dueNow && !abandonedSinceLastCall) continue;
+
+    // ── LOG BREAKERS FIRST (founder, 24 Sep 2026) ──────────────────────────
+    // Read before the future-action guard below on purpose: a retry or promise
+    // clock set BEFORE the break was about a student who was still logging,
+    // and it must not hide the one who has just stopped. After the break the
+    // normal clock applies again — each unanswered try waits for its evening
+    // or next-day retry, up to LOG_BREAKER_MAX_ATTEMPTS.
+    const touches: Touch[] = touchesBy.get(r.id)
+      ?? (o?.last_attempt_at ? [{ atIso: o.last_attempt_at as string, status }] : []);
+    const logBreaker = logBreakerOf(logDates.get(r.id) ?? [], todayIst, touches);
+    const untouchedBreak = logBreaker != null && logBreaker.attemptsSinceBreak === 0
+      && !(o?.last_attempt_at && istDateStr(o.last_attempt_at) > logBreaker.lastLog);
+    const dailyLogger = logBreaker ? null : dailyLoggerOf(logDates.get(r.id) ?? [], todayIst, touches, now);
+
     // A future scheduled action that isn't due yet — not today's work, unless
-    // they have since tried to pay.
-    if (nextAction != null && !dueNow && !abandonedSinceLastCall) continue;
+    // they have since tried to pay, or broke a logging habit since it was set.
+    if (nextAction != null && !dueNow && !abandonedSinceLastCall && !untouchedBreak) continue;
 
     const prof = profById.get(r.id) as any;
     const e = engById.get(r.id) as any;
@@ -943,6 +974,29 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
       // the conversation is a hotter card than the conversation's own
       // follow-up, and fresher intent sorts first within this lane.
       sort = 9_000_000 - Math.min(8_000, daysAgoAb);
+    } else if (logBreaker) {
+      const tries = logBreaker.attemptsSinceBreak;
+      dueReason = 'log_breaker';
+      dueLabel = tries === 0 ? 'Log breaker — must connect' : `Log breaker — try ${tries + 1} of ${LOG_BREAKER_MAX_ATTEMPTS}`;
+      why = [
+        `Logged on ${logBreaker.habitDays} days in the week before they stopped — last log ${daysAgoLabel(logBreaker.gapDays)}`,
+        tries === 0
+          ? 'Nobody has spoken to them since the break'
+          : `${tries} ${tries === 1 ? 'try' : 'tries'} since the break went unanswered — keep trying until you connect`,
+      ];
+      action = LOG_BREAKER_ASK;
+      // Within the section: the freshest break first (the habit is warmest),
+      // then the strongest habit.
+      sort = 8_500_000 - logBreaker.gapDays * 10_000 + logBreaker.habitDays * 100;
+    } else if (dailyLogger) {
+      dueReason = 'daily_logger';
+      dueLabel = 'Daily logger — ask for feedback';
+      why = [
+        `Logged ${dailyLogger.daysOf7} of the last 7 days — one of our most consistent students`,
+        (status === 'no_answer' ? `Not reached yet — ${(o?.no_answer_count as number | null) ?? 0} unanswered` : 'No feedback conversation in the last 14 days'),
+      ];
+      action = DAILY_LOGGER_ASK;
+      sort = 8_000_000 + dailyLogger.daysOf7 * 1_000 + r.score;
     } else if (dueNow && status === 'follow_up') {
       // ── A PROMISE PAST A WEEK SAYS SO (founder, 15 Sep 2026) ───────────
       //
