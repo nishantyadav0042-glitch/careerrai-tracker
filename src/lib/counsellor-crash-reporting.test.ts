@@ -21,7 +21,7 @@ type Listener = (e: unknown) => void;
 
 function fakeBrowser(pathname: string) {
   const listeners: Record<string, Listener[]> = {};
-  const fetchMock = vi.fn((_url: string, _init?: RequestInit) => Promise.resolve(new Response('{}')));
+  const fetchMock = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(() => Promise.resolve(new Response('{}')));
   vi.stubGlobal('window', {
     location: { pathname, search: '' },
     matchMedia: () => ({ matches: false }),
