@@ -9,7 +9,8 @@ import {
 } from '@/lib/sales-authz';
 import { completeDueFollowups, scheduleFollowup } from '@/lib/sales-followup';
 import { resolveConvertedClaim } from '@/lib/sales-conversion-truth';
-import { markSkipped, markWorked } from '@/lib/sales-opportunity-record';
+import { markSkipped, markWorked, readToday } from '@/lib/sales-opportunity-record';
+import { writtenReasonProblem } from '@/lib/sales-written-reason';
 import { captureStateSnapshot, recordIntervention, interventionTypeForLane } from '@/lib/intervention-ledger';
 import { isReasonCategory, reasonNeedsVerbatim } from '@/lib/intervention-taxonomy';
 import { templateByKey, templateNote } from '@/lib/sales-templates';
@@ -125,6 +126,15 @@ export async function POST(request: NextRequest) {
       ? 'Say what you messaged them - that is the record.'
       : 'Feedback is required for a connected call.';
     return NextResponse.json({ error: msg }, { status: 400 });
+  }
+  // ── LOG BREAKERS AND DAILY LOGGERS: THE REASON IS WRITTEN (24 Sep 2026) ──
+  // The lane comes from today's stored offer (sales_opportunity), never from
+  // the client, so the rule follows the card the system actually dealt.
+  // lib/sales-written-reason holds the rule the call deck also enforces.
+  if (isConnectedOutcome(outcome)) {
+    const dealt = (await readToday(admin, principal.id)).find((r) => r.studentId === studentId);
+    const problem = writtenReasonProblem(dealt?.lane ?? null, outcome, noteText);
+    if (problem) return NextResponse.json({ error: problem }, { status: 400 });
   }
   // ── A MESSAGE MUST BE ONE THAT COULD HAVE BEEN SENT (founder, 15 Sep 2026) ─
   //
