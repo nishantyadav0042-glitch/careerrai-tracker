@@ -22,7 +22,7 @@ import { assembleDay, dayAnchorMs, istHour, SECTION_OF, type Channel, type DaySe
 import { readToday } from '@/lib/sales-opportunity-record';
 import { PROMISE_STALE_DAYS } from '@/lib/os/promise-debt';
 import { journeyStage, JOURNEY_NEXT_STEP, type JourneyStage } from '@/lib/sales-messages';
-import { logBreakerOf, dailyLoggerOf, LOG_BREAKER_MAX_ATTEMPTS, LOG_BREAKER_ASK, DAILY_LOGGER_ASK, type Touch } from '@/lib/sales-log-breakers';
+import { logBreakerOf, dailyLoggerOf, LOG_BREAKER_ASK, DAILY_LOGGER_ASK, type Touch } from '@/lib/sales-log-breakers';
 import { buildRemarkHistories, EMPTY_HISTORY, HUMAN_PROVENANCE, MAX_REMARKS_ON_CARD, type RemarkHistory } from '@/lib/sales-remarks';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -62,9 +62,10 @@ function daysAgoLabel(n: number): string {
 
 export type DueReason =
   /**
-   * Logged 3+ of 7 days, then missed the last 2–7, and nobody has spoken to
-   * them since (founder, 24 Sep 2026: "log breakers call connect is
-   * mandatory"). The first section of the day — lib/sales-log-breakers.
+   * Logged 3+ of 7 days or 2+ days in a row, then missed the last 2–7, and
+   * nobody has spoken to them since (founder, 24 Sep 2026: "connecting a
+   * streak breaker is non-negotiable"). The first section of every day —
+   * lib/sales-log-breakers.
    */
   | 'log_breaker'
   /** Logging 3+ of the last 7 days — a feedback call, not a pitch (24 Sep 2026). */
@@ -867,17 +868,16 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
     // spoke, and waiting until tomorrow wastes the warmest hour we will get.
     if (attemptedToday && !dueNow && !abandonedSinceLastCall) continue;
 
-    // ── LOG BREAKERS FIRST (founder, 24 Sep 2026) ──────────────────────────
-    // Read before the future-action guard below on purpose: a retry or promise
-    // clock set BEFORE the break was about a student who was still logging,
-    // and it must not hide the one who has just stopped. After the break the
-    // normal clock applies again — each unanswered try waits for its evening
-    // or next-day retry, up to LOG_BREAKER_MAX_ATTEMPTS.
+    // ── LOG BREAKERS FIRST, EVERY DAY (founder, 24 Sep 2026) ───────────────
+    // Read before the future-action guard below on purpose. "Connecting a
+    // streak breaker is non-negotiable" and "it should refresh daily": no
+    // retry or promise clock may hide a log breaker for a whole day. The only
+    // wait is within the day — once tried today, the card returns when the
+    // same-evening retry comes due (the guard above).
     const touches: Touch[] = touchesBy.get(r.id)
       ?? (o?.last_attempt_at ? [{ atIso: o.last_attempt_at as string, status }] : []);
     const logBreaker = logBreakerOf(logDates.get(r.id) ?? [], todayIst, touches);
-    const untouchedBreak = logBreaker != null && logBreaker.attemptsSinceBreak === 0
-      && !(o?.last_attempt_at && istDateStr(o.last_attempt_at) > logBreaker.lastLog);
+    const untouchedBreak = logBreaker != null && !attemptedToday;
     const dailyLogger = logBreaker ? null : dailyLoggerOf(logDates.get(r.id) ?? [], todayIst, touches, now);
 
     // A future scheduled action that isn't due yet — not today's work, unless
@@ -977,9 +977,11 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
     } else if (logBreaker) {
       const tries = logBreaker.attemptsSinceBreak;
       dueReason = 'log_breaker';
-      dueLabel = tries === 0 ? 'Log breaker — must connect' : `Log breaker — try ${tries + 1} of ${LOG_BREAKER_MAX_ATTEMPTS}`;
+      dueLabel = tries === 0 ? 'Log breaker — must connect' : `Log breaker — try ${tries + 1}, must connect`;
       why = [
-        `Logged on ${logBreaker.habitDays} days in the week before they stopped — last log ${daysAgoLabel(logBreaker.gapDays)}`,
+        logBreaker.streak >= 2
+          ? `${logBreaker.streak}-day logging streak broke — last log ${daysAgoLabel(logBreaker.gapDays)}`
+          : `Logged on ${logBreaker.habitDays} days in the week before they stopped — last log ${daysAgoLabel(logBreaker.gapDays)}`,
         tries === 0
           ? 'Nobody has spoken to them since the break'
           : `${tries} ${tries === 1 ? 'try' : 'tries'} since the break went unanswered — keep trying until you connect`,

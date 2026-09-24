@@ -25,14 +25,31 @@
 import { loggedDaysLast7 } from '@/lib/facts/daily-log';
 import { trailingWindow, inWindow, isDayKey } from '@/lib/facts/window';
 
-/** A log breaker had a real rhythm: this many log days in the 7 ending at the last one. */
+/** A log breaker had a real rhythm: this many log days in the 7 ending at the last one… */
 export const LOG_BREAKER_MIN_HABIT_DAYS = 3;
-/** The break: no log yesterday. A student whose last log was yesterday may still log today. */
+/**
+ * …or a streak of at least this many days in a row, ending at the last log.
+ * Founder, 24 Sep 2026: "add all streak breakers who have more than 1 day
+ * streak on our app".
+ */
+export const LOG_BREAKER_MIN_STREAK = 2;
+/**
+ * The break: no log yesterday. Founder, 24 Sep 2026: "if I missed my log for
+ * a day, then the day after tomorrow is a must-connect day" — last log on D,
+ * nothing on D+1, the call is on D+2. A student whose last log was yesterday
+ * may still log today, so they are not called yet.
+ */
 export const LOG_BREAKER_MIN_GAP_DAYS = 2;
 /** After a week silent the break is no longer fresh; going_cold / restart own them. */
 export const LOG_BREAKER_MAX_GAP_DAYS = 7;
-/** "Try 2-3 times until he connects." After three unanswered tries the card rejoins the normal re-dial. */
-export const LOG_BREAKER_MAX_ATTEMPTS = 3;
+/**
+ * "Try 2-3 times until he connects" is the daily target, not a limit.
+ * Founder, 24 Sep 2026: connecting a log breaker is non-negotiable. The card
+ * stays in the first section every day until someone speaks to them, until
+ * they log again, or until the break is a week old. The contact ceiling
+ * (MAX_CONSECUTIVE_NO_ANSWER) still applies, as it does to every lane.
+ */
+export const LOG_BREAKER_TRIES_PER_DAY_TARGET = 3;
 /** A daily logger: log days in the last 7, counting today. */
 export const DAILY_LOGGER_MIN_DAYS = 3;
 /** A daily logger has logged today or yesterday — the rhythm is live. */
@@ -64,14 +81,17 @@ export interface LogBreaker {
   gapDays: number;
   /** Log days in the 7 ending at the last log. */
   habitDays: number;
+  /** Days in a row ending at the last log. */
+  streak: number;
   /** Dials since the break that did not reach them. */
   attemptsSinceBreak: number;
 }
 
 /**
- * The student logged on 3+ of 7 days and has now missed 2–7 days — and nobody
- * has spoken to them since. Null once a conversation has happened after the
- * break, once three tries have gone unanswered, or once they log again.
+ * The student logged on 3+ of 7 days, or 2+ days in a row, and has now missed
+ * 2–7 days — and nobody has spoken to them since. Null once a conversation has
+ * happened after the break, or once they log again. Re-evaluated every
+ * morning, so the list refreshes daily.
  */
 export function logBreakerOf(logDates: readonly string[], todayIst: string, touches: readonly Touch[]): LogBreaker | null {
   const days = [...new Set(logDates)].filter((d) => d <= todayIst).sort();
@@ -83,7 +103,9 @@ export function logBreakerOf(logDates: readonly string[], todayIst: string, touc
     const back = daysBefore(d, lastLog);
     return back >= 0 && back <= 6;
   }).length;
-  if (habitDays < LOG_BREAKER_MIN_HABIT_DAYS) return null;
+  let streak = 1;
+  for (let i = days.length - 1; i > 0 && daysBefore(days[i - 1], days[i]) === 1; i--) streak++;
+  if (habitDays < LOG_BREAKER_MIN_HABIT_DAYS && streak < LOG_BREAKER_MIN_STREAK) return null;
 
   // Only what happened AFTER the break counts. A call on the day of the last
   // log, or before it, was a different conversation with a student who was
@@ -91,8 +113,7 @@ export function logBreakerOf(logDates: readonly string[], todayIst: string, touc
   const since = touches.filter((t) => istDate(t.atIso) > lastLog);
   if (since.some((t) => isConversation(t.status))) return null;
   const attemptsSinceBreak = since.filter((t) => t.status === 'no_answer' || t.status === 'switched_off').length;
-  if (attemptsSinceBreak >= LOG_BREAKER_MAX_ATTEMPTS) return null;
-  return { lastLog, gapDays, habitDays, attemptsSinceBreak };
+  return { lastLog, gapDays, habitDays, streak, attemptsSinceBreak };
 }
 
 export interface DailyLogger { daysOf7: number; lastLog: string }
@@ -121,7 +142,7 @@ export function dailyLoggerOf(logDates: readonly string[], todayIst: string, tou
 
 /** What the counsellor asks a log breaker. Read out as the card's action. */
 export const LOG_BREAKER_ASK =
-  'Must connect — try up to 3 times. Ask what stopped the logging: no time, something missing in the app, or an error? Help them log today.';
+  'Non-negotiable: connect today (try 3 times). Bring them back — help them log today. If they will not, record why they stopped: an app error, something missing, no time. Their words in the remark.';
 
 /** What the counsellor asks a daily logger. Write their answers in the remark. */
 export const DAILY_LOGGER_ASK =
