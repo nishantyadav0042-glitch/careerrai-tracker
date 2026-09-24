@@ -475,12 +475,7 @@ export default async function DailyTrackerPage() {
   // the answer in the same glance, not in a settings screen.
   const planBlock = (
     <>
-      <TodaysRoutineCard
-        planSource={(profile?.plan_source as string | null) ?? null}
-        // Day one: never logged, onboarding finished. The card offers the
-        // first task now, or asks for a time (components/first-task-flow).
-        firstDay={(logs ?? []).length === 0 && profile?.onboarding_completed === true && profile?.post_signup_done === true}
-      />
+      <TodaysRoutineCard planSource={(profile?.plan_source as string | null) ?? null} />
       {/* The two things a student wants next to today's plan: the whole plan,
           and the one honest way out of today. Founder, 8 Aug: "sometimes you
           just want to see what your next fifteen days look like." */}
@@ -827,7 +822,7 @@ export default async function DailyTrackerPage() {
       </div>
       {/* One-time spotlight tour of the home screen (Plan → Swap → Log → Buddy).
           Gated: installed app only, after onboarding + reminders are settled. */}
-      <AppTour enabled={tourReady} neverLogged={(logs ?? []).length === 0} />
+      <AppTour enabled={tourReady} />
       {/* One-time Momentum Shield briefing — existing loggers only (their past
           streak was restored under the new rules; new students just live with
           shields from day one). */}

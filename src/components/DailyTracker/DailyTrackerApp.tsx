@@ -12,7 +12,7 @@ import { getLogDateString } from '@/lib/streak-utils';
 import { RatingPromptSheet } from '@/components/rating-prompt-sheet';
 import type { RatingPromptTrigger } from '@/lib/rating-prompt';
 import { track } from '@/lib/journey';
-import { insightVisible } from '@/lib/first-run-events';
+import { NOTIF_ASK_SETTLED_EVENT, TOUR_DONE_EVENT, INSIGHT_DONE_EVENT, insightVisible } from '@/lib/first-run-events';
 
 import { joinState, canJoinNow, shouldShowLink, countdownLabel } from '@/lib/session-link';
 import type { EvidenceItem } from '@/lib/evidence/mock-evidence';
@@ -219,14 +219,41 @@ export function DailyTrackerApp({
     return () => clearTimeout(timer);
   }, [hasLoggedYesterday, yesterdayStr]);
 
-  // First-log moment — RETIRED 24 Sep. This auto-opened the log sheet in the
-  // first session, after the tour, for a student who had never logged: 198
-  // students got it in the 30 days to 24 Sep, before they could have studied
-  // anything. The day-one ask now lives on the plan card
-  // (components/first-task-flow.tsx): do your first task now and mark it, or
-  // pick a time and be asked after it. `firstLogNudge` is still accepted so the
-  // page's props do not change shape; nothing reads it.
-  void firstLogNudge;
+  // First-log moment (20 July zero-log fix): the journey funnels install →
+  // tour → notifications and then just… ends — the first log was outsourced to
+  // an evening push most new students can't receive. This auto-opens the real
+  // log modal ONCE (per device) for a student who has never logged, after the
+  // tour is done and the notification ask isn't covering the screen. In-app,
+  // at the peak of the first session — not hours later on a dead channel.
+  useEffect(() => {
+    if (!firstLogNudge || hasLoggedToday) return;
+    const KEY = 'cr_first_log_prompt_v1';
+    try { if (localStorage.getItem(KEY)) return; } catch { return; }
+    let fired = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const tourDone = () => { try { return localStorage.getItem('cr_app_tour_v1') === '1'; } catch { return false; } };
+    const askUp = () => { try { return (window as Window & { __crNotifAskVisible?: boolean }).__crNotifAskVisible === true; } catch { return false; } };
+    const maybeOpen = () => {
+      if (fired || !tourDone() || askUp() || insightVisible()) return;
+      fired = true;
+      try { localStorage.setItem(KEY, '1'); } catch { /* ignore */ }
+      track('first_log_prompt');
+      setIsLogOpen(true);
+    };
+    // Small delay on each trigger so sibling listeners (the notif ask's own
+    // evaluate) run first and set their visibility flag before we check it.
+    const deferred = () => { if (timer) clearTimeout(timer); timer = setTimeout(maybeOpen, 700); };
+    deferred(); // page load: tour may already be done from a previous session
+    window.addEventListener(TOUR_DONE_EVENT, deferred);
+    window.addEventListener(NOTIF_ASK_SETTLED_EVENT, deferred);
+    window.addEventListener(INSIGHT_DONE_EVENT, deferred);
+    return () => {
+      if (timer) clearTimeout(timer);
+      window.removeEventListener(TOUR_DONE_EVENT, deferred);
+      window.removeEventListener(NOTIF_ASK_SETTLED_EVENT, deferred);
+      window.removeEventListener(INSIGHT_DONE_EVENT, deferred);
+    };
+  }, [firstLogNudge, hasLoggedToday]);
 
   const handleLogSubmit = async (data: LoggingData): Promise<{ mockSelected: boolean }> => {
     const backdated = logDateOverride;

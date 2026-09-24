@@ -19,20 +19,12 @@ export const TOUR_DONE_EVENT = 'cr-app-tour-done';
 export const TIMETABLE_ASK_SETTLED_EVENT = 'cr-timetable-ask-settled';
 
 export const TOUR_KEY = 'cr_app_tour_v1';
-// The first-log guide (24 Sep). TOUR_KEY records "has had a tour" and three
-// other surfaces wait on it (the first-log prompt, the insight cloud, the
-// notification ask), so it keeps its meaning. This second key lets the tour
-// run ONE more time for a student who saw the old tour and has still never
-// logged: on 24 Sep, 72 installed students had opened the app in 14 days,
-// passed every onboarding gate, and never logged once.
-export const FIRST_LOG_GUIDE_KEY = 'cr_first_log_guide_v1';
 
 type FirstRunWindow = Window & {
   __crInsightVisible?: boolean;
   __crNotifAskVisible?: boolean;
   __crLogModalOpen?: boolean;
   __crTimetableAskVisible?: boolean;
-  __crTourVisible?: boolean;
 };
 
 export function insightVisible(): boolean {
@@ -65,16 +57,6 @@ export function setLogModalOpen(open: boolean): void {
   try { (window as FirstRunWindow).__crLogModalOpen = open; } catch { /* ignore */ }
 }
 
-// The tour ON SCREEN, as opposed to tourDone() (it has run at least once).
-// Needed since 24 Sep: the tour can run a second time for a never-logged
-// student whose TOUR_KEY is already set, so tourDone() alone would let the
-// buddy nudge and the coverage review open on top of it.
-export function tourVisible(): boolean {
-  try { return (window as FirstRunWindow).__crTourVisible === true; } catch { return false; }
-}
-export function setTourVisible(visible: boolean): void {
-  try { (window as FirstRunWindow).__crTourVisible = visible; } catch { /* ignore */ }
-}
 export function tourDone(): boolean {
   try { return localStorage.getItem(TOUR_KEY) === '1'; } catch { return false; }
 }

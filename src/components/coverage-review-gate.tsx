@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { WeeklyCoverageReview } from '@/components/weekly-coverage-review';
-import { TOUR_DONE_EVENT, tourDone, tourVisible, notifAskVisible, insightVisible, logModalOpen } from '@/lib/first-run-events';
+import { TOUR_DONE_EVENT, tourDone, notifAskVisible, insightVisible, logModalOpen } from '@/lib/first-run-events';
 
 // Mounts the weekly coverage review once it's due.
 //
@@ -27,7 +27,7 @@ export function CoverageReviewGate() {
       if (shown) return;
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
-        if (shown || !tourDone() || tourVisible() || notifAskVisible() || insightVisible() || logModalOpen()) return;
+        if (shown || !tourDone() || notifAskVisible() || insightVisible() || logModalOpen()) return;
         shown = true;
         setShow(true);
       }, 1200);
