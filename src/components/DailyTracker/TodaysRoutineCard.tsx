@@ -749,6 +749,9 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
                     <div
                       role="button"
                       tabIndex={0}
+                      // The app tour's "Start here" step points at the real
+                      // first task, not at the whole plan card (24 Sep).
+                      data-tour={isStart ? 'first-task' : undefined}
                       aria-label={`Mark progress: ${taskTitle(task)}`}
                       onClick={openPicker}
                       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPicker(); } }}

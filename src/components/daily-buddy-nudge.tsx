@@ -7,7 +7,7 @@ import { X } from 'lucide-react';
 import { UnlockBuddyButton } from '@/components/unlock-buddy-sheet';
 import { claimDailyModal, NUDGE_SETTLE_MS } from '@/lib/daily-modal';
 import { track } from '@/lib/journey';
-import { TOUR_DONE_EVENT, NOTIF_ASK_SETTLED_EVENT, INSIGHT_DONE_EVENT, tourDone, notifAskVisible, insightVisible, logModalOpen } from '@/lib/first-run-events';
+import { TOUR_DONE_EVENT, NOTIF_ASK_SETTLED_EVENT, INSIGHT_DONE_EVENT, tourDone, tourVisible, notifAskVisible, insightVisible, logModalOpen } from '@/lib/first-run-events';
 
 // A gentle once-a-day nudge for students who don't have an IIM buddy yet.
 // Throttled to one appearance per calendar day (localStorage). The parent
@@ -90,7 +90,7 @@ export function DailyBuddyNudge({ fullName }: { fullName?: string }) {
       timer = setTimeout(() => {
         if (shown) return;
         // Unchanged order, unchanged verdicts — each one now says its name.
-        if (!tourDone()) return blocked('tour_unfinished');
+        if (!tourDone() || tourVisible()) return blocked('tour_unfinished');
         if (notifAskVisible()) return blocked('notif_ask_open');
         if (insightVisible()) return blocked('insight_open');
         if (logModalOpen()) return blocked('log_modal_open');

@@ -822,7 +822,7 @@ export default async function DailyTrackerPage() {
       </div>
       {/* One-time spotlight tour of the home screen (Plan → Swap → Log → Buddy).
           Gated: installed app only, after onboarding + reminders are settled. */}
-      <AppTour enabled={tourReady} />
+      <AppTour enabled={tourReady} neverLogged={(logs ?? []).length === 0} />
       {/* One-time Momentum Shield briefing — existing loggers only (their past
           streak was restored under the new rules; new students just live with
           shields from day one). */}

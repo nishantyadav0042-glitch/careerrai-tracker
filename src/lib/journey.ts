@@ -355,6 +355,14 @@ export type EventName =
   // a second record of it would be one more number that can drift from the
   // table it duplicates.
   | 'restore_shown' | 'restore_tapped' | 'restore_failed'
+  // The app tour, recorded since 24 Sep (it had no telemetry at all before).
+  //   app_tour_started   IMPRESSION — { variant: first_run | never_logged, steps }
+  //   app_tour_step      IMPRESSION — { variant, step, n }: a step was on screen
+  //   app_tour_finished  ACT        — { variant, completed, at }: completed is
+  //                      false for Skip, and `at` is the step it ended on
+  // Whether a finished tour is followed by a first log is a join against
+  // daily_reports, not another event.
+  | 'app_tour_started' | 'app_tour_step' | 'app_tour_finished'
   | 'buddy_plan_click' | 'buddy_unlock_open'
   // Independence Day campaign (12 Aug): one funnel, measured end to end —
   // card seen → clicked → offer page → checkout (pay_* above carries the rest).
