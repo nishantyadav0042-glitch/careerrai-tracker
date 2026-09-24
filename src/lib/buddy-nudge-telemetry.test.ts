@@ -127,7 +127,8 @@ describe('scope containment — this gate changes nothing but telemetry', () => 
     // each gained its own line so it could name itself in telemetry. Same
     // conditions, same order, same verdicts — assert the ORDER, which is the
     // founder's rule (21 July: the buddy pitch is LAST), not the punctuation.
-    const order = ['tourDone()', 'notifAskVisible()', 'insightVisible()', 'logModalOpen()'];
+    // tourDone() became firstDayOver() when the app tour was retired (24 Sep).
+    const order = ['firstDayOver()', 'notifAskVisible()', 'insightVisible()', 'logModalOpen()'];
     let at = s.indexOf('const attempt = () =>');
     expect(at, 'the settle loop moved — this assertion needs rewiring').toBeGreaterThan(-1);
     for (const gate of order) {

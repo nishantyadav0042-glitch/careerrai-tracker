@@ -51,7 +51,8 @@ describe('every path out of the buddy nudge is counted', () => {
   it('names each distinct gate, so the cohorts stay separable', () => {
     const s = code(NUDGE);
     for (const gate of [
-      'tour_unfinished', 'notif_ask_open', 'insight_open', 'log_modal_open',
+      // 'first_day' was 'tour_unfinished' until the app tour was retired (24 Sep).
+      'first_day', 'notif_ask_open', 'insight_open', 'log_modal_open',
       'daily_slot_taken', 'already_pitched_today', 'claim_failed', 'claim_unreachable',
     ]) {
       expect(s, `missing gate: ${gate}`).toContain(`'${gate}'`);
@@ -126,9 +127,10 @@ describe('the instrumentation cannot flood', () => {
 describe('measuring the silence changed nothing about who is pitched', () => {
   it('still waits for the whole first-run queue before it claims', () => {
     // Founder order, 21 July: the buddy pitch is LAST. Instrumentation is not
-    // a licence to jump the queue.
+    // a licence to jump the queue. The first rung waited for the app tour
+    // until 24 Sep; it now waits for the student's second study day.
     const ladder = gateLadder();
-    const order = ['tourDone()', 'notifAskVisible()', 'insightVisible()', 'logModalOpen()', 'claimDailyModal()'];
+    const order = ['firstDayOver()', 'notifAskVisible()', 'insightVisible()', 'logModalOpen()', 'claimDailyModal()'];
     let at = -1;
     for (const gate of order) {
       const i = ladder.indexOf(gate);

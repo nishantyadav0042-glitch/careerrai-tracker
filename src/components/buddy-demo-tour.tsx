@@ -10,7 +10,7 @@ import { useCallback, useEffect, useState } from 'react';
 // Keyed off the non-httpOnly `cr_demo` cookie stamped at login. Replays once
 // per browser session; the banner's Replay button restarts it anytime. Steps
 // spotlight real elements when they exist on the current page (same
-// data-tour markers the student AppTour uses) and fall back to a centered
+// data-tour markers the retired student AppTour used) and fall back to a centered
 // card when they don't — so the tour works from any student page.
 
 interface Step { sel: string | null; title: string; body: string }

@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { SIX_PROMISES, RELIEF_PREFIX } from '@/components/six-promises';
+import { SIX_PROMISES } from '@/components/six-promises';
 import {
-  buildValueProof, shouldShowValueProof, hoursGivenBack, VALUE_PROOF_INTERVAL_DAYS,
+  buildValueProof, shouldShowValueProof, hoursGivenBack, VALUE_PROOF_INTERVAL_DAYS, VALUE_PROOF_QUIET_DAYS,
 } from './value-proof';
 
 const base = {
@@ -101,19 +101,6 @@ describe('one list of six worries, everywhere', () => {
     }
   });
 
-  it('every row is one loud sentence: Don\'t worry about X', () => {
-    // Six bare nouns are a feature list, and a feature list reads as work
-    // someone else is doing. The phrase repeated six times is six weights
-    // being lifted. It sits on the SAME line as the noun — split across two
-    // lines it became a label above a heading, which is two quiet things
-    // instead of one loud sentence. No "now": that invites a comparison with
-    // a past they have not stopped living in yet.
-    const screen = readFileSync('src/components/six-promises.tsx', 'utf8');
-    expect(RELIEF_PREFIX).toBe("Don't worry about");
-    expect(RELIEF_PREFIX.toLowerCase()).not.toContain('now');
-    expect(screen).toContain('{RELIEF_PREFIX}');
-  });
-
   it('the landing page and the AI caller carry the same six', () => {
     // Three surfaces stated the pitch in three different ways, and the landing
     // page argued against it outright: "CAT prep, tracked" tells a stranger
@@ -159,6 +146,17 @@ describe('cadence: every third day, not every open', () => {
   it('shows again on the third day', () => {
     expect(shouldShowValueProof('2026-08-08', '2026-08-11')).toBe(true);
     expect(VALUE_PROOF_INTERVAL_DAYS).toBe(3);
+  });
+
+  it('says nothing on the first two days, and never stamps them', () => {
+    // 24 Sep: on days 0 and 1 it repeated the explanation the student had just
+    // read after signup. The check sits before any storage write, so a day-0
+    // visit cannot push the first real showing back another three days.
+    expect(VALUE_PROOF_QUIET_DAYS).toBe(2);
+    const card = readFileSync('src/components/value-proof-card.tsx', 'utf8');
+    expect(card).toContain('const quiet = stats.daysSinceSignup < VALUE_PROOF_QUIET_DAYS;');
+    expect(card.indexOf('if (quiet) return;')).toBeGreaterThan(-1);
+    expect(card.indexOf('if (quiet) return;')).toBeLessThan(card.indexOf('localStorage.getItem(KEY)'));
   });
 
   it('a student back after a week sees it once, not the three they missed', () => {

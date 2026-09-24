@@ -7,7 +7,7 @@ import { X } from 'lucide-react';
 import { UnlockBuddyButton } from '@/components/unlock-buddy-sheet';
 import { claimDailyModal, NUDGE_SETTLE_MS } from '@/lib/daily-modal';
 import { track } from '@/lib/journey';
-import { TOUR_DONE_EVENT, NOTIF_ASK_SETTLED_EVENT, INSIGHT_DONE_EVENT, tourDone, notifAskVisible, insightVisible, logModalOpen } from '@/lib/first-run-events';
+import { NOTIF_ASK_SETTLED_EVENT, INSIGHT_DONE_EVENT, firstDayOver, notifAskVisible, insightVisible, logModalOpen } from '@/lib/first-run-events';
 
 // A gentle once-a-day nudge for students who don't have an IIM buddy yet.
 // Throttled to one appearance per calendar day (localStorage). The parent
@@ -30,7 +30,7 @@ type DismissVia = 'backdrop' | 'close' | 'maybe_tomorrow';
 // free-text gate would let two spellings of the same cause look like two causes.
 // Ordered as the code checks them.
 type NudgeGate =
-  | 'tour_unfinished'      // the app tour is still running
+  | 'first_day'            // the student's first study day (was 'tour_unfinished' until the tour was retired, 24 Sep)
   | 'notif_ask_open'       // the push permission ask owns the screen
   | 'insight_open'         // the day-1 Career Insight owns the screen
   | 'log_modal_open'       // the student is logging — never interrupt that
@@ -81,8 +81,8 @@ export function DailyBuddyNudge({ fullName }: { fullName?: string }) {
     const attempt = () => {
       if (shown) return;
       if (timer) clearTimeout(timer);
-      // Settle first: lets the notif ask evaluate and the first-log prompt
-      // (700ms after tour) claim the screen if they're going to — and, since
+      // Settle first: lets the notif ask evaluate and claim the screen if it
+      // is going to — and, since
       // 16 Sep, lets the one-time concept-resource announcement claim the
       // shared daily slot ahead of this on the single day it appears.
       // NUDGE_SETTLE_MS > ANNOUNCE_SETTLE_MS is the whole of that priority;
@@ -90,7 +90,9 @@ export function DailyBuddyNudge({ fullName }: { fullName?: string }) {
       timer = setTimeout(() => {
         if (shown) return;
         // Unchanged order, unchanged verdicts — each one now says its name.
-        if (!tourDone()) return blocked('tour_unfinished');
+        // Day one is the plan and nothing else (24 Sep; this waited for the
+        // app tour until the tour was retired).
+        if (!firstDayOver()) return blocked('first_day');
         if (notifAskVisible()) return blocked('notif_ask_open');
         if (insightVisible()) return blocked('insight_open');
         if (logModalOpen()) return blocked('log_modal_open');
@@ -125,12 +127,10 @@ export function DailyBuddyNudge({ fullName }: { fullName?: string }) {
       }, NUDGE_SETTLE_MS);
     };
     attempt();
-    window.addEventListener(TOUR_DONE_EVENT, attempt);
     window.addEventListener(NOTIF_ASK_SETTLED_EVENT, attempt);
     window.addEventListener(INSIGHT_DONE_EVENT, attempt);
     return () => {
       if (timer) clearTimeout(timer);
-      window.removeEventListener(TOUR_DONE_EVENT, attempt);
       window.removeEventListener(NOTIF_ASK_SETTLED_EVENT, attempt);
       window.removeEventListener(INSIGHT_DONE_EVENT, attempt);
     };

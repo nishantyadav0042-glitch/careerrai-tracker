@@ -5,8 +5,7 @@ import { InstallButton } from '@/components/install/install-button';
 import { AndroidInstallGuide } from '@/components/install/android-install-guide';
 import { useInstall } from '@/lib/install/use-install';
 import { trackMeta } from '@/lib/track';
-import { SixPromises } from '@/components/six-promises';
-import ScreenLogTour from '@/app/student/onboarding/screens/screen-log-tour';
+import { WhatCareerRaiIs } from '@/components/what-careerrai-is';
 import { WhatsAppOptIn, reachOf } from '@/components/onboarding/whatsapp-optin';
 import { PlanSnapshot } from '@/components/onboarding/plan-snapshot';
 
@@ -59,7 +58,7 @@ function JourneyRail({ current, stations }: { current: number; stations: readonl
 // here needs it any more.
 
 
-type Step = 'promises' | 'logTour' | 'whatsapp' | 'installFirst' | 'openApp';
+type Step = 'promises' | 'whatsapp' | 'installFirst' | 'openApp';
 
 function isStandalone(): boolean {
   if (typeof window === 'undefined') return false;
@@ -273,11 +272,10 @@ export default function PostSignupSequence({ regEventId }: { regEventId?: string
         {step === 'promises' && (
           <div className="space-y-5">
             <JourneyRail current={isIphone ? 1 : 2} stations={stations} />
-            {/* The hold-to-commit ceremony used to live here — a ritual that
-                asked the student for a promise before we had named a single
-                thing we do for them. Backwards. The app commits first, out
-                loud; the student's one job is named last. */}
-            <SixPromises onNext={() => { void persist({ done: true }); setStep('whatsapp'); }} />
+            {/* The one place the product is explained (24 Sep): you study,
+                CareerRai plans. It replaced the six promises, and nothing
+                after it explains the product again. */}
+            <WhatCareerRaiIs onNext={() => { void persist({ done: true }); setStep('whatsapp'); }} />
           </div>
         )}
 
@@ -295,31 +293,15 @@ export default function PostSignupSequence({ regEventId }: { regEventId?: string
             <JourneyRail current={stations.length - 1} stations={stations} />
             <WhatsAppOptIn
               reach={reach}
-              onDone={() => setStep('logTour')}
+              onDone={() => finishCommitment()}
             />
           </div>
         )}
 
-        {/* ── The last screen before Home: practise the log ──────────────────
-            Built 13 Aug and wired into onboarding-modal — which turned out to
-            be unreachable for anyone who signs up through /start, because
-            that route marks onboarding_completed server-side, so the modal
-            never renders. Every real student therefore finished setup without
-            ever seeing it. It belongs here: this sequence IS the last thing
-            between signup and Home.
-
-            Practice only — writes nothing, and skippable (Incident #2). */}
-        {step === 'logTour' && (
-          <div className="space-y-4">
-            <JourneyRail current={stations.length - 1} stations={stations} />
-            <ScreenLogTour
-              onNext={async () => finishCommitment()}
-              onBack={() => setStep('whatsapp')}
-              canGoBack
-              isLoading={false}
-            />
-          </div>
-        )}
+        {/* The log practice that used to follow (13 Aug) is gone (24 Sep).
+            It had the student tap sample tasks and then said "nothing is
+            saved" — teaching the real gesture on a fake task. The first real
+            task on Home teaches it instead. */}
 
       </div>
     </div>

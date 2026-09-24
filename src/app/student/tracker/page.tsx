@@ -32,7 +32,6 @@ import { TOPIC_METADATA } from '@/lib/topics-constants';
 import { firstVerdict } from '@/lib/first-verdict';
 import { FirstVerdictCard } from '@/components/first-verdict-card';
 import { Flame, CalendarCheck, CalendarDays, ChevronRight } from 'lucide-react';
-import { AppTour } from '@/components/app-tour';
 import type { StreakData } from '@/types';
 import { sessionsVisibleFrom } from '@/lib/session-window';
 import { PlanExtendedAlert } from '@/components/home/plan-extended-alert';
@@ -443,14 +442,11 @@ export default async function DailyTrackerPage() {
     daysSinceJoin >= 1 &&
     notifPrefs.password_prompt_dismissed !== true;
 
-  // First-run sequence in the INSTALLED app (founder): app tour FIRST, then the
-  // "switch on notifications" ask right after it finishes. So the tour only
-  // needs the app installed and onboarding/post-signup settled — it must NOT
-  // wait for push (push is what we ask for AT THE END of the tour). It must
-  // never run in a browser tab or over the reminders screen; the component adds
-  // a standalone-display-mode guard, and the notification ask holds back until
-  // the tour is complete.
-  const tourReady =
+  // Settled in the installed app: onboarding and post-signup done. The app
+  // tour ran on this until it was retired (24 Sep); the check-in and the
+  // insight cloud still wait for it, and each also waits for the student's
+  // second study day (first-run-events.firstDayOver).
+  const settledInApp =
     profile?.app_installed === true &&
     profile?.onboarding_completed === true &&
     profile?.post_signup_done === true;
@@ -561,7 +557,7 @@ export default async function DailyTrackerPage() {
   // after two weeks answers one question, not fourteen. Skipped entirely for
   // anyone who joined today or yesterday: they have no yesterday with us to
   // report on, and a check-in about a day before they existed is nonsense.
-  const showCheckIn = !hasLoggedYesterday && daysSinceJoin >= 2 && tourReady;
+  const showCheckIn = !hasLoggedYesterday && daysSinceJoin >= 2 && settledInApp;
   // Framing experiment: stable per-student assignment from the id, so a
   // student always sees the same framing. A = task, B = coach-dependency.
   const checkInVariant: 'A' | 'B' =
@@ -819,17 +815,17 @@ export default async function DailyTrackerPage() {
         {/* Install card (browser only; hides itself in the installed app) */}
         <div className="empty:hidden"><InstallButton variant="card" /></div>
       </div>
-      {/* One-time spotlight tour of the home screen (Plan → Swap → Log → Buddy).
-          Gated: installed app only, after onboarding + reminders are settled. */}
-      <AppTour enabled={tourReady} />
+      {/* The spotlight tour of Home is gone (24 Sep). The founder's rule: don't
+          teach students how to use CareerRai; show them today's job and let
+          the first task teach the product. */}
       {/* One-time Momentum Shield briefing — existing loggers only (their past
           streak was restored under the new rules; new students just live with
           shields from day one). */}
       <MomentumShieldIntro streak={momentum.streak} shields={momentum.shields} enabled={(logs ?? []).length > 0} />
-      {/* First-run insight — now the LAST beat (founder, 23 Jul): a tiny
-          corner cloud with a 4-5 word insight for ~4.5s, AFTER notifications
-          and the tour. Replaces the old full-screen Day-1 insight. */}
-      {tourReady && (
+      {/* A tiny corner cloud with a 4-5 word insight for ~4.5s (founder,
+          23 Jul), from the second study day. Replaced the old full-screen
+          Day-1 insight. */}
+      {settledInApp && (
         <InsightCloud weakest={weakestSec.name} fresh={insightFresh} />
       )}
     </div>

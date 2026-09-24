@@ -123,10 +123,11 @@ describe('WhatsApp is the ceremony\'s one ask now — every student, same order'
     expect(s).not.toContain('turnOnReminders');
   });
 
-  it('whatsapp hands off to logTour with no branching left to test', () => {
+  it('whatsapp is the last step: it hands off straight to Home', () => {
+    // It handed off to the log practice until that was removed (24 Sep).
     const s = readFileSync(SEQUENCE, 'utf8');
-    expect(s).toContain("onDone={() => setStep('logTour')}");
-    expect(s).toContain("onNext={async () => finishCommitment()}");
+    expect(s).toContain("onDone={() => finishCommitment()}");
+    expect(s).not.toContain("'logTour'");
   });
 
   it('nothing after it gates Home', () => {

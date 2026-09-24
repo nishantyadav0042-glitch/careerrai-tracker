@@ -30,7 +30,7 @@ import { readFileSync } from 'node:fs';
 // button is stuck inside Instagram's webview with no route out of it.
 
 const FULLSCREEN_TAKEOVERS = [
-  { file: 'src/components/post-signup-sequence.tsx', why: 'the six-promises step, one tap after signup' },
+  { file: 'src/components/post-signup-sequence.tsx', why: 'the what-is-CareerRai step, one tap after signup' },
   { file: 'src/components/standalone-notif-ask.tsx', why: 'the notification permission ask' },
   { file: 'src/components/install/in-app-escape.tsx', why: 'the in-app-browser escape hatch' },
 ];
@@ -51,7 +51,8 @@ describe('full-screen overlays can always be scrolled', () => {
 });
 
 describe('the screen that introduces the product keeps its way forward reachable', () => {
-  const SRC = 'src/components/six-promises.tsx';
+  // The six-promises screen until 24 Sep; this screen replaced it.
+  const SRC = 'src/components/what-careerrai-is.tsx';
 
   it('the CTA is sticky, like every other decision screen in the funnel', () => {
     // Same rule funnel-cta.guard.test.ts pins for /start. This screen is one
@@ -60,13 +61,24 @@ describe('the screen that introduces the product keeps its way forward reachable
     expect(readFileSync(SRC, 'utf8')).toMatch(/sticky\s+bottom-0/);
   });
 
-  it('still says all six things — tightening the layout cut nothing', () => {
+  it('says the division of labour once, in the student’s words', () => {
+    // Founder, 24 Sep: the student must leave able to say "it decides what I
+    // study today; I study from my own material; I tell it how much got done."
     const src = readFileSync(SRC, 'utf8');
-    for (const promise of ['what to study today', 'your backlog', 'revision', 'mocks', 'syllabus completion', 'off days']) {
-      expect(src).toContain(promise);
-    }
-    // The two claims that carry the positioning.
-    expect(src).toContain('1 hour of your day');
-    expect(src).toContain('All six · 100% free');
+    expect(src).toContain('You study.<br />CareerRai plans.');
+    expect(src).toContain('CareerRai isn&apos;t a coaching app.');
+    for (const step of ['CareerRai plans', 'You study', 'You mark it']) expect(src).toContain(`head: '${step}'`);
+    // The two gestures, named exactly as the Home card names them.
+    expect(src).toContain('Finished it or Got halfway');
+    expect(src).toContain('Your daily plan is free.');
+  });
+
+  it('promises nothing the product does not do', () => {
+    const copy = readFileSync(SRC, 'utf8').replace(/^\s*\/\/.*$/gm, '');
+    // Most tasks have no video; carry-over into tomorrow is not guaranteed.
+    expect(copy).toContain('Some tasks also have a free video.');
+    expect(copy).not.toMatch(/every task has|tomorrow/i);
+    // The plan is sized per student, so no fixed daily load is stated.
+    expect(copy).not.toMatch(/\b\d+\s*(h|hrs?|hours)\b/i);
   });
 });

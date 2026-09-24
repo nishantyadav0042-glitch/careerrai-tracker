@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { studyDayString } from '@/lib/study-day';
+import { RESOURCE_ANNOUNCE_DAY } from '@/lib/companion';
 import { getAuthUser } from '@/lib/auth';
 import { StudentBottomNav } from '@/components/bottom-nav';
 import { NotificationBell } from '@/components/notification-bell';
@@ -196,8 +197,15 @@ export default async function StudentLayout({ children }: { children: React.Reac
   // student who onboarded today — their first session already has enough to
   // meet. It also takes the shared once-a-day slot, so it can only ever replace
   // another prompt, never stack on one.
+  //
+  // And only to a student who joined before lesson links shipped (24 Sep). It
+  // says "New: a lesson link on new topics"; to anyone who joined after, the
+  // link was always there and the task already labels it, so the modal only
+  // explains the product a second time.
+  const joinedBeforeLessonLinks = profile?.created_at != null
+    && studyDayString(new Date(profile.created_at as string)) < RESOURCE_ANNOUNCE_DAY;
   const showResourceAnnounce = noBlockingModal && !showCoverageReview
-    && !showTimetablePrompt && !onboardedTodayIst;
+    && !showTimetablePrompt && !onboardedTodayIst && joinedBeforeLessonLinks;
 
   // ── INCIDENT #92: `X && !X` (16 Sep 2026) ─────────────────────────────────
   //

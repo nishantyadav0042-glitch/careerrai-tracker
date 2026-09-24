@@ -110,10 +110,15 @@ over the first 10 screens. **Draft key is versioned** — bump it to invalidate
 every draft saved before a breaking change.
 
 **Post-signup ceremony** (`post-signup-sequence.tsx`), once per student, guarded
-by `profiles.post_signup_done`: *date reconciliation → hold-to-commit →
-thanks → install (the finale) → open app → share.* Install is deliberately the
-finale, marked `done` **before** the install step so the iOS `/app` navigation
-can never re-trigger the ceremony.
+by `profiles.post_signup_done`: *install → open app (browser only) → what
+CareerRai is (one screen, `what-careerrai-is.tsx`) → WhatsApp → Home.* `done` is
+persisted when the student passes the explanation screen, so the iOS `/app`
+navigation can never re-trigger the ceremony. Since 24 Sep the product is
+explained on that one screen and nowhere else in the first session: the six
+promises, the log practice on sample tasks, the Home spotlight tour and the
+day 0–1 value-proof card were removed, and the extras that waited for the tour
+(buddy pitch, check-in, weekly review, insight cloud) wait for the student's
+second study day (`first-run-events.firstDayOver`).
 
 **In-app opt-in** (`standalone-notif-ask.tsx`): fires only in the installed
 standalone app, *after* the first Career Insight, and returns on **every app

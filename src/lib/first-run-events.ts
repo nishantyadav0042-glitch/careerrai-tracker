@@ -1,7 +1,9 @@
-// First-run sequencing signals (founder order, 21 July):
-//   0. Day-1 insight (VALUE first — "here's your weakness as of today")
-//   1. notification permission → 2. app tour → 3. buddy pitch
-// (plus the first-log auto-open, which also waits its turn).
+import { studyDayString } from './study-day';
+
+// First-run sequencing signals. The founder's order was set 21 July:
+// notification permission → app tour → buddy pitch. The app tour and the
+// first-log auto-open are gone (24 Sep); what waited for the tour now waits
+// for the student's second study day (see firstDayOver).
 //
 // These are window-level events + flags because the participants are sibling
 // client components (layout overlay, page tour, page modal) with no shared
@@ -10,15 +12,16 @@
 
 export const INSIGHT_DONE_EVENT = 'cr-first-insight-done';
 export const NOTIF_ASK_SETTLED_EVENT = 'cr-notif-ask-settled';
-export const TOUR_DONE_EVENT = 'cr-app-tour-done';
 // Stage A (founder, 8 Aug): for a coaching student's first 2 days, the
-// timetable ask outranks the tour — the photo-to-plan moment is the wow the
-// first hour is for, and a tour of screens means little before the plan is
-// theirs. The tour waits for this to settle, exactly as it waits for the
-// notification ask.
+// timetable ask outranks everything optional — the photo-to-plan moment is the
+// wow the first hour is for.
 export const TIMETABLE_ASK_SETTLED_EVENT = 'cr-timetable-ask-settled';
 
+// Set on devices that finished the old app tour (retired 24 Sep). Read only,
+// so a student who already had their first day is never given a second one.
 export const TOUR_KEY = 'cr_app_tour_v1';
+// The study day this device first opened Home on, once the tour was gone.
+export const FIRST_HOME_DAY_KEY = 'cr_first_home_day_v1';
 
 type FirstRunWindow = Window & {
   __crInsightVisible?: boolean;
@@ -57,8 +60,29 @@ export function setLogModalOpen(open: boolean): void {
   try { (window as FirstRunWindow).__crLogModalOpen = open; } catch { /* ignore */ }
 }
 
-export function tourDone(): boolean {
-  try { return localStorage.getItem(TOUR_KEY) === '1'; } catch { return false; }
+/**
+ * Is the student past their first day in the app? Day one is the plan and
+ * nothing else (founder, 24 Sep: "the first task is the onboarding"), so the
+ * buddy pitch, the yesterday check-in, the weekly review and the insight cloud
+ * all wait for this. They used to wait for the app tour.
+ *
+ * The first call on a device records today's study day (05:30 IST rollover)
+ * and answers no; from the next study day on it answers yes. A device that
+ * finished the old tour already had its first day.
+ */
+export function firstDayOver(now: Date = new Date()): boolean {
+  try {
+    if (localStorage.getItem(TOUR_KEY) === '1') return true;
+    const today = studyDayString(now);
+    const first = localStorage.getItem(FIRST_HOME_DAY_KEY);
+    if (!first) {
+      localStorage.setItem(FIRST_HOME_DAY_KEY, today);
+      return false;
+    }
+    return first !== today;
+  } catch {
+    return false;
+  }
 }
 
 export function timetableAskVisible(): boolean {
