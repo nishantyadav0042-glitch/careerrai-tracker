@@ -205,7 +205,7 @@ export function CallDeck({ queue, repFirstName }: { queue: CallLead[]; repFirstN
     return (
       <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-8 text-center">
         <p className="text-lg font-bold text-emerald-800">Queue cleared for now 👏</p>
-        <p className="mt-1 text-sm text-emerald-700">Every card marked — {tallyLine(tally)} this session. New leads and callbacks roll in through the day; tomorrow&rsquo;s list is dealt at 4 AM.</p>
+        <p className="mt-1 text-sm text-emerald-700">Every card marked — {tallyLine(tally)} this session. New leads and callbacks roll in through the day; tomorrow&rsquo;s list is built the moment you open it.</p>
       </div>
     );
   }
