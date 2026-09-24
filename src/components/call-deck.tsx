@@ -12,6 +12,7 @@ import { DECK_FILTERS, DECK_FILTER_LABEL, matchesDeckFilter, deckFilterCounts,
   addToTally, tallyLine, EMPTY_TALLY, type DeckFilter } from '@/lib/sales-deck-filter';
 import { messageFor, JOURNEY_LABEL } from '@/lib/sales-messages';
 import { templatesFor, templateNote, renderTemplate, type MessageTemplate } from '@/lib/sales-templates';
+import { writtenReasonProblem, writtenReasonPrompt, WRITTEN_REASON_LANES } from '@/lib/sales-written-reason';
 
 const TIER: Record<string, string> = { hot: 'bg-rose-50 text-rose-700', warm: 'bg-amber-50 text-amber-800', cool: 'bg-stone-100 text-stone-500' };
 const DUE_CLS: Record<string, string> = {
@@ -514,7 +515,12 @@ function Disposition({ lead, onDispose }: {
   // Nobody spoke to a student who was skipped either, so the "why aren't they
   // studying" taxonomy is as inapplicable here as it is to an unanswered dial.
   // Neither unreached outcome has a reason to give: nobody spoke.
-  const asksReason = !isUnreached(outcome) && !isSkip;
+  // Log breakers and daily loggers (founder, 24 Sep 2026): the reason is
+  // WRITTEN, not picked — the category list is not offered on these cards,
+  // and a connected call needs a real sentence (lib/sales-written-reason).
+  const writesReason = WRITTEN_REASON_LANES.has(lead.dueReason);
+  const reasonProblem = writtenReasonProblem(lead.dueReason, outcome, note);
+  const asksReason = !isUnreached(outcome) && !isSkip && !writesReason;
   const needsVerbatim = asksReason && reasonNeedsVerbatim(reason || null);
   // ── A NOTE IS REQUIRED ON EVERY CONNECTED OUTCOME ────────────────────────
   //
@@ -530,6 +536,7 @@ function Disposition({ lead, onDispose }: {
   // button has to know that too — otherwise the rep taps Save, the request
   // fails, and the card stays put with no explanation.
   const canSave = (!NOTE_REQUIRED.has(outcome) || note.trim().length > 0)
+    && reasonProblem === null
     && (!needsVerbatim || reasonVerbatim.trim().length >= 3)
     // A skip without a reason is the blank cell this whole change exists to
     // remove, so the API rejects it and the button knows that too.
@@ -592,8 +599,12 @@ function Disposition({ lead, onDispose }: {
           )}
         </div>
       )}
-      <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Feedback (required): what did they say?"
+      <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={writesReason ? 3 : 2}
+        placeholder={writtenReasonPrompt(lead.dueReason) ?? 'Feedback (required): what did they say?'}
         className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm" />
+      {reasonProblem && note.trim().length > 0 && (
+        <p className="text-[11px] font-semibold text-red-700">{reasonProblem}</p>
+      )}
       <button
         disabled={!canSave || saving}
         onClick={async () => {
@@ -608,7 +619,7 @@ function Disposition({ lead, onDispose }: {
           if (!ok) setSaving(false); // failed — keep the form so she can retry
         }}
         className="w-full rounded-xl bg-stone-900 py-2.5 text-sm font-bold text-white active:scale-[0.98] disabled:opacity-40">
-        {saving ? 'Saving…' : canSave ? (isSkip ? 'Skip & next' : 'Save & next') : isSkip ? 'Pick a reason to skip' : 'Write feedback to save'}
+        {saving ? 'Saving…' : canSave ? (isSkip ? 'Skip & next' : 'Save & next') : isSkip ? 'Pick a reason to skip' : reasonProblem ? 'Write their reason to save' : 'Write feedback to save'}
       </button>
     </div>
   );
