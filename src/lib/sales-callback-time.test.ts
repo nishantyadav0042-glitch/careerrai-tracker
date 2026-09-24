@@ -19,6 +19,11 @@ describe('a callback carries the time the student asked for', () => {
     expect(callbackTimeProblem('2026-09-24T18:00', NOW)).toMatch(/already passed/);
   });
 
+  it('with no clock (render time), only the entry is checked', () => {
+    expect(callbackTimeProblem('2026-09-24T18:00', null)).toBeNull();
+    expect(callbackTimeProblem('', null)).toMatch(/Set the time/);
+  });
+
   it('a future time, read as IST, is accepted', () => {
     expect(callbackTimeProblem('2026-09-24T20:30', NOW)).toBeNull();
     expect(callbackTimeProblem('2026-09-25T11:00', NOW)).toBeNull();
@@ -29,6 +34,8 @@ describe('a callback carries the time the student asked for', () => {
       const src = readFileSync(join(__dirname, '..', f), 'utf8');
       expect(src, f).not.toMatch(/defaultCallback/);
       expect(src, f).toMatch(/value=\{callbackAt\}/);
+      // Entry checked while rendering; the future check runs on Save.
+      expect(src, f).toMatch(/callbackTimeProblem\(callbackAt, null\)/);
       expect(src, f).toMatch(/callbackTimeProblem\(callbackAt, Date\.now\(\)\)/);
     }
     const route = readFileSync(join(__dirname, '..', 'app', 'api', 'sales', 'log', 'route.ts'), 'utf8');

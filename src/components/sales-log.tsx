@@ -31,7 +31,7 @@ export function QuickLog({ studentId }: { studentId: string }) {
   const [error, setError] = useState<string | null>(null);
   const needsCallback = status === 'callback';
   // No pre-filled time (founder, 24 Sep 2026) — lib/sales-callback-time.
-  const callbackProblem = needsCallback ? callbackTimeProblem(callbackAt, Date.now()) : null;
+  const callbackProblem = needsCallback ? callbackTimeProblem(callbackAt, null) : null;
   // The learning fields. One student saying "the timetable clashes with my
   // coaching" is an anecdote; thirty-seven saying it is a product requirement —
   // but only if it was recorded as a CATEGORY. Free text cannot aggregate.
@@ -43,6 +43,9 @@ export function QuickLog({ studentId }: { studentId: string }) {
   // "Call logged ✓" is shown only after the server confirms the write —
   // never optimistically (20 Aug, Sales Phase 1).
   async function save() {
+    // The past-time check needs the clock, so it runs on Save, not in render.
+    const late = needsCallback ? callbackTimeProblem(callbackAt, Date.now()) : null;
+    if (late) { setError(late); return; }
     setSaving(true);
     setError(null);
     try {

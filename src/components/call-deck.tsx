@@ -480,7 +480,8 @@ function Disposition({ lead, onDispose }: {
   const needsCallback = outcome === 'callback';
   // No pre-filled time (founder, 24 Sep 2026): the box starts empty and the
   // rep sets the time the student asked for (lib/sales-callback-time).
-  const callbackProblem = needsCallback ? callbackTimeProblem(callbackAt, Date.now()) : null;
+  const [callbackLate, setCallbackLate] = useState<string | null>(null);
+  const callbackProblem = needsCallback ? (callbackTimeProblem(callbackAt, null) ?? callbackLate) : null;
 
   // ── WHAT THE STUDENT SAID (29 Aug 2026) ─────────────────────────────────
   //
@@ -570,7 +571,7 @@ function Disposition({ lead, onDispose }: {
       {needsCallback && (
         <div>
           <label className="text-[11px] font-bold text-sky-800">When did they ask to be called back? (required — set the time)</label>
-          <input type="datetime-local" value={callbackAt} onChange={(e) => setCallbackAt(e.target.value)}
+          <input type="datetime-local" value={callbackAt} onChange={(e) => { setCallbackAt(e.target.value); setCallbackLate(null); }}
             className={`mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm ${callbackProblem ? 'border-red-400' : 'border-stone-300'}`} />
           {callbackProblem && <p className="mt-1 text-[11px] font-semibold text-red-700">{callbackProblem}</p>}
         </div>
@@ -607,6 +608,11 @@ function Disposition({ lead, onDispose }: {
       <button
         disabled={!canSave || saving}
         onClick={async () => {
+          // The past-time check needs the clock, so it runs here, not in render.
+          if (needsCallback) {
+            const late = callbackTimeProblem(callbackAt, Date.now());
+            if (late) { setCallbackLate(late); return; }
+          }
           setSaving(true);
           const ok = await onDispose(
             lead, outcome, note.trim(),
