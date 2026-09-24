@@ -467,7 +467,6 @@ export default async function DailyTrackerPage() {
       hasLoggedYesterday={hasLoggedYesterday}
       yesterdayStr={yesterdayStr}
       yesterdayLabel={yesterdayLabel}
-      firstLogNudge={(logs ?? []).length === 0}
     />
   );
   // The plan, and directly under it the one honest way out of it. Placed

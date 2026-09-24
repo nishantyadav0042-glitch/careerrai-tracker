@@ -51,6 +51,24 @@ function memoryTag(task: RoutineTask): string | null {
   return times > 1 ? `${ordinal} revision · ${task.lastTouchedDaysAgo}d ago` : `Last done ${task.lastTouchedDaysAgo}d ago`;
 }
 
+// "Couldn't start it?" (24 Sep). The founder's three reasons, asked on the
+// Home card and nowhere else. It records why a student is stuck before a first
+// tick; the reply is one line and never promises the plan will change.
+type CouldntReason = 'too_hard' | 'no_time' | 'where_to_study';
+const COULDNT_REASONS: { reason: CouldntReason; label: string }[] = [
+  { reason: 'too_hard', label: 'Too hard' },
+  { reason: 'no_time', label: 'No time' },
+  { reason: 'where_to_study', label: 'Didn’t know where to study' },
+];
+
+function couldntReply(reason: CouldntReason, hasVideo: boolean): string {
+  if (reason === 'too_hard') return 'Noted. Try just the first part. If you do some of it, tap the task and pick Got halfway.';
+  if (reason === 'no_time') return 'Noted. When you do study it, tap the task here.';
+  return hasVideo
+    ? 'Use your own notes or book, or the free video on this task.'
+    : 'Use your own notes or any CAT book you have for this topic.';
+}
+
 // The card sends only the two ADVANCING signals, derived from how far the
 // student got: "Finished it" -> green, "Got halfway" -> blue (mapped
 // server-side in complete-task). The 🟡/🔴 four-option picker that used to be
@@ -247,6 +265,8 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
   // most real days end somewhere in between, and a student forced to choose
   // between "done" and nothing will pick nothing.
   const [markingTaskId, setMarkingTaskId] = useState<string | null>(null);
+  const [couldntOpen, setCouldntOpen] = useState(false);
+  const [couldntReason, setCouldntReason] = useState<CouldntReason | null>(null);
   const [loading, setLoading] = useState(true);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [calibrated, setCalibrated] = useState(false);
@@ -715,11 +735,45 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
               students the way they can log — they can log directly from home
               screen only." Shown until they have marked anything at all today,
               then it disappears; a hint that outstays its welcome becomes
-              furniture. */}
+              furniture. Reworded 24 Sep to the founder's sentence: CareerRai
+              says what to study, the studying happens in the student's own
+              material, then they tap the task. The video is named only when
+              this task has one; most tasks do not. */}
           {doneCount === 0 && (
-            <p className="mb-1.5 rounded-lg bg-stone-900 px-2.5 py-1.5 text-[11px] font-semibold text-white">
-              Finished a task? Tap anywhere on it — that&apos;s it, your day is marked.
-            </p>
+            <div className="mb-1.5">
+              <p className="rounded-lg bg-stone-900 px-2.5 py-1.5 text-[11px] font-semibold text-white">
+                CareerRai tells you what to study today.{' '}
+                {tasks[0]?.resource ? 'Study it from your notes, book, or the free video.' : 'Study it from your notes or book.'}{' '}
+                Then tap the task here.
+              </p>
+              {couldntReason ? (
+                <p className="mt-1 px-1 text-[11px] text-stone-600">{couldntReply(couldntReason, !!tasks[0]?.resource)}</p>
+              ) : couldntOpen ? (
+                <div className="mt-1 flex flex-wrap gap-1.5">
+                  {COULDNT_REASONS.map(({ reason, label }) => (
+                    <button
+                      key={reason}
+                      type="button"
+                      onClick={() => {
+                        setCouldntReason(reason);
+                        track('couldnt_start', { reason, task_id: tasks[0]?.id ?? null, topic: tasks[0]?.topic ?? null, has_video: !!tasks[0]?.resource });
+                      }}
+                      className="rounded-full border border-stone-300 bg-white px-3 py-1 text-[11px] font-semibold text-stone-700 active:scale-95"
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setCouldntOpen(true)}
+                  className="mt-1 px-1 text-[11px] font-semibold text-stone-500 underline underline-offset-2"
+                >
+                  Couldn&apos;t start it?
+                </button>
+              )}
+            </div>
           )}
 
           <div className="space-y-1">

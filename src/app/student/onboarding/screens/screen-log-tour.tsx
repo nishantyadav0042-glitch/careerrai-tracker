@@ -333,7 +333,7 @@ export default function ScreenLogTour({ onNext, isLoading, firstName = null }: S
           {firstName ? `${firstName}, ` : ''}one last thing — try this
         </h3>
         <p className="mt-1.5 text-[13px] leading-relaxed text-stone-600">
-          Every day you get 2–3 tasks like these on Home. After studying, tap the
+          Every day you get tasks like these on Home. After studying, tap the
           circle and pick how much you did — <b>that&apos;s it, done for the day</b>. No typing, no forms.
         </p>
       </div>
@@ -433,7 +433,7 @@ export default function ScreenLogTour({ onNext, isLoading, firstName = null }: S
         </div>
       ) : (
         <p className="text-center text-[11px] text-stone-400">
-          This is just practice — nothing is saved. It counts for real from tomorrow.
+          This is just practice — nothing is saved.
         </p>
       )}
 
