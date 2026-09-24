@@ -11,6 +11,7 @@ import { completeDueFollowups, scheduleFollowup } from '@/lib/sales-followup';
 import { resolveConvertedClaim } from '@/lib/sales-conversion-truth';
 import { markSkipped, markWorked, readToday } from '@/lib/sales-opportunity-record';
 import { writtenReasonProblem } from '@/lib/sales-written-reason';
+import { callbackTimeProblem } from '@/lib/sales-callback-time';
 import { captureStateSnapshot, recordIntervention, interventionTypeForLane } from '@/lib/intervention-ledger';
 import { isReasonCategory, reasonNeedsVerbatim } from '@/lib/intervention-taxonomy';
 import { templateByKey, templateNote } from '@/lib/sales-templates';
@@ -199,9 +200,12 @@ export async function POST(request: NextRequest) {
     }, { status: 409 });
   }
 
-  // A callback needs a time.
-  if (outcome === 'callback' && !(typeof callbackAt === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(callbackAt))) {
-    return NextResponse.json({ error: 'Pick a callback time.' }, { status: 400 });
+  // A callback needs the time the student asked for, and it must be in the
+  // future (founder, 24 Sep 2026 — lib/sales-callback-time). The screens no
+  // longer pre-fill 6 PM, so this is the rep's own entry.
+  if (outcome === 'callback') {
+    const problem = callbackTimeProblem(callbackAt, Date.now());
+    if (problem) return NextResponse.json({ error: problem }, { status: 400 });
   }
 
   // ── A SKIP CLOSES THE CARD AND TOUCHES NOTHING ELSE ──────────────────────

@@ -12,6 +12,7 @@ import { DECK_FILTERS, DECK_FILTER_LABEL, matchesDeckFilter, deckFilterCounts,
   addToTally, tallyLine, EMPTY_TALLY, type DeckFilter } from '@/lib/sales-deck-filter';
 import { messageFor, JOURNEY_LABEL } from '@/lib/sales-messages';
 import { templatesFor, templateNote, renderTemplate, type MessageTemplate } from '@/lib/sales-templates';
+import { callbackTimeProblem } from '@/lib/sales-callback-time';
 import { writtenReasonProblem, writtenReasonPrompt, WRITTEN_REASON_LANES } from '@/lib/sales-written-reason';
 
 const TIER: Record<string, string> = { hot: 'bg-rose-50 text-rose-700', warm: 'bg-amber-50 text-amber-800', cool: 'bg-stone-100 text-stone-500' };
@@ -44,13 +45,6 @@ const OUTCOMES: { key: string; label: string; cls: string }[] = [
   // student, who returns to tomorrow's queue on the same terms.
   { key: 'skipped', label: 'Skip today', cls: 'bg-stone-500 text-white' },
 ];
-
-function defaultCallback(): string {
-  const ist = new Date(Date.now() + 5.5 * 3600_000);
-  ist.setUTCHours(18, 0, 0, 0);
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${ist.getUTCFullYear()}-${p(ist.getUTCMonth() + 1)}-${p(ist.getUTCDate())}T18:00`;
-}
 
 export function CallDeck({ queue, repFirstName }: { queue: CallLead[]; repFirstName: string }) {
   const [list, setList] = useState(queue);
@@ -484,6 +478,10 @@ function Disposition({ lead, onDispose }: {
   const [callbackAt, setCallbackAt] = useState('');
   const [saving, setSaving] = useState(false);
   const needsCallback = outcome === 'callback';
+  // No pre-filled time (founder, 24 Sep 2026): the box starts empty and the
+  // rep sets the time the student asked for (lib/sales-callback-time).
+  const [callbackLate, setCallbackLate] = useState<string | null>(null);
+  const callbackProblem = needsCallback ? (callbackTimeProblem(callbackAt, null) ?? callbackLate) : null;
 
   // ── WHAT THE STUDENT SAID (29 Aug 2026) ─────────────────────────────────
   //
@@ -537,6 +535,7 @@ function Disposition({ lead, onDispose }: {
   // fails, and the card stays put with no explanation.
   const canSave = (!NOTE_REQUIRED.has(outcome) || note.trim().length > 0)
     && reasonProblem === null
+    && callbackProblem === null
     && (!needsVerbatim || reasonVerbatim.trim().length >= 3)
     // A skip without a reason is the blank cell this whole change exists to
     // remove, so the API rejects it and the button knows that too.
@@ -571,9 +570,10 @@ function Disposition({ lead, onDispose }: {
       )}
       {needsCallback && (
         <div>
-          <label className="text-[11px] font-semibold text-stone-500">Call back at (the time they said)</label>
-          <input type="datetime-local" value={callbackAt || defaultCallback()} onChange={(e) => setCallbackAt(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm" />
+          <label className="text-[11px] font-bold text-sky-800">When did they ask to be called back? (required — set the time)</label>
+          <input type="datetime-local" value={callbackAt} onChange={(e) => { setCallbackAt(e.target.value); setCallbackLate(null); }}
+            className={`mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm ${callbackProblem ? 'border-red-400' : 'border-stone-300'}`} />
+          {callbackProblem && <p className="mt-1 text-[11px] font-semibold text-red-700">{callbackProblem}</p>}
         </div>
       )}
       {asksReason && (
@@ -608,10 +608,15 @@ function Disposition({ lead, onDispose }: {
       <button
         disabled={!canSave || saving}
         onClick={async () => {
+          // The past-time check needs the clock, so it runs here, not in render.
+          if (needsCallback) {
+            const late = callbackTimeProblem(callbackAt, Date.now());
+            if (late) { setCallbackLate(late); return; }
+          }
           setSaving(true);
           const ok = await onDispose(
             lead, outcome, note.trim(),
-            needsCallback ? (callbackAt || defaultCallback()) : undefined,
+            needsCallback ? callbackAt : undefined,
             asksReason ? (reason || null) : null,
             asksReason && reasonVerbatim.trim() ? reasonVerbatim.trim() : null,
             isSkip ? skipReason : null,
@@ -619,7 +624,7 @@ function Disposition({ lead, onDispose }: {
           if (!ok) setSaving(false); // failed — keep the form so she can retry
         }}
         className="w-full rounded-xl bg-stone-900 py-2.5 text-sm font-bold text-white active:scale-[0.98] disabled:opacity-40">
-        {saving ? 'Saving…' : canSave ? (isSkip ? 'Skip & next' : 'Save & next') : isSkip ? 'Pick a reason to skip' : reasonProblem ? 'Write their reason to save' : 'Write feedback to save'}
+        {saving ? 'Saving…' : canSave ? (isSkip ? 'Skip & next' : 'Save & next') : isSkip ? 'Pick a reason to skip' : callbackProblem ? 'Set the callback time to save' : reasonProblem ? 'Write their reason to save' : 'Write feedback to save'}
       </button>
     </div>
   );

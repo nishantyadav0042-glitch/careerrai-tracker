@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { Check } from 'lucide-react';
+import { callbackTimeProblem } from '@/lib/sales-callback-time';
 import { REASON_CATEGORIES, REASON_LABEL, reasonNeedsVerbatim,
   type ReasonCategory } from '@/lib/intervention-taxonomy';
 
@@ -20,14 +21,6 @@ const OUTCOMES: { key: string; label: string; cls: string }[] = [
   { key: 'dnd', label: 'Stop calling (DND)', cls: 'bg-rose-700 text-white' },
 ];
 
-function defaultCallback(): string {
-  const now = new Date();
-  const ist = new Date(now.getTime() + (5.5 * 60 + now.getTimezoneOffset()) * 60_000);
-  ist.setHours(18, 0, 0, 0);
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${ist.getFullYear()}-${p(ist.getMonth() + 1)}-${p(ist.getDate())}T18:00`;
-}
-
 // Standalone call-logger for the conversion page — outcome + feedback + callback.
 export function QuickLog({ studentId }: { studentId: string }) {
   const [status, setStatus] = useState('interested');
@@ -37,6 +30,8 @@ export function QuickLog({ studentId }: { studentId: string }) {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const needsCallback = status === 'callback';
+  // No pre-filled time (founder, 24 Sep 2026) — lib/sales-callback-time.
+  const callbackProblem = needsCallback ? callbackTimeProblem(callbackAt, null) : null;
   // The learning fields. One student saying "the timetable clashes with my
   // coaching" is an anecdote; thirty-seven saying it is a product requirement —
   // but only if it was recorded as a CATEGORY. Free text cannot aggregate.
@@ -48,6 +43,9 @@ export function QuickLog({ studentId }: { studentId: string }) {
   // "Call logged ✓" is shown only after the server confirms the write —
   // never optimistically (20 Aug, Sales Phase 1).
   async function save() {
+    // The past-time check needs the clock, so it runs on Save, not in render.
+    const late = needsCallback ? callbackTimeProblem(callbackAt, Date.now()) : null;
+    if (late) { setError(late); return; }
     setSaving(true);
     setError(null);
     try {
@@ -55,7 +53,7 @@ export function QuickLog({ studentId }: { studentId: string }) {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           studentId, outcome: status, note,
-          callbackAt: needsCallback ? (callbackAt || defaultCallback()) : null,
+          callbackAt: needsCallback ? callbackAt : null,
           reasonCategory: reason || null,
           reasonVerbatim: reasonVerbatim.trim() || null,
           microCommitment,
@@ -86,9 +84,10 @@ export function QuickLog({ studentId }: { studentId: string }) {
       </div>
       {needsCallback && (
         <div>
-          <label className="text-[11px] font-semibold text-stone-500">Call back at (the time they said)</label>
-          <input type="datetime-local" value={callbackAt || defaultCallback()} onChange={(e) => setCallbackAt(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm" />
+          <label className="text-[11px] font-bold text-sky-800">When did they ask to be called back? (required — set the time)</label>
+          <input type="datetime-local" value={callbackAt} onChange={(e) => setCallbackAt(e.target.value)}
+            className={`mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm ${callbackProblem ? 'border-red-400' : 'border-stone-300'}`} />
+          {callbackProblem && <p className="mt-1 text-[11px] font-semibold text-red-700">{callbackProblem}</p>}
         </div>
       )}
       <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="What did they say? Objections, next step…"
@@ -127,7 +126,7 @@ export function QuickLog({ studentId }: { studentId: string }) {
         </label>
       </div>
       {error && <p className="text-[12px] font-semibold text-rose-600">{error}</p>}
-      <button onClick={save} disabled={saving}
+      <button onClick={save} disabled={saving || callbackProblem !== null}
         className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-stone-900 py-2.5 text-sm font-bold text-white active:scale-[0.98] disabled:opacity-60">
         {saving ? 'Saving…' : <><Check className="h-4 w-4" /> Save this call</>}
       </button>
