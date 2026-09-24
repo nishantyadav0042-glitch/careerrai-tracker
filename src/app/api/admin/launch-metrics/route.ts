@@ -3,6 +3,7 @@ import { requireAdminCtx } from '@/lib/require-admin';
 import { MIN_ACTIVE_QUESTIONS, MIN_ACTIVE_TIPS } from '@/lib/community-pipeline';
 
 import { fetchAll } from '@/lib/supabase/fetch-all';
+import { isCounsellorWorkspacePath } from '@/lib/client-error-meta';
 export const maxDuration = 60;
 
 // The Launch Dashboard numbers — the one page the founder opens each morning
@@ -66,12 +67,15 @@ export async function GET() {
   const dau = dauSet.size || anyEventUsers.size;
 
   // ── Crash-free: students with zero client errors, out of students seen ──
-  const crashed = new Set((errs24 ?? []).map((e) => e.student_id as string).filter(Boolean));
+  // Student surfaces only. The counsellor workspace reports into the same
+  // table (24 Sep), and a rep's error is not a student's crash.
+  const studentErrs = (errs24 ?? []).filter((e) => !isCounsellorWorkspacePath(e.path));
+  const crashed = new Set(studentErrs.map((e) => e.student_id as string).filter(Boolean));
   const crashFreePct = dau > 0 ? Math.round(((dau - crashed.size) / dau) * 100) : null;
 
   // Top crash groups, so a real bug is one line not 200.
   const groups = new Map<string, { count: number; message: string; path: string | null }>();
-  for (const e of errs24 ?? []) {
+  for (const e of studentErrs) {
     const k = e.fingerprint as string;
     const g = groups.get(k) ?? { count: 0, message: e.message as string, path: (e.path as string) ?? null };
     g.count += 1;
@@ -143,7 +147,7 @@ export async function GET() {
     reliability: {
       crashFreePct,
       studentsWithErrors: crashed.size,
-      errorReports24: (errs24 ?? []).length,
+      errorReports24: studentErrs.length,
       topCrashes,
     },
     otp: { sends24: otpSends, distinctPhones24: otpPhones, newAccounts24: newStudents24, loggedIn24 },

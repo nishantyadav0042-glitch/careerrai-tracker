@@ -66,3 +66,15 @@ export function fingerprintFor(message: string, file: unknown, line: unknown): s
     String(line ?? ''),
   ].join('|');
 }
+
+/** True for an error reported from the counsellor workspace (/sales and below).
+ *
+ *  The crash reporter also runs there since 24 Sep (founder: "Add the crash
+ *  logger to Anshul's workspace"), and both land in client_errors. The rows
+ *  share a table but not a population: a counsellor is not a student, so his
+ *  errors must never move a STUDENT metric such as crash-free students on
+ *  /admin/launch. Anchored to a whole path segment so a future '/salesforce'
+ *  route is not swept in by a prefix match. */
+export function isCounsellorWorkspacePath(path: unknown): boolean {
+  return typeof path === 'string' && /^\/sales(\/|$)/.test(path);
+}

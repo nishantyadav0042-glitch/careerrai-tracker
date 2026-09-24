@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { requireSales } from '@/lib/admin-auth';
 import { Logo } from '@/components/logo';
+import { CrashReporter } from '@/components/crash-reporter';
 
 // Sales workspace — for the sales role (and admins, who can see everything).
 // Priya logs in and lands here; a student/buddy is bounced to their own home.
@@ -30,6 +31,9 @@ export default async function SalesLayout({ children }: { children: React.ReactN
         </nav>
         {children}
       </div>
+      {/* Errors on these screens used to reach us only when the rep noticed
+          and told us. Install source is a student fact, so it stays off. */}
+      <CrashReporter stampInstallSource={false} />
     </div>
   );
 }
