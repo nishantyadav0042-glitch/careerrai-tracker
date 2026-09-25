@@ -1,0 +1,15 @@
+d1,sid,cohort,d2,first_kind,launch,session_new,surface,s_to_first_tap,first_tap_el,first_action,s_to_first_task,w_tick,w_resource,w_log,w_error,w_exit,studied_later
+2026-09-22,b21965b5,A_repeat,2026-09-23,app_open,direct,true,browser,2,ill_do_this_later_continue_to_careerrai,other,180,false,false,false,false,true,false
+2026-09-22,d5c6556f,A_repeat,2026-09-23,app_open,external,false,browser,48,learn_it_optionalvocabulary_building_-_h,resource,22634,false,true,false,false,true,true
+2026-09-22,e1b6a6a5,A_repeat,2026-09-23,app_open,internal,false,standalone,6,maybe_tomorrow,other,22,true,false,true,false,true,true
+2026-09-22,69c28d05,B_returned_no_recorded_study,2026-09-23,app_open,pre-instr,,standalone,3,buy_tillcat_ladder,other,665,false,false,false,false,true,false
+2026-09-22,20833ecb,C_pending,,,pre-instr,,,,,,,false,false,false,false,false,false
+2026-09-22,25c8da13,C_pending,,,pre-instr,,,,,,,false,false,false,false,false,false
+2026-09-23,66c05734,A_repeat,2026-09-25,app_open,icon,true,standalone,4,studiedfinished_what_i_planned,other,8,true,false,true,false,false,false
+2026-09-23,d5c6556f,A_repeat,2026-09-24,app_open,external,false,browser,16556,mark_progress_learn_triangles_solve_5_qu,task,16556,false,false,false,false,true,false
+2026-09-23,e1b6a6a5,A_repeat,2026-09-24,app_open,icon,true,standalone,10,maybe_tomorrow,other,3041,false,false,false,false,true,false
+2026-09-23,b21965b5,C_pending,,,pre-instr,,,,,,,false,false,false,false,false,false
+2026-09-24,055f7ec9,C_pending,,,pre-instr,,,,,,,false,false,false,false,false,false
+2026-09-24,75182378,C_pending,,,pre-instr,,,,,,,false,false,false,false,false,false
+2026-09-24,d5c6556f,C_pending,,,pre-instr,,,,,,,false,false,false,false,false,false
+2026-09-24,e1b6a6a5,C_pending,,,pre-instr,,,,,,,false,false,false,false,false,false
